@@ -562,7 +562,7 @@ def main():
                          " slower, 1/16 s above); default: copy 1's speed")
     ap.add_argument("--no-invade", action="store_true", help="city: no invasion, the city as it is")
     ap.add_argument("--cmds", default="",
-                    help="player actions copy 1 takes once every copy runs, ';'-separated, 3 s apart, through the UI's"
+                    help="player actions copy 1 takes once every copy runs, ';'-separated or @file (one per line), 3 s apart, through the UI's"
                          " own calls (e.g. 'curfew 1;men 0 40'); the others get them through the host's log (ADR 0002)")
     ap.add_argument("--warm", default="",
                     help="copies (e.g. 3 or 2,3) that play the autoloaded game normally for 30 game seconds before the"
@@ -682,7 +682,13 @@ def main():
     if len(starts) != len(copies):
         fail("not every copy started")
 
-    for action in [a.strip() for a in args.cmds.split(";") if a.strip()]:
+    # --cmds "a;b" or --cmds @file (one action per line; '#' starts a comment)
+    if args.cmds.startswith("@"):
+        lines = pathlib.Path(args.cmds[1:]).read_text(encoding="utf-8").splitlines()
+        actions = [l.split("#")[0].strip() for l in lines]
+    else:
+        actions = [a.strip() for a in args.cmds.split(";")]
+    for action in [a for a in actions if a]:
         time.sleep(3)
         copies[0].send("cmd " + action, "cmd")
         log("copy 1 (the host's player): " + action)
