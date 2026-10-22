@@ -341,7 +341,7 @@ val modInfo by tasks.registering {
             NAME: "SOSDET",
             DESC: "Deterministic simulation engine for Songs of Syx V71 (lockstep battles).",
             AUTHOR: "FighterX2500",
-            INFO: "https://github.com/FighterX2500/SOSDET",
+            INFO: "https://github.com/FighterX2500/Songs-of-Syx-Deterministic-Engine",
             """.trimIndent() + "\n")
     }
 }
@@ -579,7 +579,7 @@ val rigInfo by tasks.registering {
             NAME: "SOSDET rig",
             DESC: "Test rig for the SOSDET engine (rig/rig.py). Not for play.",
             AUTHOR: "FighterX2500",
-            INFO: "https://github.com/FighterX2500/SOSDET",
+            INFO: "https://github.com/FighterX2500/Songs-of-Syx-Deterministic-Engine",
             """.trimIndent() + "\n")
     }
 }

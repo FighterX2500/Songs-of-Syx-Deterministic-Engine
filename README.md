@@ -1,14 +1,23 @@
-# SOSDET
+# Songs of Syx Deterministic Engine (SOSDET)
 
-Deterministic simulation engine for Songs of Syx V71 (build 71.44). The same battle save, seed, orders and AI log give a bit-identical simulation on every PC. The SoS GSG MP multiplayer mod ([SOSGSGMP](https://github.com/FighterX2500/SOSGSGMP)) uses it for lockstep battles.
+Deterministic simulation engine for Songs of Syx V71 (build 71.44). The same save, seed, orders, players' commands and AI log give a bit-identical simulation on every PC. The SoS GSG MP multiplayer mod ([SOSGSGMP](https://github.com/FighterX2500/SOSGSGMP)) uses it to run battles, cities and the world map in lockstep. The mod's name in the game's launcher stays SOSDET.
 
-**Status:** the engine core works (fixed step, random streams, battle jobs in the step; SOS-27), the AI general can run on the host with its AI log (SOS-28), every 30 steps the state is hashed and compared with the other PCs', with a desync report on the first difference (SOS-29), and a battle can be saved at a step and reloaded there by every PC to recover from a desync (SOS-30). The scenario suite, player orders and city commands follow (SOS-31, SOS-32, SOS-34). Until something starts an engine session, the game plays as vanilla.
+**Status:**
+- **Engine core:** fixed step, random streams, and battle jobs in the step (SOS-27).
+- **AI general:** runs on the host, with its AI log (SOS-28).
+- **State hash:** taken every 30 steps and compared with the other PCs'; the first difference gives a desync report (SOS-29).
+- **Resync:** a battle can be saved at a step and reloaded there by every PC to recover from a desync (SOS-30).
+- **Players' battle orders and speed changes:** in the host's log, and the step length follows the agreed speed. The owner's 13-minute play session on the Mogus-72 city invasion stayed identical across three copies (SOS-32 M1).
+- **City and world lockstep:** in progress, following [plan 0002](docs/plan/0002-city-and-world-lockstep.md). The city groundwork is done (SOS-32 M2a); city commands are next (SOS-34).
+
+Until something starts an engine session, the game plays as vanilla.
 
 - What it must do: [docs/requirements.md](docs/requirements.md)
 - Coding rules: [AGENTS.md](AGENTS.md); determinism rules: [.claude/rules/determinism.md](.claude/rules/determinism.md)
 - Changes to the game's code: [docs/hooks.md](docs/hooks.md); the patch set: [patches/](patches/README.md)
 - How it is built and shipped: [ADR 0001](docs/decisions/0001-build-and-packaging.md)
 - Why it is a separate project: [ADR 0004](https://github.com/FighterX2500/SOSGSGMP/blob/main/docs/decisions/0004-engine-split.md) in SOSGSGMP
+- Code and ideas adapted from other projects: [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)
 
 No game files or game source are ever committed. The build reads the game from `SOS_GAME_DIR`. Where the scenario suite keeps its test saves is settled in SOS-31.
 
