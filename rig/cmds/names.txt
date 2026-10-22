@@ -1,0 +1,19 @@
+divname 0 Rigmen
+roomname FARM_GRAIN Rigfarm
+factionname Rigland
+rulername Rigruler
+markadd 100 100
+markname 100 100 Rigmark
+colour mark 100 100 0 10
+markorder 100 100 0
+markremove 100 100
+colour divbanner 0 0 0 20
+colour divbanner 0 1 2 30
+colour banner 0 1 40
+bannertype 3
+bannertype 0
+subjectname Rigsubject
+noble
+nobleoffice 0 0
+noblerank 0
+noblereplace 0 1
