@@ -58,6 +58,26 @@ class AiLogTest {
     }
 
     @Test
+    void theGeneralsRepeatedChangesToOneSlotBecomeOneEntryPerStep() throws InterruptedException {
+        Recorder r = new Recorder();
+        AiLog host = AiLog.host(START, r);
+        Thread general = new Thread(() -> {
+            host.generalThreadIs(Thread.currentThread());
+            for (int i = 0; i < 100_000; i++) {
+                host.capture(AiEntry.TASK, 121, AiEntry.ints(i)); // the general's loop re-sets the same order
+            }
+            host.capture(AiEntry.GUARD, 5, AiEntry.ints(1));
+        });
+        general.start();
+        general.join();
+        for (long s = 1; s <= 31; s++) {
+            runStep(host, r, s);
+        }
+        assertEquals(List.of("31:0:2:121:99999", "31:1:3:5:1"), r.applied, "the last value of each slot, once");
+        assertEquals(99_999, host.coalesced());
+    }
+
+    @Test
     void aPeerAppliesTheHostsLogAtTheSameSteps() throws InterruptedException {
         Recorder hr = new Recorder();
         AiLog host = AiLog.host(START, hr);

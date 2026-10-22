@@ -4,6 +4,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
@@ -40,6 +41,13 @@ public final class AiLog {
     private final AiApplier applier;
 
     private final ConcurrentLinkedQueue<AiEntry> captured = new ConcurrentLinkedQueue<>();
+    /**
+     * Host: the general's changes since the last step, one per order slot (kind and division), in the order each slot
+     * was first changed. The general's loop can write one slot thousands of times a step; only the last value is
+     * logged. Guarded by itself.
+     */
+    private final LinkedHashMap<Integer, AiEntry> aiBatch = new LinkedHashMap<>();
+    private long coalesced;
     private final ArrayDeque<AiEntry> pending = new ArrayDeque<>();
     private volatile Thread generalThread;
     /** Host: the next sequence number to give. Peer: the next one expected. */
@@ -116,7 +124,12 @@ public final class AiLog {
         if (mode != AiMode.HOST) {
             throw new IllegalStateException("SOSDET: AI capture in mode " + mode);
         }
-        captured.add(new AiEntry(-1, -1, kind, div, AiEntry.AI, payload.clone()));
+        AiEntry e = new AiEntry(-1, -1, kind, div, AiEntry.AI, payload.clone());
+        synchronized (aiBatch) {
+            if (aiBatch.put(kind << 16 | (div & 0xFFFF), e) != null) {
+                coalesced++; // the slot keeps its place; the newer value replaces the older one
+            }
+        }
     }
 
     // ------------------------------------------------------------ the players' orders (B16)
@@ -172,6 +185,14 @@ public final class AiLog {
             return;
         }
         if (mode == AiMode.HOST) {
+            synchronized (aiBatch) {
+                for (AiEntry b : aiBatch.values()) {
+                    AiEntry stamped = b.stamped(step + DELAY_STEPS, nextSeq++);
+                    writeEntry(stamped);
+                    pending.add(stamped);
+                }
+                aiBatch.clear();
+            }
             AiEntry e;
             while ((e = captured.poll()) != null) {
                 AiEntry stamped = e.stamped(step + DELAY_STEPS, nextSeq++);
@@ -409,6 +430,13 @@ public final class AiLog {
 
     // ------------------------------------------------------------ counts
 
+    /** Host: the general's changes replaced by a later change to the same slot before their step. */
+    public long coalesced() {
+        synchronized (aiBatch) {
+            return coalesced;
+        }
+    }
+
     public long applied() {
         return applied;
     }
@@ -434,7 +462,9 @@ public final class AiLog {
 
     /** Entries known but not applied yet. */
     public int pending() {
-        return pending.size() + captured.size();
+        synchronized (aiBatch) {
+            return pending.size() + captured.size() + aiBatch.size();
+        }
     }
 
     /** The last {@link #RECENT} entries applied, in a ring. */
