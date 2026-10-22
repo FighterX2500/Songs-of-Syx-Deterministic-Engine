@@ -1,6 +1,6 @@
 diff -ru -U2 a/game/GAME.java b/game/GAME.java
 --- a/game/GAME.java	2026-06-17 19:41:18.000000000 +0500
-+++ b/game/GAME.java	2026-10-22 21:44:16.464765200 +0500
++++ b/game/GAME.java	2026-10-22 23:09:20.450520100 +0500
 @@ -255,7 +255,9 @@
  		double speed = SPEED.update(slowDown);
  		
@@ -12,7 +12,7 @@ diff -ru -U2 a/game/GAME.java b/game/GAME.java
  			for (GameResource s : GameResource.all) {
  				if (s.isBattle || !VIEW.b().isActive())
  					s.update(0, game.profiler);
-@@ -263,15 +265,36 @@
+@@ -263,16 +265,41 @@
  			game.updateI++;
  		}else {
  			ds *= speed;
@@ -31,6 +31,9 @@ diff -ru -U2 a/game/GAME.java b/game/GAME.java
  			for (int i = 0; i < fulls; i++){
 +				if (sosdet.Hooks.fixedSteps() && !sosdet.Hooks.stepBegin())
 +					break;
++				if (sosdet.Hooks.fixedSteps())
++					game.updateI++; // SOSDET: counted as the step starts: between steps the UI sees the tick just run, so a
++					// tick-keyed cache the simulation filled is only read, and one the UI fills is refilled next step (SOS-32)
 +				boolean battleView = VIEW.b().isActive(); // SOSDET: inside the step the same on every PC (VIEW patch, SOS-32)
 +				if (sosdet.Hooks.fixedSteps()) {
 +					max = (float) sosdet.Hooks.stepSeconds(); // SOSDET: a speed change from the log takes effect at its step (B16)
@@ -44,14 +47,17 @@ diff -ru -U2 a/game/GAME.java b/game/GAME.java
 +					if (s.isBattle|| (!battleView && !sosdet.Hooks.worldHeld()))
  						s.update(max, game.profiler);
  				}
+-				game.updateI++;
 +				if (sosdet.Hooks.battleStateInStep() && battleView && VIEW.b().state() != null)
 +					VIEW.b().state().update(max);
 +				if (sosdet.Hooks.fixedSteps())
 +					sosdet.Hooks.stepEnd();
- 				game.updateI++;
++				else
++					game.updateI++;
  			}
  			
-@@ -289,11 +312,14 @@
+ 			if (last > 0) {
+@@ -289,11 +316,14 @@
  		
  		game.profiler.logEnd(game);
  		game.profiler.log();
@@ -67,7 +73,7 @@ diff -ru -U2 a/game/GAME.java b/game/GAME.java
  		for (GameResource s : GameResource.all) {
  			s.afterTick();
  		}
-@@ -410,6 +436,10 @@
+@@ -410,6 +440,10 @@
  	}
  	
  	public static void Error(String s) {
@@ -78,7 +84,7 @@ diff -ru -U2 a/game/GAME.java b/game/GAME.java
  	    if (S.get().developer || S.get().debug) {
  	    	Warn(s);
  	    }else {
-@@ -419,6 +449,10 @@
+@@ -419,6 +453,10 @@
  	}
  	
  	public static void Warn(String s) {
@@ -89,9 +95,18 @@ diff -ru -U2 a/game/GAME.java b/game/GAME.java
  	    if (S.get().developer || S.get().debug) {
  	    	SPEED.speedSet(0);
  	    	LOG.err("SYX WARNING: " + s);
+@@ -504,7 +542,7 @@
+ 		}
+ 		
+ 		public boolean shouldAndReset() {
+-			if (Math.abs(GAME.updateI()-upI) > ticks) {
++			if (!sosdet.Hooks.outsideStep() && Math.abs(GAME.updateI()-upI) > ticks) { // SOSDET: the UI never refreshes it (SOS-32)
+ 				upI = GAME.updateI();
+ 				return true;
+ 			}
 diff -ru -U2 a/view/battle/BattleView.java b/view/battle/BattleView.java
 --- a/view/battle/BattleView.java	2025-11-19 14:24:46.000000000 +0500
-+++ b/view/battle/BattleView.java	2026-10-22 21:44:16.460764800 +0500
++++ b/view/battle/BattleView.java	2026-10-22 23:09:20.445067300 +0500
 @@ -109,7 +109,7 @@
  	@Override
  	protected boolean update(float ds, boolean should){

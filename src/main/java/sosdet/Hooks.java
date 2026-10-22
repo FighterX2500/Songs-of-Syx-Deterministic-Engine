@@ -306,6 +306,16 @@ public final class Hooks {
     }
 
     /**
+     * True with a session when the caller is not the simulation inside its step: the UI and rendering between steps,
+     * or another thread (the host's AI general). Such a caller may read the simulation's caches but never refresh
+     * them, move their cursors, or write the simulation's state while drawing (SOS-32).
+     */
+    public static boolean outsideStep() {
+        Session s = Engine.session();
+        return s != null && !s.streams.isSimulationThread();
+    }
+
+    /**
      * The room placement this PC's player is previewing, as the simulation reads it (farms, pastures, snow, overlays,
      * the environment map): never with a session, since only this PC has it.
      */
