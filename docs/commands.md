@@ -13,8 +13,8 @@ Status: **done** (hooked, with its command id), **to do**, or why it needs no co
 
 | Area | Entry point (V71.44) | Stage | Status |
 | --- | --- | --- | --- |
-| generic holder | `util.data.INT$IntImp` `set(I)V` | B | not hooked (hot path): the UI call sites instead (ADR 0002) |
-| generic holder | `util.data.BOOLEAN$BOOLEANImp` `set(Z)Lutil/data/BOOLEAN$BOOLEAN_MUTABLE;` | B | not hooked (hot path): the UI call sites instead (ADR 0002) |
+| generic holder | `util.data.INT$IntImp` `set(I)V` | B | not needed: hot path; the laws UI call sites are hooked instead (DPanel auto: command 1004) |
+| generic holder | `util.data.BOOLEAN$BOOLEANImp` `set(Z)Lutil/data/BOOLEAN$BOOLEAN_MUTABLE;` | B | not needed: hot path; no laws UI site writes one |
 | employment | `settlement.room.main.employment.RoomEmployment$Priority` `set(I)V` | B | done: command 3000 workPriority, patch 96-cmd-employment |
 | employment | `settlement.room.main.employment.RoomEmployment$GRoupInt` `set(Linit/type/WGROUP;I)V` | B | done: command 3001 workGroupPriority, patch 96-cmd-employment |
 | employment | `settlement.room.main.employment.RoomEmployment$2` `set(Linit/type/WGROUP;I)V` | B | done: command 3001 workGroupPriority, patch 96-cmd-employment |
@@ -34,8 +34,8 @@ Status: **done** (hooked, with its command id), **to do**, or why it needs no co
 | tools/placement | `settlement.room.main.placement.UtilStructure` `set(Lsettlement/tilemap/terrain/TBuilding;)V` | B | to do |
 | tools/placement | `settlement.room.main.placement.UtilStructure` `set(II)V` | B | to do |
 | tools/placement | `settlement.room.main.copy.CopierMass` `copy(IIIII)V` | B | to do |
-| laws/stats | `settlement.entry.Immigration` `setWanted(Linit/race/Race;I)V` | B | to do |
-| laws/stats | `settlement.entry.Immigration` `setHigher(Linit/race/Race;I)V` | B | to do |
+| laws/stats | `settlement.entry.Immigration` `setWanted(Linit/race/Race;I)V` | B | not needed: nothing calls it in V71.44 |
+| laws/stats | `settlement.entry.Immigration` `setHigher(Linit/race/Race;I)V` | B | not needed: only the simulation calls it, inside the step |
 | rooms | `settlement.room.main.RoomInstance` `activate(Z)V` | B | to do |
 | rooms | `settlement.room.main.RoomInstance` `remove(IIZLjava/lang/Object;Z)Lsettlement/room/main/TmpArea;` | B | to do |
 | rooms | `settlement.room.main.RoomInstance` `upgradeSet(I)V` | B | to do |
@@ -110,31 +110,31 @@ Status: **done** (hooked, with its command id), **to do**, or why it needs no co
 | city military | `settlement.room.military.artillery.ArtilleryInstance` `targetCooSet(IIZZ)V` | B | to do |
 | city military | `settlement.room.military.artillery.ArtilleryInstance` `targetDivSet(Lgame/battle/div/Div;Z)V` | B | to do |
 | tools/placement | `settlement.job.JOBS$1` `set(Z)Lutil/data/BOOLEAN$BOOLEAN_MUTABLE;` | B | to do |
-| laws/stats | `settlement.stats.law.Curfew` `setForADay(Z)V` | B | to do |
-| laws/stats | `settlement.stats.law.StatCrime` `punishmentSet(Linit/type/HCLASS;Linit/race/Race;Linit/type/CRIME_PUNISHMENTS$PUNISHMENT;)V` | B | to do |
-| laws/stats | `settlement.stats.muls.StatsMultipliers$Emancipate` `mark(Linit/type/HCLASS;Linit/race/Race;I)V` | B | to do |
-| laws/stats | `settlement.stats.muls.StatsMultipliers$Emancipate` `mark(Lsettlement/entity/humanoid/Humanoid;Z)V` | B | to do |
-| laws/stats | `settlement.stats.muls.StatsMultipliers$Emancipate` `unmark(Linit/type/HCLASS;Linit/race/Race;)V` | B | to do |
-| laws/stats | `settlement.stats.muls.StatsMultipliers$Handout` `mark(Lsettlement/entity/humanoid/Humanoid;Z)V` | B | to do |
-| laws/stats | `settlement.stats.muls.StatsMultipliers$Prosecution` `mark(Linit/type/HCLASS;Linit/race/Race;I)V` | B | to do |
-| laws/stats | `settlement.stats.muls.StatsMultipliers$Prosecution` `mark(Lsettlement/entity/humanoid/Humanoid;Z)V` | B | to do |
-| laws/stats | `settlement.stats.muls.StatsMultipliers$Prosecution` `unmark(Linit/type/HCLASS;Linit/race/Race;)V` | B | to do |
-| laws/stats | `settlement.stats.muls.StatsMultipliers$StatMultiplierActionImp` `mark(Linit/type/HCLASS;Linit/race/Race;I)V` | B | to do |
-| laws/stats | `settlement.stats.muls.StatsMultipliers$StatMultiplierActionImp` `mark(Lsettlement/entity/humanoid/Humanoid;Z)V` | B | to do |
-| laws/stats | `settlement.stats.muls.StatsMultipliers$StatMultiplierActionImp` `unmark(Linit/type/HCLASS;Linit/race/Race;)V` | B | to do |
-| laws/stats | `settlement.stats.muls.StatsMultipliers$StatMultiplierWork` `mark(Linit/type/HCLASS;Linit/race/Race;I)V` | B | to do |
-| laws/stats | `settlement.stats.muls.StatsMultipliers$StatMultiplierWork` `mark(Lsettlement/entity/humanoid/Humanoid;Z)V` | B | to do |
-| laws/stats | `settlement.stats.muls.StatsMultipliers$StatMultiplierWork` `unmark(Linit/type/HCLASS;Linit/race/Race;)V` | B | to do |
-| laws/stats | `util.race.PERMISSION$Permission` `set(Linit/type/HCLASS;Linit/race/Race;Z)V` | B | to do |
-| laws/stats | `settlement.stats.colls.StatsFood$3` `set(Linit/type/HCLASS;Linit/race/Race;Z)V` | B | to do |
-| laws/stats | `settlement.stats.service.StatServiceImp$Perm` `set(Linit/type/HCLASS_RACE;Z)Lutil/data/BOOLEANO$BOOLEAN_OE;` | B | to do |
-| laws/stats | `settlement.stats.colls.StatsHome` `targetSet(ILinit/type/HCLASS;Linit/race/Race;Linit/resources/RESOURCE;)V` | B | to do |
-| laws/stats | `settlement.stats.equip.EquipCivic` `targetSet(ILinit/type/HCLASS;Linit/race/Race;)V` | B | to do |
-| laws/stats | `settlement.stats.colls.StatsEducation` `policySet(Linit/type/HCLASS;Linit/race/Race;Lsettlement/stats/colls/StatsEducation$StatEducation;)V` | B | to do |
-| laws/stats | `settlement.stats.colls.StatsEducation` `policySet(Linit/type/HCLASS_RACE;Lsettlement/stats/colls/StatsEducation$StatEducation;)V` | B | to do |
-| laws/stats | `settlement.stats.colls.StatsEducation$AgeType` `limitSet(Linit/type/HCLASS;Linit/race/Race;I)V` | B | to do |
-| laws/stats | `settlement.stats.colls.StatsEducation$AgeType` `limitSet(Linit/type/HCLASS_RACE;I)V` | B | to do |
-| laws/stats | `settlement.stats.stat.StatDecree$2` `set(Linit/race/Race;I)V` | B | to do |
+| laws/stats | `settlement.stats.law.Curfew` `setForADay(Z)V` | B | done: command 1000 curfew, patch 96-cmd-laws |
+| laws/stats | `settlement.stats.law.StatCrime` `punishmentSet(Linit/type/HCLASS;Linit/race/Race;Linit/type/CRIME_PUNISHMENTS$PUNISHMENT;)V` | B | done: command 1001 punishmentSet, patch 96-cmd-laws |
+| laws/stats | `settlement.stats.muls.StatsMultipliers$Emancipate` `mark(Linit/type/HCLASS;Linit/race/Race;I)V` | B | done: command 1002 actionMark, patch 96-cmd-laws (DPanel call site) |
+| laws/stats | `settlement.stats.muls.StatsMultipliers$Emancipate` `mark(Lsettlement/entity/humanoid/Humanoid;Z)V` | B | done: command 1005 actionPerson, patch 67-read-only-ui |
+| laws/stats | `settlement.stats.muls.StatsMultipliers$Emancipate` `unmark(Linit/type/HCLASS;Linit/race/Race;)V` | B | done: command 1003 actionUnmark, patch 96-cmd-laws (DPanel call site) |
+| laws/stats | `settlement.stats.muls.StatsMultipliers$Handout` `mark(Lsettlement/entity/humanoid/Humanoid;Z)V` | B | done: command 1005 actionPerson, patch 67-read-only-ui |
+| laws/stats | `settlement.stats.muls.StatsMultipliers$Prosecution` `mark(Linit/type/HCLASS;Linit/race/Race;I)V` | B | done: command 1002 actionMark, patch 96-cmd-laws (DPanel call site) |
+| laws/stats | `settlement.stats.muls.StatsMultipliers$Prosecution` `mark(Lsettlement/entity/humanoid/Humanoid;Z)V` | B | done: command 1005 actionPerson, patch 67-read-only-ui |
+| laws/stats | `settlement.stats.muls.StatsMultipliers$Prosecution` `unmark(Linit/type/HCLASS;Linit/race/Race;)V` | B | done: command 1003 actionUnmark, patch 96-cmd-laws (DPanel call site) |
+| laws/stats | `settlement.stats.muls.StatsMultipliers$StatMultiplierActionImp` `mark(Linit/type/HCLASS;Linit/race/Race;I)V` | B | done: command 1002 actionMark, patch 96-cmd-laws (DPanel call site) |
+| laws/stats | `settlement.stats.muls.StatsMultipliers$StatMultiplierActionImp` `mark(Lsettlement/entity/humanoid/Humanoid;Z)V` | B | done: command 1005 actionPerson, patch 67-read-only-ui |
+| laws/stats | `settlement.stats.muls.StatsMultipliers$StatMultiplierActionImp` `unmark(Linit/type/HCLASS;Linit/race/Race;)V` | B | done: command 1003 actionUnmark, patch 96-cmd-laws (DPanel call site) |
+| laws/stats | `settlement.stats.muls.StatsMultipliers$StatMultiplierWork` `mark(Linit/type/HCLASS;Linit/race/Race;I)V` | B | done: command 1002 actionMark, patch 96-cmd-laws (DPanel call site) |
+| laws/stats | `settlement.stats.muls.StatsMultipliers$StatMultiplierWork` `mark(Lsettlement/entity/humanoid/Humanoid;Z)V` | B | done: command 1005 actionPerson, patch 67-read-only-ui |
+| laws/stats | `settlement.stats.muls.StatsMultipliers$StatMultiplierWork` `unmark(Linit/type/HCLASS;Linit/race/Race;)V` | B | done: command 1003 actionUnmark, patch 96-cmd-laws (DPanel call site) |
+| laws/stats | `util.race.PERMISSION$Permission` `set(Linit/type/HCLASS;Linit/race/Race;Z)V` | B | done: commands 1007 religionPermission, 1008 gravePermission, patch 96-cmd-laws |
+| laws/stats | `settlement.stats.colls.StatsFood$3` `set(Linit/type/HCLASS;Linit/race/Race;Z)V` | B | done: command 1006 foodAllowed, patch 96-cmd-laws |
+| laws/stats | `settlement.stats.service.StatServiceImp$Perm` `set(Linit/type/HCLASS_RACE;Z)Lutil/data/BOOLEANO$BOOLEAN_OE;` | B | done: command 1009 servicePermission, patch 96-cmd-laws |
+| laws/stats | `settlement.stats.colls.StatsHome` `targetSet(ILinit/type/HCLASS;Linit/race/Race;Linit/resources/RESOURCE;)V` | B | done: command 1010 homeTarget, patch 96-cmd-laws |
+| laws/stats | `settlement.stats.equip.EquipCivic` `targetSet(ILinit/type/HCLASS;Linit/race/Race;)V` | B | done: command 1011 civicTarget, patch 96-cmd-laws |
+| laws/stats | `settlement.stats.colls.StatsEducation` `policySet(Linit/type/HCLASS;Linit/race/Race;Lsettlement/stats/colls/StatsEducation$StatEducation;)V` | B | done: command 1012 educationPolicy, patch 96-cmd-laws |
+| laws/stats | `settlement.stats.colls.StatsEducation` `policySet(Linit/type/HCLASS_RACE;Lsettlement/stats/colls/StatsEducation$StatEducation;)V` | B | done: command 1012 educationPolicy, patch 96-cmd-laws |
+| laws/stats | `settlement.stats.colls.StatsEducation$AgeType` `limitSet(Linit/type/HCLASS;Linit/race/Race;I)V` | B | done: command 1013 educationLimit, patch 96-cmd-laws |
+| laws/stats | `settlement.stats.colls.StatsEducation$AgeType` `limitSet(Linit/type/HCLASS_RACE;I)V` | B | done: command 1013 educationLimit, patch 96-cmd-laws |
+| laws/stats | `settlement.stats.stat.StatDecree$2` `set(Linit/race/Race;I)V` | B | done: command 1014 statDecree, patch 96-cmd-laws |
 | names/colours | `settlement.stats.colls.StatsAppearance` `setCustomName(Lsettlement/stats/Induvidual;Ljava/lang/String;)V` | B | to do |
 | nobles | `settlement.entity.humanoid.Humanoid` `nobleSet()V` | B | to do |
 | nobles | `game.nobility.NOBLES` `setOffice(Lgame/nobility/Noble;Lgame/nobility/NobleOffice;)V` | B | to do |
@@ -179,7 +179,7 @@ Status: **done** (hooked, with its command id), **to do**, or why it needs no co
 | diplomacy | `game.faction.royalty.opinion.OpsGifts` `makeDeal(Lgame/faction/npc/FactionNPC;D)V` | D | to do |
 | diplomacy | `game.faction.FCredits` `inc(DLgame/faction/FCredits$CTYPE;)V` | D | to do |
 | events | `game.raiding.RaidingCurrent` `clear()V` | D | to do |
-| laws/stats | `game.faction.player.PTech` `levelSet(Linit/tech/TECH;I)V` | B | to do |
+| laws/stats | `game.faction.player.PTech` `levelSet(Linit/tech/TECH;I)V` | B | done: command 1015 techLevel, patch 96-cmd-laws |
 | events | `game.events.killer.EventKiller` `setSuspect(I)V` | D | to do |
 | events | `game.raiding.RaidingCurrent` `setAllyFight()V` | D | to do |
 | names/colours | `game.faction.FBanner` `bannerTypeSet(I)V` | B | to do |
@@ -225,7 +225,7 @@ Status: **done** (hooked, with its command id), **to do**, or why it needs no co
 | diplomacy | `view.ui.diplomacy.UIDipMessDeal$3.clickA`, `$4.clickA` | D | to do |
 | battle infra | `game.save.GameLoader.set()V` | - | -: engine load path (SOS-30) |
 | world (generated battle) | `view.battle.IDeploy.update(F)Z`, `BattleState$ILiveConclude.update(F)Z`, `BattleState$ILiveConclude$1.close()V` | D | to do |
-| laws/stats | `settlement.entry.Immigration.admit(Race,I)V` | B | to do |
+| laws/stats | `settlement.entry.Immigration.admit(Race,I)V` | B | done: command 1016 admit, patch 96-cmd-laws (call sites; Immigration holds the menu-unsafe Immigrator) |
 
 ## Call sites
 
@@ -246,5 +246,5 @@ Status: **done** (hooked, with its command id), **to do**, or why it needs no co
 | names/colours | `ColorImp.setRed/Green/Blue(I)` at `util.gui.misc.GColorPicker$1/$2/$3` | B | to do |
 | names/colours | `SettMarks$SettMark.remove()V` at `view.sett.ui.right.UIMiniHotSpots$Panel$2` | B | to do |
 | rooms | `RBIT$RBITImp.or(RBIT)` at `MoveOrderPullUI$Detail$3` | B | to do |
-| laws/stats, world | `RMapInt.set`, `ArrayInt.set`, `INT_OE.set` at `CatPopulationGrowth$8`, `CatPopulationGrowth$9`, `UISubjectType$2`, `PlayPop$15`, `Army$10` | B/D | to do |
+| laws/stats, world | `RMapInt.set`, `ArrayInt.set`, `INT_OE.set` at `CatPopulationGrowth$8`, `CatPopulationGrowth$9`, `UISubjectType$2`, `PlayPop$15`, `Army$10` | B/D | city side done: 1018 birthLimit, 1019 breeding, 1020 favourite, patch 96-cmd-laws; world side (PlayPop$15, Army$10) stage D |
 | world (generated battle) | `BattleState.deploy()`, `liveRetreat()`, `reloadBattle()` at `view.battle.IDeploy$1`, `BattlePanel$12$1`, `BattlePanel$11$1`, `UIBattleResult$3` | D | to do |

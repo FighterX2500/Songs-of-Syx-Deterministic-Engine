@@ -128,3 +128,4 @@ Each stage is one card (or a card's milestone) with its own PR, in this order.
 2. **World-battle prompts:** the world holds for everyone while a player decides a prompt, as vanilla pauses for its single player and as the spec pauses the world for manual battles.
 3. **Hook placement:** command hooks go in the declaring method where that's safe. When the class crashes the menu or the method is on a hot path, the hook goes at the UI call site instead.
 4. **Several human factions:** that stays the mod's work. The engine keeps the save's single player faction identical on every PC.
+5. **Room placement (SOS-34):** the player plans an area room (drag, items, rotation, refurnish, copier, saved blueprints) on their own PC, hidden from the simulation, which also works while paused. Build sends the whole plan as one command, applied at its step on every PC. The owner chose this over sending every planning step as a command.
