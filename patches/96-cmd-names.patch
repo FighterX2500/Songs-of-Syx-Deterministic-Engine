@@ -1,0 +1,193 @@
+diff -ru -U2 a/game/faction/FBanner.java b/game/faction/FBanner.java
+--- a/game/faction/FBanner.java	2025-11-20 16:38:10.000000000 +0500
++++ b/game/faction/FBanner.java	2026-10-23 02:28:30.209149600 +0500
+@@ -66,6 +66,8 @@
+ 	}
+ 	
+ 	public void bannerTypeSet(int i) {
++		if (sosdet.game.cmd.Names.bannerType(this, i)) // SOSDET: the player's banner shape is a command (ADR 0002)
++			return;
+ 		i&= 0xFFFF;
+ 		bannerI = (byte) (i%SPRITES.icons().l.banners.length);
+ 	}
+diff -ru -U2 a/game/nobility/NOBLES.java b/game/nobility/NOBLES.java
+--- a/game/nobility/NOBLES.java	2026-06-17 10:48:04.000000000 +0500
++++ b/game/nobility/NOBLES.java	2026-10-23 02:28:30.212145300 +0500
+@@ -184,6 +184,8 @@
+ 	}
+ 	
+ 	public void ranksAllocate(Noble n) {
++		if (sosdet.game.cmd.Names.nobleRank(n)) // SOSDET: the player's promotion is a command (ADR 0002)
++			return;
+ 		if (ranksAllocated() < (int)MAX_RANKS.get(HCLASS_RACE.clP())) {
+ 			n.rankInc();
+ 			ri = -1;
+@@ -223,6 +225,8 @@
+ 	}
+ 	
+ 	public void setOffice(Noble n, NobleOffice office) {
++		if (sosdet.game.cmd.Names.nobleOffice(n, office)) // SOSDET: the player's office choice is a command (ADR 0002)
++			return;
+ 		n.setOffice(office);
+ 		ri = -1;
+ 	}
+@@ -314,6 +318,10 @@
+ 								Humanoid a = (Humanoid) e;
+ 								if (a.race() == indu.race() && a.indu().clas() == HCLASSES.CITIZEN()) {
+ 									NobleOffice o = GAME.NOBLE().OFFICES.get(no);
++									if (sosdet.game.cmd.Names.nobleReplace(a, o, ranks)) { // SOSDET: the replacement, with its office and ranks, is one command (ADR 0002)
++										VIEW.messages().hide();
++										return;
++									}
+ 									a.nobleSet();
+ 									GAME.NOBLE().setOffice(a.noble(), o);
+ 									for (int i = 0; i < ranks; i++) {
+diff -ru -U2 a/util/gui/misc/GColorPicker.java b/util/gui/misc/GColorPicker.java
+--- a/util/gui/misc/GColorPicker.java	2025-12-02 09:51:38.000000000 +0500
++++ b/util/gui/misc/GColorPicker.java	2026-10-23 02:28:30.209149600 +0500
+@@ -46,6 +46,8 @@
+ 			@Override
+ 			public void set(int t) {
+ 				
++				if (sosdet.game.cmd.Names.colour(color(), 0, t)) // SOSDET: a shared colour is a command (ADR 0002)
++					return;
+ 				color().setRed(t);
+ 				change();
+ 			}
+@@ -71,6 +73,8 @@
+ 			
+ 			@Override
+ 			public void set(int t) {
++				if (sosdet.game.cmd.Names.colour(color(), 1, t)) // SOSDET: a shared colour is a command (ADR 0002)
++					return;
+ 				color().setGreen(t);
+ 				change();
+ 			}
+@@ -95,6 +99,8 @@
+ 			
+ 			@Override
+ 			public void set(int t) {
++				if (sosdet.game.cmd.Names.colour(color(), 2, t)) // SOSDET: a shared colour is a command (ADR 0002)
++					return;
+ 				color().setBlue(t);
+ 				change();
+ 			}
+diff -ru -U2 a/view/sett/ui/right/UIMiniHotSpots.java b/view/sett/ui/right/UIMiniHotSpots.java
+--- a/view/sett/ui/right/UIMiniHotSpots.java	2025-09-12 16:12:40.000000000 +0500
++++ b/view/sett/ui/right/UIMiniHotSpots.java	2026-10-23 02:28:30.207141900 +0500
+@@ -65,7 +65,7 @@
+ 		
+ 		@Override
+ 		public void placeFirst(int tx, int ty) {
+-			SettMark d = SETT.TILE_MAP().marks.make();
++			SettMark d = sosdet.game.cmd.Names.markAdd(tx, ty) ? null : SETT.TILE_MAP().marks.make(); // SOSDET: a new mark is a command (ADR 0002)
+ 			if (d != null)
+ 				d.set(tx, ty);
+ 			VIEW.s().tools.placer.deactivate();
+@@ -227,6 +227,8 @@
+ 				@Override
+ 				protected void change() {
+ 					
++					if (sosdet.game.cmd.Names.markName(data, text())) // SOSDET: the mark's name, whole after each edit, is a command (ADR 0002)
++						return;
+ 					data.name.clear().add(text());
+ 				};
+ 			});
+@@ -235,7 +237,8 @@
+ 			addRightC(20, new GButt.Panel(SPRITES.icons().m.trash) {
+ 				@Override
+ 				protected void clickA() {
+-					data.remove();
++					if (!sosdet.game.cmd.Names.markRemove(data)) // SOSDET: removing a mark is a command (ADR 0002)
++						data.remove();
+ 					VIEW.inters().popup.close();
+ 				}
+ 			});
+@@ -279,7 +282,8 @@
+ 				
+ 				@Override
+ 				public void set(int t) {
+-					data.setPosition(t);
++					if (!sosdet.game.cmd.Names.markOrder(data, t)) // SOSDET: a mark's place in the list is a command (ADR 0002)
++						data.setPosition(t);
+ 					for (SettMark d : SETT.TILE_MAP().marks.active()) {
+ 						if (t == 0 && d.active) {
+ 							init(d);
+diff -ru -U2 a/view/sett/ui/room/UIRoom.java b/view/sett/ui/room/UIRoom.java
+--- a/view/sett/ui/room/UIRoom.java	2026-05-20 08:23:46.000000000 +0500
++++ b/view/sett/ui/room/UIRoom.java	2026-10-23 02:28:30.203144200 +0500
+@@ -233,6 +233,8 @@
+ 		private final StringInputSprite panelTitle = new StringInputSprite(24, UI.FONT().S) {
+ 			@Override
+ 			protected void change() {
++				if (sosdet.game.cmd.Names.roomName(room, text())) // SOSDET: the room's name, whole after each edit, is a command (ADR 0002)
++					return;
+ 				room.name().clear().add(text());
+ 			};
+ 		};
+diff -ru -U2 a/view/sett/ui/subject/UISubjectActions.java b/view/sett/ui/subject/UISubjectActions.java
+--- a/view/sett/ui/subject/UISubjectActions.java	2026-06-20 16:14:10.000000000 +0500
++++ b/view/sett/ui/subject/UISubjectActions.java	2026-10-23 02:28:30.210148900 +0500
+@@ -84,7 +84,7 @@
+ 					
+ 					@Override
+ 					public void acceptString(CharSequence string) {
+-						if (string != null && string.length() > 0)
++						if (string != null && string.length() > 0 && !sosdet.game.cmd.Names.subjectName(a.a, ""+string)) // SOSDET: a rename is a command (ADR 0002)
+ 							STATS.APPEARANCE().setCustomName(a.a.indu(), ""+string);
+ 					}
+ 				};
+@@ -130,7 +130,8 @@
+ 						
+ 						@Override
+ 						public void exe() {
+-							a.a.nobleSet();
++							if (!sosdet.game.cmd.Names.nobleSet(a.a)) // SOSDET: elevating a subject is a command; Humanoid is not menu-safe, so the hook is here (ADR 0002)
++								a.a.nobleSet();
+ 						}
+ 					};
+ 					@Override
+diff -ru -U2 a/view/ui/div/UIDivEditor.java b/view/ui/div/UIDivEditor.java
+--- a/view/ui/div/UIDivEditor.java	2026-01-12 12:38:12.000000000 +0500
++++ b/view/ui/div/UIDivEditor.java	2026-10-23 02:28:30.203144200 +0500
+@@ -147,6 +147,8 @@
+ 				
+ 				@Override
+ 				void copyTo(DIV_SPECE to) {
++					if (sosdet.game.cmd.Names.divisionName(to, div.name())) // SOSDET: a city division's new name is a command (ADR 0002)
++						return;
+ 					to.nameE().clear().add(div.name());
+ 				}
+ 				
+diff -ru -U2 a/view/ui/profile/UIProfile.java b/view/ui/profile/UIProfile.java
+--- a/view/ui/profile/UIProfile.java	2026-05-23 21:02:52.000000000 +0500
++++ b/view/ui/profile/UIProfile.java	2026-10-23 02:28:30.205143500 +0500
+@@ -82,11 +82,13 @@
+ 			
+ 			@Override
+ 			public Str text() {
+-				return FACTIONS.player().name;
++				return sosdet.game.cmd.Names.nameInput(this, FACTIONS.player().name, super.text()); // SOSDET: with a session the player types into this input's own text (ADR 0002)
+ 			}
+ 			
+ 			@Override
+ 			protected void change() {
++				if (sosdet.game.cmd.Names.factionName(text())) // SOSDET: the faction's name, whole after each edit, is a command (ADR 0002)
++					return;
+ 				if (FACTIONS.player().capitolRegion() != null)
+ 					FACTIONS.player().capitolRegion().info.name().clear().add(text());
+ 				super.change();
+@@ -102,7 +104,12 @@
+ 			
+ 			@Override
+ 			public Str text() {
+-				return FACTIONS.player().rulerName;
++				return sosdet.game.cmd.Names.nameInput(this, FACTIONS.player().rulerName, super.text()); // SOSDET: with a session the player types into this input's own text (ADR 0002)
++			}
++			
++			@Override
++			protected void change() {
++				sosdet.game.cmd.Names.rulerName(text()); // SOSDET: the ruler's name, whole after each edit, is a command (ADR 0002)
+ 			}
+ 		};
+ 		in = new GInput(t);
