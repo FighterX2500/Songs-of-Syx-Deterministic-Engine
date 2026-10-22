@@ -33,6 +33,14 @@ public final class GameHash implements StateSource {
     private final long[] keptStep = new long[KEPT];
     private long[][] kept;
     private int keptCount;
+    /** The other entities of the same hashes: index, id, tile, row hash and class, for the desync report. */
+    private int[][] entIndex;
+    private int[][] entId;
+    private int[][] entX;
+    private int[][] entY;
+    private long[][] entHash;
+    private Class<?>[][] entClass;
+    private final int[] entCount = new int[KEPT];
 
     @Override
     public int divisions() {
@@ -44,6 +52,16 @@ public final class GameHash implements StateSource {
         long others = HashLog.start();
         ENTITY[] all = SETT.ENTITIES().getAllEnts();
         int max = Math.min(all.length, SETT.ENTITIES().Imax() + 1);
+        if (entIndex == null) {
+            entIndex = new int[KEPT][all.length];
+            entId = new int[KEPT][all.length];
+            entX = new int[KEPT][all.length];
+            entY = new int[KEPT][all.length];
+            entHash = new long[KEPT][all.length];
+            entClass = new Class<?>[KEPT][all.length];
+        }
+        int es = keptCount % KEPT; // divisionsHash below takes this slot for the same step
+        int en = 0;
         for (int i = 0; i < max; i++) {
             ENTITY e = all[i];
             if (e == null || e.isRemoved()) {
@@ -66,8 +84,16 @@ public final class GameHash implements StateSource {
                 divisions[d.index()] = h;
             } else {
                 others = h;
+                entIndex[es][en] = i;
+                entId[es][en] = e.id();
+                entX[es][en] = e.body().x1();
+                entY[es][en] = e.body().y1();
+                entHash[es][en] = h;
+                entClass[es][en] = e.getClass();
+                en++;
             }
         }
+        entCount[es] = en;
         sections[HashLog.ENTITIES] = others;
         sections[HashLog.DIVISIONS] = divisionsHash();
         sections[HashLog.PROJECTILES] = projectilesHash();
@@ -121,6 +147,22 @@ public final class GameHash implements StateSource {
         for (int slot = 0; kept != null && slot < KEPT; slot++) {
             if (keptCount > slot && keptStep[slot] == step) {
                 return describe(kept[slot]);
+            }
+        }
+        return "  (not kept)" + System.lineSeparator();
+    }
+
+    @Override
+    public String describeEntities(long step) {
+        for (int slot = 0; kept != null && slot < KEPT; slot++) {
+            if (keptCount > slot && keptStep[slot] == step) {
+                StringBuilder b = new StringBuilder();
+                for (int k = 0; k < entCount[slot]; k++) {
+                    b.append(String.format(Locale.ROOT, "  %d: %s id %d at %d,%d, running hash %016x%n",
+                            entIndex[slot][k], entClass[slot][k].getSimpleName(), entId[slot][k], entX[slot][k],
+                            entY[slot][k], entHash[slot][k]));
+                }
+                return b.toString();
             }
         }
         return "  (not kept)" + System.lineSeparator();

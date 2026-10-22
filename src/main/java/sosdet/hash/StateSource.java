@@ -21,4 +21,10 @@ public interface StateSource {
      * still kept. Two PCs' lines for the same step differ at the division and field that went differently.
      */
     String describeDivisions(long step);
+
+    /**
+     * The entities outside divisions as the entities section hashed them at {@code step} (index, class, id, place and
+     * the section's running hash after each), if kept. The first line two PCs disagree on names the entity.
+     */
+    String describeEntities(long step);
 }

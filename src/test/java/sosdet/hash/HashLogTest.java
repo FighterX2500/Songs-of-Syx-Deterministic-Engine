@@ -44,6 +44,11 @@ class HashLogTest {
         public String describeDivisions(long step) {
             return "";
         }
+
+        @Override
+        public String describeEntities(long step) {
+            return "";
+        }
     }
 
     /** Runs a PC from step {@code from} to {@code to}, hashing where due. */

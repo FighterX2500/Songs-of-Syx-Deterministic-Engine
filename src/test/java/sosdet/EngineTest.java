@@ -40,6 +40,11 @@ class EngineTest {
         public String describeDivisions(long step) {
             return "";
         }
+
+        @Override
+        public String describeEntities(long step) {
+            return "";
+        }
     };
 
     /**
