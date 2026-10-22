@@ -28,6 +28,7 @@ import subprocess
 import sys
 import threading
 import time
+import zlib
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 BUILD = ROOT / "build"
@@ -59,7 +60,7 @@ class Copy:
         self.rig = self.data / "sosdet-rig"
         self.events = self.rig / "events.jsonl"
 
-    def prepare(self, saves):
+    def prepare(self, saves, window=False):
         shutil.rmtree(self.appdata, ignore_errors=True)
         (self.data / "settings").mkdir(parents=True)
         (self.data / "saves" / "saves").mkdir(parents=True)
@@ -72,9 +73,9 @@ class Copy:
         for target, src in saves.items():
             shutil.copy2(src, self.data / "saves" / "saves" / target)
         settings = (REAL / "settings" / "LauncherSettings.txt").read_bytes().decode("utf-8")
-        # Windowed and tiny, muted, never minimised, both mods on.
-        for key, value in (("SCREEN_MODE", "2"), ("WINDOW_WIDTH", "10"), ("WIDOW_HEIGHT", "10"),
-                           ("WIN_AUTO_ICONIFY", "0"), ("VOLUME_MASTER", "0")):
+        # Windowed and tiny, muted, never minimised, both mods on; with window=True, the user's own screen and sound.
+        tiny = () if window else (("SCREEN_MODE", "2"), ("WINDOW_WIDTH", "10"), ("WIDOW_HEIGHT", "10"), ("VOLUME_MASTER", "0"))
+        for key, value in tiny + (("WIN_AUTO_ICONIFY", "0"),):
             settings, n = re.subn(r"(?m)^" + key + r": [^,\r\n]*,", key + ": " + value + ",", settings)
             if n != 1:
                 fail("LauncherSettings.txt has no single %s line" % key)
@@ -133,11 +134,14 @@ class Copy:
 
 
 def stop_copies():
-    """Stops every game process whose class path points into the rig's copies."""
+    """Stops every game process whose class path points into the rig's copies, and waits until they are gone
+    (a copy still exiting keeps its data folder locked)."""
     marker = str(INST).replace("'", "''")
     subprocess.run(["powershell", "-NoProfile", "-Command",
-                    "Get-CimInstance Win32_Process -Filter \"Name='java.exe'\" | Where-Object { $_.CommandLine -like '*%s*' }"
-                    " | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }" % marker], check=False)
+                    "$p = Get-CimInstance Win32_Process -Filter \"Name='java.exe'\" | Where-Object { $_.CommandLine -like '*%s*' };"
+                    " $p | ForEach-Object { Stop-Process -Id $_.ProcessId -Force };"
+                    " $p | ForEach-Object { Wait-Process -Id $_.ProcessId -Timeout 60 -ErrorAction SilentlyContinue }"
+                    % marker], check=False)
 
 
 class Watcher:
@@ -178,6 +182,21 @@ class Watcher:
                 del h[s]
             self.next_step += 1
         return self.diverged
+
+
+def last_logged_step(path):
+    """The last step in a per-step log that is still being written (0 if none yet)."""
+    if not path.exists():
+        return 0
+    with open(path, "rb") as f:
+        f.seek(0, 2)
+        f.seek(max(0, f.tell() - 4096))
+        lines = f.read().decode("utf-8", "replace").splitlines()
+    for line in reversed(lines):
+        step = line.split(",")[0]
+        if step.isdigit():
+            return int(step)
+    return 0
 
 
 def read_log(path):
@@ -243,6 +262,180 @@ def compare(copies, run_dir, tag, ref, steps, ends):
     return identical, lines
 
 
+STEP_MS = 1000 / 60
+# Vanilla timing from SOS-23 (runs EVfieldB, EVcityB; SOSGSGMP docs/plan/spikes/city-determinism.md), the same
+# measure and saves; the default baseline, since vanilla doesn't change (owner, 2026-10-22). --vanilla measures again.
+SOS23_VANILLA = {
+    "field": {"p50": 2.21, "p95": 4.36, "p99": 5.81, "p999": 8.4, "max": float("nan"), "mean": 2.30, "stalls10": 10, "over1s": 0},
+    "city": {"p50": 3.54, "p95": 7.78, "p99": 10.77, "p999": 17.4, "max": float("nan"), "mean": 3.96, "stalls10": 12, "over1s": 4},
+}
+
+
+def timing_metrics(path, skip_first):
+    """The SOS-23 measure: each frame's game update time per 1/60 s of game time it advanced (frames with several
+    steps are averaged over them). skip_first leaves out the first frame that advanced game time: the vanilla load
+    stall right after a battle save loads (owner, 2026-10-21)."""
+    per_step, total_ms, game_s, skipped = [], 0.0, 0.0, None
+    for line in path.read_text(encoding="utf-8").splitlines()[1:]:
+        nanos, gs = line.split(",")
+        ms, gs = int(nanos) / 1e6, float(gs)
+        if gs <= 0 or int(nanos) < 0:
+            continue
+        if skip_first and skipped is None:
+            skipped = ms / (gs * 60)
+            continue
+        total_ms += ms
+        game_s += gs
+        per_step.append(ms / (gs * 60))
+    xs = sorted(per_step)
+
+    def pct(p):
+        return xs[min(len(xs) - 1, int(p / 100 * len(xs)))] if xs else float("nan")
+
+    stalls = sum(1 for x in xs if x > 100)
+    return {"frames": len(xs), "gameS": game_s, "p50": pct(50), "p95": pct(95), "p99": pct(99), "p999": pct(99.9),
+            "max": xs[-1] if xs else float("nan"), "mean": total_ms / max(game_s * 60, 1e-9),
+            "stalls10": stalls * 600 / max(game_s, 1e-9), "stalls": stalls, "over1s": sum(1 for x in xs if x > 1000),
+            "skipped": skipped}
+
+
+def stall_causes(path, top=6):
+    """The game frames the stall sampler found most often at the top of the simulation thread's stack."""
+    if not path.exists():
+        return []
+    counts = {}
+    for block in path.read_text(encoding="utf-8").split("step over 100 ms")[1:]:
+        frames = [l.strip()[3:] for l in block.splitlines() if l.strip().startswith("at ")]
+        game = next((f for f in frames if not f.startswith(("java.", "jdk.", "sun."))), frames[0] if frames else "?")
+        key = game.split("(")[0]
+        counts[key] = counts.get(key, 0) + 1
+    return sorted(counts.items(), key=lambda kv: -kv[1])[:top]
+
+
+def scenario_saves(args):
+    if args.scenario == "city":
+        if not args.save:
+            fail("city needs --save")
+        saves, autoload = {"sosdet-city.save": REAL / "saves" / "saves" / args.save}, "sosdet-city"
+    else:
+        saves, autoload = {BASE_SAVE: REAL / "saves" / "saves" / BASE_SAVE}, BASE_SAVE[:-len(".save")]
+    for src in saves.values():
+        if not src.is_file():
+            fail("no save %s" % src)
+    return saves, autoload
+
+
+def run_evals(args):
+    """The timing rule (requirements §4): vanilla, host and peer, one copy alone each, 10 minutes at speed 1."""
+    game = pathlib.Path(os.environ.get("SOS_GAME_DIR") or fail("SOS_GAME_DIR is not set"))
+    run_dir = RUNS / args.tag
+    shutil.rmtree(run_dir, ignore_errors=True)
+    run_dir.mkdir(parents=True)
+    saves, autoload = scenario_saves(args)
+    field = args.scenario == "field"
+    kind = "battle" if field else "city"
+    stop_copies()
+    c = Copy(1, game)
+
+    def fresh():
+        c.prepare(saves)
+        c.start(autoload)
+        c.wait("loaded", 0, 600)
+
+    def load_start(session):
+        if field:
+            c.send("loadbattle sosdet-battle", "loaded", 600)
+        else:
+            if session:
+                c.send("holdworld 1", "holdworld")
+            c.send("load sosdet-city", "loaded", 600)
+        time.sleep(5)
+
+    if field:
+        fresh()
+        log("generating the battle (seed %d, %d per side)" % (BATTLE_SEED, MEN_PER_SIDE))
+        c.send("generate %d %d" % (BATTLE_SEED, MEN_PER_SIDE), "generated", 600)
+        shutil.copy2(c.data / "saves" / "saves" / "__battle.save", run_dir / "battle.save")
+        stop_copies()
+        saves = dict(saves, **{"sosdet-battle.save": run_dir / "battle.save"})
+    start_id = "%x" % zlib.crc32((run_dir / "battle.save" if field else saves["sosdet-city.save"]).read_bytes())
+    runs = {}
+
+    if args.vanilla:
+        log("vanilla: %d steps of game time at speed 1" % args.steps)
+        fresh()
+        load_start(False)
+        c.send("seed %d" % RUN_SEED, "seeded")
+        if not field:
+            c.send("invade %d" % INVADE_MEN, "invade")
+        mark = c.events_count()
+        c.send("vanilla %s %s 1 %s-vanilla" % (kind, args.steps / 60, args.tag), "running")
+        runs["vanilla"] = c.wait("finished", mark, 3 * 3600)
+        shutil.copy2(c.rig / ("%s-vanilla-timing.csv" % args.tag), run_dir)
+        stop_copies()
+
+    for role in ("host", "peer"):
+        log("%s: %d steps at speed 1" % (role, args.steps))
+        fresh()
+        c.send("begin", "begin")
+        c.send("ai %s %s" % (role, start_id), "ai")
+        c.send("loadseed %d" % LOAD_SEED, "loadseed")
+        load_start(True)
+        c.send("ailog %s %s" % (role, run_dir / "ai-host.log" if role == "peer" else c.rig / "ai-host.log"), "ailog")
+        c.send("seed %d" % RUN_SEED, "seeded")
+        if not field:
+            c.send("invade %d" % INVADE_MEN, "invade")
+        mark = c.events_count()
+        c.send("run %s %d 1 %s-%s" % (kind, args.steps, args.tag, role), "running")
+        runs[role] = c.wait("finished", mark, 3 * 3600)
+        for name in ("%s-%s.csv", "%s-%s-timing.csv", "%s-%s-stalls.txt"):
+            src = c.rig / (name % (args.tag, role))
+            if src.exists():
+                shutil.copy2(src, run_dir)
+        if role == "host":
+            shutil.copy2(c.rig / "ai-host.log", run_dir / "ai-host.log")
+        shutil.copy2(c.events, run_dir / ("events-%s.jsonl" % role))
+        stop_copies()
+
+    host_log, _ = read_log(run_dir / ("%s-host.csv" % args.tag))
+    peer_log, _ = read_log(run_dir / ("%s-peer.csv" % args.tag))
+    first = next((s for s in sorted(host_log) if peer_log.get(s) != host_log[s]), None)
+    roles = ("vanilla", "host", "peer") if args.vanilla else ("host", "peer")
+    m = {r: timing_metrics(run_dir / ("%s-%s-timing.csv" % (args.tag, r)), field) for r in roles}
+    if not args.vanilla:
+        m["vanilla"] = dict(SOS23_VANILLA[args.scenario], skipped=None)
+    out = ["SOSDET timing evals: %s, tag %s, one copy alone at speed 1, %d steps (%s)"
+           % (args.scenario, args.tag, args.steps, "first frame after the battle save loads left out" if field else "all frames"),
+           "%-8s %8s %8s %8s %9s %9s %8s %12s %8s" % ("run", "p50", "p95", "p99", "p99.9", "max", "mean", ">100ms/10min", ">1s")]
+    if not args.vanilla:
+        out.insert(1, "vanilla: SOS-23's measurements on the same save and rule (EV%sB), not run again (owner, 2026-10-22)"
+                   % ("field" if field else "city"))
+    for r in ("vanilla", "host", "peer"):
+        x = m[r]
+        out.append("%-8s %8.2f %8.2f %8.2f %9.2f %9.1f %8.2f %12.1f %8d" % (r, x["p50"], x["p95"], x["p99"], x["p999"],
+                                                                               x["max"], x["mean"], x["stalls10"], x["over1s"]))
+    verdict = True
+    for r in ("host", "peer"):
+        x = m[r]
+        ok = x["p999"] <= 20 and x["over1s"] == 0 and x["stalls10"] <= m["vanilla"]["stalls10"]
+        verdict &= ok
+        out.append("%s: %s (p99.9 %.1f <= 20 ms, steps over 1 s %d, over 100 ms %.1f vs vanilla %.1f per 10 min)"
+                   % (r, "PASS" if ok else "FAIL", x["p999"], x["over1s"], x["stalls10"], m["vanilla"]["stalls10"]))
+        if x["skipped"] is not None:
+            out.append("  %s: left-out first frame %.0f ms per step" % (r, x["skipped"]))
+        for frame, n in stall_causes(run_dir / ("%s-%s-stalls.txt" % (args.tag, r))):
+            out.append("  %s stall: %d x %s" % (r, n, frame))
+    out.append("vanilla first frame left out: %s ms per step" % (
+        "%.0f" % m["vanilla"]["skipped"] if m["vanilla"]["skipped"] is not None else "-"))
+    out.append("host vs peer: %s" % ("identical at every step" if first is None else "DIFFER from step %d" % first))
+    for r in ("host", "peer"):
+        out.append("%s stats: %s" % (r, json.dumps(runs[r]["stats"])))
+    out.append("RESULT: timing rule %s" % ("PASSES" if verdict else "FAILS"))
+    (run_dir / "evals.txt").write_text("\n".join(out) + "\n", encoding="utf-8")
+    print("\n".join(out))
+    sys.exit(0 if verdict and first is None else 1)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("scenario", choices=["field", "city"])
@@ -252,8 +445,17 @@ def main():
     ap.add_argument("--steps", type=int, default=36000)
     ap.add_argument("--save", help="city: the save file in your saves folder")
     ap.add_argument("--keep", action="store_true", help="leave the copies open")
+    ap.add_argument("--artillery", type=int, default=0, help="field: artillery pieces per side in the generated battle")
+    ap.add_argument("--window", action="store_true", help="the user's own screen and sound settings, to watch a copy")
     ap.add_argument("--run-on", action="store_true", help="don't stop at the first difference; run the whole length")
+    ap.add_argument("--ai", choices=["instep", "host"], default="instep",
+                    help="host: copy 1 hosts the AI general and is the reference, the others are peers fed its AI log")
+    ap.add_argument("--evals", action="store_true",
+                    help="the timing rule instead: host and peer, one copy alone each, at speed 1")
+    ap.add_argument("--vanilla", action="store_true", help="with --evals: measure vanilla again (default: SOS-23's figures)")
     args = ap.parse_args()
+    if args.evals:
+        return run_evals(args)
 
     game = pathlib.Path(os.environ.get("SOS_GAME_DIR") or fail("SOS_GAME_DIR is not set"))
     for name, path in MODS.items():
@@ -262,29 +464,19 @@ def main():
     speeds = [float(s) for s in args.speeds.split(",")][:args.copies]
     if len(speeds) < args.copies:
         fail("need a speed per copy")
-    # The reference copy runs exactly --steps: the slowest. Its speed names the run ("5x baseline").
-    ref = 1 + speeds.index(min(speeds))
-    baseline = "%gx baseline" % speeds[ref - 1]
+    # The reference copy runs exactly --steps: the slowest, or the host. Its speed names the run ("5x baseline").
+    ref = 1 if args.ai == "host" else 1 + speeds.index(min(speeds))
+    baseline = "%gx baseline" % speeds[ref - 1] + (", AI on the host" if args.ai == "host" else "")
     run_dir = RUNS / args.tag
     shutil.rmtree(run_dir, ignore_errors=True)
     run_dir.mkdir(parents=True)
 
-    if args.scenario == "city":
-        if not args.save:
-            fail("city needs --save")
-        saves = {"sosdet-city.save": REAL / "saves" / "saves" / args.save}
-        autoload = "sosdet-city"
-    else:
-        saves = {BASE_SAVE: REAL / "saves" / "saves" / BASE_SAVE}
-        autoload = BASE_SAVE[:-len(".save")]
-    for src in saves.values():
-        if not src.is_file():
-            fail("no save %s" % src)
+    saves, autoload = scenario_saves(args)
 
     stop_copies()
     copies = [Copy(k, game) for k in range(1, args.copies + 1)]
     for c in copies:
-        c.prepare(saves)
+        c.prepare(saves, args.window)
     for c in copies:
         c.start(autoload)
         time.sleep(3)
@@ -294,17 +486,23 @@ def main():
         % (len(copies), args.scenario, baseline, speeds, ref, args.steps))
 
     if args.scenario == "field":
-        log("copy 1 generates the battle (seed %d, %d per side)" % (BATTLE_SEED, MEN_PER_SIDE))
-        copies[0].send("generate %d %d" % (BATTLE_SEED, MEN_PER_SIDE), "generated", 600)
+        log("copy 1 generates the battle (seed %d, %d men and %d artillery per side)" % (BATTLE_SEED, MEN_PER_SIDE, args.artillery))
+        gen = copies[0].send("generate %d %d %d" % (BATTLE_SEED, MEN_PER_SIDE, args.artillery), "generated", 600)
+        log("generated: %s" % json.dumps(gen))
         battle = copies[0].data / "saves" / "saves" / "__battle.save"
         shutil.copy2(battle, run_dir / "battle.save")
         for c in copies:
             shutil.copy2(battle, c.data / "saves" / "saves" / "sosdet-battle.save")
 
     starts = {}
+    start_save = run_dir / "battle.save" if args.scenario == "field" else saves["sosdet-city.save"]
+    start_id = "%x" % zlib.crc32(start_save.read_bytes())  # names the start; a peer refuses another host's log
+    host_log = copies[0].rig / "ai-host.log"
 
     def start_copy(c, speed):
         c.send("begin", "begin")
+        if args.ai == "host":
+            c.send("ai %s %s" % ("host" if c.k == 1 else "peer", start_id), "ai")
         c.send("loadseed %d" % LOAD_SEED, "loadseed")
         if args.scenario == "field":
             c.send("loadbattle sosdet-battle", "loaded", 600)
@@ -312,6 +510,8 @@ def main():
             c.send("holdworld 1", "holdworld")
             c.send("load sosdet-city", "loaded", 600)
         time.sleep(5)
+        if args.ai == "host":
+            c.send("ailog %s %s" % ("host" if c.k == 1 else "peer", host_log), "ailog")
         c.send("seed %d" % RUN_SEED, "seeded")
         starts[c.k] = c.send("hash", "hash")
         if args.scenario == "city":
@@ -342,6 +542,12 @@ def main():
             log("copies differ at step %d; holding every copy" % diverged)
             break
         time.sleep(2)
+    if args.ai == "host" and ref in finished:
+        # Peers can't outrun the host: give them the time to pass its last step before holding them.
+        for c in copies[1:]:
+            path, deadline = c.rig / ("%s-c%d.csv" % (args.tag, c.k)), time.time() + 600
+            while last_logged_step(path) <= args.steps and time.time() < deadline:
+                time.sleep(2)
     marks = {c.k: c.events_count() for c in copies if c.k not in finished}
     for c in copies:  # hold the rest now, wherever they are
         if c.k not in finished:

@@ -42,6 +42,11 @@ final class StepClock {
         return true;
     }
 
+    /** The next step may not run yet (a peer waiting for the host): drop the game time owed, as at the last step. */
+    void hold() {
+        accumulator = 0;
+    }
+
     long step() {
         return step;
     }

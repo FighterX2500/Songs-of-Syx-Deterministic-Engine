@@ -1,18 +1,18 @@
 diff -ru -U2 a/game/battle/thread/BattleThread.java b/game/battle/thread/BattleThread.java
---- a/game/battle/thread/BattleThread.java	2026-10-22 16:10:14.699567200 +0500
-+++ b/game/battle/thread/BattleThread.java	2026-10-22 16:10:14.727082100 +0500
+--- a/game/battle/thread/BattleThread.java	2026-10-22 18:11:16.652046200 +0500
++++ b/game/battle/thread/BattleThread.java	2026-10-22 18:11:16.680865600 +0500
 @@ -42,6 +42,8 @@
  	}
  	
  	protected void start() {
-+		if (sosdet.Hooks.battleThreadsOwned())
-+			return; // SOSDET: the job runs inside the step instead (B8)
++		if (sosdet.Hooks.threadRunsInStep(this instanceof game.battle.thread.general.Strategos2000))
++			return; // SOSDET: the job runs inside the step instead; the host's general keeps its thread (B8, B15)
  		thread.start(job);
  	}
  
 diff -ru -U2 a/game/battle/thread/BattleThreads.java b/game/battle/thread/BattleThreads.java
---- a/game/battle/thread/BattleThreads.java	2026-10-22 16:10:14.547478300 +0500
-+++ b/game/battle/thread/BattleThreads.java	2026-10-22 16:10:14.578534100 +0500
+--- a/game/battle/thread/BattleThreads.java	2026-10-22 18:11:16.520215200 +0500
++++ b/game/battle/thread/BattleThreads.java	2026-10-22 18:11:16.547099200 +0500
 @@ -33,6 +33,12 @@
  	public final BattleOrders orders = new BattleOrders();
  	public final Strategos2000 strat = new Strategos2000();
@@ -37,8 +37,8 @@ diff -ru -U2 a/game/battle/thread/BattleThreads.java b/game/battle/thread/Battle
  	}
  
 diff -ru -U2 a/snake2d/SlaveThread.java b/snake2d/SlaveThread.java
---- a/snake2d/SlaveThread.java	2026-10-22 16:10:14.836108600 +0500
-+++ b/snake2d/SlaveThread.java	2026-10-22 16:10:14.865135000 +0500
+--- a/snake2d/SlaveThread.java	2026-10-22 18:11:16.784556100 +0500
++++ b/snake2d/SlaveThread.java	2026-10-22 18:11:16.811837600 +0500
 @@ -45,7 +45,7 @@
  	}
  	

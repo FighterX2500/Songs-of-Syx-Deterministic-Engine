@@ -54,12 +54,17 @@ import view.main.VIEW;
  *   loadseed &lt;n&gt;                       loads run on the simulation stream seeded with n (0: vanilla)
  *   holdworld &lt;0|1&gt;                     hold the world map still in the city view
  *   load &lt;save&gt;                         load a save
- *   generate &lt;seed&gt; &lt;menPerSide&gt;       generate a field battle near the capital and save it as __battle
+ *   generate &lt;seed&gt; &lt;menPerSide&gt; [artillery]  generate a field battle near the capital and save it as __battle;
+ *                                       artillery pieces per side, spread over the artillery types
  *   loadbattle &lt;save&gt;                   load a battle save and enter its deployment
  *   seed &lt;n&gt;                            seed the simulation stream
  *   invade &lt;men&gt;                        the next city run starts an invasion of that many men at steps 1 and 2
+ *   ai &lt;instep | host ID | peer ID&gt;    where the AI general runs; before the save loads (ID names the start)
+ *   ailog &lt;host|peer&gt; &lt;file&gt;           after the load: the host appends its AI log to the file every frame,
+ *                                       a peer reads what is new every frame
  *   run &lt;battle|city&gt; &lt;steps&gt; &lt;speed&gt; &lt;tag&gt;  battle: deploy as step 0; run that many steps (0: no last step),
  *                                       logging each
+ *   vanilla &lt;battle|city&gt; &lt;seconds&gt; &lt;speed&gt; &lt;tag&gt;  no session: the game's own stepping, for the timing baseline
  *   hold                                end a run at the current step
  *   hash                                the current battle and city hashes
  * </pre>
@@ -99,6 +104,8 @@ public final class Rig implements SCRIPT {
         private final Path commandFile = dir.resolve("command.txt");
         private final Path eventsFile = dir.resolve("events.jsonl");
 
+        private static final long STALL_NANOS = 100_000_000; // the timing rule counts steps over 100 ms
+
         private int frames;
         private boolean running;
         private boolean city;
@@ -107,6 +114,22 @@ public final class Rig implements SCRIPT {
         private BufferedWriter log;
         private int invadeMen;
         private long started;
+        // vanilla timing baseline: no session, the game's own sub-steps
+        private boolean vanilla;
+        private double gameSeconds;
+        private double gameSecondsLeft;
+        private long subSteps;
+        // timing per frame (patch 91): the update time is known one frame late
+        private BufferedWriter timing;
+        private double frameGameSeconds;
+        private double pendingGameSeconds = -1;
+        // the AI log between host and peers, through a file
+        private Path aiFile;
+        private boolean aiHost;
+        private long aiOffset;
+        // stall sampler: the simulation thread's stack for every step over 100 ms
+        private volatile Thread simThread;
+        private volatile boolean sampling;
 
         Instance() {
             try {
@@ -129,6 +152,16 @@ public final class Rig implements SCRIPT {
             if (!running || ds <= 0) {
                 return;
             }
+            frameGameSeconds += ds;
+            if (vanilla) {
+                subSteps++;
+                gameSeconds += ds;
+                if (city && invadeMen > 0 && subSteps <= 2) {
+                    invasion(subSteps);
+                }
+                return;
+            }
+            simThread = Thread.currentThread();
             long step = Engine.step();
             if (city && invadeMen > 0 && step <= 2) {
                 invasion(step);
@@ -141,19 +174,101 @@ public final class Rig implements SCRIPT {
         }
 
         private void afterFrame() {
+            exchangeAiLog();
             if (running) {
+                timing();
                 if (city && invadeMen > 0) {
                     VIEW.inters().messages.hide(); // the invasion's messages would pause the game
                 }
-                if (Engine.step() >= lastStep) {
+                if (vanilla ? gameSeconds >= gameSecondsLeft : Engine.step() >= lastStep) {
                     finish();
-                } else {
+                } else if (!vanilla) {
                     flushLog(); // the runner compares the copies while they run
                 }
             }
             if (++frames % POLL_EVERY_FRAMES == 0) {
                 poll();
             }
+        }
+
+        /** The host appends what its AI log wrote; a peer takes in what is new. Between frames, so before the next step. */
+        private void exchangeAiLog() {
+            if (aiFile == null || !Engine.active()) {
+                return;
+            }
+            try {
+                if (aiHost) {
+                    Files.write(aiFile, Engine.aiLogOut(), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+                    return;
+                }
+                if (!Files.exists(aiFile)) {
+                    return;
+                }
+                try (java.nio.channels.SeekableByteChannel ch = Files.newByteChannel(aiFile)) {
+                    long size = ch.size();
+                    if (size <= aiOffset) {
+                        return;
+                    }
+                    java.nio.ByteBuffer b = java.nio.ByteBuffer.allocate((int) (size - aiOffset));
+                    ch.position(aiOffset);
+                    while (b.hasRemaining() && ch.read(b) > 0) {
+                        // read what is there now; a record the host is still writing waits in the engine
+                    }
+                    aiOffset += b.position();
+                    Engine.aiLogIn(Arrays.copyOf(b.array(), b.position()));
+                }
+            } catch (IOException e) {
+                throw new IllegalStateException("SOSDET rig: AI log file " + aiFile, e);
+            }
+        }
+
+        /** One line per frame: the previous frame's update time (patch 91) and the game time it advanced. */
+        private void timing() {
+            try {
+                if (pendingGameSeconds >= 0) {
+                    timing.write(FrameTiming.lastUpdateNanos() + "," + pendingGameSeconds + "\n");
+                }
+            } catch (IOException e) {
+                throw new IllegalStateException("SOSDET rig: cannot write the timing log", e);
+            }
+            pendingGameSeconds = frameGameSeconds;
+            frameGameSeconds = 0;
+        }
+
+        /** Records the simulation thread's stack once for every step that runs over 100 ms. */
+        private void startStallSampler(Path file) {
+            sampling = true;
+            Thread t = new Thread(() -> {
+                long sampled = 0;
+                while (sampling) {
+                    long start = Engine.stepStartNanos();
+                    Thread sim = simThread;
+                    if (start != 0 && start != sampled && sim != null && System.nanoTime() - start > STALL_NANOS) {
+                        sampled = start;
+                        StringBuilder sb = new StringBuilder("step over 100 ms, at step " + safeStep() + ":\n");
+                        for (StackTraceElement e : sim.getStackTrace()) {
+                            sb.append("  at ").append(e).append('\n');
+                        }
+                        try {
+                            Files.write(file, sb.toString().getBytes(StandardCharsets.UTF_8), StandardOpenOption.CREATE,
+                                    StandardOpenOption.APPEND);
+                        } catch (IOException e) {
+                            return; // diagnostics only; the run itself goes on
+                        }
+                    }
+                    try {
+                        Thread.sleep(10);
+                    } catch (InterruptedException e) {
+                        return;
+                    }
+                }
+            }, "sosdet-rig-stall-sampler");
+            t.setDaemon(true);
+            t.start();
+        }
+
+        private static long safeStep() {
+            return Engine.active() ? Engine.step() : -1;
         }
 
         /** The rig's only boundary for failures: a failed command is reported and the copy keeps running. */
@@ -202,7 +317,7 @@ public final class Rig implements SCRIPT {
                 new GameLoader(PATHS.local().save().get(rest(c))).set();
                 return;
             case "generate":
-                generate(Integer.parseInt(c[1]), Integer.parseInt(c[2]));
+                generate(Integer.parseInt(c[1]), Integer.parseInt(c[2]), c.length > 3 ? Integer.parseInt(c[3]) : 0);
                 return;
             case "loadbattle":
                 loadBattle(rest(c));
@@ -215,8 +330,29 @@ public final class Rig implements SCRIPT {
                 invadeMen = Integer.parseInt(c[1]);
                 event("invade", "\"men\":" + invadeMen);
                 return;
+            case "ai":
+                if (c[1].equals("instep")) {
+                    Engine.aiInStep();
+                } else if (c[1].equals("host")) {
+                    Engine.aiHost(Long.parseLong(c[2], 16));
+                } else if (c[1].equals("peer")) {
+                    Engine.aiPeer(Long.parseLong(c[2], 16));
+                } else {
+                    throw new IllegalArgumentException("SOSDET rig: ai " + c[1]);
+                }
+                event("ai", "\"mode\":\"" + Engine.aiMode() + "\"");
+                return;
+            case "ailog":
+                aiHost = c[1].equals("host");
+                aiFile = Paths.get(rest(Arrays.copyOfRange(c, 1, c.length)));
+                aiOffset = 0;
+                event("ailog", "\"host\":" + aiHost + ",\"file\":\"" + clean(aiFile.toString()) + "\"");
+                return;
             case "run":
                 run(c[1].equals("city"), Long.parseLong(c[2]), Double.parseDouble(c[3]), c[4]);
+                return;
+            case "vanilla":
+                vanilla(c[1].equals("city"), Double.parseDouble(c[2]), Double.parseDouble(c[3]), c[4]);
                 return;
             case "hold":
                 if (!running) {
@@ -254,6 +390,8 @@ public final class Rig implements SCRIPT {
             VIEW.inters().load.deactivate(); // the "click to continue" screen after a load would pause the game
             log = Files.newBufferedWriter(dir.resolve(tag + ".csv"), StandardCharsets.UTF_8);
             log.write("step,hash,men\n");
+            openTiming();
+            startStallSampler(dir.resolve(tag + "-stalls.txt"));
             Engine.resetStats();
             long from = Engine.step();
             if (steps > 0) {
@@ -270,6 +408,38 @@ public final class Rig implements SCRIPT {
                     tag, city, from, steps > 0 ? lastStep : -1, speed));
         }
 
+        /** The timing baseline: no session, the game's own stepping and threads, for this much game time. */
+        private void vanilla(boolean cityRun, double seconds, double speed, String runTag) throws ReflectiveOperationException,
+                IOException {
+            if (Engine.active()) {
+                throw new IllegalStateException("SOSDET rig: vanilla runs without a session (end)");
+            }
+            city = cityRun;
+            tag = runTag;
+            vanilla = true;
+            if (!city) {
+                VIEW.b().state().deploy();
+                hideDeployPanel();
+            }
+            VIEW.inters().load.deactivate();
+            openTiming();
+            gameSeconds = 0;
+            gameSecondsLeft = seconds;
+            subSteps = 0;
+            started = System.nanoTime();
+            running = true;
+            GAME.SPEED.speedSet(speed);
+            event("running", String.format(Locale.ROOT, "\"tag\":\"%s\",\"city\":%b,\"vanilla\":true,\"seconds\":%.1f,\"speed\":%.1f",
+                    tag, city, seconds, speed));
+        }
+
+        private void openTiming() throws IOException {
+            timing = Files.newBufferedWriter(dir.resolve(tag + "-timing.csv"), StandardCharsets.UTF_8);
+            timing.write("updateNanos,gameSeconds\n");
+            frameGameSeconds = 0;
+            pendingGameSeconds = -1;
+        }
+
         private void flushLog() {
             try {
                 log.flush();
@@ -280,13 +450,24 @@ public final class Rig implements SCRIPT {
 
         private void finish() {
             running = false;
+            sampling = false;
             GAME.SPEED.speedSet(0);
             String end = Long.toHexString(city ? cityHash() : battleHash());
             try {
-                log.write("end," + end + "," + men() + "\n");
-                log.close();
+                timing.close();
+                if (!vanilla) {
+                    log.write("end," + end + "," + men() + "\n");
+                    log.close();
+                }
             } catch (IOException e) {
-                throw new IllegalStateException("SOSDET rig: cannot close the hash log", e);
+                throw new IllegalStateException("SOSDET rig: cannot close the logs", e);
+            }
+            if (vanilla) {
+                vanilla = false;
+                event("finished", String.format(Locale.ROOT, "\"tag\":\"%s\",\"vanilla\":true,\"endStep\":%d,\"gameSeconds\":%.2f,"
+                        + "\"endHash\":\"%s\",\"men\":%d,\"wallSeconds\":%.1f,\"stats\":{}", tag, subSteps, gameSeconds, end, men(),
+                        (System.nanoTime() - started) / 1e9));
+                return;
             }
             event("finished", String.format(Locale.ROOT, "\"tag\":\"%s\",\"endStep\":%d,\"endHash\":\"%s\",\"men\":%d,\"wallSeconds\":%.1f,\"stats\":%s",
                     tag, Engine.step(), end, men(), (System.nanoTime() - started) / 1e9, Engine.stats().toJson()));
@@ -329,7 +510,7 @@ public final class Rig implements SCRIPT {
         // ------------------------------------------------------------ battle saves
 
         /** Generates a field battle next to the player's capital, as the debug tool does, and saves it as __battle. */
-        private void generate(int seed, int menPerSide) throws ReflectiveOperationException {
+        private void generate(int seed, int menPerSide, int artillery) throws ReflectiveOperationException {
             int wx = FACTIONS.player().capitolRegion().cx() + 3;
             int wy = FACTIONS.player().capitolRegion().cy();
             Method save = BattleState.class.getDeclaredMethod("save", String.class);
@@ -340,8 +521,8 @@ public final class Rig implements SCRIPT {
             }
             RND.setSeed(seed);
             BattleStateSpec spec = new BattleStateSpec();
-            fillSide(spec.player, menPerSide, wx, wy);
-            fillSide(spec.enemy, menPerSide, wx + 1, wy);
+            fillSide(spec.player, menPerSide, artillery, wx, wy);
+            fillSide(spec.enemy, menPerSide, artillery, wx + 1, wy);
             Constructor<BattleState> ctor = BattleState.class.getDeclaredConstructor(BattleStateExiter.class, Path.class);
             ctor.setAccessible(true);
             BattleState state = ctor.newInstance(exiter(), PATHS.local().save().get("__battle"));
@@ -354,7 +535,8 @@ public final class Rig implements SCRIPT {
             generateMethod.setAccessible(true);
             generateMethod.invoke(generatorCtor.newInstance(), state, spec, tiles.get(state));
             save.invoke(null, "__battle");
-            event("generated", String.format(Locale.ROOT, "\"seed\":%d,\"menPerSide\":%d,\"battle\":\"%016x\"", seed, menPerSide, battleHash()));
+            event("generated", String.format(Locale.ROOT, "\"seed\":%d,\"menPerSide\":%d,\"artillery\":%d,\"artilleryTypes\":%d,\"battle\":\"%016x\"",
+                    seed, menPerSide, artillery, SETT.ROOMS().ARTILLERY.size(), battleHash()));
         }
 
         private void loadBattle(String name) {
@@ -376,7 +558,12 @@ public final class Rig implements SCRIPT {
             };
         }
 
-        private static void fillSide(BattleStateSpec.SpecSide side, int men, int wx, int wy) {
+        private static void fillSide(BattleStateSpec.SpecSide side, int men, int artillery, int wx, int wy) {
+            // Artillery pieces, spread evenly over the artillery types (the first types take the remainder).
+            int types = SETT.ROOMS().ARTILLERY.size();
+            for (int t = 0; t < types; t++) {
+                side.artillery[SETT.ROOMS().ARTILLERY.get(t).typeIndex()] = artillery / types + (t < artillery % types ? 1 : 0);
+            }
             int perDiv = Config.battle().MEN_PER_DIVISION;
             int divs = Math.min(Config.battle().DIVISIONS_PER_ARMY, (men + perDiv - 1) / perDiv);
             side.wCoo.set(wx, wy);

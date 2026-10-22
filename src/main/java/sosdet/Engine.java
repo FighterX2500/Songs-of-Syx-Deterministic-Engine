@@ -1,5 +1,10 @@
 package sosdet;
 
+import sosdet.ai.AiEntry;
+import sosdet.ai.AiLog;
+import sosdet.ai.AiMode;
+import sosdet.game.GameAi;
+
 /**
  * The engine's API for the mod and the test rig (requirements §3). The patched game calls {@link Hooks}.
  *
@@ -80,13 +85,64 @@ public final class Engine {
         }
     }
 
+    // ------------------------------------------------------------ the AI general (requirements §3)
+
+    /** The general runs inside every step (the default): deterministic with no log. */
+    public static void aiInStep() {
+        setAi(AiLog.inStep());
+    }
+
+    /**
+     * This PC is the host: the general runs on its own thread, and its changes go into the AI log, applied by every
+     * PC at step N + 30. Set it before the battle save loads or deploys (that starts the general's thread).
+     * {@code startId} names the start state; peers refuse a log made from another.
+     */
+    public static void aiHost(long startId) {
+        setAi(AiLog.host(startId, new GameAi()));
+    }
+
+    /** This PC is a peer: the general is off, and the host's AI log (see {@link #aiLogIn}) is applied instead. */
+    public static void aiPeer(long startId) {
+        setAi(AiLog.peer(startId, new GameAi()));
+    }
+
+    public static AiMode aiMode() {
+        return required().ai.mode();
+    }
+
+    /** Host: the AI log written since the last call, for the mod to send to every peer. */
+    public static byte[] aiLogOut() {
+        return required().ai.logOut();
+    }
+
+    /** Peer: more of the host's AI log, in any pieces. The peer runs at most 30 steps past what it confirms. */
+    public static void aiLogIn(byte[] bytes) {
+        required().ai.logIn(bytes);
+    }
+
+    private static void setAi(AiLog log) {
+        Session s = required();
+        if (s.clock.step() != 0) {
+            throw new IllegalStateException("SOSDET: the AI mode is set before the run (step " + s.clock.step()
+                    + "); changing host mid-battle comes with resync (SOS-30)");
+        }
+        s.ai = log;
+    }
+
+    /** When the running step started (System.nanoTime), or 0 between steps: for a stall sampler on another thread. */
+    public static long stepStartNanos() {
+        Session s = session;
+        return s == null ? 0 : s.stepStartNanos;
+    }
+
     /** Counters and step times since the session began or {@link #resetStats()}. */
     public static Stats stats() {
         Session s = required();
         StepTimes t = s.times;
         return new Stats(s.clock.step(), s.streams.simulationDraws(), s.streams.foreignDraws(), s.pathJobs,
                 s.pathNanos, t.steps(), t.meanMs(), t.percentileMs(0.5), t.percentileMs(0.95), t.percentileMs(0.99),
-                t.percentileMs(0.999), t.maxMs(), t.over100Ms(), t.over1S());
+                t.percentileMs(0.999), t.maxMs(), t.over100Ms(), t.over1S(), s.ai.mode(), s.ai.applied(),
+                s.ai.applied(AiEntry.ARTILLERY), s.ai.pending());
     }
 
     public static void resetStats() {
