@@ -1,0 +1,24 @@
+diff -ru -U2 a/snake2d/util/rnd/RND.java b/snake2d/util/rnd/RND.java
+--- a/snake2d/util/rnd/RND.java	2026-10-22 15:38:02.713361700 +0500
++++ b/snake2d/util/rnd/RND.java	2026-10-22 15:38:02.748357500 +0500
+@@ -16,6 +16,20 @@
+ 		rnd = new Random(seed);
+ 		long seed = rnd.nextLong();
+ 		Printer.ln("[RND] ---Initiating random, seed: " + seed);
++		try {
++			java.nio.file.Path sosdetDir = java.nio.file.Paths.get(System.getenv("APPDATA"), "songsofsyx", "sosdet-spike");
++			java.nio.file.Files.createDirectories(sosdetDir);
++			StringBuilder sosdetSb = new StringBuilder();
++			sosdetSb.append("marker: patched RND from the mod jar\n");
++			sosdetSb.append("time: ").append(System.currentTimeMillis()).append("\n");
++			sosdetSb.append("thread: ").append(Thread.currentThread().getName()).append("\n");
++			sosdetSb.append("java.class.path: ").append(System.getProperty("java.class.path")).append("\n");
++			for (StackTraceElement sosdetE : new Throwable().getStackTrace())
++				sosdetSb.append("  at ").append(sosdetE).append("\n");
++			java.nio.file.Files.write(sosdetDir.resolve("RND.txt"), sosdetSb.toString().getBytes("UTF-8"));
++		} catch (java.io.IOException sosdetEx) {
++			throw new RuntimeException("SOSDET-spike marker failed", sosdetEx);
++		}
+ 		//rnd.setSeed(System.nanoTime());
+ 		//seed stuff
+ 	}

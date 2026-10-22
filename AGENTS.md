@@ -10,12 +10,14 @@ Fill these in and keep them current. Agents must not guess them.
 *   **Game folder (`<game>`):** outside the repository, located through the `SOS_GAME_DIR` environment variable. On the main dev PC: `C:\ClaudeFolder\Songs of Syx`. Nothing under it is ever committed.
 *   **Game source:** `<game>/info/SongsOfSyx-sources/`, shipped with the game. Read it freely; never copy or commit it. The engine changes it only through its patch set (see "Patches to Game Code").
 *   **Game jar:** `<game>/SongsOfSyx.jar`. Never shade, copy, or commit it. It already contains steamworks4j 1.9.0 and the Steam native libraries.
-*   **Compiling game source:** ECJ 3.40.0 with `-g -preserveAllLocals -encoding UTF-8`, at `--release 8` for `snake2d` and `integrations` and `--release 16` for the rest ([ADR 0001](https://github.com/FighterX2500/SOSGSGMP/blob/main/docs/decisions/0001-game-compiler-ecj.md), status still Proposed). ECJ is a build tool; whether players ever run it is SOS-25.
-*   **Engine's own code:** the game runs on its bundled JRE (`<game>/jre/release`: Temurin 21.0.11). The `--release` level for the engine's classes, which game code at release 8 and 16 calls, is settled in SOS-26.
+*   **Compiling game source:** ECJ 3.40.0 with `-g -preserveAllLocals -encoding UTF-8 -proc:none`, at `--release 8` for `snake2d` and `integrations` and `--release 16` for the rest, inside the build's JDK ([engine ADR 0001](docs/decisions/0001-build-and-packaging.md)). Without `-proc:none`, 26 classes differ from the shipped ones. ECJ is a build tool only; players never run it.
+*   **Engine's own code:** package `sosdet`, `javac --release 21`, the level of the game's bundled JRE (`<game>/jre/release`: Temurin 21.0.11). Game code compiled at 8 and 16 can call it.
+*   **Release:** a mod folder, `build/mod/SOSDET` (`_Info.txt`, `V71/script/SOSDET.jar`): the engine's classes plus every class compiled from the patched game files ([engine ADR 0001](docs/decisions/0001-build-and-packaging.md)).
 *   **Game source index:** codegraph (`npm i -g @colbymchenry/codegraph`, telemetry off), built once per PC with `codegraph init -y "%SOS_GAME_DIR%\info\SongsOfSyx-sources"`; the index stays in the game folder. Use it first to find definitions and callers; confirm with grep when a complete list matters.
-*   **Build:** `gradlew.bat build` (Gradle not set up yet; SOS-26).
-*   **Fast check:** `gradlew.bat compileJava compileTestJava` (not set up yet).
-*   **Tests:** `gradlew.bat test` (not set up yet).
+*   **Build:** `gradlew.bat build` (Gradle 8.14.3 wrapper; needs `SOS_GAME_DIR`, a JDK 21+ and `git`). It includes the byte-for-byte checks: the patched files compiled unchanged, and the whole untouched game rebuilt.
+*   **Fast check:** `gradlew.bat compileJava compileTestJava`.
+*   **Tests:** `gradlew.bat test` (JUnit 5).
+*   **Dev install and launch:** `gradlew.bat installMod` / `uninstallMod` (`%APPDATA%\songsofsyx\mods\SOSDET`, then enable it in the launcher); `gradlew.bat runGame` starts the game with the mod, without the launcher. `-Psosdet.patches=<dir>` builds another patch set, for example a test fixture.
 *   **Determinism test:** the scenario suite (SOS-31); until then the spike rig in SOSGSGMP, `spikes/determinism/matrix.sh`.
 *   **Game log / crash output:** `%APPDATA%\songsofsyx\logs\` (error files `error<date>.txt`); also `<game>/errorLogs/`.
 
@@ -96,7 +98,8 @@ Every line that runs inside the step, or feeds the state hash, follows `.claude/
 
 ### Dependencies and Packaging
 *   No third-party runtime libraries unless explicitly approved in an ADR.
-*   What a release holds (the engine's own classes and patches only, or a patched game jar) is open until SOS-25 and the distribution ADR. Nothing that holds game classes is committed or published before that ADR. Verify jar contents after packaging changes.
+*   A release holds the engine's own classes and the classes compiled from the patched game files, and nothing else ([engine ADR 0001](docs/decisions/0001-build-and-packaging.md); a test checks it). Never commit a built jar or game classes; releases are published only when the owner decides. Verify jar contents after packaging changes.
+*   Static initializers of engine classes must not touch game state: the game's script scan initializes every class in the mod jar while it builds the main menu (SOS-25).
 
 ## Reporting
 When finishing, report: what changed and why, how it was verified (commands run and results, determinism and timing runs), what was verified only by reasoning or needs manual in-game testing, which `docs/requirements.md` sections the work touched, and any remaining gaps against the principles above.

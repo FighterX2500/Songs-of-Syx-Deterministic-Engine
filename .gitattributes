@@ -1,0 +1,7 @@
+# Patches must reach git apply byte for byte: the game source uses CRLF line
+# endings, so a converted patch would no longer match it.
+*.patch -text
+
+# Scripts keep their platform's line endings
+*.bat text eol=crlf
+gradlew text eol=lf
