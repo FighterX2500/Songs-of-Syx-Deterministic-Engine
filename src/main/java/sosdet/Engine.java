@@ -3,9 +3,11 @@ package sosdet;
 import sosdet.ai.AiEntry;
 import sosdet.ai.AiLog;
 import sosdet.ai.AiMode;
+import java.nio.file.Path;
 import java.util.Collections;
 
 import sosdet.game.GameAi;
+import sosdet.game.GameResync;
 import sosdet.hash.Desync;
 
 /**
@@ -69,6 +71,18 @@ public final class Engine {
         required().worldHeld = held;
     }
 
+    /**
+     * The seed of the simulation's random stream, which is reseeded every step from it and the step number. Every PC
+     * uses the same; set it at step 0.
+     */
+    public static void seed(int seed) {
+        Session s = required();
+        if (s.clock.step() != 0) {
+            throw new IllegalStateException("SOSDET: the seed is set before the run (step " + s.clock.step() + ")");
+        }
+        s.seed = seed;
+    }
+
     /** From the next load on, loading runs on the simulation stream seeded with this; 0 = vanilla loading. */
     public static void armLoadSeed(int seed) {
         required().loadSeed = seed;
@@ -81,6 +95,7 @@ public final class Engine {
             throw new IllegalStateException("SOSDET: step 0 is over (step " + s.clock.step() + ")");
         }
         s.streams.enter();
+        s.streams.reseed(s.stepSeed(0));
         try {
             start.run();
         } finally {
@@ -88,17 +103,54 @@ public final class Engine {
         }
     }
 
+    // ------------------------------------------------------------ resync: save and load at a step (B14)
+
+    /**
+     * Host, between steps: saves the game to {@code file} at the current step and returns the engine's own state at
+     * that step (versioned bytes), then holds there. Every PC, the host included, then loads both with
+     * {@link #resyncLoad}: a freshly loaded game on every PC, so nothing the save leaves out can differ (owner,
+     * 2026-10-22, after a host that ran on kept caches its reloaded peers rebuilt).
+     */
+    public static byte[] resyncSave(Path file) {
+        Session s = required();
+        if (s.streams.inStep()) {
+            throw new IllegalStateException("SOSDET: a resync is saved between steps, not inside one");
+        }
+        long step = s.clock.step();
+        GameResync.save(file);
+        s.clock.runUntil(step); // the host waits for its own load too
+        return new Resync(step, s.seed, s.hashes.interval(), s.hashes.epoch() + 1, s.streams.drawsSinceLoad(),
+                s.ai().resyncOut(), GameResync.capture()).toBytes();
+    }
+
+    /**
+     * Every PC, the host included: loads the host's resync save and continues at its step, holding there until
+     * {@link #runUntil}. Hashes from before the resync are no longer compared.
+     * {@code afterSet} runs once the loaded game is set, before the engine restores what the save leaves out: it
+     * opens the view the save needs (for a battle, {@code BattleState.setLoaded}).
+     */
+    public static void resyncLoad(Path file, byte[] state, Runnable afterSet) {
+        Session s = required();
+        Resync r = Resync.fromBytes(state);
+        if (r.hashInterval != s.hashes.interval()) {
+            throw new IllegalStateException("SOSDET: the host hashes every " + r.hashInterval + " steps, this PC every "
+                    + s.hashes.interval());
+        }
+        s.resync = r; // taken up when the load begins (Hooks.loadBegin)
+        GameResync.load(file, afterSet, r.game);
+    }
+
     // ------------------------------------------------------------ the AI general (requirements §3)
 
-    /** The general runs inside every step (the default): deterministic with no log. */
+    /** The general runs inside every step: deterministic with no log, for single-PC replays and tests. */
     public static void aiInStep() {
         setAi(AiLog.inStep());
     }
 
     /**
-     * This PC is the host: the general runs on its own thread, and its changes go into the AI log, applied by every
-     * PC at step N + 30. Set it before the battle save loads or deploys (that starts the general's thread).
-     * {@code startId} names the start state; peers refuse a log made from another.
+     * This PC is the host (the default, with start ID 0): the general runs on its own thread, and its changes go into
+     * the AI log, applied by every PC at step N + 30. Set it before the battle save loads or deploys (that starts the
+     * general's thread). {@code startId} names the start state; peers refuse a log made from another.
      */
     public static void aiHost(long startId) {
         setAi(AiLog.host(startId, new GameAi()));
@@ -110,17 +162,17 @@ public final class Engine {
     }
 
     public static AiMode aiMode() {
-        return required().ai.mode();
+        return required().ai().mode();
     }
 
     /** Host: the AI log written since the last call, for the mod to send to every peer. */
     public static byte[] aiLogOut() {
-        return required().ai.logOut();
+        return required().ai().logOut();
     }
 
     /** Peer: more of the host's AI log, in any pieces. The peer runs at most 30 steps past what it confirms. */
     public static void aiLogIn(byte[] bytes) {
-        required().ai.logIn(bytes);
+        required().ai().logIn(bytes);
     }
 
     private static void setAi(AiLog log) {
@@ -129,7 +181,7 @@ public final class Engine {
             throw new IllegalStateException("SOSDET: the AI mode is set before the run (step " + s.clock.step()
                     + "); changing host mid-battle comes with resync (SOS-30)");
         }
-        s.ai = log;
+        s.ai(log);
     }
 
     // ------------------------------------------------------------ the state hash and desyncs (requirements §3, §4)
@@ -174,7 +226,7 @@ public final class Engine {
             throw new IllegalStateException("SOSDET: no desync to report");
         }
         // player orders come with SOS-33
-        return d.report(s.source(), s.ai.recent(), Collections.<String>emptyList());
+        return d.report(s.source(), s.ai().recent(), Collections.<String>emptyList());
     }
 
     /** When the running step started (System.nanoTime), or 0 between steps: for a stall sampler on another thread. */
@@ -189,8 +241,8 @@ public final class Engine {
         StepTimes t = s.times;
         return new Stats(s.clock.step(), s.streams.simulationDraws(), s.streams.foreignDraws(), s.pathJobs,
                 s.pathNanos, t.steps(), t.meanMs(), t.percentileMs(0.5), t.percentileMs(0.95), t.percentileMs(0.99),
-                t.percentileMs(0.999), t.maxMs(), t.over100Ms(), t.over1S(), s.ai.mode(), s.ai.applied(),
-                s.ai.applied(AiEntry.ARTILLERY), s.ai.pending(), s.hashes.taken(), s.hashes.meanMs(), s.hashes.maxMs(),
+                t.percentileMs(0.999), t.maxMs(), t.over100Ms(), t.over1S(), s.ai().mode(), s.ai().applied(),
+                s.ai().applied(AiEntry.ARTILLERY), s.ai().pending(), s.hashes.taken(), s.hashes.meanMs(), s.hashes.maxMs(),
                 s.hashes.compared(), s.hashes.missed());
     }
 

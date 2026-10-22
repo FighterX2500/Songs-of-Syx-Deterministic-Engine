@@ -18,6 +18,7 @@ Field battles run in lockstep ([ADR 0003](https://github.com/FighterX2500/SOSGSG
 ## Random numbers
 
 - Simulation code draws only from the simulation stream, only inside the step, and only on the simulation thread. No `Math.random()`, `ThreadLocalRandom`, or `new Random()` without the battle seed.
+- The simulation stream is reseeded at every step from the battle seed and the step number (SOS-30), so the stream at a step never depends on what drew before it.
 - Anything visual or audible draws from the cosmetic stream, even when it is called from inside the step: rendering, animation such as tree sway, sound picks and pitch, light flicker, UI. *SOS-11:* all three of those examples drew from the simulation stream.
 - Nothing that runs outside the step may draw from the simulation stream: class initializers, field initializers, constructors run on load, UI actions. *SOS-11:* a tile order was shuffled at class load, and the AI's `flanking` value was drawn when the AI was built.
 - Battle start (deploy and AI start-up) is step 0 and runs inside the simulation context. *SOS-11:* the AI drew its start-up values outside it.

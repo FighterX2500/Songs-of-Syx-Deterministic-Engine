@@ -155,6 +155,7 @@ class Watcher:
         self.hashes = {k: {} for k in logs}
         self.next_step = 1
         self.diverged = None
+        self.resynced = {}  # copy -> the step it resynced at (its marker line)
 
     def _read(self, k):
         path = self.logs[k]
@@ -168,21 +169,40 @@ class Watcher:
         self.partial[k] = lines.pop()  # an unfinished last line waits for the next read
         for line in lines:
             parts = line.strip().split(",")
-            if len(parts) >= 2 and parts[0].isdigit():
+            if len(parts) >= 2 and parts[0] == "resync":
+                at = int(parts[1])
+                self.resynced[k] = at
+                self.hashes[k] = {s: h for s, h in self.hashes[k].items() if s <= at}  # from before the load
+                self.next_step = min(self.next_step, at + 1)
+            elif len(parts) >= 2 and parts[0].isdigit():
                 self.hashes[k][int(parts[0])] = parts[1]
 
     def check(self):
         """Reads what is new; returns the first differing step, or None."""
         for k in self.logs:
             self._read(k)
-        while self.diverged is None and all(self.next_step in h for h in self.hashes.values()):
+        while self.diverged is None:
             s = self.next_step
-            if len({h[s] for h in self.hashes.values()}) > 1:
+            if self.resynced and (len(self.resynced) < len(self.logs) or s > min(self.resynced.values()) and
+                                  len(set(self.resynced.values())) > 1):
+                break  # a resync under way: wait until every copy has loaded it
+            present = [h[s] for k, h in self.hashes.items() if s in h]
+            jumped = [k for k, h in self.hashes.items() if s not in h and self.resynced.get(k, 0) >= s]
+            if len(present) + len(jumped) < len(self.logs):
+                break
+            if len(set(present)) > 1:
                 self.diverged = s
             for h in self.hashes.values():
-                del h[s]
+                h.pop(s, None)
             self.next_step += 1
         return self.diverged
+
+
+def load_resync(copies, saved, save, state):
+    """Every copy but copy 1 loads the resync copy 1 saved (copy 1 loads it itself)."""
+    log("copy 1 saved a resync at step %d in %d ms; the others load it" % (saved["step"], saved["saveMs"]))
+    for c in copies[1:]:
+        c.send("resyncload %s %s" % (save, state), "resyncloading")
 
 
 def last_logged_step(path):
@@ -201,19 +221,22 @@ def last_logged_step(path):
 
 
 def read_log(path):
-    """step -> hash for a per-step log (the hash logged at step s is the state step s-1 left), and the end hash."""
+    """step -> hash for a per-step log (the hash logged at step s is the state step s-1 left), and the end hash. A
+    resync marker drops the lines logged before it for later steps (they came from the game before the load)."""
     hashes, end = {}, None
     for line in path.read_text(encoding="utf-8").splitlines()[1:]:
         step, h = line.split(",")[:2]
         if step == "end":
             end = h
+        elif step == "resync":
+            hashes = {s: v for s, v in hashes.items() if s <= int(h)}
         else:
             hashes[int(step)] = h
     return hashes, end
 
 
-def compare(copies, run_dir, tag, ref, steps, ends):
-    """Acceptance: every copy matches the reference copy at every step up to its last (--steps).
+def compare(copies, run_dir, tag, ref, steps, ends, after=1, resync_step=0):
+    """Acceptance: every copy matches the reference copy at every step from `after` up to its last (--steps).
     Logged: where each copy stopped, the steps every copy reached, and each copy's end state against the
     copies that passed that step (a copy's end state is what another logs at the start of the next step)."""
     logs = {}
@@ -230,10 +253,13 @@ def compare(copies, run_dir, tag, ref, steps, ends):
         if k == ref:
             continue
         hashes, _ = logs[k]
-        first = next((s for s in range(1, last + 1) if hashes.get(s) != ref_hashes[s]), None)
+        # a copy that loaded a resync from behind its step has no lines for the steps it jumped
+        first = next((s for s in range(after, last + 1) if s in ref_hashes and hashes.get(s) != ref_hashes[s]
+                      and not (s not in hashes and s <= resync_step)), None)
         at_end = hashes.get(steps + 1)
         if first is None and at_end == ref_end and ends[ref] == steps:
-            lines.append("copy %d: identical to copy %d at every step to %d" % (k, ref, steps))
+            lines.append("copy %d: identical to copy %d at every step %sto %d"
+                         % (k, ref, "from %d " % after if after > 1 else "", steps))
         else:
             identical = False
             if first is not None and first not in hashes:
@@ -243,7 +269,7 @@ def compare(copies, run_dir, tag, ref, steps, ends):
             else:
                 lines.append("copy %d: DIFFERS from copy %d after step %d" % (k, ref, steps))
 
-    common = set.intersection(*(set(h) for h, _ in logs.values()))
+    common = set(s for s in set.intersection(*(set(h) for h, _ in logs.values())) if s >= after)
     differ = next((s for s in sorted(common) if any(logs[k][0][s] != ref_hashes[s] for k in logs)), None)
     lines.append("end steps: " + ", ".join("copy %d %d" % (k, ends[k]) for k in sorted(ends)))
     lines.append("steps every copy reached: %d (to step %d), %s"
@@ -449,11 +475,15 @@ def main():
     ap.add_argument("--artillery", type=int, default=0, help="field: artillery pieces per side in the generated battle")
     ap.add_argument("--window", action="store_true", help="the user's own screen and sound settings, to watch a copy")
     ap.add_argument("--run-on", action="store_true", help="don't stop at the first difference; run the whole length")
-    ap.add_argument("--ai", choices=["instep", "host"], default="instep",
-                    help="host: copy 1 hosts the AI general and is the reference, the others are peers fed its AI log")
+    ap.add_argument("--ai", choices=["instep", "host"], default="host",
+                    help="host (default, as the engine): copy 1 hosts the AI general and is the reference, the others are"
+                         " peers fed its AI log; instep: the general runs inside the step in every copy")
     ap.add_argument("--nudge", type=int, default=0,
                     help="forced desync: fatal injuries to one soldier in one copy at this step; runs on past the difference")
     ap.add_argument("--nudge-copy", type=int, default=0, help="the copy to nudge (default: the last)")
+    ap.add_argument("--resync", type=int, default=0, help="copy 1 saves a resync at this step; every copy loads it")
+    ap.add_argument("--resync-on-desync", action="store_true",
+                    help="at the first desync an engine reports, copy 1 saves a resync at its step; the others load it")
     ap.add_argument("--evals", action="store_true",
                     help="the timing rule instead: host and peer, one copy alone each, at speed 1")
     ap.add_argument("--vanilla", action="store_true", help="with --evals: measure vanilla again (default: SOS-23's figures)")
@@ -503,11 +533,14 @@ def main():
     start_save = run_dir / "battle.save" if args.scenario == "field" else saves["sosdet-city.save"]
     start_id = "%x" % zlib.crc32(start_save.read_bytes())  # names the start; a peer refuses another host's log
     host_log = copies[0].rig / "ai-host.log"
+    resync_save, resync_state = copies[0].rig / "resync.save", copies[0].rig / "resync.state"
 
     def start_copy(c, speed):
         c.send("begin", "begin")
         if args.ai == "host":
             c.send("ai %s %s" % ("host" if c.k == 1 else "peer", start_id), "ai")
+        else:
+            c.send("ai instep", "ai")
         c.send("loadseed %d" % LOAD_SEED, "loadseed")
         if args.scenario == "field":
             c.send("loadbattle sosdet-battle", "loaded", 600)
@@ -524,6 +557,8 @@ def main():
                 c.send("hashpeer %d %s" % (o.k, o.rig / "hashes.bin"), "hashpeer")
         if c.k == nudged:
             c.send("nudge %d" % args.nudge, "nudge")
+        if c.k == 1 and args.resync:
+            c.send("resyncat %d %s %s" % (args.resync, resync_save, resync_state), "resyncat")
         c.send("seed %d" % RUN_SEED, "seeded")
         starts[c.k] = c.send("hash", "hash")
         if args.scenario == "city":
@@ -542,15 +577,24 @@ def main():
     # Until the reference finishes: compare the copies as they run, and stop them all at the first difference.
     watcher = Watcher({c.k: c.rig / ("%s-c%d.csv" % (args.tag, c.k)) for c in copies})
     finished, deadline = {}, time.time() + 6 * 3600
+    resync = None  # copy 1's resyncsaved event, once it saved
     while True:
         if time.time() > deadline:
             fail("the reference copy did not finish")
+        if resync is None and args.resync_on_desync and any(c.find("desync", 0) for c in copies):
+            log("an engine reported a desync; copy 1 saves a resync")
+            resync = copies[0].send("resyncnow %s %s" % (resync_save, resync_state), "resyncsaved", 600)
+            load_resync(copies, resync, resync_save, resync_state)
+        if resync is None and args.resync:
+            resync = copies[0].find("resyncsaved", 0)
+            if resync:
+                load_resync(copies, resync, resync_save, resync_state)
         done = copies[ref - 1].find("finished", 0)
         if done:
             finished[ref] = done
             break
         diverged = watcher.check()
-        if diverged is not None and not args.run_on and not args.nudge:
+        if diverged is not None and not args.run_on and not args.nudge and not (args.resync_on_desync and resync is None):
             log("copies differ at step %d; holding every copy" % diverged)
             break
         time.sleep(2)
@@ -569,7 +613,15 @@ def main():
             finished[c.k] = c.wait("finished", marks[c.k], 600)
     ends = {k: f["endStep"] for k, f in finished.items()}
 
-    identical, lines = compare(copies, run_dir, args.tag, ref, args.steps, ends)
+    after = resync["step"] + 1 if resync and args.nudge else 1  # a forced desync is only repaired from the resync on
+    identical, lines = compare(copies, run_dir, args.tag, ref, args.steps, ends, after, resync["step"] if resync else 0)
+    if resync:
+        lines.insert(0, "resync: copy 1 saved at step %d in %d ms (save %d bytes, engine state %d bytes)"
+                     % (resync["step"], resync["saveMs"], resync["saveBytes"], resync["stateBytes"]))
+        for c in reversed(copies):
+            loading, done_ = c.find("resyncloading", 0), c.find("resynced", 0)
+            lines.insert(1, "resync: copy %d loaded it from its step %s, at step %s, in %s s"
+                         % (c.k, loading and loading["fromStep"], done_ and done_["step"], done_ and done_["loadSeconds"]))
     for c in copies:
         shutil.copy2(c.events, run_dir / ("events-c%d.jsonl" % c.k))
     summary = ["SOSDET rig: %s, %s test, tag %s, %d copies; copy %d runs %d steps, the others until it stops"

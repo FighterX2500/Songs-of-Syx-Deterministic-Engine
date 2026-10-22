@@ -58,6 +58,13 @@ final class StepClock {
         lastStep = last;
     }
 
+    /** After a resync load: at that step, holding there. */
+    void resetTo(long at) {
+        accumulator = 0;
+        step = at;
+        lastStep = at;
+    }
+
     /** After a load: back to step 0, holding there. */
     void reset() {
         accumulator = 0;

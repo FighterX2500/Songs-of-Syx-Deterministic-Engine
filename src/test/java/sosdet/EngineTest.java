@@ -37,6 +37,15 @@ class EngineTest {
         }
     };
 
+    /**
+     * A session as these tests need it: the AI general in-step, since the default (on the host's thread) needs a
+     * running game for its adapter.
+     */
+    private static void begin() {
+        Engine.begin();
+        Engine.aiInStep();
+    }
+
     @AfterEach
     void endSession() {
         Engine.end();
@@ -68,7 +77,7 @@ class EngineTest {
 
     @Test
     void aSessionRunsWholeStepsUpToItsLimit() {
-        Engine.begin();
+        begin();
         assertTrue(Hooks.fixedSteps());
         Engine.runUntil(2);
         int ran = 0;
@@ -91,7 +100,7 @@ class EngineTest {
 
     @Test
     void battleJobsUseTheSessionStepForTheirBeat() {
-        Engine.begin();
+        begin();
         Engine.session().source = NO_BATTLE;
         Engine.runFreely();
         int[] status = {0};
@@ -105,7 +114,7 @@ class EngineTest {
 
     @Test
     void theStateIsHashedEveryThirtyStepsAndAgainFromALoad() {
-        Engine.begin();
+        begin();
         Engine.session().source = NO_BATTLE;
         Engine.runFreely();
         for (int i = Hooks.stepsFor(1.0); i > 0 && Hooks.stepBegin(); i--) {
@@ -129,9 +138,43 @@ class EngineTest {
         assertEquals(HashLog.DEFAULT_INTERVAL, 30);
     }
 
+    /** Runs steps 1 to 5, drawing once per step plus {@code extra} times at step 2; returns step 5's draw. */
+    private static int fifthStepDraw(Random generator, int extra) {
+        begin();
+        Engine.seed(42);
+        Engine.runFreely();
+        int last = 0;
+        for (int i = Hooks.stepsFor(5 * Engine.STEP_SECONDS + 1e-9); i > 0 && Hooks.stepBegin(); i--) {
+            last = Hooks.random(generator).nextInt();
+            if (Engine.step() == 2) {
+                for (int e = 0; e < extra; e++) {
+                    Hooks.random(generator).nextInt();
+                }
+            }
+            Hooks.stepEnd();
+        }
+        assertEquals(5, Engine.step());
+        Engine.end();
+        return last;
+    }
+
+    @Test
+    void theStreamIsReseededEveryStepFromTheSeedAndTheStep() {
+        int plain = fifthStepDraw(new Random(1), 0);
+        assertEquals(plain, fifthStepDraw(new Random(99), 7), "earlier draws and the generator's history don't matter");
+        assertThrows(IllegalStateException.class, () -> {
+            begin();
+            Engine.runFreely();
+            Hooks.stepsFor(0.1);
+            Hooks.stepBegin();
+            Hooks.stepEnd();
+            Engine.seed(1);
+        }, "the seed is set at step 0");
+    }
+
     @Test
     void stepZeroRunsInsideTheSimulationAndOnlyOnce() {
-        Engine.begin();
+        begin();
         Random[] drawn = new Random[1];
         Engine.atStepZero(() -> drawn[0] = Hooks.random(simulation));
         assertSame(simulation, drawn[0]);
@@ -145,7 +188,7 @@ class EngineTest {
 
     @Test
     void aLoadRestartsTheSessionAtStepZero() {
-        Engine.begin();
+        begin();
         Engine.runFreely();
         Hooks.stepsFor(0.1);
         Hooks.stepBegin();
@@ -159,7 +202,7 @@ class EngineTest {
 
     @Test
     void localSettingsAndTheCameraStopMattering() {
-        Engine.begin();
+        begin();
         assertEquals(1, Hooks.simulationValue(3, 1));
         assertFalse(Hooks.cameraMatters());
         assertFalse(Hooks.autoSaveAllowed());
@@ -170,7 +213,7 @@ class EngineTest {
 
     @Test
     void oneSessionAtATime() {
-        Engine.begin();
+        begin();
         assertThrows(IllegalStateException.class, Engine::begin);
     }
 
