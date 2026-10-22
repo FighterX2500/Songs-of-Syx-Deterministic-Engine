@@ -60,7 +60,7 @@ class Copy:
         self.rig = self.data / "sosdet-rig"
         self.events = self.rig / "events.jsonl"
 
-    def prepare(self, saves):
+    def prepare(self, saves, window=False):
         shutil.rmtree(self.appdata, ignore_errors=True)
         (self.data / "settings").mkdir(parents=True)
         (self.data / "saves" / "saves").mkdir(parents=True)
@@ -73,9 +73,9 @@ class Copy:
         for target, src in saves.items():
             shutil.copy2(src, self.data / "saves" / "saves" / target)
         settings = (REAL / "settings" / "LauncherSettings.txt").read_bytes().decode("utf-8")
-        # Windowed and tiny, muted, never minimised, both mods on.
-        for key, value in (("SCREEN_MODE", "2"), ("WINDOW_WIDTH", "10"), ("WIDOW_HEIGHT", "10"),
-                           ("WIN_AUTO_ICONIFY", "0"), ("VOLUME_MASTER", "0")):
+        # Windowed and tiny, muted, never minimised, both mods on; with window=True, the user's own screen and sound.
+        tiny = () if window else (("SCREEN_MODE", "2"), ("WINDOW_WIDTH", "10"), ("WIDOW_HEIGHT", "10"), ("VOLUME_MASTER", "0"))
+        for key, value in tiny + (("WIN_AUTO_ICONIFY", "0"),):
             settings, n = re.subn(r"(?m)^" + key + r": [^,\r\n]*,", key + ": " + value + ",", settings)
             if n != 1:
                 fail("LauncherSettings.txt has no single %s line" % key)
@@ -445,6 +445,8 @@ def main():
     ap.add_argument("--steps", type=int, default=36000)
     ap.add_argument("--save", help="city: the save file in your saves folder")
     ap.add_argument("--keep", action="store_true", help="leave the copies open")
+    ap.add_argument("--artillery", type=int, default=0, help="field: artillery pieces per side in the generated battle")
+    ap.add_argument("--window", action="store_true", help="the user's own screen and sound settings, to watch a copy")
     ap.add_argument("--run-on", action="store_true", help="don't stop at the first difference; run the whole length")
     ap.add_argument("--ai", choices=["instep", "host"], default="instep",
                     help="host: copy 1 hosts the AI general and is the reference, the others are peers fed its AI log")
@@ -474,7 +476,7 @@ def main():
     stop_copies()
     copies = [Copy(k, game) for k in range(1, args.copies + 1)]
     for c in copies:
-        c.prepare(saves)
+        c.prepare(saves, args.window)
     for c in copies:
         c.start(autoload)
         time.sleep(3)
@@ -484,8 +486,9 @@ def main():
         % (len(copies), args.scenario, baseline, speeds, ref, args.steps))
 
     if args.scenario == "field":
-        log("copy 1 generates the battle (seed %d, %d per side)" % (BATTLE_SEED, MEN_PER_SIDE))
-        copies[0].send("generate %d %d" % (BATTLE_SEED, MEN_PER_SIDE), "generated", 600)
+        log("copy 1 generates the battle (seed %d, %d men and %d artillery per side)" % (BATTLE_SEED, MEN_PER_SIDE, args.artillery))
+        gen = copies[0].send("generate %d %d %d" % (BATTLE_SEED, MEN_PER_SIDE, args.artillery), "generated", 600)
+        log("generated: %s" % json.dumps(gen))
         battle = copies[0].data / "saves" / "saves" / "__battle.save"
         shutil.copy2(battle, run_dir / "battle.save")
         for c in copies:

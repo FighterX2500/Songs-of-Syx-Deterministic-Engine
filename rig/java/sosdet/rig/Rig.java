@@ -54,7 +54,8 @@ import view.main.VIEW;
  *   loadseed &lt;n&gt;                       loads run on the simulation stream seeded with n (0: vanilla)
  *   holdworld &lt;0|1&gt;                     hold the world map still in the city view
  *   load &lt;save&gt;                         load a save
- *   generate &lt;seed&gt; &lt;menPerSide&gt;       generate a field battle near the capital and save it as __battle
+ *   generate &lt;seed&gt; &lt;menPerSide&gt; [artillery]  generate a field battle near the capital and save it as __battle;
+ *                                       artillery pieces per side, spread over the artillery types
  *   loadbattle &lt;save&gt;                   load a battle save and enter its deployment
  *   seed &lt;n&gt;                            seed the simulation stream
  *   invade &lt;men&gt;                        the next city run starts an invasion of that many men at steps 1 and 2
@@ -316,7 +317,7 @@ public final class Rig implements SCRIPT {
                 new GameLoader(PATHS.local().save().get(rest(c))).set();
                 return;
             case "generate":
-                generate(Integer.parseInt(c[1]), Integer.parseInt(c[2]));
+                generate(Integer.parseInt(c[1]), Integer.parseInt(c[2]), c.length > 3 ? Integer.parseInt(c[3]) : 0);
                 return;
             case "loadbattle":
                 loadBattle(rest(c));
@@ -509,7 +510,7 @@ public final class Rig implements SCRIPT {
         // ------------------------------------------------------------ battle saves
 
         /** Generates a field battle next to the player's capital, as the debug tool does, and saves it as __battle. */
-        private void generate(int seed, int menPerSide) throws ReflectiveOperationException {
+        private void generate(int seed, int menPerSide, int artillery) throws ReflectiveOperationException {
             int wx = FACTIONS.player().capitolRegion().cx() + 3;
             int wy = FACTIONS.player().capitolRegion().cy();
             Method save = BattleState.class.getDeclaredMethod("save", String.class);
@@ -520,8 +521,8 @@ public final class Rig implements SCRIPT {
             }
             RND.setSeed(seed);
             BattleStateSpec spec = new BattleStateSpec();
-            fillSide(spec.player, menPerSide, wx, wy);
-            fillSide(spec.enemy, menPerSide, wx + 1, wy);
+            fillSide(spec.player, menPerSide, artillery, wx, wy);
+            fillSide(spec.enemy, menPerSide, artillery, wx + 1, wy);
             Constructor<BattleState> ctor = BattleState.class.getDeclaredConstructor(BattleStateExiter.class, Path.class);
             ctor.setAccessible(true);
             BattleState state = ctor.newInstance(exiter(), PATHS.local().save().get("__battle"));
@@ -534,7 +535,8 @@ public final class Rig implements SCRIPT {
             generateMethod.setAccessible(true);
             generateMethod.invoke(generatorCtor.newInstance(), state, spec, tiles.get(state));
             save.invoke(null, "__battle");
-            event("generated", String.format(Locale.ROOT, "\"seed\":%d,\"menPerSide\":%d,\"battle\":\"%016x\"", seed, menPerSide, battleHash()));
+            event("generated", String.format(Locale.ROOT, "\"seed\":%d,\"menPerSide\":%d,\"artillery\":%d,\"artilleryTypes\":%d,\"battle\":\"%016x\"",
+                    seed, menPerSide, artillery, SETT.ROOMS().ARTILLERY.size(), battleHash()));
         }
 
         private void loadBattle(String name) {
@@ -556,7 +558,12 @@ public final class Rig implements SCRIPT {
             };
         }
 
-        private static void fillSide(BattleStateSpec.SpecSide side, int men, int wx, int wy) {
+        private static void fillSide(BattleStateSpec.SpecSide side, int men, int artillery, int wx, int wy) {
+            // Artillery pieces, spread evenly over the artillery types (the first types take the remainder).
+            int types = SETT.ROOMS().ARTILLERY.size();
+            for (int t = 0; t < types; t++) {
+                side.artillery[SETT.ROOMS().ARTILLERY.get(t).typeIndex()] = artillery / types + (t < artillery % types ? 1 : 0);
+            }
             int perDiv = Config.battle().MEN_PER_DIVISION;
             int divs = Math.min(Config.battle().DIVISIONS_PER_ARMY, (men + perDiv - 1) / perDiv);
             side.wCoo.set(wx, wy);
