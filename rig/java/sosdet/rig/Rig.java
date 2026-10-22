@@ -496,6 +496,10 @@ public final class Rig implements SCRIPT {
             case "loadbattle":
                 loadBattle(rest(c));
                 return;
+            case "steplength":
+                Engine.stepSeconds(1.0 / Integer.parseInt(c[1]));
+                event("steplength", "\"perSecond\":" + c[1]);
+                return;
             case "seed":
                 Engine.seed(Integer.parseInt(c[1]));
                 event("seeded", "\"seed\":" + Integer.parseInt(c[1]));

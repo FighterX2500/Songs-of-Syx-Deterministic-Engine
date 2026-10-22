@@ -484,6 +484,8 @@ def main():
     ap.add_argument("--resync", type=int, default=0, help="copy 1 saves a resync at this step; every copy loads it")
     ap.add_argument("--resync-on-desync", action="store_true",
                     help="at the first desync an engine reports, copy 1 saves a resync at its step; the others load it")
+    ap.add_argument("--step", type=int, default=60, help="experiment: steps per game second (16 = vanilla's longest)")
+    ap.add_argument("--no-invade", action="store_true", help="city: no invasion, the city as it is")
     ap.add_argument("--evals", action="store_true",
                     help="the timing rule instead: host and peer, one copy alone each, at speed 1")
     ap.add_argument("--vanilla", action="store_true", help="with --evals: measure vanilla again (default: SOS-23's figures)")
@@ -560,8 +562,10 @@ def main():
         if c.k == 1 and args.resync:
             c.send("resyncat %d %s %s" % (args.resync, resync_save, resync_state), "resyncat")
         c.send("seed %d" % RUN_SEED, "seeded")
+        if args.step != 60:
+            c.send("steplength %d" % args.step, "steplength")
         starts[c.k] = c.send("hash", "hash")
-        if args.scenario == "city":
+        if args.scenario == "city" and not args.no_invade:
             c.send("invade %d" % INVADE_MEN, "invade")
         steps = args.steps if c.k == ref else 0
         c.send("run %s %d %s %s-c%d" % ("battle" if args.scenario == "field" else "city", steps, speed, args.tag, c.k), "running")

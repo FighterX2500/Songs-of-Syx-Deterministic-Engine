@@ -83,6 +83,15 @@ public final class Engine {
         s.seed = seed;
     }
 
+    /** Experiment: this session's step length in game seconds (1/60 by default); set at step 0. */
+    public static void stepSeconds(double seconds) {
+        Session s = required();
+        if (s.clock.step() != 0 || seconds <= 0 || seconds > 1.0 / 16) {
+            throw new IllegalArgumentException("SOSDET: step length " + seconds + " at step " + s.clock.step());
+        }
+        s.clock.stepSeconds(seconds);
+    }
+
     /** From the next load on, loading runs on the simulation stream seeded with this; 0 = vanilla loading. */
     public static void armLoadSeed(int seed) {
         required().loadSeed = seed;

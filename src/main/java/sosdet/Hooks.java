@@ -39,6 +39,11 @@ public final class Hooks {
         return Engine.session() == null;
     }
 
+    /** The length of every step this session, in game seconds. */
+    public static double stepSeconds() {
+        return Engine.session().clock.stepSeconds();
+    }
+
     /** Whole steps this frame's game time completes. */
     public static int stepsFor(double gameSeconds) {
         return Engine.session().clock.stepsFor(gameSeconds);

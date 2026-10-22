@@ -14,6 +14,8 @@ final class StepClock {
     /** No last step: run as long as game time advances. */
     static final long NO_LIMIT = -1;
 
+    /** This session's step length (experiment: 1/16 s, vanilla's longest sub-step). */
+    private double stepSeconds = STEP_SECONDS;
     private double accumulator;
     private long step;
     private long lastStep;
@@ -27,8 +29,8 @@ final class StepClock {
         if (gameSeconds > 0) {
             accumulator += gameSeconds;
         }
-        int steps = (int) (accumulator / STEP_SECONDS);
-        accumulator -= steps * STEP_SECONDS;
+        int steps = (int) (accumulator / stepSeconds);
+        accumulator -= steps * stepSeconds;
         return steps;
     }
 
@@ -45,6 +47,14 @@ final class StepClock {
     /** The next step may not run yet (a peer waiting for the host): drop the game time owed, as at the last step. */
     void hold() {
         accumulator = 0;
+    }
+
+    double stepSeconds() {
+        return stepSeconds;
+    }
+
+    void stepSeconds(double seconds) {
+        stepSeconds = seconds;
     }
 
     long step() {
