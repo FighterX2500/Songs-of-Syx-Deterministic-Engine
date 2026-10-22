@@ -9,6 +9,7 @@
 import java.io.PrintWriter
 import java.io.StringWriter
 import java.net.URLClassLoader
+import java.nio.ByteBuffer
 import java.security.MessageDigest
 import java.util.zip.ZipFile
 
@@ -368,8 +369,144 @@ tasks.test {
     systemProperty("sosdet.version", project.version.toString())
 }
 
+// ---------------------------------------------------------------- random draws in static initializers (SOS-32)
+//
+// A static initializer runs whenever its class first loads: inside the step on one PC, at load or at the menu on
+// another. If it draws from RND, the simulation stream shifts on one PC only. 50-fixed-tables gives every such class
+// we know a fixed generator; this check finds any other, for example in a new game version. It reads the bytecode of
+// every class the game runs (ours where we ship a patched one) and follows constructor and static calls across
+// classes, so a draw behind a helper (DEG.setRandom()) counts too. Calls through virtual dispatch are not followed.
+
+/** One method's direct draws from RND and its constructor, private and static calls ("owner.name desc"). */
+class MethodCalls(val drawsRnd: Boolean, val calls: List<String>)
+
+/** The methods of one class file, keyed "owner.name desc"; null for a file that isn't a class. */
+fun readMethodCalls(bytes: ByteArray): Map<String, MethodCalls>? {
+    val b = ByteBuffer.wrap(bytes)
+    if (bytes.size < 10 || b.getInt() != 0xCAFEBABE.toInt()) return null
+    b.getShort(); b.getShort()
+    val count = b.getShort().toInt() and 0xFFFF
+    val tags = IntArray(count)
+    val utf = arrayOfNulls<String>(count)
+    val ref1 = IntArray(count)
+    val ref2 = IntArray(count)
+    var i = 1
+    while (i < count) {
+        val tag = b.get().toInt()
+        tags[i] = tag
+        when (tag) {
+            1 -> { val n = b.getShort().toInt() and 0xFFFF; val s = ByteArray(n); b.get(s); utf[i] = String(s, Charsets.UTF_8) }
+            3, 4 -> b.getInt()
+            5, 6 -> { b.getLong(); i++ }
+            7, 8, 16, 19, 20 -> ref1[i] = b.getShort().toInt() and 0xFFFF
+            9, 10, 11, 12, 17, 18 -> { ref1[i] = b.getShort().toInt() and 0xFFFF; ref2[i] = b.getShort().toInt() and 0xFFFF }
+            15 -> { b.get(); b.getShort() }
+            else -> throw GradleException("SOSDET: unknown constant pool tag $tag")
+        }
+        i++
+    }
+    fun className(index: Int) = utf[ref1[index]]!!
+    fun member(index: Int): String { // Methodref or InterfaceMethodref -> "owner.name desc"
+        val nat = ref2[index]
+        return className(ref1[index]) + "." + utf[ref1[nat]] + " " + utf[ref2[nat]]
+    }
+    b.getShort()
+    val self = className(b.getShort().toInt() and 0xFFFF)
+    b.getShort()
+    repeat(b.getShort().toInt() and 0xFFFF) { b.getShort() }
+    fun skipAttributes() = repeat(b.getShort().toInt() and 0xFFFF) { b.getShort(); val n = b.getInt(); b.position(b.position() + n) }
+    repeat(b.getShort().toInt() and 0xFFFF) { b.getShort(); b.getShort(); b.getShort(); skipAttributes() }
+    val result = HashMap<String, MethodCalls>()
+    repeat(b.getShort().toInt() and 0xFFFF) {
+        b.getShort()
+        val key = self + "." + utf[b.getShort().toInt() and 0xFFFF] + " " + utf[b.getShort().toInt() and 0xFFFF]
+        var draws = false
+        val calls = ArrayList<String>()
+        repeat(b.getShort().toInt() and 0xFFFF) {
+            val name = utf[b.getShort().toInt() and 0xFFFF]
+            val length = b.getInt()
+            val end = b.position() + length
+            if (name == "Code") {
+                b.getShort(); b.getShort()
+                val codeLength = b.getInt()
+                val start = b.position()
+                var pc = 0
+                while (pc < codeLength) {
+                    val op = bytes[start + pc].toInt() and 0xFF
+                    if (op == 0xb7 || op == 0xb8) { // invokespecial, invokestatic
+                        val target = member(((bytes[start + pc + 1].toInt() and 0xFF) shl 8) or (bytes[start + pc + 2].toInt() and 0xFF))
+                        if (target.startsWith("snake2d/util/rnd/RND.")) draws = true else calls.add(target)
+                    }
+                    pc += when (op) {
+                        0x10, 0x12, 0x15, 0x16, 0x17, 0x18, 0x19, 0x36, 0x37, 0x38, 0x39, 0x3a, 0xa9, 0xbc -> 2
+                        0x11, 0x13, 0x14, 0x84, in 0x99..0xa8, in 0xb2..0xb8, 0xbb, 0xbd, 0xc0, 0xc1, 0xc6, 0xc7 -> 3
+                        0xc5 -> 4
+                        0xb9, 0xba, 0xc8, 0xc9 -> 5
+                        0xc4 -> if ((bytes[start + pc + 1].toInt() and 0xFF) == 0x84) 6 else 4
+                        0xaa, 0xab -> {
+                            val pad = (4 - (pc + 1) % 4) % 4
+                            val at = ByteBuffer.wrap(bytes, start + pc + 1 + pad, 12)
+                            at.getInt()
+                            if (op == 0xaa) { val low = at.getInt(); val high = at.getInt(); 1 + pad + 12 + (high - low + 1) * 4 }
+                            else 1 + pad + 8 + at.getInt() * 8
+                        }
+                        else -> 1
+                    }
+                }
+            }
+            b.position(end)
+        }
+        result[key] = MethodCalls(draws, calls)
+    }
+    return result
+}
+
+val staticDrawCheck by tasks.registering {
+    group = "verification"
+    description = "Fails if any static initializer the game runs draws from RND (directly or through the methods it calls)."
+    dependsOn(compileGamePatches)
+    inputs.file(gameJar())
+    inputs.dir(gamePatchClassesDir)
+    val report = layout.buildDirectory.file("static-draws.txt")
+    outputs.file(report)
+    doLast {
+        val methods = HashMap<String, MethodCalls>()
+        ZipFile(gameJar()).use { jar ->
+            jar.entries().asSequence().filter { it.name.endsWith(".class") }.forEach { entry ->
+                readMethodCalls(jar.getInputStream(entry).use { it.readBytes() })?.let { methods.putAll(it) }
+            }
+        }
+        classesUnder(gamePatchClassesDir.get().asFile).values.forEach { file ->
+            val shipped = readMethodCalls(file.readBytes()) ?: return@forEach
+            val owner = shipped.keys.first().substringBefore('.')
+            methods.keys.removeIf { it.substringBefore('.') == owner } // the shipped class replaces the game's
+            methods.putAll(shipped)
+        }
+        // the shortest known chain from a method to a draw from RND, or null; memoized
+        val chains = HashMap<String, List<String>?>()
+        fun chain(key: String, seen: MutableSet<String>): List<String>? {
+            if (chains.containsKey(key)) return chains[key]
+            val m = methods[key] ?: return null
+            if (!seen.add(key)) return null
+            val result = if (m.drawsRnd) listOf(key, "RND") else m.calls.firstNotNullOfOrNull { c -> chain(c, seen)?.let { listOf(key) + it } }
+            chains[key] = result
+            return result
+        }
+        // a static initializer that opens a cosmetic bracket (40-cosmetic) draws its visual values off the simulation
+        val found = methods.filterValues { "sosdet/Hooks.cosmeticBegin ()V" !in it.calls }.keys
+            .filter { it.endsWith(".<clinit> ()V") }.mapNotNull { k -> chain(k, HashSet())?.let { k.substringBefore('.') to it } }
+            .sortedBy { it.first }
+        val offenders = found.map { it.first }
+        report.get().asFile.writeText("Static initializers drawing from RND: ${found.size}\n" +
+            found.joinToString("") { (c, path) -> "$c\n    " + path.joinToString("\n    -> ") + "\n" })
+        if (offenders.isNotEmpty()) {
+            throw GradleException("SOSDET: static initializers draw from RND (50-fixed-tables needs them): $offenders")
+        }
+    }
+}
+
 tasks.check {
-    dependsOn(verifyUntouched, fullRebuildCheck)
+    dependsOn(verifyUntouched, fullRebuildCheck, staticDrawCheck)
 }
 
 // ---------------------------------------------------------------- the test rig (rig/; never in a release)
