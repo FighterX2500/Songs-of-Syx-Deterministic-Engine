@@ -15,16 +15,16 @@ Status: **done** (hooked, with its command id), **to do**, or why it needs no co
 | --- | --- | --- | --- |
 | generic holder | `util.data.INT$IntImp` `set(I)V` | B | not hooked (hot path): the UI call sites instead (ADR 0002) |
 | generic holder | `util.data.BOOLEAN$BOOLEANImp` `set(Z)Lutil/data/BOOLEAN$BOOLEAN_MUTABLE;` | B | not hooked (hot path): the UI call sites instead (ADR 0002) |
-| employment | `settlement.room.main.employment.RoomEmployment$Priority` `set(I)V` | B | to do |
-| employment | `settlement.room.main.employment.RoomEmployment$GRoupInt` `set(Linit/type/WGROUP;I)V` | B | to do |
-| employment | `settlement.room.main.employment.RoomEmployment$2` `set(Linit/type/WGROUP;I)V` | B | to do |
-| employment | `settlement.room.main.employment.RoomEmployment` `setPrioOnSkill()V` | B | to do |
-| employment | `settlement.room.main.employment.RoomEmployment` `setPrioOnFullfillment()V` | B | to do |
-| employment | `settlement.room.main.employment.RoomEmployment` `setPrioOnSkill(Linit/type/WGROUP;)V` | B | to do |
-| employment | `settlement.room.main.employment.RoomEmployment` `setPrioOnFullfillment(Linit/type/WGROUP;)V` | B | to do |
-| employment | `settlement.room.main.employment.RoomEmployments` `setTargets()V` | B | to do |
-| employment | `settlement.room.main.employment.RoomEmploymentIns` `neededSet(I)V` | B | to do |
-| employment | `settlement.room.main.employment.RoomEquip$Target` `set(I)V` | B | to do |
+| employment | `settlement.room.main.employment.RoomEmployment$Priority` `set(I)V` | B | done: command 3000 workPriority, patch 96-cmd-employment |
+| employment | `settlement.room.main.employment.RoomEmployment$GRoupInt` `set(Linit/type/WGROUP;I)V` | B | done: command 3001 workGroupPriority, patch 96-cmd-employment |
+| employment | `settlement.room.main.employment.RoomEmployment$2` `set(Linit/type/WGROUP;I)V` | B | done: command 3001 workGroupPriority, patch 96-cmd-employment |
+| employment | `settlement.room.main.employment.RoomEmployment` `setPrioOnSkill()V` | B | not needed: no UI caller (new game and load only) |
+| employment | `settlement.room.main.employment.RoomEmployment` `setPrioOnFullfillment()V` | B | not needed: no caller |
+| employment | `settlement.room.main.employment.RoomEmployment` `setPrioOnSkill(Linit/type/WGROUP;)V` | B | done: command 3003 workPrioOnSkill, patch 96-cmd-employment |
+| employment | `settlement.room.main.employment.RoomEmployment` `setPrioOnFullfillment(Linit/type/WGROUP;)V` | B | done: command 3004 workPrioOnFulfillment, patch 96-cmd-employment |
+| employment | `settlement.room.main.employment.RoomEmployments` `setTargets()V` | B | done: command 3002 workTargets, patch 96-cmd-employment |
+| employment | `settlement.room.main.employment.RoomEmploymentIns` `neededSet(I)V` | B | done: command 3005 roomWorkers, patch 96-cmd-employment (the trainer panel's gauge with the rooms patch; room rebuild and move-order paste run inside their own commands) |
+| employment | `settlement.room.main.employment.RoomEquip$Target` `set(I)V` | B | done: command 3007 equipTarget, patch 96-cmd-employment |
 | tools/placement | `settlement.room.main.placement.RoomPlacer` `init(Lsettlement/room/main/RoomBlueprintImp;I)V` | B | to do |
 | tools/placement | `settlement.room.main.placement.RoomPlacer` `create()Lsnake2d/util/datatypes/COORDINATE;` | B | to do |
 | tools/placement | `settlement.room.main.placement.RoomPlacer` `popHistory()Z` | B | to do |
@@ -41,25 +41,25 @@ Status: **done** (hooked, with its command id), **to do**, or why it needs no co
 | rooms | `settlement.room.main.RoomInstance` `upgradeSet(I)V` | B | to do |
 | rooms | `init.resources.RESOURCE` `remove(ILgame/faction/FResources$RTYPE;)I` | B | to do |
 | rooms | `settlement.maintenance.MAINTENANCE` `maintain(II)V` | B | to do |
-| employment | `settlement.room.food.pasture.ROOM_PASTURE` `autoEmploy(Lsettlement/room/main/Room;Z)V` | B | to do |
-| employment | `settlement.room.health.physician.ROOM_PHYSICIAN` `autoEmploy(Lsettlement/room/main/Room;Z)V` | B | to do |
-| employment | `settlement.room.service.breeder.ROOM_BREEDER` `autoEmploy(Lsettlement/room/main/Room;Z)V` | B | to do |
-| employment | `settlement.room.service.hygine.bath.ROOM_BATH` `autoEmploy(Lsettlement/room/main/Room;Z)V` | B | to do |
-| employment | `settlement.room.service.lavatory.ROOM_LAVATORY` `autoEmploy(Lsettlement/room/main/Room;Z)V` | B | to do |
-| employment | `settlement.room.service.food.eatery.ROOM_EATERY` `autoEmploy(Lsettlement/room/main/Room;Z)V` | B | to do |
-| employment | `settlement.room.service.food.tavern.ROOM_TAVERN` `autoEmploy(Lsettlement/room/main/Room;Z)V` | B | to do |
-| employment | `settlement.room.service.pleasure.ROOM_PLEASURE` `autoEmploy(Lsettlement/room/main/Room;Z)V` | B | to do |
-| employment | `settlement.room.service.food.canteen.ROOM_CANTEEN` `autoEmploy(Lsettlement/room/main/Room;Z)V` | B | to do |
-| employment | `settlement.room.service.barber.ROOM_BARBER` `autoEmploy(Lsettlement/room/main/Room;Z)V` | B | to do |
-| employment | `settlement.room.service.market.ROOM_MARKET` `autoEmploy(Lsettlement/room/main/Room;Z)V` | B | to do |
-| employment | `settlement.room.military.supply.ROOM_SUPPLY` `autoEmploy(Lsettlement/room/main/Room;Z)V` | B | to do |
-| employment | `settlement.room.infra.export.ROOM_EXPORT` `autoEmploy(Lsettlement/room/main/Room;Z)V` | B | to do |
-| employment | `settlement.room.infra.janitor.ROOM_JANITOR` `autoEmploy(Lsettlement/room/main/Room;Z)V` | B | to do |
-| employment | `settlement.room.infra.station.ROOM_STATION` `autoEmploy(Lsettlement/room/main/Room;Z)V` | B | to do |
-| employment | `settlement.room.infra.hauler.ROOM_HAULER` `autoEmploy(Lsettlement/room/main/Room;Z)V` | B | to do |
-| employment | `settlement.room.infra.inn.ROOM_INN` `autoEmploy(Lsettlement/room/main/Room;Z)V` | B | to do |
-| employment | `settlement.room.infra.transport.ROOM_TRANSPORT` `autoEmploy(Lsettlement/room/main/Room;Z)V` | B | to do |
-| employment | `settlement.room.infra.stockpile.ROOM_STOCKPILE` `autoEmploy(Lsettlement/room/main/Room;Z)V` | B | to do |
+| employment | `settlement.room.food.pasture.ROOM_PASTURE` `autoEmploy(Lsettlement/room/main/Room;Z)V` | B | done: command 3006 roomAutoEmploy, patch 96-cmd-employment (ModuleEmployment call sites) |
+| employment | `settlement.room.health.physician.ROOM_PHYSICIAN` `autoEmploy(Lsettlement/room/main/Room;Z)V` | B | done: command 3006 roomAutoEmploy, patch 96-cmd-employment (ModuleEmployment call sites) |
+| employment | `settlement.room.service.breeder.ROOM_BREEDER` `autoEmploy(Lsettlement/room/main/Room;Z)V` | B | done: command 3006 roomAutoEmploy, patch 96-cmd-employment (ModuleEmployment call sites) |
+| employment | `settlement.room.service.hygine.bath.ROOM_BATH` `autoEmploy(Lsettlement/room/main/Room;Z)V` | B | done: command 3006 roomAutoEmploy, patch 96-cmd-employment (ModuleEmployment call sites) |
+| employment | `settlement.room.service.lavatory.ROOM_LAVATORY` `autoEmploy(Lsettlement/room/main/Room;Z)V` | B | done: command 3006 roomAutoEmploy, patch 96-cmd-employment (ModuleEmployment call sites) |
+| employment | `settlement.room.service.food.eatery.ROOM_EATERY` `autoEmploy(Lsettlement/room/main/Room;Z)V` | B | done: command 3006 roomAutoEmploy, patch 96-cmd-employment (ModuleEmployment call sites) |
+| employment | `settlement.room.service.food.tavern.ROOM_TAVERN` `autoEmploy(Lsettlement/room/main/Room;Z)V` | B | done: command 3006 roomAutoEmploy, patch 96-cmd-employment (ModuleEmployment call sites) |
+| employment | `settlement.room.service.pleasure.ROOM_PLEASURE` `autoEmploy(Lsettlement/room/main/Room;Z)V` | B | done: command 3006 roomAutoEmploy, patch 96-cmd-employment (ModuleEmployment call sites) |
+| employment | `settlement.room.service.food.canteen.ROOM_CANTEEN` `autoEmploy(Lsettlement/room/main/Room;Z)V` | B | done: command 3006 roomAutoEmploy, patch 96-cmd-employment (ModuleEmployment call sites) |
+| employment | `settlement.room.service.barber.ROOM_BARBER` `autoEmploy(Lsettlement/room/main/Room;Z)V` | B | done: command 3006 roomAutoEmploy, patch 96-cmd-employment (ModuleEmployment call sites) |
+| employment | `settlement.room.service.market.ROOM_MARKET` `autoEmploy(Lsettlement/room/main/Room;Z)V` | B | done: command 3006 roomAutoEmploy, patch 96-cmd-employment (ModuleEmployment call sites) |
+| employment | `settlement.room.military.supply.ROOM_SUPPLY` `autoEmploy(Lsettlement/room/main/Room;Z)V` | B | done: command 3006 roomAutoEmploy, patch 96-cmd-employment (ModuleEmployment call sites) |
+| employment | `settlement.room.infra.export.ROOM_EXPORT` `autoEmploy(Lsettlement/room/main/Room;Z)V` | B | done: command 3006 roomAutoEmploy, patch 96-cmd-employment (ModuleEmployment call sites) |
+| employment | `settlement.room.infra.janitor.ROOM_JANITOR` `autoEmploy(Lsettlement/room/main/Room;Z)V` | B | done: command 3006 roomAutoEmploy, patch 96-cmd-employment (ModuleEmployment call sites) |
+| employment | `settlement.room.infra.station.ROOM_STATION` `autoEmploy(Lsettlement/room/main/Room;Z)V` | B | done: command 3006 roomAutoEmploy, patch 96-cmd-employment (ModuleEmployment call sites) |
+| employment | `settlement.room.infra.hauler.ROOM_HAULER` `autoEmploy(Lsettlement/room/main/Room;Z)V` | B | done: command 3006 roomAutoEmploy, patch 96-cmd-employment (ModuleEmployment call sites) |
+| employment | `settlement.room.infra.inn.ROOM_INN` `autoEmploy(Lsettlement/room/main/Room;Z)V` | B | done: command 3006 roomAutoEmploy, patch 96-cmd-employment (ModuleEmployment call sites) |
+| employment | `settlement.room.infra.transport.ROOM_TRANSPORT` `autoEmploy(Lsettlement/room/main/Room;Z)V` | B | done: command 3006 roomAutoEmploy, patch 96-cmd-employment (ModuleEmployment call sites) |
+| employment | `settlement.room.infra.stockpile.ROOM_STOCKPILE` `autoEmploy(Lsettlement/room/main/Room;Z)V` | B | done: command 3006 roomAutoEmploy, patch 96-cmd-employment (ModuleEmployment call sites) |
 | rooms | `settlement.room.infra.export.ExportInstance` `radiusRawSet(B)V` | B | to do |
 | rooms | `settlement.room.infra.hauler.HaulerInstance` `radiusRawSet(B)V` | B | to do |
 | rooms | `settlement.room.infra.builder.BuilderInstance` `radiusRawSet(B)V` | B | to do |
