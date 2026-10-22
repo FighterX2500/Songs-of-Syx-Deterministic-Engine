@@ -1,0 +1,77 @@
+room-activate stockpile 0
+room-activate stockpile 1
+room-radius hauler 40
+room-radius hauler 60
+room-industry refiner 1
+room-industry refiner 0
+room-consumption library 0
+room-consumption library 0
+room-upgrade hunter
+room-downgrade hunter
+room-upgrade-all hunter
+export-resource 0
+export-fetching 1
+export-prio
+export-prio
+export-fetching 0
+hauler-resource 0
+hauler-fetching 1
+hauler-storing 1
+hauler-prio
+hauler-prio
+hauler-storing 0
+hauler-fetching 0
+import-allocate 0
+station-allocate 0 1
+transport-resource 0
+transport-fetching 1
+transport-prio 1
+transport-prio 0
+transport-fetching 0
+stockpile-crates 0 2
+stockpile-special 0 50
+stockpile-special 0 0
+stockpile-storing 1
+stockpile-storing 0
+stockpile-fetching 1
+stockpile-fetching 0
+stockpile-prio
+stockpile-prio
+move-new stockpile 0 hauler
+move-res stockpile 0 none
+move-res stockpile 0 0
+move-res stockpile 0 all
+move-limit stockpile 0 30
+move-set stockpile 0 export
+move-paste stockpile
+move-remove stockpile 0
+supply-allowed 0
+supply-allowed 0
+supply-fetching
+supply-fetching
+supply-prio
+supply-prio
+canteen-uses 0
+canteen-uses 0
+distribution-uses eatery 0
+distribution-uses eatery 0
+punish-race 0
+punish-race 0
+prison-fetch prison 0
+prison-fetch prison 0
+prisoner-punish 0
+prisoner-punish -1
+guard-duty 0 1
+guard-duty 0 0
+gate-lock 1
+gate-lock 0
+hospital-fetch 0 0
+hospital-fetch 0 1
+breeder-prosecute 1
+breeder-prosecute 0
+breeder-limit-total 5000
+breeder-limit-species 2000
+trainer-limit 50
+farm-change
+pasture-slaughter
+room-remove hunter
