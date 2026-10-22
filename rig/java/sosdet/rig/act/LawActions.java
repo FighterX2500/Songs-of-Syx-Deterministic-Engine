@@ -267,7 +267,7 @@ public final class LawActions {
 
     private static StatMultiplierAction action(String key) {
         for (StatMultiplier m : STATS.MULTIPLIERS().all()) {
-            if (m.key.equals(key) && m instanceof StatMultiplierAction) {
+            if (m.key.endsWith(key) && m instanceof StatMultiplierAction) { // the game prefixes the key
                 return (StatMultiplierAction) m;
             }
         }
