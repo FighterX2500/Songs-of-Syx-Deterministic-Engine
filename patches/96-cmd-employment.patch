@@ -1,0 +1,277 @@
+diff -ru -U2 a/settlement/room/main/employment/RoomEmployment.java b/settlement/room/main/employment/RoomEmployment.java
+--- a/settlement/room/main/employment/RoomEmployment.java	2026-06-20 10:20:06.000000000 +0500
++++ b/settlement/room/main/employment/RoomEmployment.java	2026-10-23 02:19:14.704260800 +0500
+@@ -184,6 +184,8 @@
+ 
+ 		@Override
+ 		public void set(int i) {
++			if (sosdet.game.cmd.Employment.priority(p, i)) // SOSDET: a workplace's master priority is a command, applied at its step on every PC (ADR 0002)
++				return;
+ 			i = CLAMP.i(i, min(), max());
+ 			if (prio != i) {
+ 				prio = i;
+diff -ru -U2 a/settlement/room/main/employment/RoomEmployments.java b/settlement/room/main/employment/RoomEmployments.java
+--- a/settlement/room/main/employment/RoomEmployments.java	2026-06-20 09:00:50.000000000 +0500
++++ b/settlement/room/main/employment/RoomEmployments.java	2026-10-23 02:19:14.705250200 +0500
+@@ -126,6 +126,8 @@
+ 	}
+ 	
+ 	public void setTargets() {
++		if (sosdet.game.cmd.Employment.targets()) // SOSDET: recomputing the work targets is a command (ADR 0002)
++			return;
+ 		employer.updateAll();
+ 	}
+ 	
+diff -ru -U2 a/view/sett/ui/room/ModuleEmployment.java b/view/sett/ui/room/ModuleEmployment.java
+--- a/view/sett/ui/room/ModuleEmployment.java	2026-06-18 19:47:24.000000000 +0500
++++ b/view/sett/ui/room/ModuleEmployment.java	2026-10-23 02:19:14.719252300 +0500
+@@ -202,42 +202,48 @@
+ 				
+ 				@Override
+ 				protected void apply(RoomInstance t) {
+-					t.employees().neededSet(t.employees().needed()+25);
++					if (!sosdet.game.cmd.Employment.workers(t, t.employees().needed()+25)) // SOSDET: a room's worker target is a command (ADR 0002)
++						t.employees().neededSet(t.employees().needed()+25);
+ 				}
+ 			});
+ 			appliers.add(new UIRoomBulkApplier(new Str(¤¤WORKERS_INC).insert(0, ""+5)) {
+ 				
+ 				@Override
+ 				protected void apply(RoomInstance t) {
+-					t.employees().neededSet(t.employees().needed()+5);
++					if (!sosdet.game.cmd.Employment.workers(t, t.employees().needed()+5)) // SOSDET: a room's worker target is a command (ADR 0002)
++						t.employees().neededSet(t.employees().needed()+5);
+ 				}
+ 			});
+ 			appliers.add(new UIRoomBulkApplier(new Str(¤¤WORKERS_INC).insert(0, ""+1)) {
+ 				
+ 				@Override
+ 				protected void apply(RoomInstance t) {
+-					t.employees().neededSet(t.employees().needed()+1);
++					if (!sosdet.game.cmd.Employment.workers(t, t.employees().needed()+1)) // SOSDET: a room's worker target is a command (ADR 0002)
++						t.employees().neededSet(t.employees().needed()+1);
+ 				}
+ 			});
+ 			appliers.add(new UIRoomBulkApplier(new Str(¤¤WORKERS_DEC).insert(0, ""+1)) {
+ 				
+ 				@Override
+ 				protected void apply(RoomInstance t) {
+-					t.employees().neededSet(t.employees().needed()-1);
++					if (!sosdet.game.cmd.Employment.workers(t, t.employees().needed()-1)) // SOSDET: a room's worker target is a command (ADR 0002)
++						t.employees().neededSet(t.employees().needed()-1);
+ 				}
+ 			});
+ 			appliers.add(new UIRoomBulkApplier(new Str(¤¤WORKERS_DEC).insert(0, ""+5)) {
+ 				
+ 				@Override
+ 				protected void apply(RoomInstance t) {
+-					t.employees().neededSet(t.employees().needed()-5);
++					if (!sosdet.game.cmd.Employment.workers(t, t.employees().needed()-5)) // SOSDET: a room's worker target is a command (ADR 0002)
++						t.employees().neededSet(t.employees().needed()-5);
+ 				}
+ 			});
+ 			appliers.add(new UIRoomBulkApplier(new Str(¤¤WORKERS_DEC).insert(0, ""+25)) {
+ 				
+ 				@Override
+ 				protected void apply(RoomInstance t) {
+-					t.employees().neededSet(t.employees().needed()-25);
++					if (!sosdet.game.cmd.Employment.workers(t, t.employees().needed()-25)) // SOSDET: a room's worker target is a command (ADR 0002)
++						t.employees().neededSet(t.employees().needed()-25);
+ 				}
+ 			});
+ 			
+@@ -249,9 +255,11 @@
+ 						
+ 						boolean b = ((ROOM_EMPLOY_AUTO)t.blueprint()).autoEmploy(t);
+ 						if (!b && t.employees().needed() == 0)
+-							(t).employees().neededSet(1);
++							if (!sosdet.game.cmd.Employment.workers(t, 1)) // SOSDET: a room's worker target is a command (ADR 0002)
++								(t).employees().neededSet(1);
+ 						
+-						((ROOM_EMPLOY_AUTO)t.blueprint()).autoEmploy(t, true);
++						if (!sosdet.game.cmd.Employment.autoEmploy(t, true)) // SOSDET: a room's auto-employ is a command (ADR 0002)
++							((ROOM_EMPLOY_AUTO)t.blueprint()).autoEmploy(t, true);
+ 					}
+ 				});
+ 				appliers.add(new UIRoomBulkApplier(new Str(¤¤AUTO).s().add(Dic.¤¤off)) {
+@@ -260,7 +268,8 @@
+ 					protected void apply(RoomInstance t) {
+ 						
+ 						
+-						((ROOM_EMPLOY_AUTO)t.blueprint()).autoEmploy(t, false);
++						if (!sosdet.game.cmd.Employment.autoEmploy(t, false)) // SOSDET: a room's auto-employ is a command (ADR 0002)
++							((ROOM_EMPLOY_AUTO)t.blueprint()).autoEmploy(t, false);
+ 					}
+ 				});
+ 			}
+@@ -340,7 +349,8 @@
+ 				
+ 				@Override
+ 				public void set(int t) {
+-					get.get().employees().neededSet(t);
++					if (!sosdet.game.cmd.Employment.workers(get.get(), t)) // SOSDET: a room's worker target is a command (ADR 0002)
++						get.get().employees().neededSet(t);
+ 				}
+ 			};
+ 			
+@@ -404,9 +414,11 @@
+ 					protected void clickA() {
+ 						boolean b = ((ROOM_EMPLOY_AUTO)get.get().blueprint()).autoEmploy(get.get());
+ 						if (!b && ((RoomInstance)get.get()).employees().needed() == 0)
+-							((RoomInstance)get.get()).employees().neededSet(1);
++							if (!sosdet.game.cmd.Employment.workers(get.get(), 1)) // SOSDET: a room's worker target is a command (ADR 0002)
++								((RoomInstance)get.get()).employees().neededSet(1);
+ 						
+-						((ROOM_EMPLOY_AUTO)get.get().blueprint()).autoEmploy(get.get(), !b);
++						if (!sosdet.game.cmd.Employment.autoEmploy(get.get(), !b)) // SOSDET: a room's auto-employ is a command (ADR 0002)
++							((ROOM_EMPLOY_AUTO)get.get().blueprint()).autoEmploy(get.get(), !b);
+ 					}
+ 					@Override
+ 					protected void renAction() {
+@@ -648,7 +660,8 @@
+ 				
+ 				@Override
+ 				public void set(int t) {
+-					g(get).employees().neededSet(t);
++					if (!sosdet.game.cmd.Employment.workers(g(get), t)) // SOSDET: a room's worker target is a command (ADR 0002)
++						g(get).employees().neededSet(t);
+ 				}
+ 			};
+ 			
+@@ -689,9 +702,11 @@
+ 					protected void clickA() {
+ 						boolean b = ((ROOM_EMPLOY_AUTO)get.get().blueprint()).autoEmploy(get.get());
+ 						if (!b && ((RoomInstance)get.get()).employees().needed() == 0)
+-							((RoomInstance)get.get()).employees().neededSet(1);
++							if (!sosdet.game.cmd.Employment.workers(get.get(), 1)) // SOSDET: a room's worker target is a command (ADR 0002)
++								((RoomInstance)get.get()).employees().neededSet(1);
+ 						
+-						((ROOM_EMPLOY_AUTO)get.get().blueprint()).autoEmploy(get.get(), !b);
++						if (!sosdet.game.cmd.Employment.autoEmploy(get.get(), !b)) // SOSDET: a room's auto-employ is a command (ADR 0002)
++							((ROOM_EMPLOY_AUTO)get.get().blueprint()).autoEmploy(get.get(), !b);
+ 					}
+ 					@Override
+ 					protected void renAction() {
+diff -ru -U2 a/view/sett/ui/room/UIPanelWorkTools.java b/view/sett/ui/room/UIPanelWorkTools.java
+--- a/view/sett/ui/room/UIPanelWorkTools.java	2026-02-05 16:12:22.000000000 +0500
++++ b/view/sett/ui/room/UIPanelWorkTools.java	2026-10-23 02:19:14.728769500 +0500
+@@ -79,7 +79,7 @@
+ 					}
+ 				});
+ 				
+-				r.addRelBody(48, DIR.E, new GAllocator(COLOR.ORANGE100.makeSaturated(0.7), work.target(bb.employment()), 6, 16));
++				r.addRelBody(48, DIR.E, new GAllocator(COLOR.ORANGE100.makeSaturated(0.7), sosdet.game.cmd.Employment.equipTargetInput(work, bb.employment()), 6, 16)); // SOSDET: a workplace's equipment target is a command (ADR 0002)
+ 				r.body().incrW(420-r.body().width());
+ 				r.pad(16, 0);
+ 				return r;
+@@ -116,7 +116,8 @@
+ 								
+ 								RoomBlueprintIns<?> bb = (RoomBlueprintIns<?>) b;
+ 								if (bb.employment() != null) {
+-									work.target(bb.employment()).inc(1);
++									if (!sosdet.game.cmd.Employment.equipTargetInc(work, bb.employment(), 1)) // SOSDET: a workplace's equipment target is a command (ADR 0002)
++										work.target(bb.employment()).inc(1);
+ 								}
+ 							}
+ 						}
+@@ -138,7 +139,8 @@
+ 								
+ 								RoomBlueprintIns<?> bb = (RoomBlueprintIns<?>) b;
+ 								if (bb.employment() != null) {
+-									work.target(bb.employment()).inc(-1);
++									if (!sosdet.game.cmd.Employment.equipTargetInc(work, bb.employment(), -1)) // SOSDET: a workplace's equipment target is a command (ADR 0002)
++										work.target(bb.employment()).inc(-1);
+ 								}
+ 							}
+ 						}
+diff -ru -U2 a/view/sett/ui/room/UIRoomTable.java b/view/sett/ui/room/UIRoomTable.java
+--- a/view/sett/ui/room/UIRoomTable.java	2026-01-31 09:04:10.000000000 +0500
++++ b/view/sett/ui/room/UIRoomTable.java	2026-10-23 02:19:14.729767500 +0500
+@@ -346,7 +346,7 @@
+ 					
+ 					s.add(e.resource.icon(), 0, 0);
+ 					
+-					s.addRelBody(8, DIR.E, new GAllocator(COLOR.ORANGE100.makeSaturated(0.7), e.target(b.employment()), 6, 16));
++					s.addRelBody(8, DIR.E, new GAllocator(COLOR.ORANGE100.makeSaturated(0.7), sosdet.game.cmd.Employment.equipTargetInput(e, b.employment()), 6, 16)); // SOSDET: a workplace's equipment target is a command (ADR 0002)
+ 					s.pad(8, 4);
+ 					equip.addGrid(s, i++, 3, 0, 0);
+ 					
+diff -ru -U2 a/view/sett/ui/room/priority/Row.java b/view/sett/ui/room/priority/Row.java
+--- a/view/sett/ui/room/priority/Row.java	2026-06-20 10:30:04.000000000 +0500
++++ b/view/sett/ui/room/priority/Row.java	2026-10-23 02:19:14.721766600 +0500
+@@ -123,7 +123,8 @@
+ 			protected void clickA() {
+ 				for (Card c : cardsSmall) {
+ 					if (groupFilter.active(c.g)) {
+-						emp.priorities.inc(c.e, 1);
++						if (!sosdet.game.cmd.Employment.groupPriorityInc(emp, c.e, 1)) // SOSDET: a work group's priority is a command (ADR 0002)
++							emp.priorities.inc(c.e, 1);
+ 					}
+ 				}
+ 				super.clickA();
+@@ -141,7 +142,8 @@
+ 			protected void clickA() {
+ 				for (Card c : cardsSmall) {
+ 					if (groupFilter.active(c.g)) {
+-						emp.priorities.inc(c.e, -1);
++						if (!sosdet.game.cmd.Employment.groupPriorityInc(emp, c.e, -1)) // SOSDET: a work group's priority is a command (ADR 0002)
++							emp.priorities.inc(c.e, -1);
+ 					}
+ 				}
+ 				super.clickA();
+@@ -179,7 +181,8 @@
+ 		if (dragging != null) {
+ 			if (!MButt.LEFT.isDown()) {
+ 				if (draggingTo != null) {
+-					emp.priorities.set(dragging.e, draggingTo.prio);
++					if (!sosdet.game.cmd.Employment.groupPriority(emp, dragging.e, draggingTo.prio)) // SOSDET: a work group's priority is a command (ADR 0002)
++						emp.priorities.set(dragging.e, draggingTo.prio);
+ 					SETT.ROOMS().employment.setTargets();
+ 				}
+ 				dragging = null;
+diff -ru -U2 a/view/sett/ui/room/priority/Table.java b/view/sett/ui/room/priority/Table.java
+--- a/view/sett/ui/room/priority/Table.java	2026-05-20 09:41:50.000000000 +0500
++++ b/view/sett/ui/room/priority/Table.java	2026-10-23 02:19:14.722768100 +0500
+@@ -66,7 +66,8 @@
+ 							if (fRoom.active(e)) {
+ 								for (FilterEntry<WGROUP> g : filterGroup.all) {
+ 									if (filterGroup.active(g) && e.o.priorities.get(g.o) == prio)
+-										e.o.priorities.inc(g.o, 1);
++										if (!sosdet.game.cmd.Employment.groupPriorityInc(e.o, g.o, 1)) // SOSDET: a work group's priority is a command (ADR 0002)
++											e.o.priorities.inc(g.o, 1);
+ 								}
+ 							}
+ 						}
+@@ -88,7 +89,8 @@
+ 							if (fRoom.active(e)) {
+ 								for (FilterEntry<WGROUP> g : filterGroup.all) {
+ 									if (filterGroup.active(g) && e.o.priorities.get(g.o) == prio)
+-										e.o.priorities.inc(g.o, -1);
++										if (!sosdet.game.cmd.Employment.groupPriorityInc(e.o, g.o, -1)) // SOSDET: a work group's priority is a command (ADR 0002)
++											e.o.priorities.inc(g.o, -1);
+ 								}
+ 							}
+ 						}
+diff -ru -U2 a/view/sett/ui/room/priority/UIWorkPrio.java b/view/sett/ui/room/priority/UIWorkPrio.java
+--- a/view/sett/ui/room/priority/UIWorkPrio.java	2026-05-17 09:15:54.000000000 +0500
++++ b/view/sett/ui/room/priority/UIWorkPrio.java	2026-10-23 02:19:14.723768500 +0500
+@@ -112,7 +112,8 @@
+ 						if (fRoom.active(e)) {
+ 							for (FilterEntry<WGROUP> g : filterGroup.all) {
+ 								if (filterGroup.active(g)) {
+-									e.o.setPrioOnSkill(g.o);
++									if (!sosdet.game.cmd.Employment.prioOnSkill(e.o, g.o)) // SOSDET: priorities from skill are a command (ADR 0002)
++										e.o.setPrioOnSkill(g.o);
+ 								}
+ 							}
+ 						}
+@@ -129,7 +130,8 @@
+ 						if (fRoom.active(e)) {
+ 							for (FilterEntry<WGROUP> g : filterGroup.all) {
+ 								if (filterGroup.active(g)) {
+-									e.o.setPrioOnFullfillment(g.o);
++									if (!sosdet.game.cmd.Employment.prioOnFulfillment(e.o, g.o)) // SOSDET: priorities from fulfillment are a command (ADR 0002)
++										e.o.setPrioOnFullfillment(g.o);
+ 								}
+ 							}
+ 						}
