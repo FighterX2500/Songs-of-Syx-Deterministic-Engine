@@ -46,7 +46,7 @@ The exit code is 0 when every copy is identical to copy 1. Only one rig run at a
 - **The other copies are peers.** Their general is off. Every frame they read what is new in the host's file and feed it to the engine, which never lets a peer run more than 30 steps past the host's last confirmed step.
 - **The host is the reference.** When it stops, each peer is held once it has passed the host's last step.
 
-This is the flow the multiplayer mod will use, with a file in place of the network. Without `--ai`, every copy runs the general inside the step (in-step mode, the engine's default).
+This is the flow the multiplayer mod will use, with a file in place of the network, and the default since the owner made host mode the engine's default (2026-10-22): inside the step, the general's planning stalls the simulation. `--ai instep` runs the general inside the step in every copy instead.
 
 ## State hashes and desyncs
 
@@ -62,8 +62,8 @@ ig.py field --tag D1 --copies 2 --steps 1200 --nudge 601
 ## Resync
 
 ```
-python rigig.py field --tag R1 --ai host --resync 12000
-python rigig.py field --tag R2 --ai host --steps 12000 --nudge 6001 --resync-on-desync
+python rig\rig.py field --tag R1 --resync 12000
+python rig\rig.py field --tag R2 --steps 12000 --nudge 6001 --resync-on-desync
 ```
 
 `--resync STEP`: copy 1 holds at that step and saves a resync (`Engine.resyncSave`); then every copy, copy 1 included, loads it (`Engine.resyncLoad`) and runs on. `--resync-on-desync`: the first desync any engine reports makes copy 1 save a resync at its current step, and every copy loads it: the mod's recovery loop. With `--nudge`, copies are compared only after the resync. The rig keeps its run state across the load; `summary.txt` gives the save time and size and each copy's load time.

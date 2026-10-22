@@ -475,8 +475,9 @@ def main():
     ap.add_argument("--artillery", type=int, default=0, help="field: artillery pieces per side in the generated battle")
     ap.add_argument("--window", action="store_true", help="the user's own screen and sound settings, to watch a copy")
     ap.add_argument("--run-on", action="store_true", help="don't stop at the first difference; run the whole length")
-    ap.add_argument("--ai", choices=["instep", "host"], default="instep",
-                    help="host: copy 1 hosts the AI general and is the reference, the others are peers fed its AI log")
+    ap.add_argument("--ai", choices=["instep", "host"], default="host",
+                    help="host (default, as the engine): copy 1 hosts the AI general and is the reference, the others are"
+                         " peers fed its AI log; instep: the general runs inside the step in every copy")
     ap.add_argument("--nudge", type=int, default=0,
                     help="forced desync: fatal injuries to one soldier in one copy at this step; runs on past the difference")
     ap.add_argument("--nudge-copy", type=int, default=0, help="the copy to nudge (default: the last)")
@@ -538,6 +539,8 @@ def main():
         c.send("begin", "begin")
         if args.ai == "host":
             c.send("ai %s %s" % ("host" if c.k == 1 else "peer", start_id), "ai")
+        else:
+            c.send("ai instep", "ai")
         c.send("loadseed %d" % LOAD_SEED, "loadseed")
         if args.scenario == "field":
             c.send("loadbattle sosdet-battle", "loaded", 600)

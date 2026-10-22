@@ -1,6 +1,7 @@
 package sosdet;
 
 import sosdet.ai.AiLog;
+import sosdet.game.GameAi;
 import sosdet.game.GameHash;
 import sosdet.hash.HashLog;
 import sosdet.hash.StateSource;
@@ -12,8 +13,11 @@ final class Session {
     final Streams streams = new Streams();
     final BattleJobs jobs = new BattleJobs();
     final StepTimes times = new StepTimes();
-    /** Where the AI general runs; in-step by default. */
-    AiLog ai = AiLog.inStep();
+    /**
+     * Where the AI general runs: on the host's own thread by default (owner, 2026-10-22: inside the step its planning
+     * stalls the simulation); in-step only when chosen. Made at first use, as the game adapter needs a running game.
+     */
+    private volatile AiLog ai;
     /** The state hash every 30 steps (B13); a new one after every load. */
     HashLog hashes = new HashLog();
     /** What the hash reads: the game, made at the first hash; tests put in their own. */
@@ -52,7 +56,7 @@ final class Session {
             seed = r.seed;
             resyncDraws = r.draws; // the load's own draws don't count: set when it ends
             hashes.rewind(r.step, r.hashEpoch);
-            ai.resyncIn(r.ai);
+            ai().resyncIn(r.ai);
             return;
         }
         clock.reset();
@@ -60,6 +64,23 @@ final class Session {
         int interval = hashes.interval();
         hashes = new HashLog();
         hashes.every(interval);
+    }
+
+    AiLog ai() {
+        AiLog a = ai;
+        if (a == null) {
+            synchronized (this) { // the general's thread may ask first
+                if (ai == null) {
+                    ai = AiLog.host(0, new GameAi());
+                }
+                a = ai;
+            }
+        }
+        return a;
+    }
+
+    void ai(AiLog log) {
+        ai = log;
     }
 
     StateSource source() {

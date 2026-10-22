@@ -120,7 +120,7 @@ public final class Engine {
         GameResync.save(file);
         s.clock.runUntil(step); // the host waits for its own load too
         return new Resync(step, s.seed, s.hashes.interval(), s.hashes.epoch() + 1, s.streams.drawsSinceLoad(),
-                s.ai.resyncOut(), GameResync.capture()).toBytes();
+                s.ai().resyncOut(), GameResync.capture()).toBytes();
     }
 
     /**
@@ -142,15 +142,15 @@ public final class Engine {
 
     // ------------------------------------------------------------ the AI general (requirements §3)
 
-    /** The general runs inside every step (the default): deterministic with no log. */
+    /** The general runs inside every step: deterministic with no log, for single-PC replays and tests. */
     public static void aiInStep() {
         setAi(AiLog.inStep());
     }
 
     /**
-     * This PC is the host: the general runs on its own thread, and its changes go into the AI log, applied by every
-     * PC at step N + 30. Set it before the battle save loads or deploys (that starts the general's thread).
-     * {@code startId} names the start state; peers refuse a log made from another.
+     * This PC is the host (the default, with start ID 0): the general runs on its own thread, and its changes go into
+     * the AI log, applied by every PC at step N + 30. Set it before the battle save loads or deploys (that starts the
+     * general's thread). {@code startId} names the start state; peers refuse a log made from another.
      */
     public static void aiHost(long startId) {
         setAi(AiLog.host(startId, new GameAi()));
@@ -162,17 +162,17 @@ public final class Engine {
     }
 
     public static AiMode aiMode() {
-        return required().ai.mode();
+        return required().ai().mode();
     }
 
     /** Host: the AI log written since the last call, for the mod to send to every peer. */
     public static byte[] aiLogOut() {
-        return required().ai.logOut();
+        return required().ai().logOut();
     }
 
     /** Peer: more of the host's AI log, in any pieces. The peer runs at most 30 steps past what it confirms. */
     public static void aiLogIn(byte[] bytes) {
-        required().ai.logIn(bytes);
+        required().ai().logIn(bytes);
     }
 
     private static void setAi(AiLog log) {
@@ -181,7 +181,7 @@ public final class Engine {
             throw new IllegalStateException("SOSDET: the AI mode is set before the run (step " + s.clock.step()
                     + "); changing host mid-battle comes with resync (SOS-30)");
         }
-        s.ai = log;
+        s.ai(log);
     }
 
     // ------------------------------------------------------------ the state hash and desyncs (requirements §3, §4)
@@ -226,7 +226,7 @@ public final class Engine {
             throw new IllegalStateException("SOSDET: no desync to report");
         }
         // player orders come with SOS-33
-        return d.report(s.source(), s.ai.recent(), Collections.<String>emptyList());
+        return d.report(s.source(), s.ai().recent(), Collections.<String>emptyList());
     }
 
     /** When the running step started (System.nanoTime), or 0 between steps: for a stall sampler on another thread. */
@@ -241,8 +241,8 @@ public final class Engine {
         StepTimes t = s.times;
         return new Stats(s.clock.step(), s.streams.simulationDraws(), s.streams.foreignDraws(), s.pathJobs,
                 s.pathNanos, t.steps(), t.meanMs(), t.percentileMs(0.5), t.percentileMs(0.95), t.percentileMs(0.99),
-                t.percentileMs(0.999), t.maxMs(), t.over100Ms(), t.over1S(), s.ai.mode(), s.ai.applied(),
-                s.ai.applied(AiEntry.ARTILLERY), s.ai.pending(), s.hashes.taken(), s.hashes.meanMs(), s.hashes.maxMs(),
+                t.percentileMs(0.999), t.maxMs(), t.over100Ms(), t.over1S(), s.ai().mode(), s.ai().applied(),
+                s.ai().applied(AiEntry.ARTILLERY), s.ai().pending(), s.hashes.taken(), s.hashes.meanMs(), s.hashes.maxMs(),
                 s.hashes.compared(), s.hashes.missed());
     }
 
