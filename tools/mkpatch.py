@@ -67,7 +67,7 @@ for side in ("a", "b"):
         dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(SRC / f, dst)
 if patch.exists():
-    r = subprocess.run(["git", "apply", "-p1", str(patch)], cwd=work / "b", capture_output=True, text=True)
+    r = subprocess.run(["git", "-c", "core.autocrlf=false", "apply", "-p1", str(patch)], cwd=work / "b", capture_output=True, text=True)
     if r.returncode != 0:
         sys.exit("cannot apply the current patch: " + r.stdout + r.stderr)
 for e in edits:
