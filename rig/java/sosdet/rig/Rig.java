@@ -532,6 +532,15 @@ public final class Rig implements SCRIPT {
                 }
                 event("ai", "\"mode\":\"" + Engine.aiMode() + "\"");
                 return;
+            case "pc":
+                Engine.localPc(Integer.parseInt(c[1]));
+                event("pc", "\"pc\":" + Integer.parseInt(c[1]));
+                return;
+            case "cmd":
+                // a scripted player: the call the game's UI makes, run outside the step where the UI acts (ADR 0002)
+                playerAction(Arrays.copyOfRange(c, 1, c.length));
+                event("cmd", "\"action\":\"" + clean(rest(c)) + "\"");
+                return;
             case "ailog":
                 aiHost = c[1].equals("host");
                 aiFile = Paths.get(rest(Arrays.copyOfRange(c, 1, c.length)));
@@ -595,6 +604,23 @@ public final class Rig implements SCRIPT {
         }
 
         // ------------------------------------------------------------ runs
+
+        /** The UI call behind one player action, queued to run after this frame's update, outside the step. */
+        private void playerAction(String[] a) {
+            switch (a[0]) {
+            case "curfew": // the law screen's curfew button
+                boolean on = a[1].equals("1");
+                Engine.betweenSteps(() -> STATS.LAW().getCurfew().setForADay(on));
+                return;
+            case "men": // a division's target size on the army screen: the player's division by its index in the army
+                int div = Integer.parseInt(a[1]);
+                int men = Integer.parseInt(a[2]);
+                Engine.betweenSteps(() -> GAME.ARMIES().player().divisions().get(div).info.menSet(men));
+                return;
+            default:
+                throw new IllegalArgumentException("SOSDET rig: no player action " + a[0]);
+            }
+        }
 
         private void run(boolean cityRun, long steps, double speed, String runTag) throws ReflectiveOperationException, IOException {
             if (!Engine.active()) {

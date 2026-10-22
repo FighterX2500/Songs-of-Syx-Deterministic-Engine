@@ -30,6 +30,9 @@ public final class Stats {
     public final int aiPending;
     /** Players' orders applied (speed changes included). */
     public final long ordersApplied;
+    /** Players' commands applied, and skipped because their target was gone (ADR 0002). */
+    public final long commandsApplied;
+    public final long commandsSkipped;
     /** The speed every PC agreed on now; it sets the step length. */
     public final double agreedSpeed;
     /** State hashes taken since the last load, their cost in ms, and other PCs' hashes compared and missed. */
@@ -42,7 +45,7 @@ public final class Stats {
     Stats(long step, long simulationDraws, long foreignDraws, long pathJobs, long pathNanos, long timedSteps,
             double meanMs, double p50Ms, double p95Ms, double p99Ms, double p999Ms, double maxMs,
             long stepsOver100Ms, long stepsOver1S, AiMode aiMode, long aiApplied, long aiArtillery, int aiPending,
-            long ordersApplied, double agreedSpeed, long hashes, double hashMeanMs, double hashMaxMs, long hashesCompared, long hashesMissed) {
+            long ordersApplied, long commandsApplied, long commandsSkipped, double agreedSpeed, long hashes, double hashMeanMs, double hashMaxMs, long hashesCompared, long hashesMissed) {
         this.step = step;
         this.simulationDraws = simulationDraws;
         this.foreignDraws = foreignDraws;
@@ -62,6 +65,8 @@ public final class Stats {
         this.aiArtillery = aiArtillery;
         this.aiPending = aiPending;
         this.ordersApplied = ordersApplied;
+        this.commandsApplied = commandsApplied;
+        this.commandsSkipped = commandsSkipped;
         this.agreedSpeed = agreedSpeed;
         this.hashes = hashes;
         this.hashMeanMs = hashMeanMs;
@@ -76,9 +81,9 @@ public final class Stats {
                 "{\"step\":%d,\"simulationDraws\":%d,\"foreignDraws\":%d,\"pathJobs\":%d,\"pathMsPerStep\":%.4f,"
                         + "\"timedSteps\":%d,\"meanMs\":%.3f,\"p50Ms\":%.1f,\"p95Ms\":%.1f,\"p99Ms\":%.1f,\"p999Ms\":%.1f,"
                         + "\"maxMs\":%.1f,\"over100Ms\":%d,\"over1S\":%d,\"ai\":\"%s\",\"aiApplied\":%d,\"aiArtillery\":%d,\"aiPending\":%d,"
-                        + "\"ordersApplied\":%d,\"agreedSpeed\":%.2f,\"hashes\":%d,\"hashMeanMs\":%.3f,\"hashMaxMs\":%.1f,\"hashesCompared\":%d,\"hashesMissed\":%d}",
+                        + "\"ordersApplied\":%d,\"commandsApplied\":%d,\"commandsSkipped\":%d,\"agreedSpeed\":%.2f,\"hashes\":%d,\"hashMeanMs\":%.3f,\"hashMaxMs\":%.1f,\"hashesCompared\":%d,\"hashesMissed\":%d}",
                 step, simulationDraws, foreignDraws, pathJobs, timedSteps == 0 ? 0 : pathNanos / 1e6 / timedSteps,
                 timedSteps, meanMs, p50Ms, p95Ms, p99Ms, p999Ms, maxMs, stepsOver100Ms, stepsOver1S, aiMode, aiApplied, aiArtillery,
-                aiPending, ordersApplied, agreedSpeed, hashes, hashMeanMs, hashMaxMs, hashesCompared, hashesMissed);
+                aiPending, ordersApplied, commandsApplied, commandsSkipped, agreedSpeed, hashes, hashMeanMs, hashMaxMs, hashesCompared, hashesMissed);
     }
 }

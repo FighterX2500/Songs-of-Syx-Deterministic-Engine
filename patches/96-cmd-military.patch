@@ -1,0 +1,12 @@
+diff -ru -U2 a/game/battle/div/DivInfo.java b/game/battle/div/DivInfo.java
+--- a/game/battle/div/DivInfo.java	2025-11-22 08:36:34.000000000 +0500
++++ b/game/battle/div/DivInfo.java	2026-10-23 02:01:46.951973600 +0500
+@@ -52,6 +52,8 @@
+ 	
+ 	@Override
+ 	public void menSet(int am) {
++		if (sosdet.game.cmd.Military.menSet(div, am)) // SOSDET: the player's division size is a command (ADR 0002)
++			return;
+ 		if (div.army() == GAME.ARMIES().player()) {
+ 			SETT.BATTLE().info.clearTargets();
+ 			

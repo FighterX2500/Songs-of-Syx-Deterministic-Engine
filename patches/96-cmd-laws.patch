@@ -1,0 +1,12 @@
+diff -ru -U2 a/settlement/stats/law/Curfew.java b/settlement/stats/law/Curfew.java
+--- a/settlement/stats/law/Curfew.java	2026-06-20 15:43:56.000000000 +0500
++++ b/settlement/stats/law/Curfew.java	2026-10-23 02:01:46.705221900 +0500
+@@ -37,6 +37,8 @@
+ 	}
+ 	
+ 	public void setForADay(boolean set) {
++		if (sosdet.game.cmd.Laws.curfew(set)) // SOSDET: the player's curfew is a command, applied at its step on every PC (ADR 0002)
++			return;
+ 		if (set) {
+ 			timer = TIME.secondsPerDay();
+ 		}else

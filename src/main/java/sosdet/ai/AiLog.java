@@ -26,7 +26,7 @@ public final class AiLog {
 
     /** Steps between the host taking a change and every PC applying it: 0.5 s at 1x. */
     public static final int DELAY_STEPS = 30;
-    static final int FORMAT_VERSION = 2;
+    static final int FORMAT_VERSION = 3;
     static final int MAGIC = 0x53444149; // "SDAI"
     static final int HEADER_BYTES = 4 + 4 + 4 + 8;
     static final byte ENTRY = 1;
@@ -55,6 +55,10 @@ public final class AiLog {
     /** Host: the last step drained. Peer: the host's last confirmed step. */
     private long confirmed;
     private long applied;
+    /** The mod's number for this PC (the host is 0), and the issuer of the entry being applied, if any. */
+    private int localPc;
+    private int applyingPc = NOT_APPLYING;
+    private static final int NOT_APPLYING = Integer.MIN_VALUE;
     private long appliedOrders;
     private final long[] appliedByKind = new long[AiEntry.KINDS];
     private final Recent recentAi = new Recent();
@@ -207,7 +211,12 @@ public final class AiLog {
                 throw new IllegalStateException("SOSDET: AI log entry " + due.seq + " for step " + due.step
                         + " is still pending at step " + step);
             }
-            applier.apply(due);
+            applyingPc = due.pc;
+            try {
+                applier.apply(due);
+            } finally {
+                applyingPc = NOT_APPLYING;
+            }
             (due.pc == AiEntry.AI ? recentAi : recentOrders).add(due);
             applied++;
             appliedByKind[due.kind]++;
@@ -435,6 +444,24 @@ public final class AiLog {
         synchronized (aiBatch) {
             return coalesced;
         }
+    }
+
+    /** Players' commands skipped because their target was gone at their step. */
+    public long commandsSkipped() {
+        return applier == null ? 0 : applier.commandsSkipped();
+    }
+
+    /** The mod's number for this PC: 0 on the host, from 1 on a peer. */
+    public void localPc(int pc) {
+        if (pc < 0) {
+            throw new IllegalArgumentException("SOSDET: PC " + pc);
+        }
+        localPc = pc;
+    }
+
+    /** While an entry is being applied: whether this PC's player gave it (feedback such as sounds only for them). */
+    public boolean issuedHere() {
+        return applyingPc != NOT_APPLYING && applyingPc == localPc;
     }
 
     public long applied() {

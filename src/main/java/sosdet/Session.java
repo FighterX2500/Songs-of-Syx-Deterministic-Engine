@@ -39,6 +39,8 @@ final class Session {
     int loadSeed;
     /** The last frame's game update time (-1 before the first); read for the timing measurements. */
     volatile long lastFrameUpdateNanos = -1;
+    /** Actions to run after the frame's game update, outside the step, as the UI would (the rig's player actions). */
+    final java.util.ArrayDeque<Runnable> betweenSteps = new java.util.ArrayDeque<>();
     /** When the running step started (0 between steps); read by the rig's stall sampler on another thread. */
     volatile long stepStartNanos;
     long pathJobs;

@@ -328,7 +328,17 @@ public final class Hooks {
         Session s = Engine.session();
         if (s != null) {
             s.lastFrameUpdateNanos = nanos;
+            Runnable action;
+            while ((action = s.betweenSteps.poll()) != null) {
+                action.run();
+            }
         }
+    }
+
+    /** While a command or order is being applied: whether this PC's player gave it (ADR 0002, issuer feedback). */
+    public static boolean issuedHere() {
+        Session s = Engine.session();
+        return s != null && s.ai().issuedHere();
     }
 
     /**

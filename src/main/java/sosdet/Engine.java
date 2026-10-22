@@ -183,6 +183,19 @@ public final class Engine {
         return required().ai().logOut();
     }
 
+    /** The mod's number for this PC: 0 on the host, from 1 on a peer (for feedback only the issuer gets). */
+    public static void localPc(int pc) {
+        required().ai().localPc(pc);
+    }
+
+    /**
+     * Runs {@code action} once after this frame's game update, outside the step, where the game's UI acts: a player's
+     * action there is captured as an order or command (the rig's scripted player). Call it on the game thread.
+     */
+    public static void betweenSteps(Runnable action) {
+        required().betweenSteps.add(action);
+    }
+
     /** Peer: its player's orders given since the last call, for the mod to send to the host. */
     public static byte[] ordersOut() {
         return required().ai().ordersOut();
@@ -295,7 +308,8 @@ public final class Engine {
         return new Stats(s.clock.step(), s.streams.simulationDraws(), s.streams.foreignDraws(), s.pathJobs,
                 s.pathNanos, t.steps(), t.meanMs(), t.percentileMs(0.5), t.percentileMs(0.95), t.percentileMs(0.99),
                 t.percentileMs(0.999), t.maxMs(), t.over100Ms(), t.over1S(), s.ai().mode(), s.ai().applied(),
-                s.ai().applied(AiEntry.ARTILLERY), s.ai().pending(), s.ai().appliedOrders(), s.clock.agreedSpeed(),
+                s.ai().applied(AiEntry.ARTILLERY), s.ai().pending(), s.ai().appliedOrders(), s.ai().applied(AiEntry.COMMAND),
+                s.ai().commandsSkipped(), s.clock.agreedSpeed(),
                 s.hashes.taken(), s.hashes.meanMs(), s.hashes.maxMs(),
                 s.hashes.compared(), s.hashes.missed());
     }

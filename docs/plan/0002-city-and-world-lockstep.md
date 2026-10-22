@@ -124,7 +124,7 @@ Each stage is one card (or a card's milestone) with its own PR, in this order.
 
 ## Decisions (owner, 2026-10-23)
 
-1. **Order:** the stages run as written, A → B → C → D → E.
+1. **Order:** A → B → D → C → E. The owner first approved the stages as written; on the same day they moved world lockstep (D) ahead of the city play sessions (C), so trade works in those sessions.
 2. **World-battle prompts:** the world holds for everyone while a player decides a prompt, as vanilla pauses for its single player and as the spec pauses the world for manual battles.
 3. **Hook placement:** command hooks go in the declaring method where that's safe. When the class crashes the menu or the method is on a hot path, the hook goes at the UI call site instead.
 4. **Several human factions:** that stays the mod's work. The engine keeps the save's single player faction identical on every PC.
