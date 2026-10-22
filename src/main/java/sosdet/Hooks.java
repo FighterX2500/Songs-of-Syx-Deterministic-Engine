@@ -5,6 +5,7 @@ import java.util.Random;
 import snake2d.util.rnd.RND;
 import sosdet.ai.AiApplier;
 import sosdet.ai.AiMode;
+import sosdet.game.cmd.PlanStash;
 import sosdet.hash.HashLog;
 
 /**
@@ -93,8 +94,9 @@ public final class Hooks {
 
     /**
      * Starts a step; false when the session may not run further (the frame's other steps are dropped): at its last
-     * step, or as a peer that is already 30 steps past the host's last confirmed step. The AI log entries due at
-     * this step are applied first, before anything else runs.
+     * step, or as a peer that is already 30 steps past the host's last confirmed step. This PC's room plan is lifted out
+     * of the simulation before the frame's first step (ADR 0003). The AI log entries due at this step are applied
+     * first, before anything else runs.
      */
     public static boolean stepBegin() {
         Session s = Engine.session();
@@ -105,6 +107,7 @@ public final class Hooks {
         if (!s.clock.begin()) {
             return false;
         }
+        s.plans().lift();
         s.streams.enter();
         // Reseeded every step: the stream depends only on the seed and the step, so a resync needs no random state
         s.streams.reseed(s.stepSeed(s.clock.step()));
@@ -257,6 +260,7 @@ public final class Hooks {
         if (s == null) {
             return;
         }
+        s.plans().discard();
         s.afterLoad();
         s.loading = true;
         if (s.loadSeed != 0) {
@@ -325,16 +329,25 @@ public final class Hooks {
         return s != null && s.streams.isSimulationThread() ? battleRunning : localViewOpen;
     }
 
-    /** A frame's game update took this long (for the timing measurements; kept per session). */
+    /**
+     * A frame's game update took this long (for the timing measurements; kept per session). Its steps are over: this
+     * PC's room plan goes back for the UI and the renderer (ADR 0003), before the queued player actions run.
+     */
     public static void frameUpdated(long nanos) {
         Session s = Engine.session();
         if (s != null) {
             s.lastFrameUpdateNanos = nanos;
+            s.plans().restore();
             Runnable action;
             while ((action = s.betweenSteps.poll()) != null) {
                 action.run();
             }
         }
+    }
+
+    /** This PC's room plan and its stash around the steps (ADR 0003), for the room placer's commands. */
+    public static PlanStash planStash() {
+        return Engine.session().plans();
     }
 
     /** While a command or order is being applied: whether this PC's player gave it (ADR 0002, issuer feedback). */

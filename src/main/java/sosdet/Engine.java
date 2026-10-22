@@ -120,7 +120,7 @@ public final class Engine {
 
     /**
      * Host, between steps: saves the game to {@code file} at the current step and returns the engine's own state at
-     * that step (versioned bytes), then holds there. Every PC, the host included, then loads both with
+     * that step (versioned bytes), then holds there. This PC's room plan is lifted out of the save (ADR 0003). Every PC, the host included, then loads both with
      * {@link #resyncLoad}: a freshly loaded game on every PC, so nothing the save leaves out can differ (owner,
      * 2026-10-22, after a host that ran on kept caches its reloaded peers rebuilt).
      */
@@ -130,7 +130,17 @@ public final class Engine {
             throw new IllegalStateException("SOSDET: a resync is saved between steps, not inside one");
         }
         long step = s.clock.step();
-        GameResync.save(file);
+        boolean lift = !s.plans().lifted();
+        if (lift) {
+            s.plans().lift();
+        }
+        try {
+            GameResync.save(file);
+        } finally {
+            if (lift) {
+                s.plans().restore();
+            }
+        }
         s.clock.runUntil(step); // the host waits for its own load too
         return new Resync(step, s.seed, s.clock.agreedSpeed(), s.hashes.interval(), s.hashes.epoch() + 1,
                 s.streams.drawsSinceLoad(), s.ai().resyncOut(), GameResync.capture()).toBytes();

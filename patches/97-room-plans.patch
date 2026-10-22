@@ -1,0 +1,50 @@
+diff -ru -U2 a/settlement/room/main/MapDataF.java b/settlement/room/main/MapDataF.java
+--- a/settlement/room/main/MapDataF.java	2026-06-17 18:46:30.000000000 +0500
++++ b/settlement/room/main/MapDataF.java	2026-10-23 04:06:27.098703800 +0500
+@@ -214,7 +214,8 @@
+ 					tileIndex.set(index, NOTHING);
+ 					masterTileI.set(index, false);
+ 					candleI.set(index, false);
+-					SETT.LIGHTS().remove(x, y);
++					if (!sosdet.Hooks.outsideStep()) // SOSDET: this removes lights at item-relative tiles (a game bug); never from local planning (ADR 0003)
++						SETT.LIGHTS().remove(x, y);
+ 				}
+ 			}
+ 		}
+diff -ru -U2 a/settlement/room/main/placement/PlacerArea.java b/settlement/room/main/placement/PlacerArea.java
+--- a/settlement/room/main/placement/PlacerArea.java	2025-12-18 09:54:26.000000000 +0500
++++ b/settlement/room/main/placement/PlacerArea.java	2026-10-23 04:06:27.097707700 +0500
+@@ -76,7 +76,8 @@
+ 			
+ 		}
+ 		
+-		SETT.MAINTENANCE().isser.is(tx, ty);
++		if (!sosdet.Hooks.outsideStep()) // SOSDET: the maintenance check clears a saved bit; planning is local (ADR 0003)
++			SETT.MAINTENANCE().isser.is(tx, ty);
+ 		
+ 		FurnisherItem it = SETT.ROOMS().fData.item.get(tx, ty);
+ 		if (it != null) {
+@@ -241,7 +242,8 @@
+ 		
+ 		am--;
+ 		if (!embrio.instance.is(tx, ty)) {
+-			SETT.JOBS().clearer.set(tx, ty);
++			if (!sosdet.Hooks.outsideStep()) // SOSDET: a local plan deletes no jobs; construction deletes them on the final tiles (ADR 0003)
++				SETT.JOBS().clearer.set(tx, ty);
+ 			embrio.door.undo.place(tx, ty, null, null);
+ 			for(int i = 0; i < DIR.ORTHO.size(); i++) {
+ 				DIR d = DIR.ORTHO.get(i);
+diff -ru -U2 a/settlement/room/main/placement/RoomPlacer.java b/settlement/room/main/placement/RoomPlacer.java
+--- a/settlement/room/main/placement/RoomPlacer.java	2025-11-19 14:21:30.000000000 +0500
++++ b/settlement/room/main/placement/RoomPlacer.java	2026-10-23 04:06:27.096708800 +0500
+@@ -328,6 +328,10 @@
+ 		if (createProblem() != null) {
+ 			throw new RuntimeException(""+createProblem());
+ 		}
++		if (sosdet.game.cmd.Tools.roomBuild(this, state != null)) { // SOSDET: Build is one command with the whole plan; the UI then clears the plan (ADR 0003)
++			Coo.TMP.set(instance.mX(), instance.mY());
++			return Coo.TMP;
++		}
+ 		TBuilding structure = null;
+ 		if (blueprint().constructor().mustBeIndoors()) {
+ 			structure = this.structure.get();

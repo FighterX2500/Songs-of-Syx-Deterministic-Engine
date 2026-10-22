@@ -46,9 +46,9 @@ import view.tool.PlacableMulti;
  * other tool options, rotation, size, furniture group, wall material, auto walls, the odd-jobber cursor). The applier
  * sets those inputs, runs the same loop the tool runs, and puts this PC's own values back.
  *
- * <p>Not here: staging an area room (the room placer's plan writes the shared room, construction and job maps while
- * the player drags, so it can be neither kept local nor captured verb by verb without an owner's decision), the room
- * copier, saved prints and the mass copier (their state is private to package-private game classes).
+ * <p>An area room is planned on this PC only and lifted out of the simulation around its steps ({@link PlanStash}, ADR
+ * 0003); its Build is one command with the whole plan ({@link #roomBuild}). Not here yet: refurnishing a room, the room
+ * copier, saved prints and the mass copier (ADR 0003, later milestones).
  */
 public final class Tools {
 
@@ -59,6 +59,7 @@ public final class Tools {
     static final int HOME_ASSIGN = 6004;
     static final int WORK_GROUPS = 6005;
     static final int HOME_ODD = 6006;
+    static final int ROOM_BUILD = 6007;
 
     /** Tool keys of {@link #MULTI} outside {@link #multiTools()}: tools the view owns. */
     private static final int UPGRADER = -1;
@@ -81,7 +82,8 @@ public final class Tools {
             new Command(THRONE, "throneMove", Tools::applyThrone),
             new Command(HOME_ASSIGN, "homeAssign", Tools::applyHomeAssign),
             new Command(WORK_GROUPS, "workGroups", Tools::applyWorkGroups),
-            new Command(HOME_ODD, "homeOddjobbers", Tools::applyHomeOdd));
+            new Command(HOME_ODD, "homeOddjobbers", Tools::applyHomeOdd),
+            new Command(ROOM_BUILD, "roomBuild", Tools::applyRoomBuild));
 
     private Tools() {
     }
@@ -194,6 +196,22 @@ public final class Tools {
         return true;
     }
 
+    /**
+     * Hook in {@code RoomPlacer.create}, after its own check that the plan has no problem: Build on a new area room. The
+     * whole plan becomes one command (ADR 0003) and nothing is created now; the UI then clears the plan as after a
+     * vanilla build. A refurnished room ({@code refurnish}: the placer holds the old room's state) still builds at once,
+     * until its own milestone.
+     */
+    public static boolean roomBuild(RoomPlacer placer, boolean refurnish) {
+        if (refurnish || !Commands.capturing() || !placer.blueprint().constructor().usesArea()) {
+            return false;
+        }
+        CmdWriter w = new CmdWriter(ROOM_BUILD);
+        Hooks.planStash().capture(w);
+        Commands.capture(w);
+        return true;
+    }
+
     // ------------------------------------------------------------------ appliers (every PC, inside the step)
 
     private static boolean applyMulti(CmdReader r) {
@@ -252,7 +270,8 @@ public final class Tools {
         RoomBlueprintImp blue = (RoomBlueprintImp) b;
 
         // The shared room placer, staged as the issuer's UI staged it; this PC's own blueprint, rotation, size, wall
-        // material and auto walls go back after.
+        // material and auto walls go back after, and its own plan is rebuilt after the steps (ADR 0003).
+        Hooks.planStash().meet();
         RoomPlacer placer = SETT.ROOMS().placement.placer;
         RoomBlueprintImp ownBlue = placer.blueprint();
         TBuilding ownStructure = placer.structure.get();
@@ -281,6 +300,34 @@ public final class Tools {
             if (ownBlue != blue) {
                 placer.init(ownBlue, 0);
             }
+        }
+    }
+
+    /**
+     * Build on an area room: the issuer's plan rebuilt in the shared room placer, then created if it still has no problem
+     * at this step ({@code SFrame}'s create action, V71.44); skipped on every PC alike otherwise. This PC's own plan is
+     * recorded first and rebuilt after the steps; its wall material and wall options go back at once.
+     */
+    private static boolean applyRoomBuild(CmdReader r) {
+        PlanRecord plan = PlanRecord.read(r);
+        Hooks.planStash().meet();
+        RoomPlacer placer = SETT.ROOMS().placement.placer;
+        TBuilding ownStructure = placer.structure.get();
+        boolean ownWalls = placer.autoWalls.getBool();
+        boolean ownOnWalls = placer.buildOnWalls.is();
+        try {
+            if (!Plans.rebuildCommand(plan) || placer.createProblem() != null) {
+                return false;
+            }
+            placer.create();
+            return true;
+        } finally {
+            placer.init(null, 0); // a skipped plan's tiles; after create() the placer is empty already
+            if (ownStructure != null) {
+                placer.structure.set(ownStructure);
+            }
+            placer.autoWalls.set(ownWalls);
+            placer.buildOnWalls.set(ownOnWalls);
         }
     }
 
@@ -549,7 +596,7 @@ public final class Tools {
         throw new IllegalStateException("SOSDET: furniture group " + group.name() + " is not in " + blue.key);
     }
 
-    private static int buildingIndex(TBuilding b) {
+    static int buildingIndex(TBuilding b) {
         LIST<TBuilding> all = SETT.TERRAIN().BUILDINGS.all();
         for (int i = 0; i < all.size(); i++) {
             if (all.get(i) == b) {
@@ -559,7 +606,7 @@ public final class Tools {
         return -1;
     }
 
-    private static TBuilding building(int i) {
+    static TBuilding building(int i) {
         return i < 0 ? null : SETT.TERRAIN().BUILDINGS.all().get(i);
     }
 
@@ -607,7 +654,7 @@ public final class Tools {
      * A private field of the game, V71.44. Resolved per use, not once at start-up: a tool command is a rare UI action,
      * and this class's static initializer must not touch game classes (the menu's script scan runs it).
      */
-    private static Field field(Class<?> c, String name) {
+    static Field field(Class<?> c, String name) {
         try {
             Field f = c.getDeclaredField(name);
             f.setAccessible(true);
@@ -641,7 +688,7 @@ public final class Tools {
         }
     }
 
-    private static void setInt(Field f, Object o, int v) {
+    static void setInt(Field f, Object o, int v) {
         try {
             f.setInt(o, v);
         } catch (IllegalAccessException e) {
@@ -652,7 +699,7 @@ public final class Tools {
     // ------------------------------------------------------------------ the area argument
 
     /** A decoded {@link TileArea} as the game's AREA, for the tool loop and the placers' checks. */
-    private static final class Area implements AREA {
+    static final class Area implements AREA {
 
         private final TileArea tiles;
         private final Rec body;
