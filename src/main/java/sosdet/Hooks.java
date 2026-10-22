@@ -287,12 +287,22 @@ public final class Hooks {
     // ------------------------------------------------------------ local UI state the simulation reads (SOS-32)
 
     /**
-     * Whether the battle view is open, as the simulation asks it (10 game files: which resources update, births,
-     * entry, weather, disease...). With a session it is the same on every PC: a battle is running. Without one, this
-     * PC's view, as in vanilla. (A desync class found by timjrobinson/songs-of-syx-multiplayer.)
+     * Whether the battle view is open. The simulation asks it inside the step (10 game files: which resources update,
+     * births, entry, weather, disease...): with a session the answer is the same on every PC, whether a battle is
+     * running. The UI asks it outside the step and gets this PC's own view, as in vanilla. (A desync class found by
+     * timjrobinson/songs-of-syx-multiplayer.)
      */
     public static boolean battleView(boolean localViewOpen, boolean battleRunning) {
-        return Engine.session() == null ? localViewOpen : battleRunning;
+        Session s = Engine.session();
+        return s != null && s.streams.isSimulationThread() ? battleRunning : localViewOpen;
+    }
+
+    /** A frame's game update took this long (for the timing measurements; kept per session). */
+    public static void frameUpdated(long nanos) {
+        Session s = Engine.session();
+        if (s != null) {
+            s.lastFrameUpdateNanos = nanos;
+        }
     }
 
     /**

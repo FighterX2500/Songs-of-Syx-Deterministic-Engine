@@ -37,6 +37,8 @@ final class Session {
     boolean worldHeld;
     /** 0 = loads run as in vanilla; otherwise loads run on the simulation stream seeded with this. */
     int loadSeed;
+    /** The last frame's game update time (-1 before the first); read for the timing measurements. */
+    volatile long lastFrameUpdateNanos = -1;
     /** When the running step started (0 between steps); read by the rig's stall sampler on another thread. */
     volatile long stepStartNanos;
     long pathJobs;

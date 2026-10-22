@@ -221,6 +221,18 @@ val compileGamePatches by tasks.registering {
         // snake2d and integrations first: patched game code at 16 may call into them.
         ecj("8", engine + gameJar(), bySource["8"].orEmpty(), out)
         ecj("16", listOf(out) + engine + gameJar(), bySource["16"].orEmpty(), out)
+        // Ship only the classes a patch changed. A patched file's other classes (nested ones the patch didn't touch)
+        // compile byte-identical to the game's own (verifyUntouched), so the game's copies serve. Shipping them anyway
+        // lets the game's script scan initialize them at the main menu, where some fail without a running game
+        // (Humanoid$HumanoidResource reads the game clock in its static initializer; SOS-32).
+        ZipFile(gameJar()).use { jar ->
+            classesUnder(out).forEach { (name, file) ->
+                val entry = jar.getEntry(name)
+                if (entry != null && jar.getInputStream(entry).use { it.readBytes() }.contentEquals(file.readBytes())) {
+                    file.delete()
+                }
+            }
+        }
     }
 }
 

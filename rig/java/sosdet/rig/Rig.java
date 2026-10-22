@@ -405,7 +405,7 @@ public final class Rig implements SCRIPT {
         private void timing() {
             try {
                 if (pendingGameSeconds >= 0) {
-                    timing.write(FrameTiming.lastUpdateNanos() + "," + pendingGameSeconds + "\n");
+                    timing.write(Engine.lastFrameUpdateNanos() + "," + pendingGameSeconds + "\n");
                 }
             } catch (IOException e) {
                 throw new IllegalStateException("SOSDET rig: cannot write the timing log", e);

@@ -273,6 +273,15 @@ public final class Engine {
         return t == null ? "" : t.dump(from, to);
     }
 
+    /**
+     * How long the last frame's game update took, in nanoseconds (-1 before the first frame of the session, or with no
+     * session). The current frame's update is still running when the caller asks.
+     */
+    public static long lastFrameUpdateNanos() {
+        Session s = session;
+        return s == null ? -1 : s.lastFrameUpdateNanos;
+    }
+
     /** When the running step started (System.nanoTime), or 0 between steps: for a stall sampler on another thread. */
     public static long stepStartNanos() {
         Session s = session;

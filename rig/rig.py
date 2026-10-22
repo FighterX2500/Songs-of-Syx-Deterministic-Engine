@@ -478,6 +478,21 @@ def run_evals(args):
     sys.exit(0 if verdict and first is None else 1)
 
 
+LOCK = RUNS.parent / "rig.lock"
+
+
+def take_lock():
+    """One runner at a time: two would send every command twice to the same copies (SOS-32)."""
+    if LOCK.exists():
+        pid = LOCK.read_text().strip()
+        alive = subprocess.run(["powershell", "-NoProfile", "-Command", "if (Get-Process -Id %s -ErrorAction SilentlyContinue)"
+                                " { 'yes' }" % pid], capture_output=True, text=True).stdout.strip() == "yes"
+        if alive and pid.isdigit():
+            fail("another rig.py (process %s) is running; stop it first" % pid)
+    LOCK.parent.mkdir(parents=True, exist_ok=True)
+    LOCK.write_text(str(os.getpid()))
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("scenario", choices=["field", "city"])
@@ -510,6 +525,7 @@ def main():
                     help="the timing rule instead: host and peer, one copy alone each, at speed 1")
     ap.add_argument("--vanilla", action="store_true", help="with --evals: measure vanilla again (default: SOS-23's figures)")
     args = ap.parse_args()
+    take_lock()
     if args.evals:
         return run_evals(args)
     nudged = (args.nudge_copy or args.copies) if args.nudge else 0

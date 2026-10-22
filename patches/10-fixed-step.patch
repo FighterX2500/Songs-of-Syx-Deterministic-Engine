@@ -1,6 +1,6 @@
 diff -ru -U2 a/game/GAME.java b/game/GAME.java
 --- a/game/GAME.java	2026-06-17 19:41:18.000000000 +0500
-+++ b/game/GAME.java	2026-10-22 21:35:44.302027700 +0500
++++ b/game/GAME.java	2026-10-22 21:44:16.464765200 +0500
 @@ -255,7 +255,9 @@
  		double speed = SPEED.update(slowDown);
  		
@@ -12,7 +12,7 @@ diff -ru -U2 a/game/GAME.java b/game/GAME.java
  			for (GameResource s : GameResource.all) {
  				if (s.isBattle || !VIEW.b().isActive())
  					s.update(0, game.profiler);
-@@ -263,15 +265,37 @@
+@@ -263,15 +265,36 @@
  			game.updateI++;
  		}else {
  			ds *= speed;
@@ -31,8 +31,7 @@ diff -ru -U2 a/game/GAME.java b/game/GAME.java
  			for (int i = 0; i < fulls; i++){
 +				if (sosdet.Hooks.fixedSteps() && !sosdet.Hooks.stepBegin())
 +					break;
-+				// SOSDET: whether the battle view is open is the same on every PC (the battle is running, B7)
-+				boolean battleView = sosdet.Hooks.battleView(VIEW.b().isActive(), VIEW.b().state() != null);
++				boolean battleView = VIEW.b().isActive(); // SOSDET: inside the step the same on every PC (VIEW patch, SOS-32)
 +				if (sosdet.Hooks.fixedSteps()) {
 +					max = (float) sosdet.Hooks.stepSeconds(); // SOSDET: a speed change from the log takes effect at its step (B16)
 +					for (GameResource s : GameResource.all) {
@@ -52,7 +51,7 @@ diff -ru -U2 a/game/GAME.java b/game/GAME.java
  				game.updateI++;
  			}
  			
-@@ -289,11 +313,14 @@
+@@ -289,11 +312,14 @@
  		
  		game.profiler.logEnd(game);
  		game.profiler.log();
@@ -68,7 +67,7 @@ diff -ru -U2 a/game/GAME.java b/game/GAME.java
  		for (GameResource s : GameResource.all) {
  			s.afterTick();
  		}
-@@ -410,6 +437,10 @@
+@@ -410,6 +436,10 @@
  	}
  	
  	public static void Error(String s) {
@@ -79,7 +78,7 @@ diff -ru -U2 a/game/GAME.java b/game/GAME.java
  	    if (S.get().developer || S.get().debug) {
  	    	Warn(s);
  	    }else {
-@@ -419,6 +450,10 @@
+@@ -419,6 +449,10 @@
  	}
  	
  	public static void Warn(String s) {
@@ -92,7 +91,7 @@ diff -ru -U2 a/game/GAME.java b/game/GAME.java
  	    	LOG.err("SYX WARNING: " + s);
 diff -ru -U2 a/view/battle/BattleView.java b/view/battle/BattleView.java
 --- a/view/battle/BattleView.java	2025-11-19 14:24:46.000000000 +0500
-+++ b/view/battle/BattleView.java	2026-10-22 21:35:44.298026200 +0500
++++ b/view/battle/BattleView.java	2026-10-22 21:44:16.460764800 +0500
 @@ -109,7 +109,7 @@
  	@Override
  	protected boolean update(float ds, boolean should){
