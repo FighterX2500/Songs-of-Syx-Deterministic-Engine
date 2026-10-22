@@ -1,0 +1,13 @@
+men 0 40
+race 0 1
+race 0 0
+training 0 0 0.5
+training 0 0 0
+equip 0 0 1
+equip 0 0 0
+banner 0 5
+banner 0 0
+order 0 1
+order 0 1
+untrained 0
+untrained 1
