@@ -561,6 +561,9 @@ def main():
                     help="the speed every copy agrees on at the start, which sets the step length (1/60 s at 1x or"
                          " slower, 1/16 s above); default: copy 1's speed")
     ap.add_argument("--no-invade", action="store_true", help="city: no invasion, the city as it is")
+    ap.add_argument("--cmds", default="",
+                    help="player actions copy 1 takes once every copy runs, ';'-separated or @file (one per line), 3 s apart, through the UI's"
+                         " own calls (e.g. 'curfew 1;men 0 40'); the others get them through the host's log (ADR 0002)")
     ap.add_argument("--warm", default="",
                     help="copies (e.g. 3 or 2,3) that play the autoloaded game normally for 30 game seconds before the"
                          " session, so their session game is not the first one their process has run")
@@ -639,6 +642,7 @@ def main():
         c.send("begin", "begin")
         if args.ai == "host":
             c.send("ai %s %s" % ("host" if c.k == 1 else "peer", start_id), "ai")
+            c.send("pc %d" % (c.k - 1), "pc")  # the host is PC 0
         else:
             c.send("ai instep", "ai")
         c.send("loadseed %d" % LOAD_SEED, "loadseed")
@@ -677,6 +681,18 @@ def main():
         t.join()
     if len(starts) != len(copies):
         fail("not every copy started")
+
+    # --cmds "a;b" or --cmds @file (one action per line; '#' starts a comment)
+    if args.cmds.startswith("@"):
+        lines = pathlib.Path(args.cmds[1:]).read_text(encoding="utf-8").splitlines()
+        actions = [l.split("#")[0].strip() for l in lines]
+    else:
+        actions = [a.strip() for a in args.cmds.split(";")]
+    actions = [a for a in actions if a] if args.cmds else []
+    for action in actions:
+        time.sleep(3)
+        copies[0].send("cmd " + action, "cmd")
+        log("copy 1 (the host's player): " + action)
 
     # Until the reference finishes: compare the copies as they run, and stop them all at the first difference.
     watcher = Watcher({c.k: c.rig / ("%s-c%d.csv" % (args.tag, c.k)) for c in copies})
@@ -758,6 +774,14 @@ def main():
         else:
             summary.append("copy %d: no engine desync (%d hashes compared, %d missed)"
                            % (c.k, finished[c.k]["stats"].get("hashesCompared", 0), finished[c.k]["stats"].get("hashesMissed", 0)))
+    if actions:
+        applied = [str(finished[c.k]["stats"].get("commandsApplied", "?")) for c in copies]
+        summary.append("scripted actions sent: %d; commands applied per copy: %s (an action sent after the reference"
+                       " copy's last step never applies)" % (len(actions), ", ".join(applied)))
+        skipped = [l for l in copies[0].events.read_text(encoding="utf-8").splitlines() if '"cmdskipped"' in l]
+        if skipped:
+            summary.append("scripted actions skipped on copy 1 (target missing in this save): %d" % len(skipped))
+            summary += ["  " + json.loads(l)["reason"] for l in skipped]
     if args.trace_draws:
         summary_draws = first_draw_difference(run_dir)
         if summary_draws:

@@ -1,0 +1,94 @@
+diff -ru -U2 a/game/battle/Army.java b/game/battle/Army.java
+--- a/game/battle/Army.java	2025-11-29 17:20:30.000000000 +0500
++++ b/game/battle/Army.java	2026-10-23 02:30:51.124382000 +0500
+@@ -63,6 +63,8 @@
+ 	}
+ 	
+ 	public void setDivAtOrderedIndex(Div toBeReplaced, Div replacer) {
++		if (sosdet.game.cmd.Military.orderSet(toBeReplaced, replacer)) // SOSDET: the player's division order is a command (ADR 0002)
++			return;
+ 		if (ordered.removeOrdered(replacer) == -1)
+ 			throw new RuntimeException();
+ 		int oi = ordered.indexOf(toBeReplaced);
+diff -ru -U2 a/game/battle/div/DivInfo.java b/game/battle/div/DivInfo.java
+--- a/game/battle/div/DivInfo.java	2025-11-22 08:36:34.000000000 +0500
++++ b/game/battle/div/DivInfo.java	2026-10-23 02:30:51.124382000 +0500
+@@ -52,6 +52,8 @@
+ 	
+ 	@Override
+ 	public void menSet(int am) {
++		if (sosdet.game.cmd.Military.menSet(div, am)) // SOSDET: the player's division size is a command (ADR 0002)
++			return;
+ 		if (div.army() == GAME.ARMIES().player()) {
+ 			SETT.BATTLE().info.clearTargets();
+ 			
+@@ -76,6 +78,8 @@
+ 	
+ 	@Override
+ 	public void trainingSet(StatTraining e, double d) {
++		if (sosdet.game.cmd.Military.trainingSet(div, e, d)) // SOSDET: the player's division training is a command (ADR 0002)
++			return;
+ 		trains[e.room.INDEX_TRAINING].setD(d);
+ 	}
+ 	
+@@ -100,6 +104,8 @@
+ 	
+ 	@Override
+ 	public void raceSet(Race race) {
++		if (sosdet.game.cmd.Military.raceSet(div, race)) // SOSDET: the player's division race is a command (ADR 0002)
++			return;
+ 		int men = men();
+ 		menSet(0);
+ 		raceI = race.index;
+@@ -194,6 +200,8 @@
+ 
+ 	@Override
+ 	public void bannerISet(int bannerI) {
++		if (sosdet.game.cmd.Military.bannerSet(div, bannerI)) // SOSDET: the player's division banner is a command (ADR 0002)
++			return;
+ 		symbolI = bannerI;
+ 	}
+ 
+diff -ru -U2 a/settlement/battle/ArmyTrainingInfo.java b/settlement/battle/ArmyTrainingInfo.java
+--- a/settlement/battle/ArmyTrainingInfo.java	2026-06-17 10:48:04.000000000 +0500
++++ b/settlement/battle/ArmyTrainingInfo.java	2026-10-23 02:30:51.125352100 +0500
+@@ -168,6 +168,8 @@
+ 	}
+ 	
+ 	public void sendOutWithoutTraining(boolean s) {
++		if (sosdet.game.cmd.Military.sendOutUntrained(s)) // SOSDET: the army screen's toggle is a command (ADR 0002)
++			return;
+ 		sendOutWithoutTraining = s;
+ 	}
+ 	
+diff -ru -U2 a/settlement/room/military/artillery/ArtilleryInstance.java b/settlement/room/military/artillery/ArtilleryInstance.java
+--- a/settlement/room/military/artillery/ArtilleryInstance.java	2025-09-29 07:49:40.000000000 +0500
++++ b/settlement/room/military/artillery/ArtilleryInstance.java	2026-10-23 02:30:51.133353600 +0500
+@@ -227,11 +227,15 @@
+ 	}
+ 
+ 	public void clearTarget() {
++		if (sosdet.game.cmd.Military.artilleryClear(this)) // SOSDET: the battle screen's stop is a command (ADR 0002)
++			return;
+ 		cTarget.set(-1, -1);
+ 		dTarget = -1;
+ 	}
+ 	
+ 	public void targetDivSet(Div div, boolean userSet) {
++		if (sosdet.game.cmd.Military.artilleryTargetDiv(this, div, userSet)) // SOSDET: aiming at a division from the battle screen is a command (ADR 0002)
++			return;
+ 		clearTarget();
+ 		dTarget = div.index();
+ 	}
+diff -ru -U2 a/settlement/stats/equip/EquipBattle.java b/settlement/stats/equip/EquipBattle.java
+--- a/settlement/stats/equip/EquipBattle.java	2026-04-06 08:51:54.000000000 +0500
++++ b/settlement/stats/equip/EquipBattle.java	2026-10-23 02:30:51.126353000 +0500
+@@ -117,6 +117,8 @@
+ 	}
+ 
+ 	public void targetSet(Div d, int t) {
++		if (sosdet.game.cmd.Military.equipmentSet(this, d, t)) // SOSDET: the player's division equipment is a command (ADR 0002)
++			return;
+ 		tars.set(d.index(), CLAMP.i(t, 0, equipMax));
+ 	}
+ 

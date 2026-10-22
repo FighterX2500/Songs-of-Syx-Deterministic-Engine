@@ -15,6 +15,7 @@ import snake2d.util.sets.ArrayList;
 import sosdet.Hooks;
 import sosdet.ai.AiApplier;
 import sosdet.ai.AiEntry;
+import sosdet.game.cmd.Commands;
 
 /**
  * Applies the host's log entries to the battle, on the simulation thread at the entry's step: the AI general's
@@ -42,9 +43,22 @@ public final class GameAi implements AiApplier {
         return orderWriter.encode(order);
     }
 
+    /** Players' commands whose target was gone at their step (ADR 0002). */
+    private long commandsSkipped;
+
+    @Override
+    public long commandsSkipped() {
+        return commandsSkipped;
+    }
+
     @Override
     public void apply(AiEntry e) {
         switch (e.kind) {
+        case AiEntry.COMMAND:
+            if (!Commands.apply(e.payload())) {
+                commandsSkipped++; // its target was gone at its step, on every PC alike
+            }
+            return;
         case AiEntry.SPEED:
             Hooks.agreedSpeed(e.intAt(0) / 1000.0);
             return;

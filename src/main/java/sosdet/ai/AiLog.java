@@ -26,7 +26,7 @@ public final class AiLog {
 
     /** Steps between the host taking a change and every PC applying it: 0.5 s at 1x. */
     public static final int DELAY_STEPS = 30;
-    static final int FORMAT_VERSION = 2;
+    static final int FORMAT_VERSION = 3;
     static final int MAGIC = 0x53444149; // "SDAI"
     static final int HEADER_BYTES = 4 + 4 + 4 + 8;
     static final byte ENTRY = 1;
@@ -55,6 +55,13 @@ public final class AiLog {
     /** Host: the last step drained. Peer: the host's last confirmed step. */
     private long confirmed;
     private long applied;
+    /** The mod's number for this PC (the host is 0), and the issuer of the entry being applied, if any. */
+    private int localPc;
+    private int applyingPc = NOT_APPLYING;
+    /** This PC's last captured command until it applies, and how many repeats of it were dropped. */
+    private byte[] lastCommand;
+    private long repeatsDropped;
+    private static final int NOT_APPLYING = Integer.MIN_VALUE;
     private long appliedOrders;
     private final long[] appliedByKind = new long[AiEntry.KINDS];
     private final Recent recentAi = new Recent();
@@ -144,6 +151,14 @@ public final class AiLog {
      * to the host through {@link #ordersOut}. Either way it is applied at the step the host stamps.
      */
     public void captureOrder(int kind, int div, byte[] payload) {
+        if (kind == AiEntry.COMMAND) {
+            // A slider dragged or a button held repeats the same command every frame until it applies; once is enough.
+            if (Arrays.equals(payload, lastCommand)) {
+                repeatsDropped++;
+                return;
+            }
+            lastCommand = payload.clone();
+        }
         if (mode == AiMode.HOST) {
             captured.add(new AiEntry(-1, -1, kind, div, 0, payload.clone()));
         } else if (mode == AiMode.PEER) {
@@ -207,7 +222,16 @@ public final class AiLog {
                 throw new IllegalStateException("SOSDET: AI log entry " + due.seq + " for step " + due.step
                         + " is still pending at step " + step);
             }
-            applier.apply(due);
+            applyingPc = due.pc;
+            try {
+                applier.apply(due);
+            } finally {
+                applyingPc = NOT_APPLYING;
+            }
+            if (due.kind == AiEntry.COMMAND && lastCommand != null && due.pc == localPc
+                    && Arrays.equals(due.payload(), lastCommand)) {
+                lastCommand = null; // applied: the same command may be given again
+            }
             (due.pc == AiEntry.AI ? recentAi : recentOrders).add(due);
             applied++;
             appliedByKind[due.kind]++;
@@ -435,6 +459,29 @@ public final class AiLog {
         synchronized (aiBatch) {
             return coalesced;
         }
+    }
+
+    /** This PC's commands dropped as repeats of the one it gave last, before that one applied. */
+    public long commandRepeatsDropped() {
+        return repeatsDropped;
+    }
+
+    /** Players' commands skipped because their target was gone at their step. */
+    public long commandsSkipped() {
+        return applier == null ? 0 : applier.commandsSkipped();
+    }
+
+    /** The mod's number for this PC: 0 on the host, from 1 on a peer. */
+    public void localPc(int pc) {
+        if (pc < 0) {
+            throw new IllegalArgumentException("SOSDET: PC " + pc);
+        }
+        localPc = pc;
+    }
+
+    /** While an entry is being applied: whether this PC's player gave it (feedback such as sounds only for them). */
+    public boolean issuedHere() {
+        return applyingPc != NOT_APPLYING && applyingPc == localPc;
     }
 
     public long applied() {

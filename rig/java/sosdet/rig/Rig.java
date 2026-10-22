@@ -43,6 +43,12 @@ import snake2d.util.file.FilePutter;
 import snake2d.util.misc.ACTION;
 import snake2d.util.rnd.RND;
 import sosdet.Engine;
+import sosdet.rig.act.EmploymentActions;
+import sosdet.rig.act.LawActions;
+import sosdet.rig.act.MilitaryActions;
+import sosdet.rig.act.NameActions;
+import sosdet.rig.act.RoomActions;
+import sosdet.rig.act.ToolActions;
 import sosdet.hash.Desync;
 import view.main.VIEW;
 
@@ -107,6 +113,21 @@ public final class Rig implements SCRIPT {
      * run's state at a resync; test tooling only, so a static holder is fine here (engine rule: no mutable static).
      */
     private static Instance current;
+
+    /**
+     * Queues a scripted player's action to run outside the step, as the UI would (SOS-34). An action whose target is
+     * missing in this save (a room type it doesn't have) is reported as a "cmdskipped" event instead of crashing the
+     * game; nothing was captured, so the copies stay comparable.
+     */
+    public static void later(Runnable action) {
+        Engine.betweenSteps(() -> {
+            try {
+                action.run();
+            } catch (IllegalStateException | IllegalArgumentException | IndexOutOfBoundsException e) {
+                current.event("cmdskipped", "\"reason\":\"" + Instance.clean(String.valueOf(e.getMessage())) + "\"");
+            }
+        });
+    }
 
     @Override
     public SCRIPT_INSTANCE createInstance() {
@@ -532,6 +553,15 @@ public final class Rig implements SCRIPT {
                 }
                 event("ai", "\"mode\":\"" + Engine.aiMode() + "\"");
                 return;
+            case "pc":
+                Engine.localPc(Integer.parseInt(c[1]));
+                event("pc", "\"pc\":" + Integer.parseInt(c[1]));
+                return;
+            case "cmd":
+                // a scripted player: the call the game's UI makes, run outside the step where the UI acts (ADR 0002)
+                playerAction(Arrays.copyOfRange(c, 1, c.length));
+                event("cmd", "\"action\":\"" + clean(rest(c)) + "\"");
+                return;
             case "ailog":
                 aiHost = c[1].equals("host");
                 aiFile = Paths.get(rest(Arrays.copyOfRange(c, 1, c.length)));
@@ -595,6 +625,14 @@ public final class Rig implements SCRIPT {
         }
 
         // ------------------------------------------------------------ runs
+
+        /** The UI call behind one player action, queued to run after this frame's update, outside the step. */
+        private void playerAction(String[] a) {
+            if (!(LawActions.run(a) || RoomActions.run(a) || EmploymentActions.run(a) || MilitaryActions.run(a)
+                    || NameActions.run(a) || ToolActions.run(a))) {
+                throw new IllegalArgumentException("SOSDET rig: no player action " + a[0]);
+            }
+        }
 
         private void run(boolean cityRun, long steps, double speed, String runTag) throws ReflectiveOperationException, IOException {
             if (!Engine.active()) {

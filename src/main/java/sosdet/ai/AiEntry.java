@@ -22,13 +22,16 @@ public final class AiEntry {
     public static final int TELEPORT = 14;
     /** The speed every PC agrees on, in thousandths (it sets the step length); not a battle change. */
     public static final int SPEED = 15;
-    static final int KINDS = 16;
+    /** A player's command (ADR 0002): the payload is the command's id and its arguments ({@link CmdWriter}). */
+    public static final int COMMAND = 16;
+    static final int KINDS = 17;
     public static String kindName(int kind) {
         return KIND_NAMES[kind];
     }
 
     private static final String[] KIND_NAMES = {"path", "dest", "task", "guard", "running", "fireAtWill", "formation",
-        "artillery", "holdFire", "ammo", "muster", "mopUp", "artilleryMuster", "artilleryFire", "teleport", "speed"};
+        "artillery", "holdFire", "ammo", "muster", "mopUp", "artilleryMuster", "artilleryFire", "teleport", "speed",
+        "command"};
 
     /** The general, as opposed to a player's PC. */
     public static final int AI = -1;
@@ -100,6 +103,7 @@ public final class AiEntry {
     String line() {
         return "step " + step + ", #" + seq + ", " + KIND_NAMES[kind] + ", division " + div
                 + (isSetting() ? " = " + intAt(0) : kind == SPEED ? " = " + intAt(0) / 1000.0 + "x" : "")
+                + (kind == COMMAND ? " " + CmdReader.idOf(payload) : "")
                 + (pc == AI ? "" : ", PC " + pc);
     }
 }

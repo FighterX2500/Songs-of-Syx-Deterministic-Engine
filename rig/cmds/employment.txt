@@ -1,0 +1,14 @@
+empprio FARM_GRAIN 20
+empprio FARM_GRAIN 10
+empgroupinc FARM_GRAIN 0 1
+empgroupinc FARM_GRAIN 0 -1
+empgroup FARM_GRAIN 0 5
+emptargets
+empfulfil FARM_GRAIN 0
+empskill FARM_GRAIN 0
+empworkers TAVERN_NORMAL 0 3
+empauto TAVERN_NORMAL 0 0
+empauto TAVERN_NORMAL 0 1
+empequip 0 1
+empequipinc 0 1
+empequipinc 0 -1

@@ -15,7 +15,7 @@ import java.util.Queue;
  */
 final class Orders {
 
-    static final int FORMAT_VERSION = 1;
+    static final int FORMAT_VERSION = 2;
     static final int MAGIC = 0x5344_4f52; // "SDOR"
     static final int HEADER_BYTES = 4 + 4 + 8;
 

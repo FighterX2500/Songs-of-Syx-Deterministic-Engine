@@ -1,0 +1,251 @@
+diff -ru -U2 a/game/faction/player/PTech.java b/game/faction/player/PTech.java
+--- a/game/faction/player/PTech.java	2026-06-17 10:48:06.000000000 +0500
++++ b/game/faction/player/PTech.java	2026-10-23 02:20:59.663176700 +0500
+@@ -354,6 +354,8 @@
+ 	}
+ 	
+ 	public void levelSet(TECH tech, int level) {
++		if (sosdet.game.cmd.Laws.techLevel(tech, level)) // SOSDET: the player's technology is a command, applied at its step on every PC (ADR 0002)
++			return;
+ 		level = CLAMP.i(level, 0, tech.levelMax);
+ 		if (level < level(tech)) {
+ 			for (TechCost c : tech.costs)
+diff -ru -U2 a/settlement/stats/colls/StatsEducation.java b/settlement/stats/colls/StatsEducation.java
+--- a/settlement/stats/colls/StatsEducation.java	2026-06-25 07:51:16.000000000 +0500
++++ b/settlement/stats/colls/StatsEducation.java	2026-10-23 02:20:59.662176500 +0500
+@@ -92,6 +92,8 @@
+ 	}
+ 	
+ 	public void policySet(HCLASS cl, Race r, StatEducation e) {
++		if (sosdet.game.cmd.Laws.educationPolicy(cl, r, e.index)) // SOSDET: the player's education policy is a command, applied at its step on every PC (ADR 0002)
++			return;
+ 		if (r == null) {
+ 			for (int ri = 0; ri < RACES.all().size(); ri++)
+ 				policySet(cl, RACES.all().get(ri), e);
+@@ -147,6 +149,8 @@
+ 		}
+ 		
+ 		public void limitSet(HCLASS_RACE cl, int l) {
++			if (sosdet.game.cmd.Laws.educationLimit(typeI, cl, l)) // SOSDET: the player's study limit is a command, applied at its step on every PC (ADR 0002)
++				return;
+ 			if (cl.race == null) {
+ 				for (int ri = 0; ri < RACES.all().size(); ri++)
+ 					limitSet(HCLASS_RACE.clP(RACES.all().get(ri), cl.cl), l);
+diff -ru -U2 a/settlement/stats/colls/StatsHome.java b/settlement/stats/colls/StatsHome.java
+--- a/settlement/stats/colls/StatsHome.java	2026-06-17 10:59:30.000000000 +0500
++++ b/settlement/stats/colls/StatsHome.java	2026-10-23 02:20:59.661178700 +0500
+@@ -311,6 +311,8 @@
+ 	}
+ 	
+ 	public void targetSet(int target, HCLASS c, Race type, RESOURCE res) {
++		if (sosdet.game.cmd.Laws.homeTarget(target, c, type, res)) // SOSDET: the player's furniture target is a command, applied at its step on every PC (ADR 0002)
++			return;
+ 		if (type == null) {
+ 			for (int ri = 0; ri < RACES.all().size(); ri++) {
+ 				Race r = RACES.all().get(ri);
+diff -ru -U2 a/settlement/stats/equip/EquipCivic.java b/settlement/stats/equip/EquipCivic.java
+--- a/settlement/stats/equip/EquipCivic.java	2025-10-25 07:53:54.000000000 +0500
++++ b/settlement/stats/equip/EquipCivic.java	2026-10-23 02:20:59.661178700 +0500
+@@ -79,6 +79,8 @@
+ 	}
+ 	
+ 	public void targetSet(int target, HCLASS c, Race type) {
++		if (sosdet.game.cmd.Laws.civicTarget(this, target, c, type)) // SOSDET: the player's equipment target is a command, applied at its step on every PC (ADR 0002)
++			return;
+ 		if (type == null) {
+ 			for (int ri = 0; ri < RACES.all().size(); ri++) {
+ 				Race r = RACES.all().get(ri);
+diff -ru -U2 a/settlement/stats/law/Curfew.java b/settlement/stats/law/Curfew.java
+--- a/settlement/stats/law/Curfew.java	2026-06-20 15:43:56.000000000 +0500
++++ b/settlement/stats/law/Curfew.java	2026-10-23 02:01:46.705221900 +0500
+@@ -37,6 +37,8 @@
+ 	}
+ 	
+ 	public void setForADay(boolean set) {
++		if (sosdet.game.cmd.Laws.curfew(set)) // SOSDET: the player's curfew is a command, applied at its step on every PC (ADR 0002)
++			return;
+ 		if (set) {
+ 			timer = TIME.secondsPerDay();
+ 		}else
+diff -ru -U2 a/settlement/stats/law/StatCrime.java b/settlement/stats/law/StatCrime.java
+--- a/settlement/stats/law/StatCrime.java	2026-06-29 09:04:40.000000000 +0500
++++ b/settlement/stats/law/StatCrime.java	2026-10-23 02:20:59.660162700 +0500
+@@ -290,6 +290,8 @@
+ 	}
+ 
+ 	public void punishmentSet(HCLASS cl, Race race, PUNISHMENT p) {
++		if (sosdet.game.cmd.Laws.punishmentSet(this, cl, race, p)) // SOSDET: the player's punishment is a command, applied at its step on every PC (ADR 0002)
++			return;
+ 
+ 		if (race == null) {
+ 			for (Race r : RACES.all()) {
+diff -ru -U2 a/settlement/stats/stat/StatDecree.java b/settlement/stats/stat/StatDecree.java
+--- a/settlement/stats/stat/StatDecree.java	2024-09-04 07:46:14.000000000 +0500
++++ b/settlement/stats/stat/StatDecree.java	2026-10-23 02:20:59.663176700 +0500
+@@ -64,6 +64,8 @@
+ 
+ 				@Override
+ 				public void set(Race t, int i) {
++					if (sosdet.game.cmd.Laws.statDecree(StatDecree.this, c, t, i)) // SOSDET: the player's rations or retirement age is a command, applied at its step on every PC (ADR 0002)
++						return;
+ 					if (t == null) {
+ 						for (int ri = 0; ri < RACES.all().size(); ri++) {
+ 							Race r = RACES.all().get(ri);
+diff -ru -U2 a/view/sett/ui/right/UIMiniRaces.java b/view/sett/ui/right/UIMiniRaces.java
+--- a/view/sett/ui/right/UIMiniRaces.java	2026-06-18 08:40:34.000000000 +0500
++++ b/view/sett/ui/right/UIMiniRaces.java	2026-10-23 02:20:59.669219700 +0500
+@@ -353,7 +353,7 @@
+ 			if (MButt.LEFT.isDouble()) {
+ 				Race res = FACTIONS.player().races.get(ri);
+ 				int am = SETT.ENTRY().immi().wanted(res);
+-				if (am > 0)
++				if (am > 0 && !sosdet.game.cmd.Laws.admit(res, am)) // SOSDET: the player's admission is a command, applied at its step on every PC (ADR 0002)
+ 				SETT.ENTRY().immi().admit(res, am);
+ 			}
+ 			clickI = ri;
+diff -ru -U2 a/view/sett/ui/standing/CatAccess.java b/view/sett/ui/standing/CatAccess.java
+--- a/view/sett/ui/standing/CatAccess.java	2026-05-30 11:34:34.000000000 +0500
++++ b/view/sett/ui/standing/CatAccess.java	2026-10-23 02:20:59.665178600 +0500
+@@ -89,7 +89,8 @@
+ 					
+ 					@Override
+ 					protected void clickA() {
+-						s.allowed(k).toggle(c, race.get());
++						if (!sosdet.game.cmd.Laws.foodAllowed(k, c, race.get(), !s.allowed(k).get(c, race.get()))) // SOSDET: the player's food permission is a command, applied at its step on every PC (ADR 0002)
++							s.allowed(k).toggle(c, race.get());
+ 					}
+ 					
+ 					@Override
+diff -ru -U2 a/view/sett/ui/standing/CatPopulationGrowth.java b/view/sett/ui/standing/CatPopulationGrowth.java
+--- a/view/sett/ui/standing/CatPopulationGrowth.java	2026-06-25 09:14:08.000000000 +0500
++++ b/view/sett/ui/standing/CatPopulationGrowth.java	2026-10-23 02:20:59.669219700 +0500
+@@ -144,7 +144,7 @@
+ 			
+ 			@Override
+ 			protected void clickA() {
+-				if (m.get() > 0)
++				if (m.get() > 0 && !sosdet.game.cmd.Laws.admit(race.get(), m.get())) // SOSDET: the player's admission is a command, applied at its step on every PC (ADR 0002)
+ 					SETT.ENTRY().immi().admit(race.get(), m.get());
+ 			}
+ 			
+@@ -182,7 +182,7 @@
+ 			
+ 			@Override
+ 			public void set(int t) {
+-				if (cl == HCLASSES.CITIZEN())
++				if (cl == HCLASSES.CITIZEN() && !sosdet.game.cmd.Laws.admitAuto(race.get(), t)) // SOSDET: the player's auto admit limit is a command, applied at its step on every PC (ADR 0002)
+ 					SETT.ENTRY().immi().auto(race.get()).set(t);
+ 			}
+ 		};
+@@ -253,7 +253,8 @@
+ 			
+ 			@Override
+ 			public void set(int t) {
+-				STATS.POP().reproduction.limit.set(HCLASS_RACE.clP(race.get(), cl), t);
++				if (!sosdet.game.cmd.Laws.birthLimit(HCLASS_RACE.clP(race.get(), cl), t)) // SOSDET: the player's birth limit is a command, applied at its step on every PC (ADR 0002)
++					STATS.POP().reproduction.limit.set(HCLASS_RACE.clP(race.get(), cl), t);
+ 			}
+ 		};
+ 		s.addRightCAbs(80, new GInputInt(a, true, true));
+@@ -279,7 +280,8 @@
+ 			
+ 			@Override
+ 			public void set(int t) {
+-				STATS.POP().reproduction.settings.set(HCLASS_RACE.clP(race.get(), cl).index, t);
++				if (!sosdet.game.cmd.Laws.breeding(HCLASS_RACE.clP(race.get(), cl), t)) // SOSDET: the player's forced breeding is a command, applied at its step on every PC (ADR 0002)
++					STATS.POP().reproduction.settings.set(HCLASS_RACE.clP(race.get(), cl).index, t);
+ 			}
+ 		};
+ 		
+diff -ru -U2 a/view/sett/ui/standing/CatReligion.java b/view/sett/ui/standing/CatReligion.java
+--- a/view/sett/ui/standing/CatReligion.java	2026-06-07 08:44:58.000000000 +0500
++++ b/view/sett/ui/standing/CatReligion.java	2026-10-23 02:20:59.666146400 +0500
+@@ -297,7 +297,8 @@
+ 		s.addRightC(16, new GButt.Checkbox() {
+ 			@Override
+ 			protected void clickA() {
+-				ss.permissionShrine.toggle(cl, race.get());
++				if (!sosdet.game.cmd.Laws.religionPermission(ss, false, cl, race.get(), !ss.permissionShrine.get(cl, race.get()))) // SOSDET: the player's shrine permission is a command, applied at its step on every PC (ADR 0002)
++					ss.permissionShrine.toggle(cl, race.get());
+ 			}
+ 			
+ 			@Override
+@@ -330,7 +331,8 @@
+ 		s.addRightC(16, new GButt.Checkbox() {
+ 			@Override
+ 			protected void clickA() {
+-				ss.permissionTemple.toggle(cl, race.get());
++				if (!sosdet.game.cmd.Laws.religionPermission(ss, true, cl, race.get(), !ss.permissionTemple.get(cl, race.get()))) // SOSDET: the player's temple permission is a command, applied at its step on every PC (ADR 0002)
++					ss.permissionTemple.toggle(cl, race.get());
+ 			}
+ 			
+ 			@Override
+@@ -449,7 +451,8 @@
+ 			s.addRightC(4, new GButt.Checkbox() {
+ 				@Override
+ 				protected void clickA() {
+-					ss.grave().permission().toggle(cl, race.get());
++					if (!sosdet.game.cmd.Laws.gravePermission(ss, cl, race.get(), !ss.grave().permission().get(cl, race.get()))) // SOSDET: the player's grave permission is a command, applied at its step on every PC (ADR 0002)
++						ss.grave().permission().toggle(cl, race.get());
+ 				}
+ 				
+ 				@Override
+diff -ru -U2 a/view/sett/ui/standing/CatServices.java b/view/sett/ui/standing/CatServices.java
+--- a/view/sett/ui/standing/CatServices.java	2026-03-21 09:14:20.000000000 +0500
++++ b/view/sett/ui/standing/CatServices.java	2026-10-23 02:20:59.667258500 +0500
+@@ -115,7 +115,8 @@
+ 				
+ 				@Override
+ 				protected void clickA() {
+-					ss.permission().toggle(cl.get(race.get()));
++					if (!sosdet.game.cmd.Laws.servicePermission(ss, cl.get(race.get()), !ss.permission().is(cl.get(race.get())))) // SOSDET: the player's service permission is a command, applied at its step on every PC (ADR 0002)
++						ss.permission().toggle(cl.get(race.get()));
+ 					super.clickA();
+ 				}
+ 				
+diff -ru -U2 a/view/sett/ui/standing/decree/DPanel.java b/view/sett/ui/standing/decree/DPanel.java
+--- a/view/sett/ui/standing/decree/DPanel.java	2026-05-27 11:40:06.000000000 +0500
++++ b/view/sett/ui/standing/decree/DPanel.java	2026-10-23 02:20:59.664176900 +0500
+@@ -108,7 +108,8 @@
+ 			
+ 			@Override
+ 			public void set(int t) {
+-				dec.auto(cl, race.get()).set(t);
++				if (!sosdet.game.cmd.Laws.actionAuto(dec, cl, race.get(), t)) // SOSDET: the player's automatic decree is a command, applied at its step on every PC (ADR 0002)
++					dec.auto(cl, race.get()).set(t);
+ 			}
+ 		};
+ 		s.addRightC(8, new GSliderInt(ee, 100, true) {
+@@ -134,7 +135,8 @@
+ 		return new GButt.ButtPanel(SPRITES.icons().m.cancel) {
+ 			@Override
+ 			protected void clickA() {
+-				dec.unmark(cl, rr.get());
++				if (!sosdet.game.cmd.Laws.actionUnmark(dec, cl, rr.get())) // SOSDET: the player's decree cancel is a command, applied at its step on every PC (ADR 0002)
++					dec.unmark(cl, rr.get());
+ 			}
+ 			
+ 			@Override
+@@ -167,7 +169,8 @@
+ 		return new GButt.ButtPanel(SPRITES.icons().m.ok) {
+ 			@Override
+ 			protected void clickA() {
+-				dec.mark(cl, rr.get(), ii.get());
++				if (!sosdet.game.cmd.Laws.actionMark(dec, cl, rr.get(), ii.get())) // SOSDET: the player's decree is a command, applied at its step on every PC (ADR 0002)
++					dec.mark(cl, rr.get(), ii.get());
+ 			}
+ 			
+ 			@Override
+diff -ru -U2 a/view/sett/ui/subject/UISubjectType.java b/view/sett/ui/subject/UISubjectType.java
+--- a/view/sett/ui/subject/UISubjectType.java	2026-02-11 12:27:44.000000000 +0500
++++ b/view/sett/ui/subject/UISubjectType.java	2026-10-23 02:20:59.670217200 +0500
+@@ -55,7 +55,8 @@
+ 			
+ 			@Override
+ 			protected void clickA() {
+-				STATS.APPEARANCE().favo.set(a.a.indu(), (STATS.APPEARANCE().favo.get(a.a.indu()) + 1)&1);
++				if (!sosdet.game.cmd.Laws.favourite(a.a, STATS.APPEARANCE().favo.get(a.a.indu()) == 0)) // SOSDET: the player's favourite is a command, applied at its step on every PC (ADR 0002)
++					STATS.APPEARANCE().favo.set(a.a.indu(), (STATS.APPEARANCE().favo.get(a.a.indu()) + 1)&1);
+ 			}
+ 			
+ 			@Override
