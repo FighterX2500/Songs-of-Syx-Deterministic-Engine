@@ -18,6 +18,7 @@ public final class Hooks {
     /** Seeds for the game's random tile tables, which every process must fill the same way (SOS-23). */
     private static final long TILE_ORDER_SEED = 0x5050L;
     private static final long RANDOM_TABLE_SEED = 0x52414E30L;
+    private static final int LOAD_VIEW_SEED = 0x56494557; // "VIEW"
 
     private Hooks() {
     }
@@ -81,6 +82,9 @@ public final class Hooks {
         s.streams.enter();
         // Reseeded every step: the stream depends only on the seed and the step, so a resync needs no random state
         s.streams.reseed(s.stepSeed(s.clock.step()));
+        if (s.streams.trace != null) {
+            s.streams.trace.step(s.clock.step());
+        }
         s.stepStartNanos = System.nanoTime(); // timing only, never fed to the simulation
         s.ai().stepBegin(s.clock.step());
         return true;
@@ -280,6 +284,44 @@ public final class Hooks {
         return Engine.session() == null;
     }
 
+    // ------------------------------------------------------------ local UI state the simulation reads (SOS-32)
+
+    /**
+     * Whether the battle view is open, as the simulation asks it (10 game files: which resources update, births,
+     * entry, weather, disease...). With a session it is the same on every PC: a battle is running. Without one, this
+     * PC's view, as in vanilla. (A desync class found by timjrobinson/songs-of-syx-multiplayer.)
+     */
+    public static boolean battleView(boolean localViewOpen, boolean battleRunning) {
+        return Engine.session() == null ? localViewOpen : battleRunning;
+    }
+
+    /**
+     * The room placement this PC's player is previewing, as the simulation reads it (farms, pastures, snow, overlays,
+     * the environment map): never with a session, since only this PC has it.
+     */
+    public static boolean placementPreview(boolean localPreview) {
+        return Engine.session() == null && localPreview;
+    }
+
+    /**
+     * True with a session: GAME.Warn and GAME.Error only log, on every PC alike. In vanilla they pause the game or
+     * throw depending on this PC's DEVELOPER and DEBUG launcher flags.
+     */
+    public static boolean uniformWarnings() {
+        return Engine.session() != null;
+    }
+
+    /**
+     * A load has built the game and its view and is about to load the save. Building them can draw differently per
+     * process (what the first game in a process builds lazily), so the save's own load starts from one seed again.
+     */
+    public static void loadViewBuilt() {
+        Session s = Engine.session();
+        if (s != null && s.loadSeed != 0) {
+            RND.setSeed(s.loadSeed ^ LOAD_VIEW_SEED);
+        }
+    }
+
     // ------------------------------------------------------------ fixed random tables (B11, SOS-23)
 
     /**
@@ -288,6 +330,14 @@ public final class Hooks {
      */
     public static Random tileOrderRandom() {
         return new Random(TILE_ORDER_SEED);
+    }
+
+    /**
+     * A generator for one class's static initializer, the same in every process: its table never differs between PCs,
+     * and loading the class (whenever that happens) draws nothing from the simulation's stream (SOS-32).
+     */
+    public static Random tableRandom(Class<?> owner) {
+        return new Random(RANDOM_TABLE_SEED ^ owner.getName().hashCode());
     }
 
     /** The seed for random tile table number {@code table} (1, 2, ...), the same in every process. */

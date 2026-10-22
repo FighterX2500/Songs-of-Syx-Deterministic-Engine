@@ -1,6 +1,6 @@
 diff -ru -U2 a/game/GAME.java b/game/GAME.java
---- a/game/GAME.java	2026-10-22 16:10:13.702343500 +0500
-+++ b/game/GAME.java	2026-10-22 16:10:13.730854200 +0500
+--- a/game/GAME.java	2026-06-17 19:41:18.000000000 +0500
++++ b/game/GAME.java	2026-10-22 21:35:44.302027700 +0500
 @@ -255,7 +255,9 @@
  		double speed = SPEED.update(slowDown);
  		
@@ -12,7 +12,7 @@ diff -ru -U2 a/game/GAME.java b/game/GAME.java
  			for (GameResource s : GameResource.all) {
  				if (s.isBattle || !VIEW.b().isActive())
  					s.update(0, game.profiler);
-@@ -263,15 +265,28 @@
+@@ -263,15 +265,37 @@
  			game.updateI++;
  		}else {
  			ds *= speed;
@@ -31,19 +31,28 @@ diff -ru -U2 a/game/GAME.java b/game/GAME.java
  			for (int i = 0; i < fulls; i++){
 +				if (sosdet.Hooks.fixedSteps() && !sosdet.Hooks.stepBegin())
 +					break;
++				// SOSDET: whether the battle view is open is the same on every PC (the battle is running, B7)
++				boolean battleView = sosdet.Hooks.battleView(VIEW.b().isActive(), VIEW.b().state() != null);
++				if (sosdet.Hooks.fixedSteps()) {
++					max = (float) sosdet.Hooks.stepSeconds(); // SOSDET: a speed change from the log takes effect at its step (B16)
++					for (GameResource s : GameResource.all) {
++						if (s.isBattle|| (!battleView && !sosdet.Hooks.worldHeld()))
++							s.afterTick(); // SOSDET: once per step, not per rendered frame: it does simulation work (B7)
++					}
++				}
  				for (GameResource s : GameResource.all) {
 -					if (s.isBattle|| !VIEW.b().isActive())
-+					if (s.isBattle|| (!VIEW.b().isActive() && !sosdet.Hooks.worldHeld()))
++					if (s.isBattle|| (!battleView && !sosdet.Hooks.worldHeld()))
  						s.update(max, game.profiler);
  				}
-+				if (sosdet.Hooks.battleStateInStep() && VIEW.b().isActive() && VIEW.b().state() != null)
++				if (sosdet.Hooks.battleStateInStep() && battleView && VIEW.b().state() != null)
 +					VIEW.b().state().update(max);
 +				if (sosdet.Hooks.fixedSteps())
 +					sosdet.Hooks.stepEnd();
  				game.updateI++;
  			}
  			
-@@ -289,7 +304,8 @@
+@@ -289,11 +313,14 @@
  		
  		game.profiler.logEnd(game);
  		game.profiler.log();
@@ -53,9 +62,37 @@ diff -ru -U2 a/game/GAME.java b/game/GAME.java
  		
  	}
  	
+ 	public void afterTick() {
++		if (sosdet.Hooks.fixedSteps())
++			return; // SOSDET: with a session it runs inside every step instead of per frame (B7)
+ 		for (GameResource s : GameResource.all) {
+ 			s.afterTick();
+ 		}
+@@ -410,6 +437,10 @@
+ 	}
+ 	
+ 	public static void Error(String s) {
++	    if (sosdet.Hooks.uniformWarnings()) {
++	    	LOG.err("SYX ERROR (SOSDET session, logged on every PC alike): " + s);
++	    	return;
++	    }
+ 	    if (S.get().developer || S.get().debug) {
+ 	    	Warn(s);
+ 	    }else {
+@@ -419,6 +450,10 @@
+ 	}
+ 	
+ 	public static void Warn(String s) {
++	    if (sosdet.Hooks.uniformWarnings()) {
++	    	LOG.err("SYX WARNING (SOSDET session, logged on every PC alike): " + s);
++	    	return; // SOSDET: never a pause or a throw that depends on this PC's DEVELOPER/DEBUG flags
++	    }
+ 	    if (S.get().developer || S.get().debug) {
+ 	    	SPEED.speedSet(0);
+ 	    	LOG.err("SYX WARNING: " + s);
 diff -ru -U2 a/view/battle/BattleView.java b/view/battle/BattleView.java
---- a/view/battle/BattleView.java	2026-10-22 16:10:13.838392700 +0500
-+++ b/view/battle/BattleView.java	2026-10-22 16:10:13.868423500 +0500
+--- a/view/battle/BattleView.java	2025-11-19 14:24:46.000000000 +0500
++++ b/view/battle/BattleView.java	2026-10-22 21:35:44.298026200 +0500
 @@ -109,7 +109,7 @@
  	@Override
  	protected boolean update(float ds, boolean should){

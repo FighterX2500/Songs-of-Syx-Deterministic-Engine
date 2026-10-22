@@ -287,6 +287,9 @@ public final class Rig implements SCRIPT {
                 desyncReported = true;
                 try {
                     Files.write(dir.resolve(tag + "-desync.txt"), Engine.desyncReport().getBytes(StandardCharsets.UTF_8));
+                    // with the draw trace on: the draws from the hash before the desync up to it
+                    Files.write(dir.resolve(tag + "-draws.txt"), Engine.drawTrace(d.step - 60, d.step + 1)
+                            .getBytes(StandardCharsets.UTF_8));
                 } catch (IOException e) {
                     throw new IllegalStateException("SOSDET rig: cannot write the desync report", e);
                 }
@@ -498,13 +501,13 @@ public final class Rig implements SCRIPT {
             case "loadbattle":
                 loadBattle(rest(c));
                 return;
-            case "steplength":
-                if (c[1].equals("byspeed")) {
-                    Engine.stepsBySpeed();
-                } else {
-                    Engine.stepSeconds(1.0 / Integer.parseInt(c[1]));
-                }
-                event("steplength", "\"perSecond\":\"" + c[1] + "\"");
+            case "tracedraws":
+                Engine.traceDraws(Integer.parseInt(c[1]));
+                event("tracedraws", "\"steps\":" + c[1]);
+                return;
+            case "speed":
+                Engine.speed(Double.parseDouble(c[1]));
+                event("speed", "\"agreed\":" + c[1]);
                 return;
             case "seed":
                 Engine.seed(Integer.parseInt(c[1]));

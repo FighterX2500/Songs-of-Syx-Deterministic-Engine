@@ -198,6 +198,21 @@ class Watcher:
         return self.diverged
 
 
+def first_draw_difference(run_dir):
+    """The first simulation draw that differs between two copies' draw traces (both dumped around a desync)."""
+    dumps = sorted(run_dir.glob("draws-c*.txt"))
+    if len(dumps) < 2:
+        return None
+    a, b = (p.read_text(encoding="utf-8").splitlines() for p in dumps[:2])
+    step = None
+    for x, y in zip(a, b):
+        if x.startswith("## step"):
+            step = x
+        if x != y:
+            return "draw trace: %s and %s differ first in %s:\n  %s\n  %s" % (dumps[0].name, dumps[1].name, step, x, y)
+    return "draw trace: %s and %s agree over the steps both kept" % (dumps[0].name, dumps[1].name)
+
+
 def load_resync(copies, saved, save, state):
     """Every copy but copy 1 loads the resync copy 1 saved (copy 1 loads it itself)."""
     log("copy 1 saved a resync at step %d in %d ms; the others load it" % (saved["step"], saved["saveMs"]))
@@ -484,8 +499,12 @@ def main():
     ap.add_argument("--resync", type=int, default=0, help="copy 1 saves a resync at this step; every copy loads it")
     ap.add_argument("--resync-on-desync", action="store_true",
                     help="at the first desync an engine reports, copy 1 saves a resync at its step; the others load it")
-    ap.add_argument("--step", default="60",
-                    help="experiment: steps per game second (16 = vanilla's longest), or byspeed: 60 at 1x, 16 above")
+    ap.add_argument("--trace-draws", type=int, default=0,
+                    help="debugging: every copy records the call site of each simulation draw for this many steps;"
+                         " a desync writes the draws around it, and the summary names the first draw that differs")
+    ap.add_argument("--agreed-speed", type=float, default=0,
+                    help="the speed every copy agrees on at the start, which sets the step length (1/60 s at 1x or"
+                         " slower, 1/16 s above); default: copy 1's speed")
     ap.add_argument("--no-invade", action="store_true", help="city: no invasion, the city as it is")
     ap.add_argument("--evals", action="store_true",
                     help="the timing rule instead: host and peer, one copy alone each, at speed 1")
@@ -563,8 +582,10 @@ def main():
         if c.k == 1 and args.resync:
             c.send("resyncat %d %s %s" % (args.resync, resync_save, resync_state), "resyncat")
         c.send("seed %d" % RUN_SEED, "seeded")
-        if args.step != "60":
-            c.send("steplength %s" % args.step, "steplength")
+        # the agreed starting speed (it sets the step length): copy 1's; each copy's own speed only sets its pace
+        c.send("speed %s" % (args.agreed_speed or speeds[0]), "speed")
+        if args.trace_draws:
+            c.send("tracedraws %d" % args.trace_draws, "tracedraws")
         starts[c.k] = c.send("hash", "hash")
         if args.scenario == "city" and not args.no_invade:
             c.send("invade %d" % INVADE_MEN, "invade")
@@ -644,9 +665,16 @@ def main():
             summary.append("copy %d: engine desync at step %d against copy %d, noticed at its step %d; sections %s, divisions %s"
                            % (c.k, d["step"], d["pc"], d["noticedAt"], ",".join(d["sections"]), d["divisions"]))
             shutil.copy2(c.rig / ("%s-c%d-desync.txt" % (args.tag, c.k)), run_dir / ("desync-c%d.txt" % c.k))
+            draws = c.rig / ("%s-c%d-draws.txt" % (args.tag, c.k))
+            if draws.exists() and draws.stat().st_size:
+                shutil.copy2(draws, run_dir / ("draws-c%d.txt" % c.k))
         else:
             summary.append("copy %d: no engine desync (%d hashes compared, %d missed)"
                            % (c.k, finished[c.k]["stats"].get("hashesCompared", 0), finished[c.k]["stats"].get("hashesMissed", 0)))
+    if args.trace_draws:
+        summary_draws = first_draw_difference(run_dir)
+        if summary_draws:
+            summary.append(summary_draws)
     if args.nudge:
         nudge = copies[nudged - 1].find("nudged", 0)
         first_hash = -(-args.nudge // HASH_EVERY) * HASH_EVERY

@@ -255,6 +255,24 @@ public final class Engine {
         return d.report(s.source(), s.ai().recent(), s.ai().recentOrders());
     }
 
+    /**
+     * Debugging: record where in the game's code every simulation draw comes from, for the last {@code keepSteps}
+     * steps (0: off). Slow; for hunting a desync, not for play.
+     */
+    public static void traceDraws(int keepSteps) {
+        Session s = required();
+        s.streams.trace = keepSteps == 0 ? null : new DrawTrace(keepSteps);
+    }
+
+    /**
+     * Debugging: the draws of steps {@code from} to {@code to} still kept, one call site per line. The same dump from
+     * two PCs differs first at the draw that went differently.
+     */
+    public static String drawTrace(long from, long to) {
+        DrawTrace t = required().streams.trace;
+        return t == null ? "" : t.dump(from, to);
+    }
+
     /** When the running step started (System.nanoTime), or 0 between steps: for a stall sampler on another thread. */
     public static long stepStartNanos() {
         Session s = session;

@@ -1,6 +1,135 @@
+diff -ru -U2 a/settlement/thing/Gore_BloodCloud.java b/settlement/thing/Gore_BloodCloud.java
+--- a/settlement/thing/Gore_BloodCloud.java	2026-06-17 10:59:30.000000000 +0500
++++ b/settlement/thing/Gore_BloodCloud.java	2026-10-22 21:36:40.462637100 +0500
+@@ -27,12 +27,15 @@
+ 	private ColorImp color = new ColorImp();
+ 	
+ 	static {
++		// SOSDET: a fixed generator per class: the same table in every process, and nothing drawn from
++		// the simulation's stream whenever the class happens to load (SOS-32)
++		java.util.Random sosdetR = sosdet.Hooks.tableRandom(Gore_BloodCloud.class);
+ 		
+ 		for (int k = 0; k < amount; k+=2) {
+-			DEG.setRandom();
+-			double x = RND.rInt0(5) + C.TILE_SIZE + C.TILE_SIZEH;
+-			double y = RND.rInt0(5) + C.TILE_SIZE + C.TILE_SIZEH;
+-			double speed = (C.TILE_SIZE*2 + RND.rFloat()*C.TILE_SIZE*12)/60.0;
++			DEG.setRandom(sosdetR);
++			double x = (-(5) + sosdetR.nextInt((5)*2 + 1)) + C.TILE_SIZE + C.TILE_SIZEH;
++			double y = (-(5) + sosdetR.nextInt((5)*2 + 1)) + C.TILE_SIZE + C.TILE_SIZEH;
++			double speed = (C.TILE_SIZE*2 + sosdetR.nextFloat()*C.TILE_SIZE*12)/60.0;
+ 			for (int tick = 0; tick < time; tick++) {
+ 				pos[tick][k] = (int) x;
+ 				pos[tick][k+1] = (int) y;
+diff -ru -U2 a/settlement/thing/Gore_Flesh.java b/settlement/thing/Gore_Flesh.java
+--- a/settlement/thing/Gore_Flesh.java	2025-10-25 10:17:32.000000000 +0500
++++ b/settlement/thing/Gore_Flesh.java	2026-10-22 21:36:40.462637100 +0500
+@@ -23,11 +23,14 @@
+ 
+ 	private static COLOR[] cols = new COLOR[64];
+ 	static {
++		// SOSDET: a fixed generator per class: the same table in every process, and nothing drawn from
++		// the simulation's stream whenever the class happens to load (SOS-32)
++		java.util.Random sosdetR = sosdet.Hooks.tableRandom(Gore_Flesh.class);
+ 		for (int i = 0; i < cols.length; i++) {
+-			double shade = 0.4+0.6*RND.rFloat();
+-			int r = (int) (127*(shade - RND.rFloat()*0.05));
+-			int g = (int) (127*(shade - RND.rFloat()*0.05));
+-			int b = (int) (127*(shade - RND.rFloat()*0.05));
++			double shade = 0.4+0.6*sosdetR.nextFloat();
++			int r = (int) (127*(shade - sosdetR.nextFloat()*0.05));
++			int g = (int) (127*(shade - sosdetR.nextFloat()*0.05));
++			int b = (int) (127*(shade - sosdetR.nextFloat()*0.05));
+ 			cols[i] = new ColorImp(r,g,b);
+ 		}
+ 	}
+diff -ru -U2 a/settlement/thing/ThingsGore.java b/settlement/thing/ThingsGore.java
+--- a/settlement/thing/ThingsGore.java	2026-03-02 08:35:42.000000000 +0500
++++ b/settlement/thing/ThingsGore.java	2026-10-22 21:36:40.461637300 +0500
+@@ -13,9 +13,12 @@
+ 
+ 	final static float[][] colRan = new float[64][3];
+ 	static{
++		// SOSDET: a fixed generator per class: the same table in every process, and nothing drawn from
++		// the simulation's stream whenever the class happens to load (SOS-32)
++		java.util.Random sosdetR = sosdet.Hooks.tableRandom(ThingsGore.class);
+ 		for (int i = 0; i < colRan.length; i++) {
+ 			for (int k = 0; k < colRan[i].length; k++)
+-				colRan[i][k] = (float) (0.5 + 0.5*RND.rFloat());
++				colRan[i][k] = (float) (0.5 + 0.5*sosdetR.nextFloat());
+ 		}
+ 	}
+ 
+diff -ru -U2 a/settlement/thing/halfEntity/crate/TransportEntity.java b/settlement/thing/halfEntity/crate/TransportEntity.java
+--- a/settlement/thing/halfEntity/crate/TransportEntity.java	2026-06-17 10:48:06.000000000 +0500
++++ b/settlement/thing/halfEntity/crate/TransportEntity.java	2026-10-22 21:36:40.463636700 +0500
+@@ -42,9 +42,12 @@
+ 	private static final int[] bumpOff = Alloc.ii(128);
+ 	
+ 	static {
++		// SOSDET: a fixed generator per class: the same table in every process, and nothing drawn from
++		// the simulation's stream whenever the class happens to load (SOS-32)
++		java.util.Random sosdetR = sosdet.Hooks.tableRandom(TransportEntity.class);
+ 		for (int i = 0; i < bumpOff.length; i+=2) {
+-			bumpOff[i] = (int) (RND.rSign()*RND.rFloat()*2);
+-			bumpOff[i+1] = (int) (RND.rSign()*RND.rFloat()*2);
++			bumpOff[i] = (int) ((sosdetR.nextBoolean() ? 1.0 : -1.0)*sosdetR.nextFloat()*2);
++			bumpOff[i+1] = (int) ((sosdetR.nextBoolean() ? 1.0 : -1.0)*sosdetR.nextFloat()*2);
+ 		}
+ 	}
+ 	
+diff -ru -U2 a/settlement/thing/halfEntity/dingy/Dingy.java b/settlement/thing/halfEntity/dingy/Dingy.java
+--- a/settlement/thing/halfEntity/dingy/Dingy.java	2026-06-17 10:48:06.000000000 +0500
++++ b/settlement/thing/halfEntity/dingy/Dingy.java	2026-10-22 21:36:40.463636700 +0500
+@@ -45,9 +45,12 @@
+ 	private static final int[] bumpOff = Alloc.ii(128);
+ 	
+ 	static {
++		// SOSDET: a fixed generator per class: the same table in every process, and nothing drawn from
++		// the simulation's stream whenever the class happens to load (SOS-32)
++		java.util.Random sosdetR = sosdet.Hooks.tableRandom(Dingy.class);
+ 		for (int i = 0; i < bumpOff.length; i+=2) {
+-			bumpOff[i] = (int) (RND.rSign()*RND.rFloat()*2);
+-			bumpOff[i+1] = (int) (RND.rSign()*RND.rFloat()*2);
++			bumpOff[i] = (int) ((sosdetR.nextBoolean() ? 1.0 : -1.0)*sosdetR.nextFloat()*2);
++			bumpOff[i+1] = (int) ((sosdetR.nextBoolean() ? 1.0 : -1.0)*sosdetR.nextFloat()*2);
+ 		}
+ 	}
+ 	
+diff -ru -U2 a/settlement/thing/halfEntity/transport/TransportEntity.java b/settlement/thing/halfEntity/transport/TransportEntity.java
+--- a/settlement/thing/halfEntity/transport/TransportEntity.java	2026-06-27 11:40:22.000000000 +0500
++++ b/settlement/thing/halfEntity/transport/TransportEntity.java	2026-10-22 21:36:40.464636400 +0500
+@@ -45,9 +45,12 @@
+ 	private static final int[] bumpOff = Alloc.ii(128);
+ 	
+ 	static {
++		// SOSDET: a fixed generator per class: the same table in every process, and nothing drawn from
++		// the simulation's stream whenever the class happens to load (SOS-32)
++		java.util.Random sosdetR = sosdet.Hooks.tableRandom(TransportEntity.class);
+ 		for (int i = 0; i < bumpOff.length; i+=2) {
+-			bumpOff[i] = (int) (RND.rSign()*RND.rFloat()*2);
+-			bumpOff[i+1] = (int) (RND.rSign()*RND.rFloat()*2);
++			bumpOff[i] = (int) ((sosdetR.nextBoolean() ? 1.0 : -1.0)*sosdetR.nextFloat()*2);
++			bumpOff[i+1] = (int) ((sosdetR.nextBoolean() ? 1.0 : -1.0)*sosdetR.nextFloat()*2);
+ 		}
+ 	}
+ 	
+diff -ru -U2 a/snake2d/util/datatypes/DEG.java b/snake2d/util/datatypes/DEG.java
+--- a/snake2d/util/datatypes/DEG.java	2023-03-20 14:04:38.000000000 +0500
++++ b/snake2d/util/datatypes/DEG.java	2026-10-22 21:36:40.465636600 +0500
+@@ -62,4 +62,9 @@
+ 		currentI = RND.rInt(360);
+ 		
+ 	}
++	
++	/** SOSDET: a random direction from the given generator (fixed tables built in static initializers, SOS-32). */
++	public static void setRandom(java.util.Random r) {
++		currentI = r.nextInt(360);
++	}
+ }
 diff -ru -U2 a/util/GUTIL.java b/util/GUTIL.java
---- a/util/GUTIL.java	2026-10-22 16:10:17.118338800 +0500
-+++ b/util/GUTIL.java	2026-10-22 16:10:17.154363600 +0500
+--- a/util/GUTIL.java	2026-06-17 17:54:26.000000000 +0500
++++ b/util/GUTIL.java	2026-10-22 21:36:40.457634500 +0500
 @@ -47,8 +47,8 @@
  		private final ArrayCooShort coos = new ArrayCooShort(Room.MAX_SIZE+1);
  		//final PathThreadManager pathManager;
@@ -13,8 +142,8 @@ diff -ru -U2 a/util/GUTIL.java b/util/GUTIL.java
  
  		TextureHolder texture;
 diff -ru -U2 a/util/data/RANMAP.java b/util/data/RANMAP.java
---- a/util/data/RANMAP.java	2026-10-22 16:10:16.984782100 +0500
-+++ b/util/data/RANMAP.java	2026-10-22 16:10:17.012803200 +0500
+--- a/util/data/RANMAP.java	2026-06-17 10:48:04.000000000 +0500
++++ b/util/data/RANMAP.java	2026-10-22 21:36:40.458639600 +0500
 @@ -17,6 +17,13 @@
  		for (int i = 0; i < ran.length; i++)
  			ran[i] = RND.rInt()&0x7FFFFFFF;
@@ -29,9 +158,21 @@ diff -ru -U2 a/util/data/RANMAP.java b/util/data/RANMAP.java
  	
  	@Override
  	public int get(int tile) {
+diff -ru -U2 a/util/text/Inserter.java b/util/text/Inserter.java
+--- a/util/text/Inserter.java	2026-06-24 12:34:42.000000000 +0500
++++ b/util/text/Inserter.java	2026-10-22 21:36:40.464636400 +0500
+@@ -48,7 +48,7 @@
+ 	}
+ 	
+ 	private static int ranI;
+-	private static long ran = RND.rInt();
++	private static long ran = sosdet.Hooks.tableRandom(Inserter.class).nextInt(); // SOSDET: the same in every process (SOS-32)
+ 	public static void setRandom(long ran) {
+ 		ranI = 0;
+ 		Inserter.ran = ran;
 diff -ru -U2 a/util/updating/TileUpdater.java b/util/updating/TileUpdater.java
---- a/util/updating/TileUpdater.java	2026-10-22 16:10:16.850732700 +0500
-+++ b/util/updating/TileUpdater.java	2026-10-22 16:10:16.877733100 +0500
+--- a/util/updating/TileUpdater.java	2026-06-17 18:49:16.000000000 +0500
++++ b/util/updating/TileUpdater.java	2026-10-22 21:36:40.458639600 +0500
 @@ -5,7 +5,6 @@
  import snake2d.util.file.FileGetter;
  import snake2d.util.file.FilePutter;

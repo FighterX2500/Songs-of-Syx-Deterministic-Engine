@@ -26,6 +26,8 @@ final class Streams {
     /** The seed the simulation's generator takes before its next draw (set at every step's start). */
     private long nextSeed;
     private boolean reseed;
+    /** Debugging: where every simulation draw comes from; null when off. */
+    DrawTrace trace;
 
     Random pick(Random simulation) {
         if (!inStep || cosmeticDepth > 0) {
@@ -41,6 +43,9 @@ final class Streams {
         }
         simulationDraws++;
         drawsSinceLoad++;
+        if (trace != null) {
+            trace.draw();
+        }
         return simulation;
     }
 
