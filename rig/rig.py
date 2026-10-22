@@ -125,13 +125,52 @@ class Copy:
 
     def send(self, command, event, timeout=300):
         since = self.events_count()
+        self.command(command)
+        return self.wait(event, since, timeout)
+
+    def command(self, command):
+        """Hands the rig one command: written whole, then renamed into place, so it never reads half of one."""
         cmd = self.rig / "command.txt"
         for _ in range(600):  # the rig deletes the file when it reads it
             if not cmd.exists():
                 break
             time.sleep(0.5)
-        cmd.write_text(command, encoding="utf-8")
-        return self.wait(event, since, timeout)
+        tmp = self.rig / "command.tmp"
+        tmp.write_text(command, encoding="utf-8")
+        for _ in range(100):
+            try:
+                os.replace(tmp, cmd)
+                return
+            except PermissionError:  # the rig has the old file open for a moment
+                time.sleep(0.1)
+        fail("copy %d: cannot hand over the command %r" % (self.k, command))
+
+
+def copy_running(k):
+    """Whether copy k's game process is still running."""
+    marker = (str(INST / str(k)) + "\\").replace("'", "''")
+    out = subprocess.run(["powershell", "-NoProfile", "-Command",
+                          "@(Get-CimInstance Win32_Process -Filter \"Name='java.exe'\" | Where-Object { $_.CommandLine -like '*%s*' }).Count"
+                          % marker], capture_output=True, text=True).stdout.strip()
+    return out not in ("", "0")
+
+
+OFFSCREEN = r"""
+Add-Type -Namespace SosdetRig -Name Win -MemberDefinition @'
+[DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr h, IntPtr a, int x, int y, int cx, int cy, uint f);
+'@
+$p = Get-CimInstance Win32_Process -Filter "Name='java.exe'" | Where-Object { $_.CommandLine -like '*MARKER*' }
+foreach ($q in $p) {
+  $h = (Get-Process -Id $q.ProcessId).MainWindowHandle
+  if ($h -ne [IntPtr]::Zero) { [void][SosdetRig.Win]::SetWindowPos($h, [IntPtr]::Zero, -32000, -32000, 0, 0, 0x0015) }
+}
+"""
+
+
+def move_offscreen(k):
+    """Moves copy k's window off the screen: it still draws and runs (a minimized window could stall), out of sight."""
+    marker = (str(INST / str(k)) + "\\").replace("'", "''")
+    subprocess.run(["powershell", "-NoProfile", "-Command", OFFSCREEN.replace("MARKER", marker)], capture_output=True)
 
 
 def stop_copies():
@@ -198,6 +237,21 @@ class Watcher:
         return self.diverged
 
 
+def first_draw_difference(run_dir):
+    """The first simulation draw that differs between two copies' draw traces (both dumped around a desync)."""
+    dumps = sorted(run_dir.glob("draws-c*.txt"))
+    if len(dumps) < 2:
+        return None
+    a, b = (p.read_text(encoding="utf-8").splitlines() for p in dumps[:2])
+    step = None
+    for x, y in zip(a, b):
+        if x.startswith("## step"):
+            step = x
+        if x != y:
+            return "draw trace: %s and %s differ first in %s:\n  %s\n  %s" % (dumps[0].name, dumps[1].name, step, x, y)
+    return "draw trace: %s and %s agree over the steps both kept" % (dumps[0].name, dumps[1].name)
+
+
 def load_resync(copies, saved, save, state):
     """Every copy but copy 1 loads the resync copy 1 saved (copy 1 loads it itself)."""
     log("copy 1 saved a resync at step %d in %d ms; the others load it" % (saved["step"], saved["saveMs"]))
@@ -257,7 +311,7 @@ def compare(copies, run_dir, tag, ref, steps, ends, after=1, resync_step=0):
         first = next((s for s in range(after, last + 1) if s in ref_hashes and hashes.get(s) != ref_hashes[s]
                       and not (s not in hashes and s <= resync_step)), None)
         at_end = hashes.get(steps + 1)
-        if first is None and at_end == ref_end and ends[ref] == steps:
+        if first is None and (ref_end is None or at_end == ref_end) and ends[ref] == steps:  # no end line: closed by hand
             lines.append("copy %d: identical to copy %d at every step %sto %d"
                          % (k, ref, "from %d " % after if after > 1 else "", steps))
         else:
@@ -463,6 +517,21 @@ def run_evals(args):
     sys.exit(0 if verdict and first is None else 1)
 
 
+LOCK = RUNS.parent / "rig.lock"
+
+
+def take_lock():
+    """One runner at a time: two would send every command twice to the same copies (SOS-32)."""
+    if LOCK.exists():
+        pid = LOCK.read_text().strip()
+        alive = subprocess.run(["powershell", "-NoProfile", "-Command", "if (Get-Process -Id %s -ErrorAction SilentlyContinue)"
+                                " { 'yes' }" % pid], capture_output=True, text=True).stdout.strip() == "yes"
+        if alive and pid.isdigit():
+            fail("another rig.py (process %s) is running; stop it first" % pid)
+    LOCK.parent.mkdir(parents=True, exist_ok=True)
+    LOCK.write_text(str(os.getpid()))
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("scenario", choices=["field", "city"])
@@ -484,13 +553,30 @@ def main():
     ap.add_argument("--resync", type=int, default=0, help="copy 1 saves a resync at this step; every copy loads it")
     ap.add_argument("--resync-on-desync", action="store_true",
                     help="at the first desync an engine reports, copy 1 saves a resync at its step; the others load it")
+    ap.add_argument("--trace-draws", type=int, default=0,
+                    help="debugging: every copy records the call site of each simulation draw for this many steps;"
+                         " a desync writes the draws around it, and the summary names the first draw that differs")
+    ap.add_argument("--agreed-speed", type=float, default=0,
+                    help="the speed every copy agrees on at the start, which sets the step length (1/60 s at 1x or"
+                         " slower, 1/16 s above); default: copy 1's speed")
+    ap.add_argument("--no-invade", action="store_true", help="city: no invasion, the city as it is")
+    ap.add_argument("--play", action="store_true",
+                    help="the owner plays copy 1 (the host) in a normal window from 1x, giving orders and changing speed;"
+                         " the other copies replay its log at 25x; the run ends when the owner closes the window")
     ap.add_argument("--evals", action="store_true",
                     help="the timing rule instead: host and peer, one copy alone each, at speed 1")
     ap.add_argument("--vanilla", action="store_true", help="with --evals: measure vanilla again (default: SOS-23's figures)")
     args = ap.parse_args()
+    take_lock()
     if args.evals:
         return run_evals(args)
     nudged = (args.nudge_copy or args.copies) if args.nudge else 0
+    if args.play:
+        # the host is played by hand from 1x; the peers replay at 25x so they never lag; no fixed end
+        args.ai = "host"
+        args.speeds = ",".join(["1"] + ["25"] * (args.copies - 1))
+        args.agreed_speed = 1
+        args.steps = 10 ** 7
 
     game = pathlib.Path(os.environ.get("SOS_GAME_DIR") or fail("SOS_GAME_DIR is not set"))
     for name, path in MODS.items():
@@ -511,12 +597,14 @@ def main():
     stop_copies()
     copies = [Copy(k, game) for k in range(1, args.copies + 1)]
     for c in copies:
-        c.prepare(saves, args.window)
+        c.prepare(saves, args.window or (args.play and c.k == 1))
     for c in copies:
         c.start(autoload)
         time.sleep(3)
     for c in copies:
         c.wait("loaded", 0, 600)
+        if not (args.window or (args.play and c.k == 1)):
+            move_offscreen(c.k)  # test copies out of sight; only a played or watched copy stays on screen
     log("%d copies up; %s, %s test, speeds %s; copy %d runs %d steps, the others until it stops"
         % (len(copies), args.scenario, baseline, speeds, ref, args.steps))
 
@@ -560,8 +648,12 @@ def main():
         if c.k == 1 and args.resync:
             c.send("resyncat %d %s %s" % (args.resync, resync_save, resync_state), "resyncat")
         c.send("seed %d" % RUN_SEED, "seeded")
+        # the agreed starting speed (it sets the step length): copy 1's; each copy's own speed only sets its pace
+        c.send("speed %s" % (args.agreed_speed or speeds[0]), "speed")
+        if args.trace_draws:
+            c.send("tracedraws %d" % args.trace_draws, "tracedraws")
         starts[c.k] = c.send("hash", "hash")
-        if args.scenario == "city":
+        if args.scenario == "city" and not args.no_invade:
             c.send("invade %d" % INVADE_MEN, "invade")
         steps = args.steps if c.k == ref else 0
         c.send("run %s %d %s %s-c%d" % ("battle" if args.scenario == "field" else "city", steps, speed, args.tag, c.k), "running")
@@ -578,7 +670,16 @@ def main():
     watcher = Watcher({c.k: c.rig / ("%s-c%d.csv" % (args.tag, c.k)) for c in copies})
     finished, deadline = {}, time.time() + 6 * 3600
     resync = None  # copy 1's resyncsaved event, once it saved
+    checked = time.time()
     while True:
+        if args.play and time.time() - checked > 10:
+            checked = time.time()
+            if not copy_running(1):
+                host_end = last_logged_step(copies[0].rig / ("%s-c1.csv" % args.tag))
+                log("the host's window was closed at step %d; comparing up to there" % host_end)
+                finished[ref] = {"endStep": host_end, "endHash": None, "men": 0, "wallSeconds": 0, "stats": {}}
+                args.steps = host_end
+                break
         if time.time() > deadline:
             fail("the reference copy did not finish")
         if resync is None and args.resync_on_desync and any(c.find("desync", 0) for c in copies):
@@ -607,7 +708,7 @@ def main():
     marks = {c.k: c.events_count() for c in copies if c.k not in finished}
     for c in copies:  # hold the rest now, wherever they are
         if c.k not in finished:
-            (c.rig / "command.txt").write_text("hold", encoding="utf-8")
+            c.command("hold")
     for c in copies:
         if c.k not in finished:
             finished[c.k] = c.wait("finished", marks[c.k], 600)
@@ -639,9 +740,16 @@ def main():
             summary.append("copy %d: engine desync at step %d against copy %d, noticed at its step %d; sections %s, divisions %s"
                            % (c.k, d["step"], d["pc"], d["noticedAt"], ",".join(d["sections"]), d["divisions"]))
             shutil.copy2(c.rig / ("%s-c%d-desync.txt" % (args.tag, c.k)), run_dir / ("desync-c%d.txt" % c.k))
+            draws = c.rig / ("%s-c%d-draws.txt" % (args.tag, c.k))
+            if draws.exists() and draws.stat().st_size:
+                shutil.copy2(draws, run_dir / ("draws-c%d.txt" % c.k))
         else:
             summary.append("copy %d: no engine desync (%d hashes compared, %d missed)"
                            % (c.k, finished[c.k]["stats"].get("hashesCompared", 0), finished[c.k]["stats"].get("hashesMissed", 0)))
+    if args.trace_draws:
+        summary_draws = first_draw_difference(run_dir)
+        if summary_draws:
+            summary.append(summary_draws)
     if args.nudge:
         nudge = copies[nudged - 1].find("nudged", 0)
         first_hash = -(-args.nudge // HASH_EVERY) * HASH_EVERY

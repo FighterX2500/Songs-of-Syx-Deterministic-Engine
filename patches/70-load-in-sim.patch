@@ -1,6 +1,6 @@
 diff -ru -U2 a/game/save/GameLoader.java b/game/save/GameLoader.java
---- a/game/save/GameLoader.java	2026-10-22 16:10:17.954781700 +0500
-+++ b/game/save/GameLoader.java	2026-10-22 16:10:17.984781000 +0500
+--- a/game/save/GameLoader.java	2025-11-12 12:26:58.000000000 +0500
++++ b/game/save/GameLoader.java	2026-10-22 21:36:17.021621300 +0500
 @@ -27,6 +27,15 @@
  	
  	@Override
@@ -17,3 +17,11 @@ diff -ru -U2 a/game/save/GameLoader.java b/game/save/GameLoader.java
  		FileGetter fg = null;
  		GameSpec ss = null;
  		CharSequence error = "No detectable error";
+@@ -55,6 +64,7 @@
+ 		try {
+ 			VIEW v = GAME.create(ss);
+ 			VIEW.inters().load.activate();
++			sosdet.Hooks.loadViewBuilt(); // SOSDET: building the game and its view can draw differently per process; the save's load starts from one seed (SOS-32)
+ 			CORE.getInput().clearAllInput();
+ 			GAME.saver().load(fg);
+ 			return v;

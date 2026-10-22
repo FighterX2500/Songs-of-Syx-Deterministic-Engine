@@ -1,0 +1,181 @@
+diff -ru -U2 a/game/battle/util/Boosts.java b/game/battle/util/Boosts.java
+--- a/game/battle/util/Boosts.java	2025-11-06 12:41:16.000000000 +0500
++++ b/game/battle/util/Boosts.java	2026-10-22 23:09:20.668669300 +0500
+@@ -53,7 +53,7 @@
+ 		
+ 		double get(DIV_SPEC div) {
+ 			
+-			if (Math.abs(checkI-GAME.updateI()) > 1200) {
++			if (!sosdet.Hooks.outsideStep() && Math.abs(checkI-GAME.updateI()) > 1200) {
+ 				checkI = GAME.updateI();
+ 				badd.set(bo, false);
+ 				bmul.set(bo, true);
+diff -ru -U2 a/game/faction/trade/ResourcePrices.java b/game/faction/trade/ResourcePrices.java
+--- a/game/faction/trade/ResourcePrices.java	2026-06-17 10:48:04.000000000 +0500
++++ b/game/faction/trade/ResourcePrices.java	2026-10-22 23:09:20.669668900 +0500
+@@ -36,7 +36,7 @@
+ 			return NPCStockpile.AVERAGE_PRICE;
+ 		}
+ 		int ri = res.index();
+-		if (Math.abs(lastCheck[res.index()] - GAME.updateI()) > 16) {
++		if (!sosdet.Hooks.outsideStep() && Math.abs(lastCheck[res.index()] - GAME.updateI()) > 16) {
+ 			lastCheck[res.index()] = GAME.updateI();
+ 			double a = 0;
+ 			price[ri] = 0;
+@@ -60,7 +60,7 @@
+ 	}
+ 	
+ 	private void ee() {
+-		if (Math.abs(echeck - GAME.updateI()) > 16) {
++		if (!sosdet.Hooks.outsideStep() && Math.abs(echeck - GAME.updateI()) > 16) {
+ 			echeck = GAME.updateI();
+ 			edible = 0;
+ 			edibleLow = Integer.MAX_VALUE;
+diff -ru -U2 a/init/sprite/imps/SpriteHead.java b/init/sprite/imps/SpriteHead.java
+--- a/init/sprite/imps/SpriteHead.java	2026-03-02 09:06:46.000000000 +0500
++++ b/init/sprite/imps/SpriteHead.java	2026-10-22 23:09:20.658671900 +0500
+@@ -49,7 +49,7 @@
+ 		
+ 		Race r = RACES.all().getC(random&0x0FF);
+ 		
+-		if (RND.oneIn(CORE.getGraphics().fps()*4)) {
++		if (!sosdet.Hooks.outsideStep() && RND.oneIn(CORE.getGraphics().fps()*4)) {
+ 			SETT.THINGS().gore.bleed(it.tx()*C.TILE_SIZE+C.TILE_SIZEH, it.ty()*C.TILE_SIZE+C.TILE_SIZEH, 0, 0, r.appearance().colors.blood);
+ 		}
+ 		
+diff -ru -U2 a/settlement/room/home/house/HomeInstance.java b/settlement/room/home/house/HomeInstance.java
+--- a/settlement/room/home/house/HomeInstance.java	2026-06-17 18:46:32.000000000 +0500
++++ b/settlement/room/home/house/HomeInstance.java	2026-10-22 23:09:20.661672400 +0500
+@@ -464,6 +464,8 @@
+ 	}
+ 	
+ 	private void resCount() {
++		if (sosdet.Hooks.outsideStep())
++			return; // SOSDET: a house panel reads, only the simulation refreshes (and turns lights off) (SOS-32)
+ 		unuse();
+ 		if (occupants() == 0)
+ 			return;
+diff -ru -U2 a/settlement/room/home/house/Sprites.java b/settlement/room/home/house/Sprites.java
+--- a/settlement/room/home/house/Sprites.java	2026-05-21 05:35:58.000000000 +0500
++++ b/settlement/room/home/house/Sprites.java	2026-10-22 23:09:20.661672400 +0500
+@@ -358,7 +358,7 @@
+ 					
+ 					RaceHomeClass stage = h.race().home().clas(h.occupant(0));
+ 					Floor f = stage.floor(h);
+-					if (f != SETT.FLOOR().getter.get(it.tx(), it.ty())) {
++					if (!sosdet.Hooks.outsideStep() && f != SETT.FLOOR().getter.get(it.tx(), it.ty())) {
+ 						if (stage.floor(h) == null)
+ 							SETT.FLOOR().clearer.clear(it.tx(), it.ty());
+ 						else
+@@ -380,7 +380,7 @@
+ 						s.house = h;
+ 						s.render(r, shadowBatch, data, it, degrade, isCandle);
+ 					}
+-					if (SETT.FLOOR().getter.get(it.tx(), it.ty()) != SETT.ROOMS().HOME.constructor.flooring)
++					if (!sosdet.Hooks.outsideStep() && SETT.FLOOR().getter.get(it.tx(), it.ty()) != SETT.ROOMS().HOME.constructor.flooring)
+ 						SETT.ROOMS().HOME.constructor.flooring.placeFixed(it.tx(), it.ty());
+ 				}
+ 			}
+diff -ru -U2 a/settlement/room/industry/module/RoomProduction.java b/settlement/room/industry/module/RoomProduction.java
+--- a/settlement/room/industry/module/RoomProduction.java	2026-06-07 08:03:56.000000000 +0500
++++ b/settlement/room/industry/module/RoomProduction.java	2026-10-22 23:09:20.664670600 +0500
+@@ -447,14 +447,14 @@
+ 	int upI = 0;
+ 	
+ 	public double produced(RESOURCE res) {
+-		if (Math.abs(upI-GAME.updateI()) > 1) {
++		if (!sosdet.Hooks.outsideStep() && Math.abs(upI-GAME.updateI()) > 1) {
+ 			update(Math.abs(upI-GAME.updateI()));
+ 		}
+ 		return producers.get(res.index()).am;
+ 	}
+ 	
+ 	public double consumed(RESOURCE res) {
+-		if (Math.abs(upI-GAME.updateI()) > 1) {
++		if (!sosdet.Hooks.outsideStep() && Math.abs(upI-GAME.updateI()) > 1) {
+ 			update(Math.abs(upI-GAME.updateI()));
+ 		}
+ 		return consumers.get(res.index()).am;
+@@ -574,7 +574,7 @@
+ 	
+ 		@Override
+ 		public double am() {
+-			if (Math.abs(upI-GAME.updateI()) > 1) {
++			if (!sosdet.Hooks.outsideStep() && Math.abs(upI-GAME.updateI()) > 1) {
+ 				update(Math.abs(upI-GAME.updateI()));
+ 				
+ 			}
+diff -ru -U2 a/settlement/room/law/guard/GuardPower.java b/settlement/room/law/guard/GuardPower.java
+--- a/settlement/room/law/guard/GuardPower.java	2026-02-25 17:00:10.000000000 +0500
++++ b/settlement/room/law/guard/GuardPower.java	2026-10-22 23:09:20.662704200 +0500
+@@ -73,6 +73,8 @@
+ 	private int DI = 0;
+ 	
+ 	public double get() {
++		if (sosdet.Hooks.outsideStep())
++			return res; // SOSDET: the UI reads, only the simulation moves the cursor (SOS-32)
+ 		if (upI == GAME.updateI())
+ 			return res;
+ 		upI = GAME.updateI();
+diff -ru -U2 a/settlement/room/main/RoomUpgrades.java b/settlement/room/main/RoomUpgrades.java
+--- a/settlement/room/main/RoomUpgrades.java	2026-03-20 08:28:00.000000000 +0500
++++ b/settlement/room/main/RoomUpgrades.java	2026-10-22 23:09:20.664670600 +0500
+@@ -190,7 +190,7 @@
+ 			
+ 			@Override
+ 			public double vGet(HCLASS_RACE popTime) {
+-				if (Math.abs(GAME.updateI()-ci) >= 120){
++				if (!sosdet.Hooks.outsideStep() && Math.abs(GAME.updateI()-ci) >= 120){
+ 					ci = GAME.updateI();
+ 					c = 0;
+ 					int am = 0;
+diff -ru -U2 a/settlement/room/water/ROOM_WATER.java b/settlement/room/water/ROOM_WATER.java
+--- a/settlement/room/water/ROOM_WATER.java	2026-03-20 08:27:26.000000000 +0500
++++ b/settlement/room/water/ROOM_WATER.java	2026-10-22 23:09:20.666669900 +0500
+@@ -94,7 +94,7 @@
+ 			public double vGet(HCLASS_RACE popTime) {
+ 				if (blue instanceof RoomBlueprintIns<?>) {
+ 					RoomBlueprintIns<?> p = (RoomBlueprintIns<?>) blue;
+-					if (Math.abs(GAME.updateI()-ci) >= 120){
++					if (!sosdet.Hooks.outsideStep() && Math.abs(GAME.updateI()-ci) >= 120){
+ 						ci = GAME.updateI();
+ 						c = 0;
+ 						int am = 0;
+diff -ru -U2 a/settlement/room/water/RoomIrrigated.java b/settlement/room/water/RoomIrrigated.java
+--- a/settlement/room/water/RoomIrrigated.java	2026-03-20 08:27:56.000000000 +0500
++++ b/settlement/room/water/RoomIrrigated.java	2026-10-22 23:09:20.665670500 +0500
+@@ -60,7 +60,7 @@
+ 			public double vGet(HCLASS_RACE popTime) {
+ 				if (blue instanceof RoomBlueprintIns<?>) {
+ 					RoomBlueprintIns<?> p = (RoomBlueprintIns<?>) blue;
+-					if (Math.abs(GAME.updateI()-ci) >= 120){
++					if (!sosdet.Hooks.outsideStep() && Math.abs(GAME.updateI()-ci) >= 120){
+ 						ci = GAME.updateI();
+ 						c = 0;
+ 						int am = 0;
+diff -ru -U2 a/settlement/stats/equip/EquipRange.java b/settlement/stats/equip/EquipRange.java
+--- a/settlement/stats/equip/EquipRange.java	2026-06-17 10:48:04.000000000 +0500
++++ b/settlement/stats/equip/EquipRange.java	2026-10-22 23:09:20.662704200 +0500
+@@ -188,6 +188,10 @@
+ 	}
+ 
+ 	public double drawInter(Div div) {
++		if (sosdet.Hooks.outsideStep()) { // SOSDET: the UI gets the value, only the simulation fills the cache (SOS-32)
++			double tt = TIME.currentSecond() / projectile.reloadSeconds(ref(div));
++			return tt - (int) tt;
++		}
+ 		if ((GAME.updateI() & ~0b011) != drawIntersI[div.index()]) {
+ 			double reloadSeconds = projectile.reloadSeconds(ref(div));
+ 			double t = TIME.currentSecond();
+diff -ru -U2 a/settlement/stats/muls/StatsMultipliers.java b/settlement/stats/muls/StatsMultipliers.java
+--- a/settlement/stats/muls/StatsMultipliers.java	2026-06-29 09:53:20.000000000 +0500
++++ b/settlement/stats/muls/StatsMultipliers.java	2026-10-22 23:09:20.667669300 +0500
+@@ -914,7 +914,7 @@
+ 		@Override
+ 		public int maxAmount(HCLASS cl, Race race) {
+ 			
+-			if (Math.abs(ai-GAME.updateI()) > 120) {
++			if (!sosdet.Hooks.outsideStep() && Math.abs(ai-GAME.updateI()) > 120) {
+ 				ai = GAME.updateI();
+ 				for (int[] i : available)
+ 					Arrays.fill(i, 0);

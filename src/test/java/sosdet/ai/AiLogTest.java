@@ -58,6 +58,26 @@ class AiLogTest {
     }
 
     @Test
+    void theGeneralsRepeatedChangesToOneSlotBecomeOneEntryPerStep() throws InterruptedException {
+        Recorder r = new Recorder();
+        AiLog host = AiLog.host(START, r);
+        Thread general = new Thread(() -> {
+            host.generalThreadIs(Thread.currentThread());
+            for (int i = 0; i < 100_000; i++) {
+                host.capture(AiEntry.TASK, 121, AiEntry.ints(i)); // the general's loop re-sets the same order
+            }
+            host.capture(AiEntry.GUARD, 5, AiEntry.ints(1));
+        });
+        general.start();
+        general.join();
+        for (long s = 1; s <= 31; s++) {
+            runStep(host, r, s);
+        }
+        assertEquals(List.of("31:0:2:121:99999", "31:1:3:5:1"), r.applied, "the last value of each slot, once");
+        assertEquals(99_999, host.coalesced());
+    }
+
+    @Test
     void aPeerAppliesTheHostsLogAtTheSameSteps() throws InterruptedException {
         Recorder hr = new Recorder();
         AiLog host = AiLog.host(START, hr);
@@ -232,6 +252,66 @@ class AiLogTest {
         host.resyncIn(resync); // the host loads its own resync too: its log stays as it is
         assertEquals(3, host.applied());
         assertThrows(IllegalStateException.class, peer::resyncOut, "a peer never saves");
+    }
+
+    /** Records what every PC applies, with who gave it, as (step, seq, kind, div, pc). */
+    private static final class ByPc implements AiApplier {
+        final List<String> applied = new ArrayList<>();
+
+        @Override
+        public void apply(AiEntry e) {
+            applied.add(e.step + ":" + e.seq + ":" + e.kind + ":" + e.div + ":" + e.pc);
+        }
+    }
+
+    @Test
+    void thePlayersOrdersGoIntoTheHostsLogAndApplyEverywhereAtTheirStep() {
+        ByPc hr = new ByPc();
+        AiLog host = AiLog.host(START, hr);
+        ByPc pr = new ByPc();
+        AiLog peer = AiLog.peer(START, pr);
+        assertTrue(host.capturingOrders(), "a player's order on the game's thread");
+        assertTrue(peer.capturingOrders());
+
+        host.captureOrder(AiEntry.MUSTER, 4, AiEntry.ints(1)); // the host's own player
+        peer.captureOrder(AiEntry.HOLD_FIRE, 7, AiEntry.ints(1)); // the peer's player
+        peer.captureOrder(AiEntry.AMMO, 7, AiEntry.ints(2));
+        byte[] fromPeer = peer.ordersOut();
+        host.ordersIn(2, Arrays.copyOf(fromPeer, 10)); // in any pieces
+        host.ordersIn(2, Arrays.copyOfRange(fromPeer, 10, fromPeer.length));
+        host.ordersIn(2, Arrays.copyOfRange(fromPeer, Orders.HEADER_BYTES, fromPeer.length)); // sent again: nothing
+        runStep(host, new Recorder(), 1); // stamped 31
+        peer.logIn(host.logOut());
+        for (long s = 2; s <= 31; s++) {
+            host.stepBegin(s);
+        }
+        for (long s = 1; s <= 31; s++) {
+            peer.stepBegin(s);
+        }
+        assertEquals(List.of("31:0:10:4:0", "31:1:8:7:2", "31:2:9:7:2"), hr.applied);
+        assertEquals(hr.applied, pr.applied);
+        assertEquals(3, host.appliedOrders());
+        assertEquals(List.of("step 31, #0, muster, division 4 = 1, PC 0", "step 31, #1, holdFire, division 7 = 1, PC 2",
+                "step 31, #2, ammo, division 7 = 2, PC 2"), host.recentOrders());
+        assertTrue(host.recent().isEmpty(), "the general's entries are listed apart");
+    }
+
+    @Test
+    void aMissingOrderOrAnotherStartIsRefused() {
+        AiLog peer = AiLog.peer(START, new ByPc());
+        peer.captureOrder(AiEntry.GUARD, 1, AiEntry.ints(1));
+        byte[] first = peer.ordersOut();
+        peer.captureOrder(AiEntry.GUARD, 1, AiEntry.ints(0));
+        byte[] second = peer.ordersOut();
+        AiLog host = AiLog.host(START, new ByPc());
+        host.ordersIn(3, Arrays.copyOf(first, Orders.HEADER_BYTES));
+        assertThrows(IllegalStateException.class, () -> host.ordersIn(3, second), "order 0 never arrived");
+        AiLog other = AiLog.host(START + 1, new ByPc());
+        assertThrows(IllegalStateException.class, () -> other.ordersIn(3, first));
+        assertThrows(IllegalArgumentException.class, () -> host.ordersIn(0, first), "PC 0 is the host's own player");
+        assertThrows(IllegalStateException.class, peer::logOut);
+        assertThrows(IllegalStateException.class, () -> AiLog.inStep().captureOrder(AiEntry.GUARD, 1, AiEntry.ints(1)));
+        assertFalse(AiLog.inStep().capturingOrders(), "in-step: orders apply at once, as in vanilla");
     }
 
     @Test

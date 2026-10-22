@@ -1,0 +1,12 @@
+diff -ru -U2 a/game/battle/formation/DivFormationImp.java b/game/battle/formation/DivFormationImp.java
+--- a/game/battle/formation/DivFormationImp.java	2026-06-17 18:46:10.000000000 +0500
++++ b/game/battle/formation/DivFormationImp.java	2026-10-23 00:14:14.969138600 +0500
+@@ -89,6 +89,8 @@
+ 		hasExtraRoom = false;
+ 		isNotCoherent = false; 
+ 		centreI = -1;
++		if (sosdet.Hooks.clearWholeFormations()) // SOSDET: no leftovers past the deployed men (SOS-32)
++			java.util.Arrays.fill(dirMasks, (byte) 0);
+ 	}
+ 
+ 

@@ -18,6 +18,7 @@ public final class Hooks {
     /** Seeds for the game's random tile tables, which every process must fill the same way (SOS-23). */
     private static final long TILE_ORDER_SEED = 0x5050L;
     private static final long RANDOM_TABLE_SEED = 0x52414E30L;
+    private static final int LOAD_VIEW_SEED = 0x56494557; // "VIEW"
 
     private Hooks() {
     }
@@ -29,6 +30,15 @@ public final class Hooks {
         return Engine.session() != null;
     }
 
+    /**
+     * With a session, clearing a formation clears its whole direction table. Formations are scratch objects the UI
+     * shares with the simulation (the move preview and the invasion's deployment use one deployer); a table copied
+     * whole, saved whole and grown without being recomputed would carry this PC's preview into the step (SOS-32).
+     */
+    public static boolean clearWholeFormations() {
+        return Engine.session() != null;
+    }
+
     /** A paused frame updates nothing, so paused frames can't change the outcome. */
     public static boolean skipPausedFrame() {
         return Engine.session() != null;
@@ -37,6 +47,43 @@ public final class Hooks {
     /** No autosave during a session; saves at a step come through the API (SOS-30). */
     public static boolean autoSaveAllowed() {
         return Engine.session() == null;
+    }
+
+    /** Whether order writes should be traced: the draw trace is on and this is the simulation thread in the step. */
+    public static boolean tracingOrders() {
+        Session s = Engine.session();
+        return s != null && s.streams.trace != null && s.streams.inStep() && s.streams.isSimulationThread();
+    }
+
+    /** Debugging: a division's order slot was written in the step, with this content hash (see {@link DrawTrace}). */
+    public static void traceOrder(int kind, int div, int contentHash) {
+        Engine.session().streams.trace.orderSet(String.format(java.util.Locale.ROOT, "SET %s division %d = %08x",
+                sosdet.ai.AiEntry.kindName(kind), div, contentHash));
+    }
+
+    /** The session's current step (the one running, or the last one run). */
+    public static long step() {
+        return Engine.session().clock.step();
+    }
+
+    /** The length of the step about to run, in game seconds: it follows the agreed speed, so read it every step. */
+    public static double stepSeconds() {
+        return Engine.session().clock.stepSeconds();
+    }
+
+    /**
+     * Whole steps this frame's game time completes. {@code setSpeed} is this PC's game speed as the player set it
+     * (never the throttled one): the host logs a change of it (B16).
+     */
+    public static int stepsFor(double gameSeconds, double setSpeed) {
+        Session s = Engine.session();
+        s.speedSeen(setSpeed);
+        return s.clock.stepsFor(gameSeconds);
+    }
+
+    /** A speed change from the log, at its step: the step length from the next step on. */
+    public static void agreedSpeed(double speed) {
+        Engine.session().clock.agreedSpeed(speed);
     }
 
     /** Whole steps this frame's game time completes. */
@@ -61,6 +108,9 @@ public final class Hooks {
         s.streams.enter();
         // Reseeded every step: the stream depends only on the seed and the step, so a resync needs no random state
         s.streams.reseed(s.stepSeed(s.clock.step()));
+        if (s.streams.trace != null) {
+            s.streams.trace.step(s.clock.step());
+        }
         s.stepStartNanos = System.nanoTime(); // timing only, never fed to the simulation
         s.ai().stepBegin(s.clock.step());
         return true;
@@ -167,6 +217,20 @@ public final class Hooks {
         Engine.session().ai().capture(kind, div, payload);
     }
 
+    /**
+     * True when a player's order is captured into the log instead of applied: with a log, outside the step, and not
+     * on the general's thread (B16).
+     */
+    public static boolean ordersCapturing() {
+        Session s = Engine.session();
+        return s != null && !s.streams.inStep() && s.ai().capturingOrders();
+    }
+
+    /** A player's order on this PC: into the host's log, through it on a peer. */
+    public static void orderCapture(int kind, int div, byte[] payload) {
+        Engine.session().ai().captureOrder(kind, div, payload);
+    }
+
     /** The session's game adapter for the AI (host or peer mode), which also encodes the general's orders. */
     public static AiApplier aiApplier() {
         return Engine.session().ai().applier();
@@ -246,6 +310,64 @@ public final class Hooks {
         return Engine.session() == null;
     }
 
+    // ------------------------------------------------------------ local UI state the simulation reads (SOS-32)
+
+    /**
+     * Whether the battle view is open. The simulation asks it inside the step (10 game files: which resources update,
+     * births, entry, weather, disease...): with a session the answer is the same on every PC, whether a battle is
+     * running. The UI asks it outside the step and gets this PC's own view, as in vanilla. (A desync class found by
+     * timjrobinson/songs-of-syx-multiplayer.)
+     */
+    public static boolean battleView(boolean localViewOpen, boolean battleRunning) {
+        Session s = Engine.session();
+        return s != null && s.streams.isSimulationThread() ? battleRunning : localViewOpen;
+    }
+
+    /** A frame's game update took this long (for the timing measurements; kept per session). */
+    public static void frameUpdated(long nanos) {
+        Session s = Engine.session();
+        if (s != null) {
+            s.lastFrameUpdateNanos = nanos;
+        }
+    }
+
+    /**
+     * True with a session when the caller is not the simulation inside its step: the UI and rendering between steps,
+     * or another thread (the host's AI general). Such a caller may read the simulation's caches but never refresh
+     * them, move their cursors, or write the simulation's state while drawing (SOS-32).
+     */
+    public static boolean outsideStep() {
+        Session s = Engine.session();
+        return s != null && !s.streams.isSimulationThread();
+    }
+
+    /**
+     * The room placement this PC's player is previewing, as the simulation reads it (farms, pastures, snow, overlays,
+     * the environment map): never with a session, since only this PC has it.
+     */
+    public static boolean placementPreview(boolean localPreview) {
+        return Engine.session() == null && localPreview;
+    }
+
+    /**
+     * True with a session: GAME.Warn and GAME.Error only log, on every PC alike. In vanilla they pause the game or
+     * throw depending on this PC's DEVELOPER and DEBUG launcher flags.
+     */
+    public static boolean uniformWarnings() {
+        return Engine.session() != null;
+    }
+
+    /**
+     * A load has built the game and its view and is about to load the save. Building them can draw differently per
+     * process (what the first game in a process builds lazily), so the save's own load starts from one seed again.
+     */
+    public static void loadViewBuilt() {
+        Session s = Engine.session();
+        if (s != null && s.loadSeed != 0) {
+            RND.setSeed(s.loadSeed ^ LOAD_VIEW_SEED);
+        }
+    }
+
     // ------------------------------------------------------------ fixed random tables (B11, SOS-23)
 
     /**
@@ -254,6 +376,14 @@ public final class Hooks {
      */
     public static Random tileOrderRandom() {
         return new Random(TILE_ORDER_SEED);
+    }
+
+    /**
+     * A generator for one class's static initializer, the same in every process: its table never differs between PCs,
+     * and loading the class (whenever that happens) draws nothing from the simulation's stream (SOS-32).
+     */
+    public static Random tableRandom(Class<?> owner) {
+        return new Random(RANDOM_TABLE_SEED ^ owner.getName().hashCode());
     }
 
     /** The seed for random tile table number {@code table} (1, 2, ...), the same in every process. */

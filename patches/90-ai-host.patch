@@ -1,6 +1,6 @@
 diff -ru -U2 a/game/battle/thread/general/Strategos2000.java b/game/battle/thread/general/Strategos2000.java
---- a/game/battle/thread/general/Strategos2000.java	2026-10-22 18:11:17.128084800 +0500
-+++ b/game/battle/thread/general/Strategos2000.java	2026-10-22 18:11:17.156731800 +0500
+--- a/game/battle/thread/general/Strategos2000.java	2025-11-19 14:22:36.000000000 +0500
++++ b/game/battle/thread/general/Strategos2000.java	2026-10-22 22:23:39.438686700 +0500
 @@ -105,6 +105,7 @@
  
  	@Override
@@ -10,8 +10,8 @@ diff -ru -U2 a/game/battle/thread/general/Strategos2000.java b/game/battle/threa
  		for (int di = 0; di < context.getArmy().divisions().size(); di++) {
  			if (context.getArmy().divisions().get(di).active())
 diff -ru -U2 a/game/battle/thread/general/offence/StepArtilleryBombard.java b/game/battle/thread/general/offence/StepArtilleryBombard.java
---- a/game/battle/thread/general/offence/StepArtilleryBombard.java	2026-10-22 18:11:18.090111900 +0500
-+++ b/game/battle/thread/general/offence/StepArtilleryBombard.java	2026-10-22 18:11:18.119177200 +0500
+--- a/game/battle/thread/general/offence/StepArtilleryBombard.java	2025-10-16 09:13:50.000000000 +0500
++++ b/game/battle/thread/general/offence/StepArtilleryBombard.java	2026-10-22 22:23:39.438686700 +0500
 @@ -167,7 +167,7 @@
  				if (SETT.PATH().availability.get(x, y).isSolid(c.getArmy()) || GAME.ARMIES().map.attackable.is(x, y, c.getArmy())) {
  					for (ArtilleryInstance i : tmp) {
@@ -22,8 +22,8 @@ diff -ru -U2 a/game/battle/thread/general/offence/StepArtilleryBombard.java b/ga
  							ins.remove(i);
  							break;
 diff -ru -U2 a/game/battle/thread/general/offence/StepAttackEnemyNear.java b/game/battle/thread/general/offence/StepAttackEnemyNear.java
---- a/game/battle/thread/general/offence/StepAttackEnemyNear.java	2026-10-22 18:11:17.538272300 +0500
-+++ b/game/battle/thread/general/offence/StepAttackEnemyNear.java	2026-10-22 18:11:17.566337300 +0500
+--- a/game/battle/thread/general/offence/StepAttackEnemyNear.java	2026-06-17 10:48:06.000000000 +0500
++++ b/game/battle/thread/general/offence/StepAttackEnemyNear.java	2026-10-22 22:23:39.439661000 +0500
 @@ -170,12 +170,12 @@
  		}
  
@@ -51,8 +51,8 @@ diff -ru -U2 a/game/battle/thread/general/offence/StepAttackEnemyNear.java b/gam
  		
  }
 diff -ru -U2 a/game/battle/thread/general/offence/StepAttackOthers.java b/game/battle/thread/general/offence/StepAttackOthers.java
---- a/game/battle/thread/general/offence/StepAttackOthers.java	2026-10-22 18:11:17.676014700 +0500
-+++ b/game/battle/thread/general/offence/StepAttackOthers.java	2026-10-22 18:11:17.705468300 +0500
+--- a/game/battle/thread/general/offence/StepAttackOthers.java	2025-12-05 10:29:22.000000000 +0500
++++ b/game/battle/thread/general/offence/StepAttackOthers.java	2026-10-22 22:23:39.439661000 +0500
 @@ -139,8 +139,8 @@
  		mDiv.order().task.set(task);
  		context.deployedToLine.set(mDiv.indexArmy(), true);
@@ -64,9 +64,21 @@ diff -ru -U2 a/game/battle/thread/general/offence/StepAttackOthers.java b/game/b
  	}
  
  
+diff -ru -U2 a/game/battle/thread/general/offence/StepBlob.java b/game/battle/thread/general/offence/StepBlob.java
+--- a/game/battle/thread/general/offence/StepBlob.java	2025-10-23 08:46:10.000000000 +0500
++++ b/game/battle/thread/general/offence/StepBlob.java	2026-10-22 22:23:39.445665100 +0500
+@@ -87,7 +87,7 @@
+ 	private void fill(Bitmap2D blob, LIST<Node> nodes, int range) {
+ 		
+ 		
+-		if (context.getArmy().men() == 0)
++		if (sosdet.game.AiHooks.armyMen(context.getArmy()) == 0) // SOSDET: on the host's general thread, never the shared lazy count (B15)
+ 			return;
+ 		
+ 		
 diff -ru -U2 a/game/battle/thread/general/offence/StepLinesMoveTo.java b/game/battle/thread/general/offence/StepLinesMoveTo.java
---- a/game/battle/thread/general/offence/StepLinesMoveTo.java	2026-10-22 18:11:17.812079000 +0500
-+++ b/game/battle/thread/general/offence/StepLinesMoveTo.java	2026-10-22 18:11:17.840050700 +0500
+--- a/game/battle/thread/general/offence/StepLinesMoveTo.java	2025-11-26 09:53:26.000000000 +0500
++++ b/game/battle/thread/general/offence/StepLinesMoveTo.java	2026-10-22 22:23:39.440687300 +0500
 @@ -139,7 +139,7 @@
  		for (int i = 0; i < Config.battle().DIVISIONS_PER_ARMY; i++) {
  			if (deployed.get(i)) {
@@ -86,8 +98,8 @@ diff -ru -U2 a/game/battle/thread/general/offence/StepLinesMoveTo.java b/game/ba
  	}
  	
 diff -ru -U2 a/game/battle/thread/general/offence/Strategos2000UpdaterOffense.java b/game/battle/thread/general/offence/Strategos2000UpdaterOffense.java
---- a/game/battle/thread/general/offence/Strategos2000UpdaterOffense.java	2026-10-22 18:11:17.946344800 +0500
-+++ b/game/battle/thread/general/offence/Strategos2000UpdaterOffense.java	2026-10-22 18:11:17.976344700 +0500
+--- a/game/battle/thread/general/offence/Strategos2000UpdaterOffense.java	2026-01-06 10:41:08.000000000 +0500
++++ b/game/battle/thread/general/offence/Strategos2000UpdaterOffense.java	2026-10-22 22:23:39.440687300 +0500
 @@ -130,8 +130,8 @@
  				for (int di = 0; di < Config.battle().DIVISIONS_PER_ARMY; di++) {
  					Div d = u.getArmy().divisions().get(di);
@@ -100,8 +112,8 @@ diff -ru -U2 a/game/battle/thread/general/offence/Strategos2000UpdaterOffense.ja
  						d.order().task.set(task);
  						c.deployedToLine.set(di, true);
 diff -ru -U2 a/game/battle/thread/order/BattleOrder.java b/game/battle/thread/order/BattleOrder.java
---- a/game/battle/thread/order/BattleOrder.java	2026-10-22 18:11:17.268342500 +0500
-+++ b/game/battle/thread/order/BattleOrder.java	2026-10-22 18:11:17.296144600 +0500
+--- a/game/battle/thread/order/BattleOrder.java	2026-01-07 12:25:32.000000000 +0500
++++ b/game/battle/thread/order/BattleOrder.java	2026-10-22 22:23:39.441687600 +0500
 @@ -18,6 +18,13 @@
  		
  	}
@@ -141,8 +153,8 @@ diff -ru -U2 a/game/battle/thread/order/BattleOrder.java b/game/battle/thread/or
  			t.copy(from);
  			setI++;
 diff -ru -U2 a/game/battle/thread/order/BattleOrders.java b/game/battle/thread/order/BattleOrders.java
---- a/game/battle/thread/order/BattleOrders.java	2026-10-22 18:11:17.403099900 +0500
-+++ b/game/battle/thread/order/BattleOrders.java	2026-10-22 18:11:17.432091000 +0500
+--- a/game/battle/thread/order/BattleOrders.java	2026-06-17 17:03:56.000000000 +0500
++++ b/game/battle/thread/order/BattleOrders.java	2026-10-22 22:23:39.441687600 +0500
 @@ -23,6 +23,7 @@
  		super(1.0/60);
  		for (int i = 0; i < orders.length; i++) {
@@ -152,8 +164,8 @@ diff -ru -U2 a/game/battle/thread/order/BattleOrders.java b/game/battle/thread/o
  		}
  	}
 diff -ru -U2 a/settlement/thing/projectiles/Updater.java b/settlement/thing/projectiles/Updater.java
---- a/settlement/thing/projectiles/Updater.java	2026-10-22 18:11:18.227702400 +0500
-+++ b/settlement/thing/projectiles/Updater.java	2026-10-22 18:11:18.255447800 +0500
+--- a/settlement/thing/projectiles/Updater.java	2026-04-18 08:24:40.000000000 +0500
++++ b/settlement/thing/projectiles/Updater.java	2026-10-22 22:23:39.442689300 +0500
 @@ -21,6 +21,8 @@
  
  	private final SProjectiles p;

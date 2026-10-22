@@ -1,0 +1,157 @@
+diff -ru -U2 a/settlement/environment/SettEnvMap.java b/settlement/environment/SettEnvMap.java
+--- a/settlement/environment/SettEnvMap.java	2026-06-17 10:48:04.000000000 +0500
++++ b/settlement/environment/SettEnvMap.java	2026-10-22 21:44:16.668885800 +0500
+@@ -397,7 +397,7 @@
+ 		}
+ 
+ 		double getRadius(int tx, int ty) {
+-			if (SETT.ROOMS().construction.isser.is(tx, ty) || SETT.ROOMS().placement.embryo.is(tx, ty))
++			if (SETT.ROOMS().construction.isser.is(tx, ty) || sosdet.Hooks.placementPreview(SETT.ROOMS().placement.embryo.is(tx, ty)))
+ 				return 0;
+ 			Room r = SETT.ROOMS().map.get(tx, ty);
+ 			if (r != null && r.constructor() != null && r.constructor().envValue(this, SettEnvValue.init(), tx, ty)) {
+@@ -408,7 +408,7 @@
+ 
+ 		@Override
+ 		public double getBaseValue(int tx, int ty) {
+-			if (SETT.ROOMS().construction.isser.is(tx, ty) || SETT.ROOMS().placement.embryo.is(tx, ty))
++			if (SETT.ROOMS().construction.isser.is(tx, ty) || sosdet.Hooks.placementPreview(SETT.ROOMS().placement.embryo.is(tx, ty)))
+ 				return 0;
+ 			
+ 			Room r = SETT.ROOMS().map.get(tx, ty);
+diff -ru -U2 a/settlement/overlay/Addable.java b/settlement/overlay/Addable.java
+--- a/settlement/overlay/Addable.java	2026-04-15 07:33:02.000000000 +0500
++++ b/settlement/overlay/Addable.java	2026-10-22 21:44:16.669885600 +0500
+@@ -176,7 +176,7 @@
+ 		if (VIEW.s().getWindow().zoomout() >= 3 && SETT.TERRAIN().get(it.tile()).miniDepth() > 0)
+ 			return false;
+ 		
+-		if (SETT.ROOMS().placement.embryo.is(it.tile()))
++		if (sosdet.Hooks.placementPreview(SETT.ROOMS().placement.embryo.is(it.tile())))
+ 			return false;
+ 		c.bind();
+ 		
+@@ -204,7 +204,7 @@
+ 	
+ 	public static boolean renderAbove(COLOR c, Renderer r, RenderIterator it) {
+ 		
+-		if (SETT.ROOMS().placement.embryo.is(it.tile()))
++		if (sosdet.Hooks.placementPreview(SETT.ROOMS().placement.embryo.is(it.tile())))
+ 			return false;
+ 		
+ 		TerrainTile tt = SETT.TERRAIN().get(it.tile());
+diff -ru -U2 a/settlement/room/food/farm/Constructor.java b/settlement/room/food/farm/Constructor.java
+--- a/settlement/room/food/farm/Constructor.java	2026-05-02 08:16:54.000000000 +0500
++++ b/settlement/room/food/farm/Constructor.java	2026-10-22 21:44:16.670885300 +0500
+@@ -194,7 +194,7 @@
+ 			d = CLAMP.d(d, 0, 1);
+ 			d*=d;
+ 			renderUnder(d, r, it, false);
+-			if (!SETT.ROOMS().placement.embryo.is(it.tile()) && TERRAIN().get(it.tile()).clearing().can() && !SETT.TERRAIN().WATER.DEEP.is(it.tile())) {
++			if (!sosdet.Hooks.placementPreview(SETT.ROOMS().placement.embryo.is(it.tile())) && TERRAIN().get(it.tile()).clearing().can() && !SETT.TERRAIN().WATER.DEEP.is(it.tile())) {
+ 				double w = SETT.GROUND().MOISTURE_TOT.get(it.tile());
+ 				w = CLAMP.d(w, 0, 1);
+ 				if (w > 0) {
+diff -ru -U2 a/settlement/room/food/fish/Constructor.java b/settlement/room/food/fish/Constructor.java
+--- a/settlement/room/food/fish/Constructor.java	2026-06-17 10:48:06.000000000 +0500
++++ b/settlement/room/food/fish/Constructor.java	2026-10-22 21:44:16.671885100 +0500
+@@ -384,7 +384,7 @@
+ 		@Override
+ 		public boolean render(Renderer r, RenderIterator it) {
+ 			
+-			if (SETT.TERRAIN().WATER.SHALLOW.is(it.tile()) && !SETT.ROOMS().map.is(it.tile()) && !SETT.ROOMS().placement.embryo.is(it.tile())) {
++			if (SETT.TERRAIN().WATER.SHALLOW.is(it.tile()) && !SETT.ROOMS().map.is(it.tile()) && !sosdet.Hooks.placementPreview(SETT.ROOMS().placement.embryo.is(it.tile()))) {
+ 				
+ 				double d = SETT.TERRAIN().WATER.fishAmount.get(it.tile())/(double)SETT.TERRAIN().WATER.fishAmount.max();
+ 				if (d == 0)
+diff -ru -U2 a/settlement/room/food/orchard/Constructor.java b/settlement/room/food/orchard/Constructor.java
+--- a/settlement/room/food/orchard/Constructor.java	2026-02-13 11:18:54.000000000 +0500
++++ b/settlement/room/food/orchard/Constructor.java	2026-10-22 21:44:16.673883100 +0500
+@@ -425,7 +425,7 @@
+ 			double d = fertility(it.tx(), it.ty()); 
+ 			d*=d;
+ 			renderUnder(d, r, it, false);
+-			if (!SETT.ROOMS().placement.embryo.is(it.tile())) {
++			if (!sosdet.Hooks.placementPreview(SETT.ROOMS().placement.embryo.is(it.tile()))) {
+ 				double w = SETT.GROUND().MOISTURE_TOT.get(it.tile());
+ 				w = CLAMP.d(w, 0, 1);
+ 				if (w > 0) {
+diff -ru -U2 a/settlement/room/food/pasture/ConstructorOutdoor.java b/settlement/room/food/pasture/ConstructorOutdoor.java
+--- a/settlement/room/food/pasture/ConstructorOutdoor.java	2026-02-12 14:31:02.000000000 +0500
++++ b/settlement/room/food/pasture/ConstructorOutdoor.java	2026-10-22 21:44:16.674881900 +0500
+@@ -86,7 +86,7 @@
+ 			
+ 			@Override
+ 			public CharSequence isPlacable(int tx, int ty, MAP_BOOLEAN roomIs, FurnisherItem it, int rx, int ry) {
+-				if (SETT.ROOMS().placement.embryo.is(tx, ty)) {
++				if (sosdet.Hooks.placementPreview(SETT.ROOMS().placement.embryo.is(tx, ty))) {
+ 					if (SETT.ROOMS().placement.placer.autoWalls.is()) {
+ 						for (DIR d : DIR.ORTHO) {
+ 							if (it.get(rx, ry, d) == null && UtilWallPlacability.wallCanBe.is(tx, ty, d) && SETT.ROOMS().placement.placer.placerDoor.isPlacable(tx+d.x(), ty+d.y(), null, null) == null) {
+@@ -177,7 +177,7 @@
+ 			double d = fertility(it.tx(), it.ty());
+ 			d*=d;
+ 			renderUnder(d, r, it, false);
+-			if (!SETT.ROOMS().placement.embryo.is(it.tile()) && TERRAIN().get(it.tile()).clearing().can()) {
++			if (!sosdet.Hooks.placementPreview(SETT.ROOMS().placement.embryo.is(it.tile())) && TERRAIN().get(it.tile()).clearing().can()) {
+ 				double w = SETT.GROUND().MOISTURE_TOT.get(it.tile())*2.0;
+ 				w = CLAMP.d(w, 0, 1);
+ 				if (w > 0) {
+diff -ru -U2 a/settlement/room/industry/woodcutter/Constructor.java b/settlement/room/industry/woodcutter/Constructor.java
+--- a/settlement/room/industry/woodcutter/Constructor.java	2026-06-14 11:19:02.000000000 +0500
++++ b/settlement/room/industry/woodcutter/Constructor.java	2026-10-22 21:44:16.675881900 +0500
+@@ -453,7 +453,7 @@
+ 		@Override
+ 		public void renderBelow(Renderer r, RenderIterator it) {
+ 			renderUnder(fertility(it.tx(),it.ty()), r, it, false);
+-			if (!SETT.ROOMS().placement.embryo.is(it.tile()) && TERRAIN().get(it.tile()).clearing().can()) {
++			if (!sosdet.Hooks.placementPreview(SETT.ROOMS().placement.embryo.is(it.tile())) && TERRAIN().get(it.tile()).clearing().can()) {
+ 				double w = SETT.GROUND().MOISTURE_TOT.get(it.tile())*2.0;
+ 				w = CLAMP.d(w, 0, 1);
+ 				w*=w;
+diff -ru -U2 a/settlement/room/law/stockade/Constructor.java b/settlement/room/law/stockade/Constructor.java
+--- a/settlement/room/law/stockade/Constructor.java	2026-06-17 10:48:04.000000000 +0500
++++ b/settlement/room/law/stockade/Constructor.java	2026-10-22 21:44:16.676881700 +0500
+@@ -125,7 +125,7 @@
+ 			
+ 			@Override
+ 			public CharSequence isPlacable(int tx, int ty, MAP_BOOLEAN roomIs, FurnisherItem it, int rx, int ry) {
+-				if (SETT.ROOMS().placement.embryo.is(tx, ty)) {
++				if (sosdet.Hooks.placementPreview(SETT.ROOMS().placement.embryo.is(tx, ty))) {
+ 					if (SETT.ROOMS().placement.placer.autoWalls.is()) {
+ 						for (DIR d : DIR.ORTHO) {
+ 							if (it.get(rx, ry, d) == null && UtilWallPlacability.wallCanBe.is(tx, ty, d) && SETT.ROOMS().placement.placer.placerDoor.isPlacable(tx+d.x(), ty+d.y(), null, null) == null) {
+diff -ru -U2 a/settlement/tilemap/floor/Snow.java b/settlement/tilemap/floor/Snow.java
+--- a/settlement/tilemap/floor/Snow.java	2025-09-12 16:12:40.000000000 +0500
++++ b/settlement/tilemap/floor/Snow.java	2026-10-22 21:44:16.677882400 +0500
+@@ -110,7 +110,7 @@
+ 			
+ 		
+ 			
+-			if (s >= 0 && !TERRAIN().get(i.tile()).roofIs() && !TERRAIN().get(i.tile()).isMassiveWall() && !SETT.ROOMS().placement.embryo.is(i.tile())) {
++			if (s >= 0 && !TERRAIN().get(i.tile()).roofIs() && !TERRAIN().get(i.tile()).isMassiveWall() && !sosdet.Hooks.placementPreview(SETT.ROOMS().placement.embryo.is(i.tile()))) {
+ 				int c = (int) (s);
+ 				ran = ran >> 8;
+ 				if (SETT.ROOMS().map.is(i.tile()) || SETT.FLOOR().getter.get(i.tile()) != null || SETT.MINERALS().amountInt.get(i.tile()) > 0) {
+diff -ru -U2 a/view/main/VIEW.java b/view/main/VIEW.java
+--- a/view/main/VIEW.java	2026-05-21 06:38:16.000000000 +0500
++++ b/view/main/VIEW.java	2026-10-22 21:44:16.666885200 +0500
+@@ -254,7 +254,9 @@
+ 			return;
+ 		}
+ 		
++		long sosdetStart = System.nanoTime(); // SOSDET: each frame's game update time, for the timing measurements
+ 		game.update(ds, slowDown);
++		sosdet.Hooks.frameUpdated(System.nanoTime() - sosdetStart);
+ 
+ 	}
+ 	
+@@ -431,6 +433,8 @@
+ 		}
+ 		
+ 		public final boolean isActive(){
++			if (this == VIEW.i.battle) // SOSDET: inside the step the same on every PC: a battle is running (SOS-32)
++				return sosdet.Hooks.battleView(this == VIEW.i.current, VIEW.i.battle.state() != null);
+ 			return this == VIEW.i.current;
+ 		}
+ 		

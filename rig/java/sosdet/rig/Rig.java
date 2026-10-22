@@ -25,6 +25,7 @@ import game.battle.util.DivGeneration;
 import game.faction.FACTIONS;
 import game.faction.Faction;
 import game.save.GameLoader;
+import game.time.TIME;
 import init.constant.Config;
 import init.paths.PATHS;
 import init.race.RACES;
@@ -209,7 +210,8 @@ public final class Rig implements SCRIPT {
                 nudge();
             }
             try {
-                log.write(step + "," + Long.toHexString(city ? cityHash() : battleHash()) + "," + men() + "\n");
+                log.write(step + "," + Long.toHexString(city ? cityHash() : battleHash()) + "," + men() + ","
+                        + TIME.currentSecond() + "\n");
             } catch (IOException e) {
                 throw new IllegalStateException("SOSDET rig: cannot write the hash log", e);
             }
@@ -226,8 +228,9 @@ public final class Rig implements SCRIPT {
             }
             if (running) {
                 timing();
-                if (city && invadeMen > 0) {
-                    VIEW.inters().messages.hide(); // the invasion's messages would pause the game
+                if (city) {
+                    // the city's messages (the invasion's, a noble's death...) would pause the game waiting for a human
+                    VIEW.inters().messages.hide();
                 }
                 if (vanilla ? gameSeconds >= gameSecondsLeft : Engine.step() >= lastStep) {
                     finish();
@@ -285,6 +288,9 @@ public final class Rig implements SCRIPT {
                 desyncReported = true;
                 try {
                     Files.write(dir.resolve(tag + "-desync.txt"), Engine.desyncReport().getBytes(StandardCharsets.UTF_8));
+                    // with the draw trace on: the draws from the hash before the desync up to it
+                    Files.write(dir.resolve(tag + "-draws.txt"), Engine.drawTrace(d.step - 60, d.step + 1)
+                            .getBytes(StandardCharsets.UTF_8));
                 } catch (IOException e) {
                     throw new IllegalStateException("SOSDET rig: cannot write the desync report", e);
                 }
@@ -400,7 +406,7 @@ public final class Rig implements SCRIPT {
         private void timing() {
             try {
                 if (pendingGameSeconds >= 0) {
-                    timing.write(FrameTiming.lastUpdateNanos() + "," + pendingGameSeconds + "\n");
+                    timing.write(Engine.lastFrameUpdateNanos() + "," + pendingGameSeconds + "\n");
                 }
             } catch (IOException e) {
                 throw new IllegalStateException("SOSDET rig: cannot write the timing log", e);
@@ -455,7 +461,9 @@ public final class Rig implements SCRIPT {
                 command = new String(Files.readAllBytes(commandFile), StandardCharsets.UTF_8).trim();
                 Files.delete(commandFile);
             } catch (IOException e) {
-                event("error", "\"message\":\"" + clean("reading the command: " + e) + "\"");
+                return; // the runner is still writing it (Windows locks the file meanwhile): read it next poll
+            }
+            if (command.isEmpty()) {
                 return;
             }
             try {
@@ -495,6 +503,14 @@ public final class Rig implements SCRIPT {
                 return;
             case "loadbattle":
                 loadBattle(rest(c));
+                return;
+            case "tracedraws":
+                Engine.traceDraws(Integer.parseInt(c[1]));
+                event("tracedraws", "\"steps\":" + c[1]);
+                return;
+            case "speed":
+                Engine.speed(Double.parseDouble(c[1]));
+                event("speed", "\"agreed\":" + c[1]);
                 return;
             case "seed":
                 Engine.seed(Integer.parseInt(c[1]));
@@ -593,7 +609,7 @@ public final class Rig implements SCRIPT {
             }
             VIEW.inters().load.deactivate(); // the "click to continue" screen after a load would pause the game
             log = Files.newBufferedWriter(dir.resolve(tag + ".csv"), StandardCharsets.UTF_8);
-            log.write("step,hash,men\n");
+            log.write("step,hash,men,gameSeconds\n");
             openTiming();
             startStallSampler(dir.resolve(tag + "-stalls.txt"));
             Engine.resetStats();

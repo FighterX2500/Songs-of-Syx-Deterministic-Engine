@@ -12,10 +12,11 @@ class ResyncTest {
 
     @Test
     void theStateRoundTrips() {
-        Resync r = new Resync(12_000, 777, 30, 2, 123_456_789L, new byte[] {1, 2, 3}, new byte[] {9, 8});
+        Resync r = new Resync(12_000, 777, 5.0, 30, 2, 123_456_789L, new byte[] {1, 2, 3}, new byte[] {9, 8});
         Resync back = Resync.fromBytes(r.toBytes());
         assertEquals(12_000, back.step);
         assertEquals(777, back.seed);
+        assertEquals(5.0, back.speed);
         assertEquals(30, back.hashInterval);
         assertEquals(2, back.hashEpoch);
         assertEquals(123_456_789L, back.draws);
@@ -25,7 +26,7 @@ class ResyncTest {
 
     @Test
     void anotherFormatOrACutStateIsRefused() {
-        byte[] bytes = new Resync(1, 2, 30, 1, 0, new byte[0], new byte[4]).toBytes();
+        byte[] bytes = new Resync(1, 2, 1.0, 30, 1, 0, new byte[0], new byte[4]).toBytes();
         byte[] wrongVersion = bytes.clone();
         wrongVersion[7] = 9;
         assertThrows(IllegalArgumentException.class, () -> Resync.fromBytes(wrongVersion));
