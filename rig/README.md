@@ -46,18 +46,26 @@ The exit code is 0 when every copy is identical to copy 1. Only one rig run at a
 - **The other copies are peers.** Their general is off. Every frame they read what is new in the host's file and feed it to the engine, which never lets a peer run more than 30 steps past the host's last confirmed step.
 - **The host is the reference.** When it stops, each peer is held once it has passed the host's last step.
 
-This is the flow the multiplayer mod will use, with a file in place of the network. Without `--ai`, every copy runs the general inside the step (in-step mode, the engine's default).
+This is the flow the multiplayer mod will use, with a file in place of the network, and the default since the owner made host mode the engine's default (2026-10-22): inside the step, the general's planning stalls the simulation. `--ai instep` runs the general inside the step in every copy instead.
 
 ## State hashes and desyncs
 
 In every run, each copy also hands its engine's state hashes (every 30 steps) to the others, the way the mod will over the network: every frame it appends `Engine.hashOut()` to its `hashes.bin` and feeds the other copies' new bytes to `Engine.hashIn`. The engine compares them; on the first difference the copy writes the engine's desync report (`desync-c<k>.txt` in the run folder) and a `desync` event. `summary.txt` says, per copy, whether the engine found a desync, and how many hashes it compared.
 
 ```
-python rig
-ig.py field --tag D1 --copies 2 --steps 1200 --nudge 601
+python rig\rig.py field --tag D1 --copies 2 --steps 1200 --nudge 601
 ```
 
 `--nudge STEP` forces a desync: at that step, inside it, one soldier of the last copy (or `--nudge-copy K`) gets fatal injuries; the game kills them on their next update. The run doesn't stop at the difference. It passes when every copy's engine reports it at the first hashed step at or after `STEP`, in the `soldiers` section, against the nudged copy (SOS-29 acceptance).
+
+## Resync
+
+```
+python rig\rig.py field --tag R1 --resync 12000
+python rig\rig.py field --tag R2 --steps 12000 --nudge 6001 --resync-on-desync
+```
+
+`--resync STEP`: copy 1 holds at that step and saves a resync (`Engine.resyncSave`); then every copy, copy 1 included, loads it (`Engine.resyncLoad`) and runs on. `--resync-on-desync`: the first desync any engine reports makes copy 1 save a resync at its current step, and every copy loads it: the mod's recovery loop. With `--nudge`, copies are compared only after the resync. The rig keeps its run state across the load; `summary.txt` gives the save time and size and each copy's load time.
 
 ## The timing rule
 

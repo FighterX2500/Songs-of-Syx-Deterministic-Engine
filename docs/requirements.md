@@ -24,7 +24,7 @@ Every PC that starts from the same battle save and seed, and applies the same or
 - Set the seed of the simulation random stream.
 - Choose host or peer mode. On the host, the AI general runs and the engine hands out its AI log entries; on every PC, the engine takes the entries in and applies each at its step.
 - Read the state hash at a step.
-- Save the battle at a step and load it at that step (start and resync). The save carries the step number and the AI log entries not yet applied. AI state that vanilla doesn't save (the offence `flanking` value) is saved, or drawn again on the simulation stream after loading ([ADR 0003](https://github.com/FighterX2500/SOSGSGMP/blob/main/docs/decisions/0003-battle-lockstep.md) consequences).
+- Save the battle at a step and load it at that step (start and resync). The save carries the step number and the AI log entries not yet applied. AI state that vanilla doesn't save (the offence `flanking` value) is saved, or drawn again on the simulation stream after loading ([ADR 0003](https://github.com/FighterX2500/SOSGSGMP/blob/main/docs/decisions/0003-battle-lockstep.md) consequences). Every PC, the host included, loads a resync (owner, 2026-10-22, SOS-30): a game that ran on keeps caches a freshly loaded one rebuilds.
 - Switch a PC from peer to host mid-battle: after a host change, the new host starts its own general (ADR 0003).
 - Every data format crossing the API (orders, AI log entries, engine save data) carries a format version.
 

@@ -23,6 +23,9 @@ final class Streams {
     private long drawsSinceLoad;
     /** Draws by other threads during a step. Diagnostic only; counted without synchronisation. */
     private long foreignDraws;
+    /** The seed the simulation's generator takes before its next draw (set at every step's start). */
+    private long nextSeed;
+    private boolean reseed;
 
     Random pick(Random simulation) {
         if (!inStep || cosmeticDepth > 0) {
@@ -32,9 +35,19 @@ final class Streams {
             foreignDraws++;
             return ThreadLocalRandom.current();
         }
+        if (reseed) {
+            simulation.setSeed(nextSeed); // as RND.setSeed(int) does
+            reseed = false;
+        }
         simulationDraws++;
         drawsSinceLoad++;
         return simulation;
+    }
+
+    /** The simulation's generator starts from this seed at its next draw, so a step's draws depend only on its seed. */
+    void reseed(int seed) {
+        nextSeed = seed;
+        reseed = true;
     }
 
     /** The calling thread runs simulation code until {@link #leave()}. */
@@ -87,6 +100,11 @@ final class Streams {
 
     void loaded() {
         drawsSinceLoad = 0;
+    }
+
+    /** A resync: the count the host had at the resync step. */
+    void drawsSinceLoad(long draws) {
+        drawsSinceLoad = draws;
     }
 
     long foreignDraws() {

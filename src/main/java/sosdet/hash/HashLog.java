@@ -12,7 +12,8 @@ import java.util.List;
  * same steps; the first difference is kept as a {@link Desync}.
  *
  * <p>The hashes as bytes: a header (magic, format version, interval, sections, divisions), then one record per hash:
- * step, total, the sections, one hash per division's soldiers.
+ * step, epoch, total, the sections, one hash per division's soldiers. The epoch counts resyncs: hashes taken before
+ * the last resync are never compared with those taken after it.
  *
  * <p>Taking a hash ({@link #take}) runs in the step: no allocation, except once for the ring and on a desync.
  */
@@ -31,7 +32,7 @@ public final class HashLog {
     public static final int SECTIONS = 5;
     static final String[] SECTION_NAMES = {"clock", "soldiers", "divisions", "projectiles", "entities"};
 
-    static final int FORMAT_VERSION = 1;
+    static final int FORMAT_VERSION = 2;
     static final int MAGIC = 0x53444853; // "SDHS"
     static final int HEADER_BYTES = 4 * 5;
     static final long FNV_OFFSET = 0xcbf29ce484222325L;
@@ -45,6 +46,7 @@ public final class HashLog {
     private long[][] divisionHashes;
     private int taken;
     private long lastStep;
+    private int epoch;
 
     private ByteBuffer out;
     private boolean headerWritten;
@@ -176,7 +178,7 @@ public final class HashLog {
     // ------------------------------------------------------------ the hashes as bytes
 
     private int recordBytes() {
-        return 8 + 8 + 8 * SECTIONS + 8 * divisions;
+        return 8 + 4 + 8 + 8 * SECTIONS + 8 * divisions;
     }
 
     /** The hashes taken since the last call (the header first); empty before the first hash. */
@@ -197,7 +199,7 @@ public final class HashLog {
         if (out.remaining() < recordBytes()) {
             return; // nobody has read this PC's hashes for a whole ring (single player): they count as missed there
         }
-        out.putLong(steps[slot]).putLong(total(sections[slot]));
+        out.putLong(steps[slot]).putInt(epoch).putLong(total(sections[slot]));
         for (long s : sections[slot]) {
             out.putLong(s);
         }
@@ -217,8 +219,11 @@ public final class HashLog {
     private void drain(Remote r) {
         long[] rec;
         while ((rec = r.next()) != null) {
-            if (rec[0] > lastStep) {
-                r.waiting.add(rec);
+            if (rec[1] < epoch) {
+                continue; // taken before the last resync
+            }
+            if (rec[0] > lastStep || rec[1] > epoch) {
+                r.waiting.add(rec); // this PC hasn't got there yet (or hasn't loaded the resync yet)
             } else {
                 compare(r.pc, rec);
             }
@@ -237,8 +242,15 @@ public final class HashLog {
     }
 
     private void compareWaiting(Remote r) {
-        while (!r.waiting.isEmpty() && r.waiting.peekFirst()[0] <= lastStep) {
-            compare(r.pc, r.waiting.pollFirst());
+        while (!r.waiting.isEmpty()) {
+            long[] rec = r.waiting.peekFirst();
+            if (rec[1] < epoch) {
+                r.waiting.pollFirst();
+            } else if (rec[1] == epoch && rec[0] <= lastStep) {
+                compare(r.pc, r.waiting.pollFirst());
+            } else {
+                return;
+            }
         }
     }
 
@@ -249,14 +261,14 @@ public final class HashLog {
             return;
         }
         compared++;
-        if (desync != null || rec[1] == total(sections[slot])) {
+        if (desync != null || rec[2] == total(sections[slot])) {
             return;
         }
-        long[] remoteSections = Arrays.copyOfRange(rec, 2, 2 + SECTIONS);
+        long[] remoteSections = Arrays.copyOfRange(rec, 3, 3 + SECTIONS);
         int[] diff = new int[divisions];
         int n = 0;
         for (int d = 0; d < divisions; d++) {
-            if (divisionHashes[slot][d] != rec[2 + SECTIONS + d]) {
+            if (divisionHashes[slot][d] != rec[3 + SECTIONS + d]) {
                 diff[n++] = d;
             }
         }
@@ -285,7 +297,7 @@ public final class HashLog {
             in.put(bytes);
         }
 
-        /** The next whole record (step, total, sections, divisions), or null. */
+        /** The next whole record (step, epoch, total, sections, divisions), or null. */
         long[] next() {
             in.flip();
             try {
@@ -305,8 +317,10 @@ public final class HashLog {
                 if (in.remaining() < recordBytes()) {
                     return null;
                 }
-                long[] rec = new long[2 + SECTIONS + divisions];
-                for (int i = 0; i < rec.length; i++) {
+                long[] rec = new long[3 + SECTIONS + divisions];
+                rec[0] = in.getLong();
+                rec[1] = in.getInt();
+                for (int i = 2; i < rec.length; i++) {
                     rec[i] = in.getLong();
                 }
                 return rec;
@@ -331,6 +345,31 @@ public final class HashLog {
             }
             headerRead = true;
         }
+    }
+
+    // ------------------------------------------------------------ resync (B14)
+
+    /**
+     * A resync at {@code step}: this PC's hashes after it are dropped (a peer that had run ahead hashes those steps
+     * again), the desync is forgotten, and from now on only hashes of the new epoch are compared.
+     */
+    public void rewind(long step, int newEpoch) {
+        if (newEpoch <= epoch) {
+            throw new IllegalArgumentException("SOSDET: resync epoch " + newEpoch + " after epoch " + epoch);
+        }
+        while (taken > 0 && steps[(taken - 1) % RING] > step) {
+            taken--;
+        }
+        lastStep = step;
+        epoch = newEpoch;
+        desync = null;
+        for (int i = 0; i < remotes.size(); i++) {
+            compareWaiting(remotes.get(i)); // drops what is older than the new epoch
+        }
+    }
+
+    public int epoch() {
+        return epoch;
     }
 
     // ------------------------------------------------------------ results and counts

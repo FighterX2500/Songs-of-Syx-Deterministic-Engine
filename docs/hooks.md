@@ -34,6 +34,7 @@ Every hook calls `sosdet.Hooks` (or `sosdet.Cosmetic`) and is marked `SOSDET` in
 | --- | --- | --- | --- |
 | B12 | `Engine.atStepZero` | The mod runs the battle's start (deploy) itself, inside the simulation | SOS-27 |
 | B13 | `Hooks.stepEnd` takes the state hash; `sosdet.game.GameHash` reads the state | Soldiers, other entities and divisions are read through public members; projectiles through the bytes of their own public `save`, written to a `FilePutter` whose private buffer the adapter reads (`GameCodec`, one reflected field) | SOS-29 |
+| B14 | `Engine.resyncSave`, `Engine.resyncLoad`; `sosdet.game.GameResync` | The game's own save pipeline through its private `GameSaver.save(FilePutter)` (no save screen) and `GameLoader`; what the save leaves out (the throne timer, the battle's progress flags, the general's timers and `flanking`) through one reflected field each. Every PC loads, so no other unsaved state can differ | SOS-30 |
 
 ## Rig-only patches
 

@@ -51,7 +51,7 @@ public final class Hooks {
      */
     public static boolean stepBegin() {
         Session s = Engine.session();
-        if (!s.ai.mayRun(s.clock.step() + 1)) {
+        if (!s.ai().mayRun(s.clock.step() + 1)) {
             s.clock.hold();
             return false;
         }
@@ -59,8 +59,10 @@ public final class Hooks {
             return false;
         }
         s.streams.enter();
+        // Reseeded every step: the stream depends only on the seed and the step, so a resync needs no random state
+        s.streams.reseed(s.stepSeed(s.clock.step()));
         s.stepStartNanos = System.nanoTime(); // timing only, never fed to the simulation
-        s.ai.stepBegin(s.clock.step());
+        s.ai().stepBegin(s.clock.step());
         return true;
     }
 
@@ -70,7 +72,7 @@ public final class Hooks {
         long step = s.clock.step();
         if (s.hashes.due(step)) {
             long clock = HashLog.mix(HashLog.mix(HashLog.mix(HashLog.start(), step), s.streams.drawsSinceLoad()),
-                    s.ai.applied());
+                    s.ai().applied());
             s.hashes.take(step, clock, s.source());
         }
         s.times.record(System.nanoTime() - s.stepStartNanos);
@@ -123,7 +125,7 @@ public final class Hooks {
     public static void runBattleJobs(Runnable orders, Runnable centres, Runnable trajectories, Runnable general,
             Runnable status) {
         Session s = Engine.session();
-        s.jobs.run(s.clock.step(), orders, centres, trajectories, general, status, s.ai.mode() == AiMode.IN_STEP);
+        s.jobs.run(s.clock.step(), orders, centres, trajectories, general, status, s.ai().mode() == AiMode.IN_STEP);
     }
 
     /**
@@ -132,13 +134,13 @@ public final class Hooks {
      */
     public static boolean threadRunsInStep(boolean general) {
         Session s = Engine.session();
-        return s != null && !(general && s.ai.mode() == AiMode.HOST);
+        return s != null && !(general && s.ai().mode() == AiMode.HOST);
     }
 
     /** What a battle thread's {@code working()} answers; {@code vanilla} is its own answer. */
     public static boolean slaveWorking(boolean vanilla) {
         Session s = Engine.session();
-        if (s == null || s.ai.capturing()) {
+        if (s == null || s.ai().capturing()) {
             return vanilla; // the host's general runs its own thread, as in vanilla
         }
         return s.jobs.running();
@@ -150,24 +152,24 @@ public final class Hooks {
     public static void aiGeneralJob() {
         Session s = Engine.session();
         if (s != null) {
-            s.ai.generalThreadIs(Thread.currentThread());
+            s.ai().generalThreadIs(Thread.currentThread());
         }
     }
 
     /** True on the host's general thread: a change goes into the AI log instead of the live state. */
     public static boolean aiCapturing() {
         Session s = Engine.session();
-        return s != null && s.ai.capturing();
+        return s != null && s.ai().capturing();
     }
 
     /** A change from the host's general thread, applied by every PC at step N + 30. */
     public static void aiCapture(int kind, int div, byte[] payload) {
-        Engine.session().ai.capture(kind, div, payload);
+        Engine.session().ai().capture(kind, div, payload);
     }
 
     /** The session's game adapter for the AI (host or peer mode), which also encodes the general's orders. */
     public static AiApplier aiApplier() {
-        return Engine.session().ai.applier();
+        return Engine.session().ai().applier();
     }
 
     /** True with a session: a path is computed at once on the calling thread, not on the path worker. */
@@ -185,7 +187,7 @@ public final class Hooks {
 
     // ------------------------------------------------------------ loading and graphics-thread jobs (SOS-23)
 
-    /** A save starts loading on this thread. Every load restarts the session at step 0. */
+    /** A save starts loading on this thread. Every load restarts the session at step 0, a resync load at its step. */
     public static void loadBegin() {
         Session s = Engine.session();
         if (s == null) {
@@ -201,8 +203,15 @@ public final class Hooks {
 
     public static void loadEnd() {
         Session s = Engine.session();
-        if (s != null && s.loadSeed != 0) {
+        if (s == null) {
+            return;
+        }
+        if (s.loadSeed != 0) {
             s.streams.leave();
+        }
+        if (s.resyncDraws >= 0) {
+            s.streams.drawsSinceLoad(s.resyncDraws);
+            s.resyncDraws = -1;
         }
     }
 
