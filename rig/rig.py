@@ -688,7 +688,8 @@ def main():
         actions = [l.split("#")[0].strip() for l in lines]
     else:
         actions = [a.strip() for a in args.cmds.split(";")]
-    for action in [a for a in actions if a]:
+    actions = [a for a in actions if a] if args.cmds else []
+    for action in actions:
         time.sleep(3)
         copies[0].send("cmd " + action, "cmd")
         log("copy 1 (the host's player): " + action)
@@ -773,6 +774,10 @@ def main():
         else:
             summary.append("copy %d: no engine desync (%d hashes compared, %d missed)"
                            % (c.k, finished[c.k]["stats"].get("hashesCompared", 0), finished[c.k]["stats"].get("hashesMissed", 0)))
+    if actions:
+        applied = [str(finished[c.k]["stats"].get("commandsApplied", "?")) for c in copies]
+        summary.append("scripted actions sent: %d; commands applied per copy: %s (an action sent after the reference"
+                       " copy's last step never applies)" % (len(actions), ", ".join(applied)))
     if args.trace_draws:
         summary_draws = first_draw_difference(run_dir)
         if summary_draws:

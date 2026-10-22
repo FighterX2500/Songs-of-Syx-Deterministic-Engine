@@ -6,6 +6,8 @@ import game.GAME;
 import game.battle.div.Div;
 import init.race.Race;
 import settlement.main.SETT;
+import settlement.room.main.RoomInstance;
+import settlement.room.military.artillery.ArtilleryInstance;
 import settlement.stats.STATS;
 import settlement.stats.colls.StatsBattle.StatTraining;
 import settlement.stats.equip.EquipBattle;
@@ -21,6 +23,8 @@ public final class Military {
     static final int BANNER = 4004;
     static final int ORDER = 4005;
     static final int SEND_UNTRAINED = 4006;
+    static final int ARTILLERY_CLEAR = 4007;
+    static final int ARTILLERY_TARGET_DIV = 4008;
 
     static final List<Command> ALL = List.of(
             new Command(MEN, "divisionMen", r -> {
@@ -65,6 +69,24 @@ public final class Military {
             }),
             new Command(SEND_UNTRAINED, "sendOutUntrained", r -> {
                 SETT.BATTLE().info.sendOutWithoutTraining(r.b());
+                return true;
+            }),
+            new Command(ARTILLERY_CLEAR, "artilleryClear", r -> {
+                RoomInstance room = Args.room(r);
+                if (!(room instanceof ArtilleryInstance)) {
+                    return false;
+                }
+                ((ArtilleryInstance) room).clearTarget();
+                return true;
+            }),
+            new Command(ARTILLERY_TARGET_DIV, "artilleryTargetDiv", r -> {
+                RoomInstance room = Args.room(r);
+                Div target = Args.div(r);
+                boolean userSet = r.b();
+                if (!(room instanceof ArtilleryInstance)) {
+                    return false;
+                }
+                ((ArtilleryInstance) room).targetDivSet(target, userSet);
                 return true;
             }));
 
@@ -125,6 +147,24 @@ public final class Military {
             return false;
         }
         Commands.capture(Args.div(Args.div(new CmdWriter(ORDER), replaced), replacer));
+        return true;
+    }
+
+    /** Hook in {@code ArtilleryInstance.clearTarget}: the battle screen's stop, for the selected or all artillery. */
+    public static boolean artilleryClear(ArtilleryInstance a) {
+        if (!Commands.capturing()) {
+            return false;
+        }
+        Commands.capture(Args.room(new CmdWriter(ARTILLERY_CLEAR), a));
+        return true;
+    }
+
+    /** Hook in {@code ArtilleryInstance.targetDivSet}: the battle screen aims the selected artillery at a division. */
+    public static boolean artilleryTargetDiv(ArtilleryInstance a, Div target, boolean userSet) {
+        if (!Commands.capturing()) {
+            return false;
+        }
+        Commands.capture(Args.div(Args.room(new CmdWriter(ARTILLERY_TARGET_DIV), a), target).b(userSet));
         return true;
     }
 

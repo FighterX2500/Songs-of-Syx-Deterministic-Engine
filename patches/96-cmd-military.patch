@@ -1,6 +1,6 @@
 diff -ru -U2 a/game/battle/Army.java b/game/battle/Army.java
 --- a/game/battle/Army.java	2025-11-29 17:20:30.000000000 +0500
-+++ b/game/battle/Army.java	2026-10-23 02:28:30.696478500 +0500
++++ b/game/battle/Army.java	2026-10-23 02:30:51.124382000 +0500
 @@ -63,6 +63,8 @@
  	}
  	
@@ -12,7 +12,7 @@ diff -ru -U2 a/game/battle/Army.java b/game/battle/Army.java
  		int oi = ordered.indexOf(toBeReplaced);
 diff -ru -U2 a/game/battle/div/DivInfo.java b/game/battle/div/DivInfo.java
 --- a/game/battle/div/DivInfo.java	2025-11-22 08:36:34.000000000 +0500
-+++ b/game/battle/div/DivInfo.java	2026-10-23 02:28:30.695478300 +0500
++++ b/game/battle/div/DivInfo.java	2026-10-23 02:30:51.124382000 +0500
 @@ -52,6 +52,8 @@
  	
  	@Override
@@ -51,7 +51,7 @@ diff -ru -U2 a/game/battle/div/DivInfo.java b/game/battle/div/DivInfo.java
  
 diff -ru -U2 a/settlement/battle/ArmyTrainingInfo.java b/settlement/battle/ArmyTrainingInfo.java
 --- a/settlement/battle/ArmyTrainingInfo.java	2026-06-17 10:48:04.000000000 +0500
-+++ b/settlement/battle/ArmyTrainingInfo.java	2026-10-23 02:28:30.697479200 +0500
++++ b/settlement/battle/ArmyTrainingInfo.java	2026-10-23 02:30:51.125352100 +0500
 @@ -168,6 +168,8 @@
  	}
  	
@@ -61,9 +61,28 @@ diff -ru -U2 a/settlement/battle/ArmyTrainingInfo.java b/settlement/battle/ArmyT
  		sendOutWithoutTraining = s;
  	}
  	
+diff -ru -U2 a/settlement/room/military/artillery/ArtilleryInstance.java b/settlement/room/military/artillery/ArtilleryInstance.java
+--- a/settlement/room/military/artillery/ArtilleryInstance.java	2025-09-29 07:49:40.000000000 +0500
++++ b/settlement/room/military/artillery/ArtilleryInstance.java	2026-10-23 02:30:51.133353600 +0500
+@@ -227,11 +227,15 @@
+ 	}
+ 
+ 	public void clearTarget() {
++		if (sosdet.game.cmd.Military.artilleryClear(this)) // SOSDET: the battle screen's stop is a command (ADR 0002)
++			return;
+ 		cTarget.set(-1, -1);
+ 		dTarget = -1;
+ 	}
+ 	
+ 	public void targetDivSet(Div div, boolean userSet) {
++		if (sosdet.game.cmd.Military.artilleryTargetDiv(this, div, userSet)) // SOSDET: aiming at a division from the battle screen is a command (ADR 0002)
++			return;
+ 		clearTarget();
+ 		dTarget = div.index();
+ 	}
 diff -ru -U2 a/settlement/stats/equip/EquipBattle.java b/settlement/stats/equip/EquipBattle.java
 --- a/settlement/stats/equip/EquipBattle.java	2026-04-06 08:51:54.000000000 +0500
-+++ b/settlement/stats/equip/EquipBattle.java	2026-10-23 02:28:30.695478300 +0500
++++ b/settlement/stats/equip/EquipBattle.java	2026-10-23 02:30:51.126353000 +0500
 @@ -117,6 +117,8 @@
  	}
  
