@@ -12,7 +12,7 @@ import java.util.stream.Collectors;
 final class DrawTrace {
 
     private static final StackWalker WALKER = StackWalker.getInstance();
-    private static final int FRAMES = 4;
+    private static final int FRAMES = 8;
 
     private final long[] steps;
     private final List<List<String>> sites;
