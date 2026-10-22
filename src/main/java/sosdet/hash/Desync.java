@@ -60,6 +60,8 @@ public final class Desync {
         for (int d : divisions) {
             b.append("  ").append(d).append(": ").append(names.divisionName(d)).append('\n');
         }
+        b.append("\nDivisions at step ").append(noticedAt).append(" on this PC (compare with the other PC's report):\n");
+        b.append(names.describeDivisions());
         b.append("\nAI log entries applied last (step, sequence, kind, division):\n");
         lines(b, recentAi);
         b.append("\nPlayer orders applied last:\n");

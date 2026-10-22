@@ -39,6 +39,11 @@ class HashLogTest {
         public String divisionName(int index) {
             return "division " + index;
         }
+
+        @Override
+        public String describeDivisions() {
+            return "";
+        }
     }
 
     /** Runs a PC from step {@code from} to {@code to}, hashing where due. */

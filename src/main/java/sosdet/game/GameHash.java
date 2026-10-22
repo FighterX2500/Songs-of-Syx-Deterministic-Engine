@@ -95,6 +95,29 @@ public final class GameHash implements StateSource {
     }
 
     @Override
+    public String describeDivisions() {
+        StringBuilder b = new StringBuilder();
+        LIST<Div> divs = GAME.ARMIES().divisions();
+        for (int i = 0; i < divs.size(); i++) {
+            Div d = divs.get(i);
+            if (d.men() == 0 && d.deployed() == 0) {
+                continue;
+            }
+            DivSettings s = d.settings();
+            b.append(String.format(java.util.Locale.ROOT,
+                    "  %d: men %d, deployed %d, morale %016x, flags %s%s%s%s%s%s%s%s%s%s, ammo %d, formation %s,"
+                            + " path %016x, dest %016x, task %016x%n",
+                    i, d.men(), d.deployed(), Double.doubleToLongBits(d.morale()),
+                    s.guard ? "G" : "-", s.charging ? "C" : "-", s.running ? "R" : "-", s.fireAtWill ? "F" : "-",
+                    s.shouldNotMoveToFire ? "H" : "-", s.shouldFire ? "S" : "-", s.shouldbreak ? "B" : "-",
+                    s.chargeSpeed ? "X" : "-", s.mustering() ? "M" : "-", s.moppingUp() ? "U" : "-", s.ammoI,
+                    s.formation, codec.hash(HashLog.start(), d.order().path), codec.hash(HashLog.start(), d.order().dest),
+                    codec.hash(HashLog.start(), d.order().task)));
+        }
+        return b.toString();
+    }
+
+    @Override
     public String divisionName(int index) {
         Div d = GAME.ARMIES().divisions().get(index);
         return (d.army() == GAME.ARMIES().player() ? "player" : "enemy") + " division " + d.indexArmy() + ", "

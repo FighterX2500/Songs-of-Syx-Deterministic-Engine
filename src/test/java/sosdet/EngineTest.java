@@ -35,6 +35,11 @@ class EngineTest {
         public String divisionName(int index) {
             return "division " + index;
         }
+
+        @Override
+        public String describeDivisions() {
+            return "";
+        }
     };
 
     /**

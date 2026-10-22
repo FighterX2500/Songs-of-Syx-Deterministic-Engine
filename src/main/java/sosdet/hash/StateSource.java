@@ -15,4 +15,10 @@ public interface StateSource {
 
     /** A division's name for a desync report (not called in the step). */
     String divisionName(int index);
+
+    /**
+     * Every division's state as the divisions section hashes it, one line each (not called in the step). Two PCs'
+     * dumps at the same step differ first at the division and field that went differently.
+     */
+    String describeDivisions();
 }
