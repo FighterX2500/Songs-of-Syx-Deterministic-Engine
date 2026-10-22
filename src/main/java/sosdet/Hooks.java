@@ -59,6 +59,8 @@ public final class Hooks {
             return false;
         }
         s.streams.enter();
+        // Reseeded every step: the stream depends only on the seed and the step, so a resync needs no random state
+        s.streams.reseed(s.stepSeed(s.clock.step()));
         s.stepStartNanos = System.nanoTime(); // timing only, never fed to the simulation
         s.ai.stepBegin(s.clock.step());
         return true;
@@ -185,7 +187,7 @@ public final class Hooks {
 
     // ------------------------------------------------------------ loading and graphics-thread jobs (SOS-23)
 
-    /** A save starts loading on this thread. Every load restarts the session at step 0. */
+    /** A save starts loading on this thread. Every load restarts the session at step 0, a resync load at its step. */
     public static void loadBegin() {
         Session s = Engine.session();
         if (s == null) {
@@ -201,8 +203,15 @@ public final class Hooks {
 
     public static void loadEnd() {
         Session s = Engine.session();
-        if (s != null && s.loadSeed != 0) {
+        if (s == null) {
+            return;
+        }
+        if (s.loadSeed != 0) {
             s.streams.leave();
+        }
+        if (s.resyncDraws >= 0) {
+            s.streams.drawsSinceLoad(s.resyncDraws);
+            s.resyncDraws = -1;
         }
     }
 

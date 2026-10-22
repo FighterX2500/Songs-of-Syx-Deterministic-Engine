@@ -129,6 +129,40 @@ class EngineTest {
         assertEquals(HashLog.DEFAULT_INTERVAL, 30);
     }
 
+    /** Runs steps 1 to 5, drawing once per step plus {@code extra} times at step 2; returns step 5's draw. */
+    private static int fifthStepDraw(Random generator, int extra) {
+        Engine.begin();
+        Engine.seed(42);
+        Engine.runFreely();
+        int last = 0;
+        for (int i = Hooks.stepsFor(5 * Engine.STEP_SECONDS + 1e-9); i > 0 && Hooks.stepBegin(); i--) {
+            last = Hooks.random(generator).nextInt();
+            if (Engine.step() == 2) {
+                for (int e = 0; e < extra; e++) {
+                    Hooks.random(generator).nextInt();
+                }
+            }
+            Hooks.stepEnd();
+        }
+        assertEquals(5, Engine.step());
+        Engine.end();
+        return last;
+    }
+
+    @Test
+    void theStreamIsReseededEveryStepFromTheSeedAndTheStep() {
+        int plain = fifthStepDraw(new Random(1), 0);
+        assertEquals(plain, fifthStepDraw(new Random(99), 7), "earlier draws and the generator's history don't matter");
+        assertThrows(IllegalStateException.class, () -> {
+            Engine.begin();
+            Engine.runFreely();
+            Hooks.stepsFor(0.1);
+            Hooks.stepBegin();
+            Hooks.stepEnd();
+            Engine.seed(1);
+        }, "the seed is set at step 0");
+    }
+
     @Test
     void stepZeroRunsInsideTheSimulationAndOnlyOnce() {
         Engine.begin();

@@ -72,6 +72,9 @@ import view.main.VIEW;
  *   hashpeer &lt;pc&gt; &lt;file&gt;               and read another copy's; on the first desync the engine finds, write
  *                                       &lt;tag&gt;-desync.txt (the engine's report) and a desync event
  *   nudge &lt;step&gt;                        forced desync: at that step, inside it, one soldier gets fatal injuries
+ *   resyncat &lt;step&gt; &lt;save&gt; &lt;state&gt;     host: hold the run at that step, save the resync there and load it
+ *   resyncnow &lt;save&gt; &lt;state&gt;           host: save the resync at the current step and load it
+ *   resyncload &lt;save&gt; &lt;state&gt;          peer: load the host's resync and run on from its step
  *   hold                                end a run at the current step
  *   hash                                the current battle and city hashes
  * </pre>
@@ -98,9 +101,20 @@ public final class Rig implements SCRIPT {
         return true;
     }
 
+    /**
+     * The rig's one instance per process. The game makes a new script instance for every load, which would lose a
+     * run's state at a resync; test tooling only, so a static holder is fine here (engine rule: no mutable static).
+     */
+    private static Instance current;
+
     @Override
     public SCRIPT_INSTANCE createInstance() {
-        return new Instance();
+        if (current == null) {
+            current = new Instance();
+        } else {
+            current.attach();
+        }
+        return current;
     }
 
     private static final class Instance implements SCRIPT_INSTANCE {
@@ -141,6 +155,12 @@ public final class Rig implements SCRIPT {
         private long[] hashOffsets = new long[0];
         private boolean desyncReported;
         private long nudgeStep = -1;
+        // resync (SOS-30)
+        private double speed;
+        private long resyncStep = -1;
+        private Path resyncSave;
+        private Path resyncState;
+        private long resyncLoadStarted;
         // stall sampler: the simulation thread's stack for every step over 100 ms
         private volatile Thread simThread;
         private volatile boolean sampling;
@@ -151,6 +171,11 @@ public final class Rig implements SCRIPT {
             } catch (IOException e) {
                 throw new IllegalStateException("SOSDET rig: cannot create " + dir, e);
             }
+            attach();
+        }
+
+        /** Every game, the first and each one loaded after it, calls back after each update. */
+        void attach() {
             GAME.addAfterUpdate(new ACTION() {
                 @Override
                 public void exe() {
@@ -191,8 +216,14 @@ public final class Rig implements SCRIPT {
         }
 
         private void afterFrame() {
+            if (resyncLoadStarted != 0) {
+                resynced();
+            }
             exchangeAiLog();
             exchangeHashes();
+            if (running && resyncStep >= 0 && Engine.step() == resyncStep) {
+                saveResync();
+            }
             if (running) {
                 timing();
                 if (city && invadeMen > 0) {
@@ -305,6 +336,66 @@ public final class Rig implements SCRIPT {
             event("error", "\"message\":\"nudge: no soldier\"");
         }
 
+        /** Host: saves the resync at the current step (between steps), then loads it like every peer. */
+        private void saveResync() {
+            long t0 = System.nanoTime();
+            long step = Engine.step();
+            byte[] state = Engine.resyncSave(resyncSave);
+            long saved = System.nanoTime();
+            try {
+                Files.write(resyncState, state);
+                event("resyncsaved", String.format(Locale.ROOT, "\"step\":%d,\"saveMs\":%.0f,\"saveBytes\":%d,\"stateBytes\":%d",
+                        step, (saved - t0) / 1e6, Files.size(resyncSave), state.length));
+            } catch (IOException e) {
+                throw new IllegalStateException("SOSDET rig: cannot write " + resyncState, e);
+            }
+            resyncStep = -1;
+            loadResync(resyncSave, state);
+        }
+
+        /** Loads a resync (every copy, the host included); the run goes on from its step once loaded. */
+        private void loadResync(Path save, byte[] state) {
+            resyncLoadStarted = System.nanoTime();
+            event("resyncloading", "\"fromStep\":" + Engine.step());
+            Engine.resyncLoad(save, state, () -> {
+                if (!city) {
+                    BattleState.setLoaded(exiter(), save, false);
+                }
+            });
+        }
+
+        /** Peer: the first frame of the game loaded for a resync. */
+        private void resynced() {
+            double seconds = (System.nanoTime() - resyncLoadStarted) / 1e9;
+            resyncLoadStarted = 0;
+            VIEW.inters().load.deactivate();
+            if (!city) {
+                try {
+                    hideDeployPanel();
+                } catch (ReflectiveOperationException e) {
+                    throw new IllegalStateException("SOSDET rig: cannot hide the deploy panel", e);
+                }
+            }
+            GAME.SPEED.speedSet(speed);
+            try {
+                // lines before this for later steps came from the game before the load; the runner drops them
+                log.write("resync," + Engine.step() + ",0\n");
+            } catch (IOException e) {
+                throw new IllegalStateException("SOSDET rig: cannot write the hash log", e);
+            }
+            runOn();
+            event("resynced", String.format(Locale.ROOT, "\"step\":%d,\"loadSeconds\":%.1f", Engine.step(), seconds));
+        }
+
+        /** Lets the run go on to its last step, or freely. */
+        private void runOn() {
+            if (lastStep == Long.MAX_VALUE) {
+                Engine.runFreely();
+            } else {
+                Engine.runUntil(lastStep);
+            }
+        }
+
         /** One line per frame: the previous frame's update time (patch 91) and the game time it advanced. */
         private void timing() {
             try {
@@ -406,7 +497,7 @@ public final class Rig implements SCRIPT {
                 loadBattle(rest(c));
                 return;
             case "seed":
-                RND.setSeed(Integer.parseInt(c[1]));
+                Engine.seed(Integer.parseInt(c[1]));
                 event("seeded", "\"seed\":" + Integer.parseInt(c[1]));
                 return;
             case "invade":
@@ -442,6 +533,20 @@ public final class Rig implements SCRIPT {
                 hashPeers.add(Paths.get(rest(Arrays.copyOfRange(c, 1, c.length))));
                 hashOffsets = Arrays.copyOf(hashOffsets, hashPeers.size());
                 event("hashpeer", "\"pc\":" + c[1]);
+                return;
+            case "resyncat":
+                resyncStep = Long.parseLong(c[1]);
+                resyncSave = Paths.get(c[2]);
+                resyncState = Paths.get(c[3]);
+                event("resyncat", "\"step\":" + resyncStep);
+                return;
+            case "resyncnow":
+                resyncSave = Paths.get(c[1]);
+                resyncState = Paths.get(c[2]);
+                saveResync();
+                return;
+            case "resyncload":
+                loadResync(Paths.get(c[1]), Files.readAllBytes(Paths.get(c[2])));
                 return;
             case "nudge":
                 nudgeStep = Long.parseLong(c[1]);
@@ -493,13 +598,13 @@ public final class Rig implements SCRIPT {
             startStallSampler(dir.resolve(tag + "-stalls.txt"));
             Engine.resetStats();
             long from = Engine.step();
-            if (steps > 0) {
-                lastStep = from + steps;
-                Engine.runUntil(lastStep);
+            lastStep = steps > 0 ? from + steps : Long.MAX_VALUE; // 0: until hold
+            if (resyncStep >= 0) {
+                Engine.runUntil(Math.min(lastStep, resyncStep)); // held there for the resync save
             } else {
-                lastStep = Long.MAX_VALUE; // until hold
-                Engine.runFreely();
+                runOn();
             }
+            this.speed = speed;
             started = System.nanoTime();
             running = true;
             GAME.SPEED.speedSet(speed);

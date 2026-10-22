@@ -194,6 +194,47 @@ class AiLogTest {
     }
 
     @Test
+    void aPeerThatLoadsAResyncAppliesWhatTheHostStillHad() throws InterruptedException {
+        Recorder hr = new Recorder();
+        AiLog host = AiLog.host(START, hr);
+        Recorder pr = new Recorder();
+        AiLog peer = AiLog.peer(START, pr);
+        captureOnGeneralThread(host, AiEntry.GUARD, 1, 1);
+        runStep(host, hr, 1); // stamped 31
+        captureOnGeneralThread(host, AiEntry.GUARD, 2, 1);
+        runStep(host, hr, 2); // stamped 32
+        for (long s = 3; s <= 31; s++) {
+            runStep(host, hr, s);
+        }
+        peer.logIn(host.logOut());
+        for (long s = 1; s <= 32; s++) { // the peer runs ahead of the host, applying both
+            runStep(peer, pr, s);
+        }
+        assertEquals(2, peer.applied());
+
+        byte[] resync = host.resyncOut(); // the host saves at step 31: entry 0 applied, entry 1 due at 32
+        captureOnGeneralThread(host, AiEntry.GUARD, 3, 1);
+        runStep(host, hr, 32); // entry 2, stamped 62, after the save
+        peer.logIn(host.logOut());
+
+        peer.resyncIn(resync); // the peer loads the save at step 31
+        assertEquals(1, peer.applied(), "the host's count at the save");
+        pr.applied.clear();
+        hr.applied.clear();
+        for (long s = 32; s <= 62; s++) {
+            runStep(peer, pr, s);
+        }
+        for (long s = 33; s <= 62; s++) {
+            runStep(host, hr, s);
+        }
+        assertEquals(List.of("32:1:3:2:1", "62:2:3:3:1"), pr.applied);
+        assertEquals(List.of("62:2:3:3:1"), hr.applied);
+        host.resyncIn(resync); // the host loads its own resync too: its log stays as it is
+        assertEquals(3, host.applied());
+        assertThrows(IllegalStateException.class, peer::resyncOut, "a peer never saves");
+    }
+
+    @Test
     void inStepModeDoesNothing() {
         AiLog log = AiLog.inStep();
         assertEquals(AiMode.IN_STEP, log.mode());

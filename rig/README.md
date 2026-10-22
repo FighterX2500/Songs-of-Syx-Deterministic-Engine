@@ -59,6 +59,15 @@ ig.py field --tag D1 --copies 2 --steps 1200 --nudge 601
 
 `--nudge STEP` forces a desync: at that step, inside it, one soldier of the last copy (or `--nudge-copy K`) gets fatal injuries; the game kills them on their next update. The run doesn't stop at the difference. It passes when every copy's engine reports it at the first hashed step at or after `STEP`, in the `soldiers` section, against the nudged copy (SOS-29 acceptance).
 
+## Resync
+
+```
+python rigig.py field --tag R1 --ai host --resync 12000
+python rigig.py field --tag R2 --ai host --steps 12000 --nudge 6001 --resync-on-desync
+```
+
+`--resync STEP`: copy 1 holds at that step and saves a resync (`Engine.resyncSave`); then every copy, copy 1 included, loads it (`Engine.resyncLoad`) and runs on. `--resync-on-desync`: the first desync any engine reports makes copy 1 save a resync at its current step, and every copy loads it: the mod's recovery loop. With `--nudge`, copies are compared only after the resync. The rig keeps its run state across the load; `summary.txt` gives the save time and size and each copy's load time.
+
 ## The timing rule
 
 ```

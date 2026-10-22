@@ -19,6 +19,13 @@ final class Session {
     /** What the hash reads: the game, made at the first hash; tests put in their own. */
     StateSource source;
 
+    /** The random stream is reseeded every step from this and the step (requirements §1); set at step 0. */
+    int seed;
+    /** A resync load in progress: applied when the load begins, then cleared. */
+    Resync resync;
+    /** The host's draw count at the resync, set once the load's own draws are over (-1: none pending). */
+    long resyncDraws = -1;
+
     boolean worldHeld;
     /** 0 = loads run as in vanilla; otherwise loads run on the simulation stream seeded with this. */
     int loadSeed;
@@ -27,8 +34,27 @@ final class Session {
     long pathJobs;
     long pathNanos;
 
-    /** Every load starts the run again from step 0 (requirements §3: save and load at a step come in SOS-30). */
+    /** The seed of the random stream at a step: the same on every PC, whatever happened before. */
+    int stepSeed(long step) {
+        long h = HashLog.mix(HashLog.mix(HashLog.start(), seed), step);
+        return (int) (h ^ (h >>> 32));
+    }
+
+    /**
+     * A load starts the run again from step 0; a resync load continues at the host's step instead, with the engine
+     * state the save leaves out (B14).
+     */
     void afterLoad() {
+        if (resync != null) {
+            Resync r = resync;
+            resync = null;
+            clock.resetTo(r.step);
+            seed = r.seed;
+            resyncDraws = r.draws; // the load's own draws don't count: set when it ends
+            hashes.rewind(r.step, r.hashEpoch);
+            ai.resyncIn(r.ai);
+            return;
+        }
         clock.reset();
         streams.loaded();
         int interval = hashes.interval();

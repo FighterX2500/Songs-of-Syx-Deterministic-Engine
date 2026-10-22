@@ -201,7 +201,56 @@ class HashLogTest {
         assertTrue(report.contains("Player orders applied last:\n  none"), report);
     }
 
+    @Test
+    void aResyncForgetsTheDesyncAndComparesOnlyNewHashes() {
+        HashLog host = new HashLog();
+        HashLog peer = new HashLog();
+        FakeState hs = new FakeState();
+        FakeState ps = new FakeState();
+        run(host, hs, 1, 90);
+        ps.soldiers[0] = 9; // the peer drifted
+        run(peer, ps, 1, 120); // and ran ahead
+        byte[] stale = peer.out();
+        host.in(2, stale);
+        assertNotNull(host.desync());
+
+        host.rewind(90, 1); // host saves the resync at step 90
+        assertNull(host.desync());
+        host.in(2, Arrays.copyOfRange(stale, HashLog.HEADER_BYTES, stale.length)); // from before the resync: ignored
+        assertNull(host.desync());
+
+        ps.soldiers[0] = 0; // the peer loads the host's save
+        peer.rewind(90, 1);
+        assertThrows(IllegalArgumentException.class, () -> peer.total(120), "dropped: hashed again after the load");
+        run(peer, ps, 91, 150);
+        run(host, hs, 91, 150);
+        long before = host.compared();
+        host.in(2, peer.out());
+        assertEquals(before + 2, host.compared(), "steps 120 and 150 of the new epoch");
+        assertNull(host.desync());
+        assertThrows(IllegalArgumentException.class, () -> host.rewind(150, 1), "epochs only go up");
+    }
+
+    @Test
+    void aHashFromAPcThatLoadedTheResyncFirstWaitsForThisOne() {
+        HashLog a = new HashLog();
+        HashLog b = new HashLog();
+        FakeState s = new FakeState();
+        run(a, s, 1, 60);
+        run(b, s, 1, 60);
+        b.rewind(60, 1);
+        run(b, s, 61, 120);
+        a.in(2, b.out());
+        long before = a.compared();
+        run(a, s, 61, 120);
+        assertEquals(before, a.compared(), "b is a resync ahead");
+        a.rewind(60, 1);
+        run(a, s, 61, 120); // hashes 90 and 120 again in the new epoch... by a fresh run after the load
+        assertEquals(before + 2, a.compared());
+        assertNull(a.desync());
+    }
+
     private static int recordBytes(int divisions) {
-        return 8 + 8 + 8 * HashLog.SECTIONS + 8 * divisions;
+        return 8 + 4 + 8 + 8 * HashLog.SECTIONS + 8 * divisions;
     }
 }

@@ -29,6 +29,8 @@ public final class AiLog {
     static final byte CONFIRM = 2;
     /** Applied entries kept for a desync report. */
     static final int RECENT = 32;
+    /** Applied entries kept for a resync to an earlier step: a peer is never more than the delay past the host. */
+    static final int HISTORY_STEPS = 4 * DELAY_STEPS;
 
     private final AiMode mode;
     private final long startId;
@@ -44,6 +46,9 @@ public final class AiLog {
     private long applied;
     private final long[] appliedByKind = new long[AiEntry.KINDS];
     private final AiEntry[] recent = new AiEntry[RECENT];
+    private long recentCount;
+    /** Peer: entries applied in the last {@link #HISTORY_STEPS}, oldest first. */
+    private final ArrayDeque<AiEntry> history = new ArrayDeque<>();
 
     private ByteBuffer out = ByteBuffer.allocate(1 << 12);
     private boolean headerWritten;
@@ -135,9 +140,15 @@ public final class AiLog {
                         + " is still pending at step " + step);
             }
             applier.apply(due);
-            recent[(int) (applied % RECENT)] = due;
+            recent[(int) (recentCount++ % RECENT)] = due;
             applied++;
             appliedByKind[due.kind]++;
+            if (mode == AiMode.PEER) {
+                history.add(due);
+            }
+        }
+        while (!history.isEmpty() && history.peekFirst().step < step - HISTORY_STEPS) {
+            history.pollFirst();
         }
     }
 
@@ -217,29 +228,113 @@ public final class AiLog {
     }
 
     private void readEntry() {
-        long step = in.getLong();
-        int seq = in.getInt();
-        int kind = in.get();
-        int div = in.getShort();
-        byte[] payload = new byte[in.getInt()];
-        in.get(payload);
-        if (seq < nextSeq) {
+        AiEntry e = getEntry(in);
+        if (e.seq < nextSeq) {
             return; // a repeated entry changes nothing
         }
-        if (seq > nextSeq) {
-            throw new IllegalStateException("SOSDET: AI log entry " + nextSeq + " missing (got " + seq + ")");
+        if (e.seq > nextSeq) {
+            throw new IllegalStateException("SOSDET: AI log entry " + nextSeq + " missing (got " + e.seq + ")");
         }
         nextSeq++;
-        pending.add(new AiEntry(step, seq, kind, div, payload));
+        pending.add(e);
     }
 
     private void writeEntry(AiEntry e) {
         ensureHeader();
-        int body = 8 + 4 + 1 + 2 + 4 + e.payloadLength();
+        int body = entryBytes(e);
         ensureOut(1 + 4 + body);
-        out.put(ENTRY).putInt(body).putLong(e.step).putInt(e.seq).put((byte) e.kind).putShort((short) e.div)
-                .putInt(e.payloadLength());
-        e.payloadTo(out);
+        out.put(ENTRY).putInt(body);
+        putEntry(out, e);
+    }
+
+    private static int entryBytes(AiEntry e) {
+        return 8 + 4 + 1 + 2 + 4 + e.payloadLength();
+    }
+
+    private static void putEntry(ByteBuffer b, AiEntry e) {
+        b.putLong(e.step).putInt(e.seq).put((byte) e.kind).putShort((short) e.div).putInt(e.payloadLength());
+        e.payloadTo(b);
+    }
+
+    private static AiEntry getEntry(ByteBuffer b) {
+        long step = b.getLong();
+        int seq = b.getInt();
+        int kind = b.get();
+        int div = b.getShort();
+        byte[] payload = new byte[b.getInt()];
+        b.get(payload);
+        return new AiEntry(step, seq, kind, div, payload);
+    }
+
+    // ------------------------------------------------------------ resync (B14)
+
+    /**
+     * The log's part of a resync state at the current step: the counts, and the entries due after it (the host's
+     * pending ones). Empty in-step.
+     */
+    public byte[] resyncOut() {
+        if (mode == AiMode.IN_STEP) {
+            return new byte[0];
+        }
+        if (mode != AiMode.HOST) {
+            throw new IllegalStateException("SOSDET: only the host saves a resync (mode " + mode + ")");
+        }
+        int bytes = 4 + 8 + 8 + 8 * AiEntry.KINDS + 4;
+        for (AiEntry e : pending) {
+            bytes += entryBytes(e);
+        }
+        ByteBuffer b = ByteBuffer.allocate(bytes);
+        b.putInt(nextSeq).putLong(confirmed).putLong(applied);
+        for (long n : appliedByKind) {
+            b.putLong(n);
+        }
+        b.putInt(pending.size());
+        for (AiEntry e : pending) {
+            putEntry(b, e);
+        }
+        return b.array();
+    }
+
+    /**
+     * Every PC loads a resync. The host's log is the source and stays as it is. A peer continues from the host's counts with the entries due after the resync step: the
+     * host's, plus any later ones this peer already had (applied past that step or still pending).
+     */
+    public void resyncIn(byte[] bytes) {
+        if (mode == AiMode.IN_STEP) {
+            if (bytes.length != 0) {
+                throw new IllegalStateException("SOSDET: a resync with AI log entries, but the AI runs in-step here");
+            }
+            return;
+        }
+        if (mode == AiMode.HOST) {
+            return; // the log came from here, and the host held at the resync step until its own load
+        }
+        ByteBuffer b = ByteBuffer.wrap(bytes);
+        int hostNextSeq = b.getInt();
+        confirmed = Math.max(confirmed, b.getLong());
+        applied = b.getLong();
+        for (int k = 0; k < appliedByKind.length; k++) {
+            appliedByKind[k] = b.getLong();
+        }
+        List<AiEntry> due = new ArrayList<>();
+        for (int n = b.getInt(); n > 0; n--) {
+            due.add(getEntry(b));
+        }
+        for (AiEntry e : history) {
+            if (e.seq >= hostNextSeq) {
+                due.add(e);
+            }
+        }
+        for (AiEntry e : pending) {
+            if (e.seq >= hostNextSeq) {
+                due.add(e);
+            }
+        }
+        due.sort((x, y) -> Integer.compare(x.seq, y.seq));
+        pending.clear();
+        pending.addAll(due);
+        history.clear();
+        nextSeq = Math.max(nextSeq, hostNextSeq);
     }
 
     private void ensureHeader() {
@@ -272,7 +367,7 @@ public final class AiLog {
     /** The last entries applied, oldest first, one line each (for a desync report). */
     public List<String> recent() {
         List<String> lines = new ArrayList<>();
-        for (long i = Math.max(0, applied - RECENT); i < applied; i++) {
+        for (long i = Math.max(0, recentCount - RECENT); i < recentCount; i++) {
             lines.add(recent[(int) (i % RECENT)].line());
         }
         return lines;
