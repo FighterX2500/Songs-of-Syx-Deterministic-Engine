@@ -28,6 +28,13 @@ Every hook calls `sosdet.Hooks` (or `sosdet.Cosmetic`) and is marked `SOSDET` in
 | `90-ai-host` | B15 | `game/battle/thread/general/offence/StepArtilleryBombard.java` | `AiHooks.artilleryTarget` | The general sets artillery targets directly | SOS-28 |
 | `90-ai-host` | B15 | `settlement/thing/projectiles/Updater.java` | `Hooks.aiCapturing` | The general's trajectory checks used a static vector shared with the trajectories job inside the step; its thread needs its own (SOS-23 data race) | SOS-28 |
 
+## Hook points without a patch
+
+| Point | Where in the engine | Why no patch is needed | Card |
+| --- | --- | --- | --- |
+| B12 | `Engine.atStepZero` | The mod runs the battle's start (deploy) itself, inside the simulation | SOS-27 |
+| B13 | `Hooks.stepEnd` takes the state hash; `sosdet.game.GameHash` reads the state | Soldiers, other entities and divisions are read through public members; projectiles through the bytes of their own public `save`, written to a `FilePutter` whose private buffer the adapter reads (`GameCodec`, one reflected field) | SOS-29 |
+
 ## Rig-only patches
 
 `rig/patches/` holds patches that only the test rig's mod (SOSDET-rig) carries. They never reach a release, and the build refuses one that touches a game file the engine patches.

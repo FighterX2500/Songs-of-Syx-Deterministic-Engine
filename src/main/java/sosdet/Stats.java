@@ -28,10 +28,17 @@ public final class Stats {
     public final long aiArtillery;
     /** AI log entries known but not applied yet. */
     public final int aiPending;
+    /** State hashes taken since the last load, their cost in ms, and other PCs' hashes compared and missed. */
+    public final long hashes;
+    public final double hashMeanMs;
+    public final double hashMaxMs;
+    public final long hashesCompared;
+    public final long hashesMissed;
 
     Stats(long step, long simulationDraws, long foreignDraws, long pathJobs, long pathNanos, long timedSteps,
             double meanMs, double p50Ms, double p95Ms, double p99Ms, double p999Ms, double maxMs,
-            long stepsOver100Ms, long stepsOver1S, AiMode aiMode, long aiApplied, long aiArtillery, int aiPending) {
+            long stepsOver100Ms, long stepsOver1S, AiMode aiMode, long aiApplied, long aiArtillery, int aiPending,
+            long hashes, double hashMeanMs, double hashMaxMs, long hashesCompared, long hashesMissed) {
         this.step = step;
         this.simulationDraws = simulationDraws;
         this.foreignDraws = foreignDraws;
@@ -50,6 +57,11 @@ public final class Stats {
         this.aiApplied = aiApplied;
         this.aiArtillery = aiArtillery;
         this.aiPending = aiPending;
+        this.hashes = hashes;
+        this.hashMeanMs = hashMeanMs;
+        this.hashMaxMs = hashMaxMs;
+        this.hashesCompared = hashesCompared;
+        this.hashesMissed = hashesMissed;
     }
 
     /** One JSON object, for logs. */
@@ -57,9 +69,10 @@ public final class Stats {
         return String.format(Locale.ROOT,
                 "{\"step\":%d,\"simulationDraws\":%d,\"foreignDraws\":%d,\"pathJobs\":%d,\"pathMsPerStep\":%.4f,"
                         + "\"timedSteps\":%d,\"meanMs\":%.3f,\"p50Ms\":%.1f,\"p95Ms\":%.1f,\"p99Ms\":%.1f,\"p999Ms\":%.1f,"
-                        + "\"maxMs\":%.1f,\"over100Ms\":%d,\"over1S\":%d,\"ai\":\"%s\",\"aiApplied\":%d,\"aiArtillery\":%d,\"aiPending\":%d}",
+                        + "\"maxMs\":%.1f,\"over100Ms\":%d,\"over1S\":%d,\"ai\":\"%s\",\"aiApplied\":%d,\"aiArtillery\":%d,\"aiPending\":%d,"
+                        + "\"hashes\":%d,\"hashMeanMs\":%.3f,\"hashMaxMs\":%.1f,\"hashesCompared\":%d,\"hashesMissed\":%d}",
                 step, simulationDraws, foreignDraws, pathJobs, timedSteps == 0 ? 0 : pathNanos / 1e6 / timedSteps,
                 timedSteps, meanMs, p50Ms, p95Ms, p99Ms, p999Ms, maxMs, stepsOver100Ms, stepsOver1S, aiMode, aiApplied, aiArtillery,
-                aiPending);
+                aiPending, hashes, hashMeanMs, hashMaxMs, hashesCompared, hashesMissed);
     }
 }

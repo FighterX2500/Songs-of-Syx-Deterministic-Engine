@@ -2,7 +2,9 @@ package sosdet.ai;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
@@ -25,6 +27,8 @@ public final class AiLog {
     static final int HEADER_BYTES = 4 + 4 + 4 + 8;
     static final byte ENTRY = 1;
     static final byte CONFIRM = 2;
+    /** Applied entries kept for a desync report. */
+    static final int RECENT = 32;
 
     private final AiMode mode;
     private final long startId;
@@ -39,6 +43,7 @@ public final class AiLog {
     private long confirmed;
     private long applied;
     private final long[] appliedByKind = new long[AiEntry.KINDS];
+    private final AiEntry[] recent = new AiEntry[RECENT];
 
     private ByteBuffer out = ByteBuffer.allocate(1 << 12);
     private boolean headerWritten;
@@ -130,6 +135,7 @@ public final class AiLog {
                         + " is still pending at step " + step);
             }
             applier.apply(due);
+            recent[(int) (applied % RECENT)] = due;
             applied++;
             appliedByKind[due.kind]++;
         }
@@ -261,6 +267,15 @@ public final class AiLog {
 
     public long applied(int kind) {
         return appliedByKind[kind];
+    }
+
+    /** The last entries applied, oldest first, one line each (for a desync report). */
+    public List<String> recent() {
+        List<String> lines = new ArrayList<>();
+        for (long i = Math.max(0, applied - RECENT); i < applied; i++) {
+            lines.add(recent[(int) (i % RECENT)].line());
+        }
+        return lines;
     }
 
     /** Entries known but not applied yet. */

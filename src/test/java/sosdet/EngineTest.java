@@ -12,10 +12,30 @@ import java.util.Random;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import sosdet.hash.HashLog;
+import sosdet.hash.StateSource;
+
 /** The engine through the hooks the game calls: vanilla without a session, deterministic with one. */
 class EngineTest {
 
     private final Random simulation = new Random(7);
+
+    /** The state hash needs a battle; this one has two divisions and never changes. */
+    private static final StateSource NO_BATTLE = new StateSource() {
+        @Override
+        public int divisions() {
+            return 2;
+        }
+
+        @Override
+        public void hash(long[] sections, long[] divisions) {
+        }
+
+        @Override
+        public String divisionName(int index) {
+            return "division " + index;
+        }
+    };
 
     @AfterEach
     void endSession() {
@@ -72,6 +92,7 @@ class EngineTest {
     @Test
     void battleJobsUseTheSessionStepForTheirBeat() {
         Engine.begin();
+        Engine.session().source = NO_BATTLE;
         Engine.runFreely();
         int[] status = {0};
         Runnable none = () -> { };
@@ -80,6 +101,32 @@ class EngineTest {
             Hooks.stepEnd();
         }
         assertEquals(2, status[0]); // steps 30 and 60
+    }
+
+    @Test
+    void theStateIsHashedEveryThirtyStepsAndAgainFromALoad() {
+        Engine.begin();
+        Engine.session().source = NO_BATTLE;
+        Engine.runFreely();
+        for (int i = Hooks.stepsFor(1.0); i > 0 && Hooks.stepBegin(); i--) {
+            Hooks.random(simulation).nextInt();
+            Hooks.stepEnd();
+        }
+        assertEquals(2, Engine.stats().hashes);
+        long at30 = Engine.hash(30);
+        assertTrue(at30 != Engine.hash(60), "the clock section moves on");
+        assertThrows(IllegalArgumentException.class, () -> Engine.hash(45));
+        Engine.resetStats();
+        Hooks.loadBegin();
+        Hooks.loadEnd();
+        Engine.runFreely();
+        for (int i = Hooks.stepsFor(0.5); i > 0 && Hooks.stepBegin(); i--) {
+            Hooks.random(simulation).nextInt();
+            Hooks.stepEnd();
+        }
+        assertEquals(at30, Engine.hash(30), "draws since the load, not since the stats were reset");
+        assertThrows(IllegalStateException.class, () -> Engine.hashEvery(15), "only at step 0");
+        assertEquals(HashLog.DEFAULT_INTERVAL, 30);
     }
 
     @Test

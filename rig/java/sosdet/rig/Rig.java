@@ -10,7 +10,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Locale;
 
 import game.GAME;
@@ -40,6 +42,7 @@ import snake2d.util.file.FilePutter;
 import snake2d.util.misc.ACTION;
 import snake2d.util.rnd.RND;
 import sosdet.Engine;
+import sosdet.hash.Desync;
 import view.main.VIEW;
 
 /**
@@ -65,6 +68,10 @@ import view.main.VIEW;
  *   run &lt;battle|city&gt; &lt;steps&gt; &lt;speed&gt; &lt;tag&gt;  battle: deploy as step 0; run that many steps (0: no last step),
  *                                       logging each
  *   vanilla &lt;battle|city&gt; &lt;seconds&gt; &lt;speed&gt; &lt;tag&gt;  no session: the game's own stepping, for the timing baseline
+ *   hashes &lt;file&gt;                      after the load: append this copy's state hashes to the file every frame
+ *   hashpeer &lt;pc&gt; &lt;file&gt;               and read another copy's; on the first desync the engine finds, write
+ *                                       &lt;tag&gt;-desync.txt (the engine's report) and a desync event
+ *   nudge &lt;step&gt;                        forced desync: at that step, inside it, one soldier gets fatal injuries
  *   hold                                end a run at the current step
  *   hash                                the current battle and city hashes
  * </pre>
@@ -127,6 +134,13 @@ public final class Rig implements SCRIPT {
         private Path aiFile;
         private boolean aiHost;
         private long aiOffset;
+        // the state hashes between copies, through files
+        private Path hashFile;
+        private final List<Path> hashPeers = new ArrayList<>();
+        private final List<Integer> hashPeerPcs = new ArrayList<>();
+        private long[] hashOffsets = new long[0];
+        private boolean desyncReported;
+        private long nudgeStep = -1;
         // stall sampler: the simulation thread's stack for every step over 100 ms
         private volatile Thread simThread;
         private volatile boolean sampling;
@@ -166,6 +180,9 @@ public final class Rig implements SCRIPT {
             if (city && invadeMen > 0 && step <= 2) {
                 invasion(step);
             }
+            if (step == nudgeStep) {
+                nudge();
+            }
             try {
                 log.write(step + "," + Long.toHexString(city ? cityHash() : battleHash()) + "," + men() + "\n");
             } catch (IOException e) {
@@ -175,6 +192,7 @@ public final class Rig implements SCRIPT {
 
         private void afterFrame() {
             exchangeAiLog();
+            exchangeHashes();
             if (running) {
                 timing();
                 if (city && invadeMen > 0) {
@@ -201,25 +219,90 @@ public final class Rig implements SCRIPT {
                     Files.write(aiFile, Engine.aiLogOut(), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
                     return;
                 }
-                if (!Files.exists(aiFile)) {
-                    return;
-                }
-                try (java.nio.channels.SeekableByteChannel ch = Files.newByteChannel(aiFile)) {
-                    long size = ch.size();
-                    if (size <= aiOffset) {
-                        return;
-                    }
-                    java.nio.ByteBuffer b = java.nio.ByteBuffer.allocate((int) (size - aiOffset));
-                    ch.position(aiOffset);
-                    while (b.hasRemaining() && ch.read(b) > 0) {
-                        // read what is there now; a record the host is still writing waits in the engine
-                    }
-                    aiOffset += b.position();
-                    Engine.aiLogIn(Arrays.copyOf(b.array(), b.position()));
+                byte[] in = readNew(aiFile, aiOffset);
+                aiOffset += in.length;
+                if (in.length > 0) {
+                    Engine.aiLogIn(in);
                 }
             } catch (IOException e) {
                 throw new IllegalStateException("SOSDET rig: AI log file " + aiFile, e);
             }
+        }
+
+        /** This copy's new hashes go to its file; the other copies' new hashes go to the engine. Between frames. */
+        private void exchangeHashes() {
+            if (hashFile == null || !Engine.active()) {
+                return;
+            }
+            try {
+                byte[] out = Engine.hashOut();
+                if (out.length > 0) {
+                    Files.write(hashFile, out, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+                }
+                for (int i = 0; i < hashPeers.size(); i++) {
+                    byte[] in = readNew(hashPeers.get(i), hashOffsets[i]);
+                    hashOffsets[i] += in.length;
+                    if (in.length > 0) {
+                        Engine.hashIn(hashPeerPcs.get(i), in);
+                    }
+                }
+            } catch (IOException e) {
+                throw new IllegalStateException("SOSDET rig: hash file", e);
+            }
+            Desync d = Engine.desync();
+            if (d != null && !desyncReported) {
+                desyncReported = true;
+                try {
+                    Files.write(dir.resolve(tag + "-desync.txt"), Engine.desyncReport().getBytes(StandardCharsets.UTF_8));
+                } catch (IOException e) {
+                    throw new IllegalStateException("SOSDET rig: cannot write the desync report", e);
+                }
+                StringBuilder sections = new StringBuilder();
+                for (String name : d.sections()) {
+                    sections.append(sections.length() == 0 ? "\"" : ",\"").append(name).append('"');
+                }
+                event("desync", String.format(Locale.ROOT, "\"step\":%d,\"pc\":%d,\"noticedAt\":%d,\"sections\":[%s],\"divisions\":%s",
+                        d.step, d.pc, d.noticedAt, sections, Arrays.toString(d.divisions())));
+            }
+        }
+
+        /** What a file has past {@code offset} (a record still being written waits in the engine). */
+        private static byte[] readNew(Path file, long offset) throws IOException {
+            if (!Files.exists(file)) {
+                return new byte[0];
+            }
+            try (java.nio.channels.SeekableByteChannel ch = Files.newByteChannel(file)) {
+                long size = ch.size();
+                if (size <= offset) {
+                    return new byte[0];
+                }
+                java.nio.ByteBuffer b = java.nio.ByteBuffer.allocate((int) (size - offset));
+                ch.position(offset);
+                while (b.hasRemaining() && ch.read(b) > 0) {
+                    // read what is there now
+                }
+                return Arrays.copyOf(b.array(), b.position());
+            }
+        }
+
+        /**
+         * Forced desync (SOS-29): the first soldier in a division gets the most injuries there are, so the game kills them
+         * on their next update. A lasting change (a speed nudge healed within 30 steps in the city run NC29).
+         */
+        private void nudge() {
+            ENTITY[] all = SETT.ENTITIES().getAllEnts();
+            int max = Math.min(all.length, SETT.ENTITIES().Imax() + 1);
+            for (int i = 0; i < max; i++) {
+                ENTITY e = all[i];
+                if (e instanceof Humanoid && !e.isRemoved() && ((Humanoid) e).division() != null) {
+                    Humanoid h = (Humanoid) e;
+                    STATS.NEEDS().INJURIES.COUNT.indu().set(h.indu(), STATS.NEEDS().INJURIES.COUNT.indu().max(h.indu()));
+                    event("nudged", String.format(Locale.ROOT, "\"step\":%d,\"entity\":%d,\"division\":%d", Engine.step(), i,
+                            ((Humanoid) e).division().index()));
+                    return;
+                }
+            }
+            event("error", "\"message\":\"nudge: no soldier\"");
         }
 
         /** One line per frame: the previous frame's update time (patch 91) and the game time it advanced. */
@@ -347,6 +430,22 @@ public final class Rig implements SCRIPT {
                 aiFile = Paths.get(rest(Arrays.copyOfRange(c, 1, c.length)));
                 aiOffset = 0;
                 event("ailog", "\"host\":" + aiHost + ",\"file\":\"" + clean(aiFile.toString()) + "\"");
+                return;
+            case "hashes":
+                hashFile = Paths.get(rest(c));
+                Files.deleteIfExists(hashFile);
+                desyncReported = false;
+                event("hashes", "\"file\":\"" + clean(hashFile.toString()) + "\"");
+                return;
+            case "hashpeer":
+                hashPeerPcs.add(Integer.parseInt(c[1]));
+                hashPeers.add(Paths.get(rest(Arrays.copyOfRange(c, 1, c.length))));
+                hashOffsets = Arrays.copyOf(hashOffsets, hashPeers.size());
+                event("hashpeer", "\"pc\":" + c[1]);
+                return;
+            case "nudge":
+                nudgeStep = Long.parseLong(c[1]);
+                event("nudge", "\"step\":" + nudgeStep);
                 return;
             case "run":
                 run(c[1].equals("city"), Long.parseLong(c[2]), Double.parseDouble(c[3]), c[4]);

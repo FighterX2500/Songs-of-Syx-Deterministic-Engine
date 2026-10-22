@@ -48,6 +48,17 @@ The exit code is 0 when every copy is identical to copy 1. Only one rig run at a
 
 This is the flow the multiplayer mod will use, with a file in place of the network. Without `--ai`, every copy runs the general inside the step (in-step mode, the engine's default).
 
+## State hashes and desyncs
+
+In every run, each copy also hands its engine's state hashes (every 30 steps) to the others, the way the mod will over the network: every frame it appends `Engine.hashOut()` to its `hashes.bin` and feeds the other copies' new bytes to `Engine.hashIn`. The engine compares them; on the first difference the copy writes the engine's desync report (`desync-c<k>.txt` in the run folder) and a `desync` event. `summary.txt` says, per copy, whether the engine found a desync, and how many hashes it compared.
+
+```
+python rig
+ig.py field --tag D1 --copies 2 --steps 1200 --nudge 601
+```
+
+`--nudge STEP` forces a desync: at that step, inside it, one soldier of the last copy (or `--nudge-copy K`) gets fatal injuries; the game kills them on their next update. The run doesn't stop at the difference. It passes when every copy's engine reports it at the first hashed step at or after `STEP`, in the `soldiers` section, against the nudged copy (SOS-29 acceptance).
+
 ## The timing rule
 
 ```

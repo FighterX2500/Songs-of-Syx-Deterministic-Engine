@@ -3,7 +3,10 @@ package sosdet;
 import sosdet.ai.AiEntry;
 import sosdet.ai.AiLog;
 import sosdet.ai.AiMode;
+import java.util.Collections;
+
 import sosdet.game.GameAi;
+import sosdet.hash.Desync;
 
 /**
  * The engine's API for the mod and the test rig (requirements §3). The patched game calls {@link Hooks}.
@@ -129,6 +132,51 @@ public final class Engine {
         s.ai = log;
     }
 
+    // ------------------------------------------------------------ the state hash and desyncs (requirements §3, §4)
+
+    /** Hash the state every this many steps (30 by default: 0.5 s). Every PC must use the same; set it at step 0. */
+    public static void hashEvery(int steps) {
+        Session s = required();
+        if (s.clock.step() != 0) {
+            throw new IllegalStateException("SOSDET: the hash interval is set before the run (step " + s.clock.step() + ")");
+        }
+        s.hashes.every(steps);
+    }
+
+    /** The state hash at a step: a multiple of the interval among the last 64 hashed. */
+    public static long hash(long step) {
+        return required().hashes.total(step);
+    }
+
+    /** The hashes taken since the last call, for the mod to send to the other PCs. */
+    public static byte[] hashOut() {
+        return required().hashes.out();
+    }
+
+    /**
+     * Another PC's hashes ({@code pc}: the mod's number for it), in any pieces. Each is compared with this PC's at the
+     * same step as soon as both exist; the first difference becomes {@link #desync()}.
+     */
+    public static void hashIn(int pc, byte[] bytes) {
+        required().hashes.in(pc, bytes);
+    }
+
+    /** The first desync found, or null. */
+    public static Desync desync() {
+        return required().hashes.desync();
+    }
+
+    /** The desync report: the step, the parts of the state that differ, the AI log entries applied last. */
+    public static String desyncReport() {
+        Session s = required();
+        Desync d = s.hashes.desync();
+        if (d == null) {
+            throw new IllegalStateException("SOSDET: no desync to report");
+        }
+        // player orders come with SOS-33
+        return d.report(s.source(), s.ai.recent(), Collections.<String>emptyList());
+    }
+
     /** When the running step started (System.nanoTime), or 0 between steps: for a stall sampler on another thread. */
     public static long stepStartNanos() {
         Session s = session;
@@ -142,7 +190,8 @@ public final class Engine {
         return new Stats(s.clock.step(), s.streams.simulationDraws(), s.streams.foreignDraws(), s.pathJobs,
                 s.pathNanos, t.steps(), t.meanMs(), t.percentileMs(0.5), t.percentileMs(0.95), t.percentileMs(0.99),
                 t.percentileMs(0.999), t.maxMs(), t.over100Ms(), t.over1S(), s.ai.mode(), s.ai.applied(),
-                s.ai.applied(AiEntry.ARTILLERY), s.ai.pending());
+                s.ai.applied(AiEntry.ARTILLERY), s.ai.pending(), s.hashes.taken(), s.hashes.meanMs(), s.hashes.maxMs(),
+                s.hashes.compared(), s.hashes.missed());
     }
 
     public static void resetStats() {

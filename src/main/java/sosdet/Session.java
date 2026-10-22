@@ -1,6 +1,9 @@
 package sosdet;
 
 import sosdet.ai.AiLog;
+import sosdet.game.GameHash;
+import sosdet.hash.HashLog;
+import sosdet.hash.StateSource;
 
 /** The state of one deterministic run: from {@link Engine#begin()} to {@link Engine#end()}. */
 final class Session {
@@ -11,6 +14,10 @@ final class Session {
     final StepTimes times = new StepTimes();
     /** Where the AI general runs; in-step by default. */
     AiLog ai = AiLog.inStep();
+    /** The state hash every 30 steps (B13); a new one after every load. */
+    HashLog hashes = new HashLog();
+    /** What the hash reads: the game, made at the first hash; tests put in their own. */
+    StateSource source;
 
     boolean worldHeld;
     /** 0 = loads run as in vanilla; otherwise loads run on the simulation stream seeded with this. */
@@ -23,6 +30,17 @@ final class Session {
     /** Every load starts the run again from step 0 (requirements §3: save and load at a step come in SOS-30). */
     void afterLoad() {
         clock.reset();
+        streams.loaded();
+        int interval = hashes.interval();
+        hashes = new HashLog();
+        hashes.every(interval);
+    }
+
+    StateSource source() {
+        if (source == null) {
+            source = new GameHash();
+        }
+        return source;
     }
 
     void resetStats() {

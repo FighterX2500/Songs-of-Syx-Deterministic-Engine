@@ -19,6 +19,8 @@ final class Streams {
     private int cosmeticDepth;
 
     private long simulationDraws;
+    /** Simulation draws since the last load; part of the state hash, so never reset by {@link #resetCounts()}. */
+    private long drawsSinceLoad;
     /** Draws by other threads during a step. Diagnostic only; counted without synchronisation. */
     private long foreignDraws;
 
@@ -31,6 +33,7 @@ final class Streams {
             return ThreadLocalRandom.current();
         }
         simulationDraws++;
+        drawsSinceLoad++;
         return simulation;
     }
 
@@ -76,6 +79,14 @@ final class Streams {
 
     long simulationDraws() {
         return simulationDraws;
+    }
+
+    long drawsSinceLoad() {
+        return drawsSinceLoad;
+    }
+
+    void loaded() {
+        drawsSinceLoad = 0;
     }
 
     long foreignDraws() {

@@ -15,6 +15,7 @@ public final class AiEntry {
     /** An artillery target; the payload is four ints: the artillery's tile and the target tile. */
     public static final int ARTILLERY = 7;
     static final int KINDS = 8;
+    private static final String[] KIND_NAMES = {"path", "dest", "task", "guard", "running", "fireAtWill", "formation", "artillery"};
 
     /** Step the entry applies at; -1 while only captured. */
     public final long step;
@@ -65,5 +66,11 @@ public final class AiEntry {
 
     AiEntry stamped(long at, int sequence) {
         return new AiEntry(at, sequence, kind, div, payload);
+    }
+
+    /** One line for a desync report: step, sequence, kind, division, the first payload value of a setting. */
+    String line() {
+        return "step " + step + ", #" + seq + ", " + KIND_NAMES[kind] + ", division " + div
+                + (kind >= GUARD && kind <= FORMATION ? " = " + intAt(0) : "");
     }
 }
