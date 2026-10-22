@@ -1,6 +1,6 @@
 diff -ru -U2 a/settlement/room/food/farm/FarmInstance.java b/settlement/room/food/farm/FarmInstance.java
 --- a/settlement/room/food/farm/FarmInstance.java	2026-05-29 11:08:14.000000000 +0500
-+++ b/settlement/room/food/farm/FarmInstance.java	2026-10-23 02:30:41.206878200 +0500
++++ b/settlement/room/food/farm/FarmInstance.java	2026-10-23 02:36:58.141293000 +0500
 @@ -207,6 +207,8 @@
  	}
  	
@@ -12,7 +12,7 @@ diff -ru -U2 a/settlement/room/food/farm/FarmInstance.java b/settlement/room/foo
  		
 diff -ru -U2 a/settlement/room/food/pasture/PastureInstance.java b/settlement/room/food/pasture/PastureInstance.java
 --- a/settlement/room/food/pasture/PastureInstance.java	2026-05-05 09:06:50.000000000 +0500
-+++ b/settlement/room/food/pasture/PastureInstance.java	2026-10-23 02:30:41.206878200 +0500
++++ b/settlement/room/food/pasture/PastureInstance.java	2026-10-23 02:36:58.141293000 +0500
 @@ -314,6 +314,8 @@
  	}
  	
@@ -24,7 +24,7 @@ diff -ru -U2 a/settlement/room/food/pasture/PastureInstance.java b/settlement/ro
  			if (is(e.physics.tileC())) {
 diff -ru -U2 a/settlement/room/health/hospital/Gui.java b/settlement/room/health/hospital/Gui.java
 --- a/settlement/room/health/hospital/Gui.java	2026-04-14 09:33:04.000000000 +0500
-+++ b/settlement/room/health/hospital/Gui.java	2026-10-23 02:30:41.233879600 +0500
++++ b/settlement/room/health/hospital/Gui.java	2026-10-23 02:36:58.142295400 +0500
 @@ -48,6 +48,8 @@
  				
  				@Override
@@ -36,7 +36,7 @@ diff -ru -U2 a/settlement/room/health/hospital/Gui.java b/settlement/room/health
  				
 diff -ru -U2 a/settlement/room/industry/module/consumption/RoomConsumption.java b/settlement/room/industry/module/consumption/RoomConsumption.java
 --- a/settlement/room/industry/module/consumption/RoomConsumption.java	2026-04-29 10:40:50.000000000 +0500
-+++ b/settlement/room/industry/module/consumption/RoomConsumption.java	2026-10-23 02:30:41.205876200 +0500
++++ b/settlement/room/industry/module/consumption/RoomConsumption.java	2026-10-23 02:36:58.143293900 +0500
 @@ -90,6 +90,8 @@
  	}
  	
@@ -48,7 +48,7 @@ diff -ru -U2 a/settlement/room/industry/module/consumption/RoomConsumption.java 
  		if (!enabled(res, ins)) {
 diff -ru -U2 a/settlement/room/infra/export/ExportInstance.java b/settlement/room/infra/export/ExportInstance.java
 --- a/settlement/room/infra/export/ExportInstance.java	2026-06-22 09:26:16.000000000 +0500
-+++ b/settlement/room/infra/export/ExportInstance.java	2026-10-23 02:30:41.209877100 +0500
++++ b/settlement/room/infra/export/ExportInstance.java	2026-10-23 02:36:58.144296400 +0500
 @@ -126,6 +126,8 @@
  	}
  	
@@ -78,7 +78,7 @@ diff -ru -U2 a/settlement/room/infra/export/ExportInstance.java b/settlement/roo
  	}
 diff -ru -U2 a/settlement/room/infra/gate/ROOM_GATE.java b/settlement/room/infra/gate/ROOM_GATE.java
 --- a/settlement/room/infra/gate/ROOM_GATE.java	2026-06-17 10:48:04.000000000 +0500
-+++ b/settlement/room/infra/gate/ROOM_GATE.java	2026-10-23 02:30:41.232877200 +0500
++++ b/settlement/room/infra/gate/ROOM_GATE.java	2026-10-23 02:36:58.144296400 +0500
 @@ -106,6 +106,8 @@
  	private static Coo cooLock = new Coo();
  	
@@ -90,7 +90,7 @@ diff -ru -U2 a/settlement/room/infra/gate/ROOM_GATE.java b/settlement/room/infra
  			COORDINATE x1y1 = SETT.ROOMS().fData.itemX1Y1(tx, ty, cooLock);
 diff -ru -U2 a/settlement/room/infra/hauler/HaulerInstance.java b/settlement/room/infra/hauler/HaulerInstance.java
 --- a/settlement/room/infra/hauler/HaulerInstance.java	2026-01-05 09:22:18.000000000 +0500
-+++ b/settlement/room/infra/hauler/HaulerInstance.java	2026-10-23 02:30:41.211878500 +0500
++++ b/settlement/room/infra/hauler/HaulerInstance.java	2026-10-23 02:36:58.145294200 +0500
 @@ -86,6 +86,8 @@
  	}
  
@@ -129,7 +129,7 @@ diff -ru -U2 a/settlement/room/infra/hauler/HaulerInstance.java b/settlement/roo
  		fetching = s;
 diff -ru -U2 a/settlement/room/infra/importt/ImportInstance.java b/settlement/room/infra/importt/ImportInstance.java
 --- a/settlement/room/infra/importt/ImportInstance.java	2026-02-17 08:55:12.000000000 +0500
-+++ b/settlement/room/infra/importt/ImportInstance.java	2026-10-23 02:30:41.212878700 +0500
++++ b/settlement/room/infra/importt/ImportInstance.java	2026-10-23 02:36:58.145294200 +0500
 @@ -119,6 +119,8 @@
  	
  	
@@ -141,7 +141,7 @@ diff -ru -U2 a/settlement/room/infra/importt/ImportInstance.java b/settlement/ro
  		dispose();
 diff -ru -U2 a/settlement/room/infra/logistics/MoveOrderPullUI.java b/settlement/room/infra/logistics/MoveOrderPullUI.java
 --- a/settlement/room/infra/logistics/MoveOrderPullUI.java	2026-01-13 14:58:24.000000000 +0500
-+++ b/settlement/room/infra/logistics/MoveOrderPullUI.java	2026-10-23 02:30:41.246878700 +0500
++++ b/settlement/room/infra/logistics/MoveOrderPullUI.java	2026-10-23 02:36:58.146296000 +0500
 @@ -95,6 +95,8 @@
  								for (int ii = 0; ii < source.get().moveOrdersPull().length; ii++) {
  									MoveOrderPull o = source.get().moveOrdersPull()[ii];
@@ -224,7 +224,7 @@ diff -ru -U2 a/settlement/room/infra/logistics/MoveOrderPullUI.java b/settlement
  			
 diff -ru -U2 a/settlement/room/infra/station/StationInstance.java b/settlement/room/infra/station/StationInstance.java
 --- a/settlement/room/infra/station/StationInstance.java	2026-06-27 11:05:12.000000000 +0500
-+++ b/settlement/room/infra/station/StationInstance.java	2026-10-23 02:30:41.212878700 +0500
++++ b/settlement/room/infra/station/StationInstance.java	2026-10-23 02:36:58.147299300 +0500
 @@ -113,6 +113,8 @@
  	}
  
@@ -236,7 +236,7 @@ diff -ru -U2 a/settlement/room/infra/station/StationInstance.java b/settlement/r
  
 diff -ru -U2 a/settlement/room/infra/stockpile/StockpileInstance.java b/settlement/room/infra/stockpile/StockpileInstance.java
 --- a/settlement/room/infra/stockpile/StockpileInstance.java	2026-06-17 18:45:40.000000000 +0500
-+++ b/settlement/room/infra/stockpile/StockpileInstance.java	2026-10-23 02:30:41.218877500 +0500
++++ b/settlement/room/infra/stockpile/StockpileInstance.java	2026-10-23 02:36:58.147299300 +0500
 @@ -188,6 +188,8 @@
  	}
  
@@ -284,7 +284,7 @@ diff -ru -U2 a/settlement/room/infra/stockpile/StockpileInstance.java b/settleme
  			crates.inc();
 diff -ru -U2 a/settlement/room/infra/transport/Gui.java b/settlement/room/infra/transport/Gui.java
 --- a/settlement/room/infra/transport/Gui.java	2026-04-09 18:45:38.000000000 +0500
-+++ b/settlement/room/infra/transport/Gui.java	2026-10-23 02:30:41.214877600 +0500
++++ b/settlement/room/infra/transport/Gui.java	2026-10-23 02:36:58.148297200 +0500
 @@ -148,6 +148,8 @@
  					
  					@Override
@@ -305,7 +305,7 @@ diff -ru -U2 a/settlement/room/infra/transport/Gui.java b/settlement/room/infra/
  				
 diff -ru -U2 a/settlement/room/infra/transport/TransportInstance.java b/settlement/room/infra/transport/TransportInstance.java
 --- a/settlement/room/infra/transport/TransportInstance.java	2026-06-24 15:44:12.000000000 +0500
-+++ b/settlement/room/infra/transport/TransportInstance.java	2026-10-23 02:30:41.213877600 +0500
++++ b/settlement/room/infra/transport/TransportInstance.java	2026-10-23 02:36:58.148297200 +0500
 @@ -363,6 +363,8 @@
  	}
  	
@@ -317,7 +317,7 @@ diff -ru -U2 a/settlement/room/infra/transport/TransportInstance.java b/settleme
  	}
 diff -ru -U2 a/settlement/room/law/guard/ROOM_GUARD.java b/settlement/room/law/guard/ROOM_GUARD.java
 --- a/settlement/room/law/guard/ROOM_GUARD.java	2026-04-09 16:11:58.000000000 +0500
-+++ b/settlement/room/law/guard/ROOM_GUARD.java	2026-10-23 02:30:41.232877200 +0500
++++ b/settlement/room/law/guard/ROOM_GUARD.java	2026-10-23 02:36:58.149296300 +0500
 @@ -120,6 +120,8 @@
  
  		@Override
@@ -329,7 +329,7 @@ diff -ru -U2 a/settlement/room/law/guard/ROOM_GUARD.java b/settlement/room/law/g
  		}
 diff -ru -U2 a/settlement/room/law/prison/Gui.java b/settlement/room/law/prison/Gui.java
 --- a/settlement/room/law/prison/Gui.java	2026-03-26 10:58:50.000000000 +0500
-+++ b/settlement/room/law/prison/Gui.java	2026-10-23 02:30:41.227877200 +0500
++++ b/settlement/room/law/prison/Gui.java	2026-10-23 02:36:58.150296300 +0500
 @@ -79,6 +79,8 @@
  				
  				@Override
@@ -359,7 +359,7 @@ diff -ru -U2 a/settlement/room/law/prison/Gui.java b/settlement/room/law/prison/
  								}
 diff -ru -U2 a/settlement/room/law/stockade/Gui.java b/settlement/room/law/stockade/Gui.java
 --- a/settlement/room/law/stockade/Gui.java	2026-03-17 11:11:40.000000000 +0500
-+++ b/settlement/room/law/stockade/Gui.java	2026-10-23 02:30:41.230881200 +0500
++++ b/settlement/room/law/stockade/Gui.java	2026-10-23 02:36:58.150296300 +0500
 @@ -79,6 +79,8 @@
  				
  				@Override
@@ -389,7 +389,7 @@ diff -ru -U2 a/settlement/room/law/stockade/Gui.java b/settlement/room/law/stock
  								}
 diff -ru -U2 a/settlement/room/main/RoomInstance.java b/settlement/room/main/RoomInstance.java
 --- a/settlement/room/main/RoomInstance.java	2026-02-25 17:10:04.000000000 +0500
-+++ b/settlement/room/main/RoomInstance.java	2026-10-23 02:30:41.199879200 +0500
++++ b/settlement/room/main/RoomInstance.java	2026-10-23 02:36:58.151292800 +0500
 @@ -196,6 +196,8 @@
  	}
  
@@ -410,7 +410,7 @@ diff -ru -U2 a/settlement/room/main/RoomInstance.java b/settlement/room/main/Roo
  			return SETT.ROOMS().tmpArea(obj);
 diff -ru -U2 a/settlement/room/military/supply/Gui.java b/settlement/room/military/supply/Gui.java
 --- a/settlement/room/military/supply/Gui.java	2026-06-17 10:48:04.000000000 +0500
-+++ b/settlement/room/military/supply/Gui.java	2026-10-23 02:30:41.223877800 +0500
++++ b/settlement/room/military/supply/Gui.java	2026-10-23 02:36:58.151292800 +0500
 @@ -220,6 +220,8 @@
  				@Override
  				protected void clickA() {
@@ -431,7 +431,7 @@ diff -ru -U2 a/settlement/room/military/supply/Gui.java b/settlement/room/milita
  						}	
 diff -ru -U2 a/settlement/room/military/supply/SupplyInstance.java b/settlement/room/military/supply/SupplyInstance.java
 --- a/settlement/room/military/supply/SupplyInstance.java	2025-11-29 09:05:18.000000000 +0500
-+++ b/settlement/room/military/supply/SupplyInstance.java	2026-10-23 02:30:41.221878900 +0500
++++ b/settlement/room/military/supply/SupplyInstance.java	2026-10-23 02:36:58.152292100 +0500
 @@ -184,6 +184,8 @@
  	}
  	
@@ -452,8 +452,18 @@ diff -ru -U2 a/settlement/room/military/supply/SupplyInstance.java b/settlement/
  	}
 diff -ru -U2 a/settlement/room/military/training/Gui.java b/settlement/room/military/training/Gui.java
 --- a/settlement/room/military/training/Gui.java	2026-01-31 09:04:10.000000000 +0500
-+++ b/settlement/room/military/training/Gui.java	2026-10-23 02:30:41.237879900 +0500
-@@ -147,6 +147,8 @@
++++ b/settlement/room/military/training/Gui.java	2026-10-23 02:36:58.159810600 +0500
+@@ -62,7 +62,8 @@
+ 			
+ 			@Override
+ 			public void set(int t) {
+-				getter.get().employees().neededSet(t);
++				if (!sosdet.game.cmd.Employment.workers(getter.get(), t)) // SOSDET: a room's worker target is a command (ADR 0002)
++					getter.get().employees().neededSet(t);
+ 			}
+ 		};
+ 		
+@@ -147,6 +148,8 @@
  			
  			@Override
  			public void set(int t) {
@@ -464,7 +474,7 @@ diff -ru -U2 a/settlement/room/military/training/Gui.java b/settlement/room/mili
  		};
 diff -ru -U2 a/settlement/room/service/breeder/Gui.java b/settlement/room/service/breeder/Gui.java
 --- a/settlement/room/service/breeder/Gui.java	2026-07-01 09:30:58.000000000 +0500
-+++ b/settlement/room/service/breeder/Gui.java	2026-10-23 02:30:41.236877200 +0500
++++ b/settlement/room/service/breeder/Gui.java	2026-10-23 02:36:58.153294300 +0500
 @@ -73,6 +73,8 @@
  			
  			@Override
@@ -494,7 +504,7 @@ diff -ru -U2 a/settlement/room/service/breeder/Gui.java b/settlement/room/servic
  			};
 diff -ru -U2 a/settlement/room/service/food/canteen/CanteenInstance.java b/settlement/room/service/food/canteen/CanteenInstance.java
 --- a/settlement/room/service/food/canteen/CanteenInstance.java	2026-06-17 10:48:06.000000000 +0500
-+++ b/settlement/room/service/food/canteen/CanteenInstance.java	2026-10-23 02:30:41.224879700 +0500
++++ b/settlement/room/service/food/canteen/CanteenInstance.java	2026-10-23 02:36:58.153294300 +0500
 @@ -155,6 +155,8 @@
  	}
  	
@@ -506,7 +516,7 @@ diff -ru -U2 a/settlement/room/service/food/canteen/CanteenInstance.java b/settl
  	}
 diff -ru -U2 a/settlement/room/service/food/eatery/RoomDistribution.java b/settlement/room/service/food/eatery/RoomDistribution.java
 --- a/settlement/room/service/food/eatery/RoomDistribution.java	2026-06-29 10:31:12.000000000 +0500
-+++ b/settlement/room/service/food/eatery/RoomDistribution.java	2026-10-23 02:30:41.225880100 +0500
++++ b/settlement/room/service/food/eatery/RoomDistribution.java	2026-10-23 02:36:58.154817900 +0500
 @@ -307,6 +307,8 @@
  	}
  	
@@ -518,7 +528,7 @@ diff -ru -U2 a/settlement/room/service/food/eatery/RoomDistribution.java b/settl
  		dump(e, dd, ins);
 diff -ru -U2 a/view/sett/ui/room/ModuleIndustry.java b/view/sett/ui/room/ModuleIndustry.java
 --- a/view/sett/ui/room/ModuleIndustry.java	2026-06-08 10:12:00.000000000 +0500
-+++ b/view/sett/ui/room/ModuleIndustry.java	2026-10-23 02:30:41.203878300 +0500
++++ b/view/sett/ui/room/ModuleIndustry.java	2026-10-23 02:36:58.154817900 +0500
 @@ -589,6 +589,10 @@
  						@Override
  						protected void clickA() {
@@ -532,7 +542,7 @@ diff -ru -U2 a/view/sett/ui/room/ModuleIndustry.java b/view/sett/ui/room/ModuleI
  								VIEW.inters().popup.close();
 diff -ru -U2 a/view/sett/ui/room/ModulePunish.java b/view/sett/ui/room/ModulePunish.java
 --- a/view/sett/ui/room/ModulePunish.java	2026-03-19 11:31:50.000000000 +0500
-+++ b/view/sett/ui/room/ModulePunish.java	2026-10-23 02:30:41.203878300 +0500
++++ b/view/sett/ui/room/ModulePunish.java	2026-10-23 02:36:58.155812800 +0500
 @@ -73,6 +73,8 @@
  						
  						@Override
@@ -544,7 +554,7 @@ diff -ru -U2 a/view/sett/ui/room/ModulePunish.java b/view/sett/ui/room/ModulePun
  						
 diff -ru -U2 a/view/sett/ui/room/ModuleRadius.java b/view/sett/ui/room/ModuleRadius.java
 --- a/view/sett/ui/room/ModuleRadius.java	2025-09-12 16:09:02.000000000 +0500
-+++ b/view/sett/ui/room/ModuleRadius.java	2026-10-23 02:30:41.202879000 +0500
++++ b/view/sett/ui/room/ModuleRadius.java	2026-10-23 02:36:58.155812800 +0500
 @@ -113,6 +113,8 @@
  					
  					@Override
@@ -556,7 +566,7 @@ diff -ru -U2 a/view/sett/ui/room/ModuleRadius.java b/view/sett/ui/room/ModuleRad
  				};
 diff -ru -U2 a/view/sett/ui/room/ModuleUpgradable.java b/view/sett/ui/room/ModuleUpgradable.java
 --- a/view/sett/ui/room/ModuleUpgradable.java	2026-06-17 10:48:04.000000000 +0500
-+++ b/view/sett/ui/room/ModuleUpgradable.java	2026-10-23 02:30:41.201876600 +0500
++++ b/view/sett/ui/room/ModuleUpgradable.java	2026-10-23 02:36:58.156814300 +0500
 @@ -88,6 +88,8 @@
  					
  					if (ii.upgrade() >= blueprint.upgrades().max() || !ii.blueprintI().upgrades().requires(ii.upgrade()+1).passes(FACTIONS.player()))

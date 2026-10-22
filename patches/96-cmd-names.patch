@@ -1,6 +1,6 @@
 diff -ru -U2 a/game/faction/FBanner.java b/game/faction/FBanner.java
 --- a/game/faction/FBanner.java	2025-11-20 16:38:10.000000000 +0500
-+++ b/game/faction/FBanner.java	2026-10-23 02:28:30.209149600 +0500
++++ b/game/faction/FBanner.java	2026-10-23 02:36:58.601654300 +0500
 @@ -66,6 +66,8 @@
  	}
  	
@@ -12,7 +12,7 @@ diff -ru -U2 a/game/faction/FBanner.java b/game/faction/FBanner.java
  	}
 diff -ru -U2 a/game/nobility/NOBLES.java b/game/nobility/NOBLES.java
 --- a/game/nobility/NOBLES.java	2026-06-17 10:48:04.000000000 +0500
-+++ b/game/nobility/NOBLES.java	2026-10-23 02:28:30.212145300 +0500
++++ b/game/nobility/NOBLES.java	2026-10-23 02:36:58.602185000 +0500
 @@ -184,6 +184,8 @@
  	}
  	
@@ -44,7 +44,7 @@ diff -ru -U2 a/game/nobility/NOBLES.java b/game/nobility/NOBLES.java
  									for (int i = 0; i < ranks; i++) {
 diff -ru -U2 a/util/gui/misc/GColorPicker.java b/util/gui/misc/GColorPicker.java
 --- a/util/gui/misc/GColorPicker.java	2025-12-02 09:51:38.000000000 +0500
-+++ b/util/gui/misc/GColorPicker.java	2026-10-23 02:28:30.209149600 +0500
++++ b/util/gui/misc/GColorPicker.java	2026-10-23 02:36:58.603173300 +0500
 @@ -46,6 +46,8 @@
  			@Override
  			public void set(int t) {
@@ -74,7 +74,7 @@ diff -ru -U2 a/util/gui/misc/GColorPicker.java b/util/gui/misc/GColorPicker.java
  			}
 diff -ru -U2 a/view/sett/ui/right/UIMiniHotSpots.java b/view/sett/ui/right/UIMiniHotSpots.java
 --- a/view/sett/ui/right/UIMiniHotSpots.java	2025-09-12 16:12:40.000000000 +0500
-+++ b/view/sett/ui/right/UIMiniHotSpots.java	2026-10-23 02:28:30.207141900 +0500
++++ b/view/sett/ui/right/UIMiniHotSpots.java	2026-10-23 02:36:58.604173700 +0500
 @@ -65,7 +65,7 @@
  		
  		@Override
@@ -115,7 +115,7 @@ diff -ru -U2 a/view/sett/ui/right/UIMiniHotSpots.java b/view/sett/ui/right/UIMin
  							init(d);
 diff -ru -U2 a/view/sett/ui/room/UIRoom.java b/view/sett/ui/room/UIRoom.java
 --- a/view/sett/ui/room/UIRoom.java	2026-05-20 08:23:46.000000000 +0500
-+++ b/view/sett/ui/room/UIRoom.java	2026-10-23 02:28:30.203144200 +0500
++++ b/view/sett/ui/room/UIRoom.java	2026-10-23 02:36:58.604173700 +0500
 @@ -233,6 +233,8 @@
  		private final StringInputSprite panelTitle = new StringInputSprite(24, UI.FONT().S) {
  			@Override
@@ -127,7 +127,7 @@ diff -ru -U2 a/view/sett/ui/room/UIRoom.java b/view/sett/ui/room/UIRoom.java
  		};
 diff -ru -U2 a/view/sett/ui/subject/UISubjectActions.java b/view/sett/ui/subject/UISubjectActions.java
 --- a/view/sett/ui/subject/UISubjectActions.java	2026-06-20 16:14:10.000000000 +0500
-+++ b/view/sett/ui/subject/UISubjectActions.java	2026-10-23 02:28:30.210148900 +0500
++++ b/view/sett/ui/subject/UISubjectActions.java	2026-10-23 02:36:58.613171000 +0500
 @@ -84,7 +84,7 @@
  					
  					@Override
@@ -147,9 +147,27 @@ diff -ru -U2 a/view/sett/ui/subject/UISubjectActions.java b/view/sett/ui/subject
  						}
  					};
  					@Override
+@@ -309,6 +310,8 @@
+ 				
+ 				@Override
+ 				protected void clickA() {
++					if (sosdet.game.cmd.Rooms.prisonerPunish(a.a, null)) // SOSDET: a prisoner's punishment set from the subject panel is a command (ADR 0002)
++						return;
+ 					AIModule_Prisoner.DATA().punishmentSet.set(a.a.ai(), null);
+ 					a.a.interrupt();
+ 				}
+@@ -333,6 +336,8 @@
+ 					@Override
+ 					protected void clickA() {
+ 						if(p != AIModule_Prisoner.punishment(a.a, a.a.ai()) && p.available(AIModule_Prisoner.DATA().clas(a.a.indu()))) {
++							if (sosdet.game.cmd.Rooms.prisonerPunish(a.a, p)) // SOSDET: a prisoner's punishment set from the subject panel is a command (ADR 0002)
++								return;
+ 							AIModule_Prisoner.DATA().punishmentSet.set(a.a.ai(), p);
+ 							a.a.interrupt();
+ 						}
 diff -ru -U2 a/view/ui/div/UIDivEditor.java b/view/ui/div/UIDivEditor.java
 --- a/view/ui/div/UIDivEditor.java	2026-01-12 12:38:12.000000000 +0500
-+++ b/view/ui/div/UIDivEditor.java	2026-10-23 02:28:30.203144200 +0500
++++ b/view/ui/div/UIDivEditor.java	2026-10-23 02:36:58.606174600 +0500
 @@ -147,6 +147,8 @@
  				
  				@Override
@@ -161,7 +179,7 @@ diff -ru -U2 a/view/ui/div/UIDivEditor.java b/view/ui/div/UIDivEditor.java
  				
 diff -ru -U2 a/view/ui/profile/UIProfile.java b/view/ui/profile/UIProfile.java
 --- a/view/ui/profile/UIProfile.java	2026-05-23 21:02:52.000000000 +0500
-+++ b/view/ui/profile/UIProfile.java	2026-10-23 02:28:30.205143500 +0500
++++ b/view/ui/profile/UIProfile.java	2026-10-23 02:36:58.607172200 +0500
 @@ -82,11 +82,13 @@
  			
  			@Override
