@@ -461,7 +461,9 @@ public final class Rig implements SCRIPT {
                 command = new String(Files.readAllBytes(commandFile), StandardCharsets.UTF_8).trim();
                 Files.delete(commandFile);
             } catch (IOException e) {
-                event("error", "\"message\":\"" + clean("reading the command: " + e) + "\"");
+                return; // the runner is still writing it (Windows locks the file meanwhile): read it next poll
+            }
+            if (command.isEmpty()) {
                 return;
             }
             try {

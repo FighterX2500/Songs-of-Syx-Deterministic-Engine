@@ -130,7 +130,15 @@ class Copy:
             if not cmd.exists():
                 break
             time.sleep(0.5)
-        cmd.write_text(command, encoding="utf-8")
+        # written whole, then renamed into place: the rig never reads half a command (SOS-32)
+        tmp = self.rig / "command.tmp"
+        tmp.write_text(command, encoding="utf-8")
+        for _ in range(100):
+            try:
+                os.replace(tmp, cmd)
+                break
+            except PermissionError:  # the rig has the old file open for a moment
+                time.sleep(0.1)
         return self.wait(event, since, timeout)
 
 
