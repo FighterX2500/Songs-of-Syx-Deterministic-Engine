@@ -1,0 +1,163 @@
+diff -ru -U2 a/view/battle/BattlePanel.java b/view/battle/BattlePanel.java
+--- a/view/battle/BattlePanel.java	2026-01-07 09:44:06.000000000 +0500
++++ b/view/battle/BattlePanel.java	2026-10-22 23:51:07.166868300 +0500
+@@ -141,11 +141,11 @@
+ 				@Override
+ 				protected void clickA() {
+ 					for (Div d : GAME.ARMIES().player().divisions())
+-						d.settings().musteringSet(shouldmuster);
++						sosdet.game.AiHooks.muster(d, shouldmuster);
+ 					for (ROOM_ARTILLERY c : SETT.ROOMS().ARTILLERY) {
+ 						for (int i = 0; i < c.instancesSize(); i++) {
+ 							if (c.getInstance(i).army() == GAME.ARMIES().player())
+-								c.getInstance(i).muster(shouldmuster);
++								sosdet.game.AiHooks.artilleryMuster(c.getInstance(i), shouldmuster);
+ 							
+ 						}
+ 					}
+diff -ru -U2 a/view/battle/BattlePlacerAttack.java b/view/battle/BattlePlacerAttack.java
+--- a/view/battle/BattlePlacerAttack.java	2026-04-15 11:52:00.000000000 +0500
++++ b/view/battle/BattlePlacerAttack.java	2026-10-22 23:51:07.168866500 +0500
+@@ -324,7 +324,7 @@
+ 			if (artillery) {
+ 				for (ArtilleryInstance ins : s.artillery.selection()) {
+ 					if (ins.testTarget(cx, cy, traj, false) == null)
+-						ins.targetCooSet(cx, cy, false, true);
++						sosdet.game.AiHooks.artilleryTarget(ins, cx, cy, false, true);
+ 				}
+ 			}
+ 			
+@@ -406,7 +406,7 @@
+ 			if (artillery) {
+ 				for (ArtilleryInstance ins : s.artillery.selection()) {
+ 					if (ins.testTarget(cx, cy, traj, false) == null)
+-						ins.targetCooSet(cx, cy, false, true);
++						sosdet.game.AiHooks.artilleryTarget(ins, cx, cy, false, true);
+ 				}
+ 			}
+ 			
+@@ -537,7 +537,7 @@
+ 		void click() {
+ 			for (ArtilleryInstance ins : s.artillery.selection()) {
+ 				if (ins.testTarget(w.pixel().x(), w.pixel().y(), traj, false) == null)
+-					ins.targetCooSet(w.pixel().x(), w.pixel().y(), true, true);
++					sosdet.game.AiHooks.artilleryTarget(ins, w.pixel().x(), w.pixel().y(), true, true);
+ 			}
+ 		}
+ 
+diff -ru -U2 a/view/battle/BattlePlacerPlace.java b/view/battle/BattlePlacerPlace.java
+--- a/view/battle/BattlePlacerPlace.java	2025-11-24 10:07:00.000000000 +0500
++++ b/view/battle/BattlePlacerPlace.java	2026-10-22 23:51:07.170866600 +0500
+@@ -48,7 +48,7 @@
+ 			GAME.ARMIES().placer.deploy(s.selection(), a.start.x(), w.pixel().x(), a.start.y(), w.pixel().y());
+ 			if (VIEW.b().state() != null && VIEW.b().state().deploying()) {
+ 			
+-				GAME.ARMIES().initAndTeleport(s.selection());
++				if (!sosdet.game.AiHooks.teleport(s.selection())) GAME.ARMIES().initAndTeleport(s.selection());
+ 				
+ 
+ 			}
+diff -ru -U2 a/view/battle/BattlePlacerSpin.java b/view/battle/BattlePlacerSpin.java
+--- a/view/battle/BattlePlacerSpin.java	2025-11-19 14:20:18.000000000 +0500
++++ b/view/battle/BattlePlacerSpin.java	2026-10-22 23:51:07.171864200 +0500
+@@ -67,7 +67,7 @@
+ 			}
+ 			if (VIEW.b().state() != null && VIEW.b().state().deploying()) {
+ 				
+-				GAME.ARMIES().initAndTeleport(s.selection());
++				if (!sosdet.game.AiHooks.teleport(s.selection())) GAME.ARMIES().initAndTeleport(s.selection());
+ 				
+ 			}
+ 
+diff -ru -U2 a/view/battle/UISelection.java b/view/battle/UISelection.java
+--- a/view/battle/UISelection.java	2026-06-22 09:50:20.000000000 +0500
++++ b/view/battle/UISelection.java	2026-10-22 23:51:07.163864000 +0500
+@@ -262,28 +262,28 @@
+ 	
+ 	private void loose() {
+ 		for (Div d : selection.selection())
+-			d.settings().formation = DIV_FORMATION.LOOSE;
++			sosdet.game.AiHooks.formation(d, DIV_FORMATION.LOOSE);
+ 	}
+ 	
+ 	private void ltight() {
+ 		for (Div d : selection.selection())
+-			d.settings().formation = DIV_FORMATION.TIGHT;
++			sosdet.game.AiHooks.formation(d, DIV_FORMATION.TIGHT);
+ 	}
+ 	
+ 	private void guard() {
+ 		boolean charge = iInGuard < selection.selection().size();
+ 		for (Div d : selection.selection()) {
+-			d.settings().guard = charge;
++			sosdet.game.AiHooks.guard(d, charge);
+ 		}
+ 	}
+ 	
+ 	protected void run() {
+ 		if (iRunning == selection.selection().size()) {
+ 			for (Div d : selection.selection())
+-				d.settings().running = false;
++				sosdet.game.AiHooks.running(d, false);
+ 		}else {
+ 			for (Div d : selection.selection())
+-				d.settings().running = true;
++				sosdet.game.AiHooks.running(d, true);
+ 		}
+ 		
+ 		
+@@ -404,7 +404,7 @@
+ 				boolean shouldMuster = iMopping < selection.selection().size();
+ 				for (Div d : selection.selection())
+ 					if (d.menNrOf() > 0 && d.position().deployed() > 0)
+-						d.settings().moppingSet(shouldMuster);
++						sosdet.game.AiHooks.mopUp(d, shouldMuster);
+ 			};
+ 			
+ 			@Override
+@@ -445,10 +445,10 @@
+ 				
+ 				boolean charge = ifiresAtWill == 0;
+ 				for (Div d : selection.selection()) {
+-					d.settings().fireAtWill = charge;
++					sosdet.game.AiHooks.fireAtWill(d, charge);
+ 				}
+ 				for (ArtilleryInstance c : selection.artillery.selection()) {
+-					c.fireAtWill(charge);
++					sosdet.game.AiHooks.artilleryFire(c, charge);
+ 				}
+ 			};
+ 			
+@@ -475,7 +475,7 @@
+ 				
+ 				boolean charge = ifiresWait == 0;
+ 				for (Div d : selection.selection()) {
+-					d.settings().shouldNotMoveToFire = charge;
++					sosdet.game.AiHooks.holdFire(d, charge);
+ 				}
+ 			};
+ 			
+@@ -497,7 +497,7 @@
+ 					protected void clickA() {
+ 						for (Div d : selection.selection()) {
+ 							if (a.stat().div().get(d) > 0)
+-								d.settings().ammoI = a.tIndex;
++								sosdet.game.AiHooks.ammo(d, a.tIndex);
+ 						}
+ 						VIEW.inters().popup.close();
+ 					};
+@@ -643,11 +643,11 @@
+ 						boolean shouldMuster = iMustered < selection.allSelected();
+ 						for (Div d : selection.selection())
+ 							if (shouldMuster && d.menNrOf() > 0 && d.position().deployed() > 0)
+-								d.settings().musteringSet(shouldMuster);
++								sosdet.game.AiHooks.muster(d, shouldMuster);
+ 							else if (!shouldMuster)
+-								d.settings().musteringSet(false);
++								sosdet.game.AiHooks.muster(d, false);
+ 						for (ArtilleryInstance c : selection.artillery.selection()) {
+-							c.muster(shouldMuster);
++							sosdet.game.AiHooks.artilleryMuster(c, shouldMuster);
+ 						}
+ 					};
+ 					

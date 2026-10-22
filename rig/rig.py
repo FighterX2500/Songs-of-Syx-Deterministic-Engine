@@ -146,6 +146,15 @@ class Copy:
         fail("copy %d: cannot hand over the command %r" % (self.k, command))
 
 
+def copy_running(k):
+    """Whether copy k's game process is still running."""
+    marker = (str(INST / str(k)) + "\\").replace("'", "''")
+    out = subprocess.run(["powershell", "-NoProfile", "-Command",
+                          "@(Get-CimInstance Win32_Process -Filter \"Name='java.exe'\" | Where-Object { $_.CommandLine -like '*%s*' }).Count"
+                          % marker], capture_output=True, text=True).stdout.strip()
+    return out not in ("", "0")
+
+
 def stop_copies():
     """Stops every game process whose class path points into the rig's copies, and waits until they are gone
     (a copy still exiting keeps its data folder locked)."""
@@ -284,7 +293,7 @@ def compare(copies, run_dir, tag, ref, steps, ends, after=1, resync_step=0):
         first = next((s for s in range(after, last + 1) if s in ref_hashes and hashes.get(s) != ref_hashes[s]
                       and not (s not in hashes and s <= resync_step)), None)
         at_end = hashes.get(steps + 1)
-        if first is None and at_end == ref_end and ends[ref] == steps:
+        if first is None and (ref_end is None or at_end == ref_end) and ends[ref] == steps:  # no end line: closed by hand
             lines.append("copy %d: identical to copy %d at every step %sto %d"
                          % (k, ref, "from %d " % after if after > 1 else "", steps))
         else:
@@ -533,6 +542,9 @@ def main():
                     help="the speed every copy agrees on at the start, which sets the step length (1/60 s at 1x or"
                          " slower, 1/16 s above); default: copy 1's speed")
     ap.add_argument("--no-invade", action="store_true", help="city: no invasion, the city as it is")
+    ap.add_argument("--play", action="store_true",
+                    help="the owner plays copy 1 (the host) in a normal window from 1x, giving orders and changing speed;"
+                         " the other copies replay its log at 25x; the run ends when the owner closes the window")
     ap.add_argument("--evals", action="store_true",
                     help="the timing rule instead: host and peer, one copy alone each, at speed 1")
     ap.add_argument("--vanilla", action="store_true", help="with --evals: measure vanilla again (default: SOS-23's figures)")
@@ -541,6 +553,12 @@ def main():
     if args.evals:
         return run_evals(args)
     nudged = (args.nudge_copy or args.copies) if args.nudge else 0
+    if args.play:
+        # the host is played by hand from 1x; the peers replay at 25x so they never lag; no fixed end
+        args.ai = "host"
+        args.speeds = ",".join(["1"] + ["25"] * (args.copies - 1))
+        args.agreed_speed = 1
+        args.steps = 10 ** 7
 
     game = pathlib.Path(os.environ.get("SOS_GAME_DIR") or fail("SOS_GAME_DIR is not set"))
     for name, path in MODS.items():
@@ -561,7 +579,7 @@ def main():
     stop_copies()
     copies = [Copy(k, game) for k in range(1, args.copies + 1)]
     for c in copies:
-        c.prepare(saves, args.window)
+        c.prepare(saves, args.window or (args.play and c.k == 1))
     for c in copies:
         c.start(autoload)
         time.sleep(3)
@@ -632,7 +650,16 @@ def main():
     watcher = Watcher({c.k: c.rig / ("%s-c%d.csv" % (args.tag, c.k)) for c in copies})
     finished, deadline = {}, time.time() + 6 * 3600
     resync = None  # copy 1's resyncsaved event, once it saved
+    checked = time.time()
     while True:
+        if args.play and time.time() - checked > 10:
+            checked = time.time()
+            if not copy_running(1):
+                host_end = last_logged_step(copies[0].rig / ("%s-c1.csv" % args.tag))
+                log("the host's window was closed at step %d; comparing up to there" % host_end)
+                finished[ref] = {"endStep": host_end, "endHash": None, "men": 0, "wallSeconds": 0, "stats": {}}
+                args.steps = host_end
+                break
         if time.time() > deadline:
             fail("the reference copy did not finish")
         if resync is None and args.resync_on_desync and any(c.find("desync", 0) for c in copies):

@@ -67,6 +67,16 @@ python rig\rig.py field --tag R2 --steps 12000 --nudge 6001 --resync-on-desync
 
 `--resync STEP`: copy 1 holds at that step and saves a resync (`Engine.resyncSave`); then every copy, copy 1 included, loads it (`Engine.resyncLoad`) and runs on. `--resync-on-desync`: the first desync any engine reports makes copy 1 save a resync at its current step, and every copy loads it: the mod's recovery loop. With `--nudge`, copies are compared only after the resync. The rig keeps its run state across the load; `summary.txt` gives the save time and size and each copy's load time.
 
+## Playing a copy (SOS-32)
+
+```
+python rig\rig.py field --tag P1 --play --copies 3
+```
+
+`--play`: copy 1 opens in a normal window with your own settings, as the host, at 1x. Give orders and change the speed as you like; every order and speed change goes into the host's log and the other copies (small, at 25x so they never lag) replay it at the same steps. The step length follows the agreed speed (1/60 s at 1x, 1/16 s above). At the first difference every copy is held, your window included, and each copy writes the engine's desync report. Close your window to end the run: the others are held and compared up to the last step yours reached. Don't retreat or leave the battle (that loads another save); in a city run, don't take decisions that change the city (building, noble replacement): city commands come with SOS-34.
+
+`--trace-draws N` adds the call site of every simulation draw for the last N steps, dumped around a desync; it slows the copies by roughly half.
+
 ## The timing rule
 
 ```
@@ -81,7 +91,7 @@ Not run for SOS-28: the owner deferred the timing evals until timing becomes an 
 - **peer:** replaying that log;
 - **vanilla,** only with `--vanilla`: no engine session, the game's own stepping and threads. By default the baseline is SOS-23's vanilla measurement on the same saves.
 
-All runs start from the same save. The rig-only patch `91-frame-timing` times each frame's game update (the SOS-23 measure: update time per 1/60 s of game time), and a stall sampler records the simulation thread's stack for every step over 100 ms.
+All runs start from the same save. The engine times each frame's game update (`Engine.lastFrameUpdateNanos`, the SOS-23 measure: update time per 1/60 s of game time), and a stall sampler records the simulation thread's stack for every step over 100 ms. Without a session (the vanilla baseline) there is no frame timing; the baseline comes from SOS-23's figures.
 
 `evals.txt` shows the percentiles, the steps over 100 ms per 10 minutes, the steps over 1 s, the most frequent stall causes, whether host and peer stayed identical, and the verdict. The rule passes when p99.9 is at most 20 ms, no step takes over 1 s, and no more steps go over 100 ms than in vanilla.
 
