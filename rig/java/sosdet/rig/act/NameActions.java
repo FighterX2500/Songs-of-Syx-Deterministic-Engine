@@ -18,8 +18,8 @@ import settlement.room.main.RoomInstance;
 import settlement.stats.STATS;
 import settlement.tilemap.SettMarks.SettMark;
 import snake2d.util.color.ColorImp;
-import sosdet.Engine;
 import sosdet.game.cmd.Names;
+import sosdet.rig.Rig;
 
 /**
  * The rig's scripted player: names, colours, map marks and nobles, each the call the game's UI makes (SOS-34). Where
@@ -36,7 +36,7 @@ public final class NameActions {
         case "divname": // divname <division> <name>: the division editor's accepted name
             int div = Integer.parseInt(a[1]);
             String divName = a[2];
-            Engine.betweenSteps(() -> {
+            Rig.later(() -> {
                 DivInfo info = GAME.ARMIES().player().divisions().get(div).info;
                 if (!Names.divisionName(info, divName)) {
                     info.nameE().clear().add(divName);
@@ -46,7 +46,7 @@ public final class NameActions {
         case "roomname": // roomname <blueprint key> <name>: the room panel's name input, on the first such room
             String key = a[1];
             String roomName = a[2];
-            Engine.betweenSteps(() -> {
+            Rig.later(() -> {
                 RoomInstance room = firstRoom(key);
                 if (!Names.roomName(room, roomName)) {
                     room.name().clear().add(roomName);
@@ -55,7 +55,7 @@ public final class NameActions {
             return true;
         case "factionname": // factionname <name>: the profile's faction name input
             String factionName = a[1];
-            Engine.betweenSteps(() -> {
+            Rig.later(() -> {
                 if (!Names.factionName(factionName)) {
                     FACTIONS.player().name.clear().add(factionName);
                 }
@@ -63,7 +63,7 @@ public final class NameActions {
             return true;
         case "rulername": // rulername <name>: the profile's ruler name input
             String rulerName = a[1];
-            Engine.betweenSteps(() -> {
+            Rig.later(() -> {
                 if (!Names.rulerName(rulerName)) {
                     FACTIONS.player().rulerName.clear().add(rulerName);
                 }
@@ -72,7 +72,7 @@ public final class NameActions {
         case "markadd": // markadd <tx> <ty>: the map marks' placer
             int addX = Integer.parseInt(a[1]);
             int addY = Integer.parseInt(a[2]);
-            Engine.betweenSteps(() -> {
+            Rig.later(() -> {
                 SettMark m = Names.markAdd(addX, addY) ? null : SETT.TILE_MAP().marks.make();
                 if (m != null) {
                     m.set(addX, addY);
@@ -83,7 +83,7 @@ public final class NameActions {
             int nameX = Integer.parseInt(a[1]);
             int nameY = Integer.parseInt(a[2]);
             String markName = a[3];
-            Engine.betweenSteps(() -> {
+            Rig.later(() -> {
                 SettMark m = mark(nameX, nameY);
                 if (!Names.markName(m, markName)) {
                     m.name.clear().add(markName);
@@ -94,7 +94,7 @@ public final class NameActions {
             int orderX = Integer.parseInt(a[1]);
             int orderY = Integer.parseInt(a[2]);
             int place = Integer.parseInt(a[3]);
-            Engine.betweenSteps(() -> {
+            Rig.later(() -> {
                 SettMark m = mark(orderX, orderY);
                 if (!Names.markOrder(m, place)) {
                     m.setPosition(place);
@@ -104,7 +104,7 @@ public final class NameActions {
         case "markremove": // markremove <tx> <ty>: the mark panel's trash button
             int removeX = Integer.parseInt(a[1]);
             int removeY = Integer.parseInt(a[2]);
-            Engine.betweenSteps(() -> {
+            Rig.later(() -> {
                 SettMark m = mark(removeX, removeY);
                 if (!Names.markRemove(m)) {
                     m.remove();
@@ -116,7 +116,7 @@ public final class NameActions {
             int channel = Integer.parseInt(a[n - 2]);
             int value = Integer.parseInt(a[n - 1]);
             String[] owner = Arrays.copyOfRange(a, 1, n - 2);
-            Engine.betweenSteps(() -> {
+            Rig.later(() -> {
                 ColorImp c = colour(owner);
                 if (!Names.colour(c, channel, value)) {
                     if (channel == 0) {
@@ -131,11 +131,11 @@ public final class NameActions {
             return true;
         case "bannertype": // bannertype <type>: the profile's banner arrows
             int type = Integer.parseInt(a[1]);
-            Engine.betweenSteps(() -> FACTIONS.player().banner().bannerTypeSet(type));
+            Rig.later(() -> FACTIONS.player().banner().bannerTypeSet(type));
             return true;
         case "subjectname": // subjectname <name>: the subject screen's rename, on the first citizen
             String subjectName = a[1];
-            Engine.betweenSteps(() -> {
+            Rig.later(() -> {
                 Humanoid h = citizen(false);
                 if (!Names.subjectName(h, subjectName)) {
                     STATS.APPEARANCE().setCustomName(h.indu(), subjectName);
@@ -143,7 +143,7 @@ public final class NameActions {
             });
             return true;
         case "noble": // noble: the subject screen's "elevate", on the first citizen of a playable race
-            Engine.betweenSteps(() -> {
+            Rig.later(() -> {
                 Humanoid h = citizen(true);
                 if (!Names.nobleSet(h)) {
                     h.nobleSet();
@@ -153,16 +153,16 @@ public final class NameActions {
         case "nobleoffice": // nobleoffice <noble> <office, -1 for none>: the noble screen's office buttons
             int officeNoble = Integer.parseInt(a[1]);
             int office = Integer.parseInt(a[2]);
-            Engine.betweenSteps(() -> GAME.NOBLE().setOffice(GAME.NOBLE().active().get(officeNoble), office(office)));
+            Rig.later(() -> GAME.NOBLE().setOffice(GAME.NOBLE().active().get(officeNoble), office(office)));
             return true;
         case "noblerank": // noblerank <noble>: the noble screen's promotion
             int rankNoble = Integer.parseInt(a[1]);
-            Engine.betweenSteps(() -> GAME.NOBLE().ranksAllocate(GAME.NOBLE().active().get(rankNoble)));
+            Rig.later(() -> GAME.NOBLE().ranksAllocate(GAME.NOBLE().active().get(rankNoble)));
             return true;
         case "noblereplace": // noblereplace <office> <ranks>: the death message's "replace", on the first citizen
             int replaceOffice = Integer.parseInt(a[1]);
             int ranks = Integer.parseInt(a[2]);
-            Engine.betweenSteps(() -> {
+            Rig.later(() -> {
                 Humanoid h = citizen(true);
                 NobleOffice o = office(replaceOffice);
                 if (!Names.nobleReplace(h, o, ranks)) {

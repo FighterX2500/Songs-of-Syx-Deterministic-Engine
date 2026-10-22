@@ -17,8 +17,8 @@ import snake2d.util.datatypes.AREA;
 import snake2d.util.datatypes.COORDINATE;
 import snake2d.util.datatypes.RECTANGLE;
 import snake2d.util.datatypes.Rec;
-import sosdet.Engine;
 import sosdet.game.cmd.Tools;
+import sosdet.rig.Rig;
 import view.sett.ui.bottom.RoomUpgrader;
 import view.tool.PLACER_TYPE;
 import view.tool.PlacableFixed;
@@ -39,7 +39,7 @@ public final class ToolActions {
         switch (a[0]) {
         case "planmode": // planmode 1|0: the bottom bar's planning-mode button
             boolean on = a[1].equals("1");
-            Engine.betweenSteps(() -> {
+            Rig.later(() -> {
                 if (!Tools.planMode(on)) {
                     SETT.JOBS().planMode.set(on);
                 }
@@ -49,12 +49,12 @@ public final class ToolActions {
             String tool = a[1];
             String key = a[2];
             int n = Integer.parseInt(a[3]);
-            Engine.betweenSteps(() -> multi(tool(tool), room(key, n).body()));
+            Rig.later(() -> multi(tool(tool), room(key, n).body()));
             return true;
         case "homeassign": // homeassign <n> all|none: the homes tool dragged over the n-th house
             int home = Integer.parseInt(a[1]);
             boolean all = a[2].equals("all");
-            Engine.betweenSteps(() -> {
+            Rig.later(() -> {
                 Box area = new Box(house(home).body());
                 HGROUP.HTypeBitsImp bits = new HGROUP.HTypeBitsImp(all);
                 for (int y = area.body.y1(); y < area.body.y2(); y++) {
@@ -70,7 +70,7 @@ public final class ToolActions {
             String wkey = a[1];
             int wn = Integer.parseInt(a[2]);
             boolean wall = a[3].equals("all");
-            Engine.betweenSteps(() -> {
+            Rig.later(() -> {
                 RoomInstance room = room(wkey, wn);
                 Box area = new Box(room.body());
                 WGROUP.HTypeBitsImp bits = new WGROUP.HTypeBitsImp(wall);
@@ -85,7 +85,7 @@ public final class ToolActions {
             return true;
         case "homeodd": // homeodd <n>: the odd-jobber mover on the n-th house's service tile, cursor 0
             int odd = Integer.parseInt(a[1]);
-            Engine.betweenSteps(() -> {
+            Rig.later(() -> {
                 HomeInstance h = house(odd);
                 if (!Tools.homeOdd(h.serviceX(), h.serviceY(), 0)) {
                     throw new IllegalStateException("SOSDET rig: homeodd was not captured");
@@ -95,7 +95,7 @@ public final class ToolActions {
         case "roomitem": // roomitem <blueprint key> <group>: a one-item room at the first free spot around the throne
             String ikey = a[1];
             int group = Integer.parseInt(a[2]);
-            Engine.betweenSteps(() -> {
+            Rig.later(() -> {
                 RoomPlacer placer = SETT.ROOMS().placement.placer;
                 placer.init((RoomBlueprintImp) blueprint(ikey), 0);
                 click(placer.item(group));
@@ -103,7 +103,7 @@ public final class ToolActions {
             });
             return true;
         case "throne": // throne: the throne mover at the first free spot around the throne
-            Engine.betweenSteps(() -> click((PlacableFixed) SETT.ROOMS().THRONE.placer));
+            Rig.later(() -> click((PlacableFixed) SETT.ROOMS().THRONE.placer));
             return true;
         default:
             return false;

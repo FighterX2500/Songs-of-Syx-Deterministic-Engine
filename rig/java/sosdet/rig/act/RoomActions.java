@@ -32,8 +32,8 @@ import settlement.room.main.RoomInstance;
 import settlement.room.main.TmpArea;
 import settlement.room.main.job.ROOM_RADIUS.ROOM_RADIUSE;
 import settlement.room.service.food.eatery.RoomDistribution.RoomDistributionIns;
-import sosdet.Engine;
 import sosdet.game.cmd.Rooms;
+import sosdet.rig.Rig;
 
 /**
  * The rig's scripted player: room actions, each the call the game's UI makes (SOS-34). Where the hook sits at a UI
@@ -53,10 +53,10 @@ public final class RoomActions {
     public static boolean run(String[] a) {
         switch (a[0]) {
         case "room-activate": // room-activate <kind> 1|0: the room panel's on/off button
-            Engine.betweenSteps(() -> room(a[1]).activate(on(a[2])));
+            Rig.later(() -> room(a[1]).activate(on(a[2])));
             return true;
         case "room-remove": // room-remove <kind>: the room panel's delete button
-            Engine.betweenSteps(() -> {
+            Rig.later(() -> {
                 RoomInstance r = room(a[1]);
                 TmpArea t = r.remove(r.mX(), r.mY(), true, r, false);
                 if (t != null) {
@@ -65,16 +65,16 @@ public final class RoomActions {
             });
             return true;
         case "room-upgrade": // room-upgrade <kind>: the upgrade button
-            Engine.betweenSteps(() -> Rooms.upgrade(room(a[1]), false));
+            Rig.later(() -> Rooms.upgrade(room(a[1]), false));
             return true;
         case "room-upgrade-all": // room-upgrade-all <kind>: the table's "upgrade all", for one room
-            Engine.betweenSteps(() -> Rooms.upgrade(room(a[1]), true));
+            Rig.later(() -> Rooms.upgrade(room(a[1]), true));
             return true;
         case "room-downgrade": // room-downgrade <kind>: the downgrade button
-            Engine.betweenSteps(() -> Rooms.downgrade(room(a[1])));
+            Rig.later(() -> Rooms.downgrade(room(a[1])));
             return true;
         case "room-radius": // room-radius <kind> <0-100>: the work radius slider
-            Engine.betweenSteps(() -> {
+            Rig.later(() -> {
                 RoomInstance r = room(a[1]);
                 byte v = (byte) Integer.parseInt(a[2]);
                 if (!Rooms.radius(r, v)) {
@@ -83,7 +83,7 @@ public final class RoomActions {
             });
             return true;
         case "room-industry": // room-industry <kind> <recipe>: the recipe picker
-            Engine.betweenSteps(() -> {
+            Rig.later(() -> {
                 RoomInstance r = room(a[1]);
                 int k = Integer.parseInt(a[2]);
                 if (!Rooms.industry(r, k)) {
@@ -93,14 +93,14 @@ public final class RoomActions {
             });
             return true;
         case "room-consumption": // room-consumption <kind> <k>: a consumed resource on/off (library, admin, ...)
-            Engine.betweenSteps(() -> {
+            Rig.later(() -> {
                 RoomInstance r = room(a[1]);
                 RoomConsumption c = ((ROOM_CONSUMPTION_HASER) r.blueprintI()).consumption();
                 c.enabledToggle(c.ins().get(Integer.parseInt(a[2])), (ROOM_IDATA_INSTANCE) r, r);
             });
             return true;
         case "farm-change": // farm-change: the first farm to the first other crop
-            Engine.betweenSteps(() -> {
+            Rig.later(() -> {
                 RoomInstance r = room("farm");
                 for (ROOM_FARM f : SETT.ROOMS().FARMS) {
                     if (f != r.blueprintI()) {
@@ -111,79 +111,79 @@ public final class RoomActions {
             });
             return true;
         case "pasture-slaughter": // pasture-slaughter: "slaughter all"
-            Engine.betweenSteps(() -> Rooms.slaughterAll(room("pasture")));
+            Rig.later(() -> Rooms.slaughterAll(room("pasture")));
             return true;
         case "export-resource": // export-resource <res>
-            Engine.betweenSteps(() -> Rooms.exportResource(room("export"), res(a[1])));
+            Rig.later(() -> Rooms.exportResource(room("export"), res(a[1])));
             return true;
         case "export-fetching": // export-fetching 1|0
-            Engine.betweenSteps(() -> ((ExportInstance) room("export")).fetchingSet(on(a[1])));
+            Rig.later(() -> ((ExportInstance) room("export")).fetchingSet(on(a[1])));
             return true;
         case "export-prio": // export-prio: toggles
-            Engine.betweenSteps(() -> Rooms.exportPrio(room("export")));
+            Rig.later(() -> Rooms.exportPrio(room("export")));
             return true;
         case "hauler-resource": // hauler-resource <res>
-            Engine.betweenSteps(() -> Rooms.haulerResource(room("hauler"), res(a[1])));
+            Rig.later(() -> Rooms.haulerResource(room("hauler"), res(a[1])));
             return true;
         case "hauler-fetching": // hauler-fetching 1|0
-            Engine.betweenSteps(() -> Rooms.haulerFetching(room("hauler"), on(a[1])));
+            Rig.later(() -> Rooms.haulerFetching(room("hauler"), on(a[1])));
             return true;
         case "hauler-prio": // hauler-prio: toggles
-            Engine.betweenSteps(() -> Rooms.haulerPrio(room("hauler")));
+            Rig.later(() -> Rooms.haulerPrio(room("hauler")));
             return true;
         case "hauler-storing": // hauler-storing 1|0
-            Engine.betweenSteps(() -> Rooms.haulerStoring(room("hauler"), on(a[1])));
+            Rig.later(() -> Rooms.haulerStoring(room("hauler"), on(a[1])));
             return true;
         case "import-allocate": // import-allocate <res>
-            Engine.betweenSteps(() -> Rooms.importAllocate(room("import"), res(a[1])));
+            Rig.later(() -> Rooms.importAllocate(room("import"), res(a[1])));
             return true;
         case "station-allocate": // station-allocate <res> <crates>
-            Engine.betweenSteps(() -> Rooms.stationAllocate(room("station"), res(a[1]), Integer.parseInt(a[2])));
+            Rig.later(() -> Rooms.stationAllocate(room("station"), res(a[1]), Integer.parseInt(a[2])));
             return true;
         case "transport-fetching": // transport-fetching 1|0
-            Engine.betweenSteps(() -> Rooms.transportFetching(room("transport"), on(a[1])));
+            Rig.later(() -> Rooms.transportFetching(room("transport"), on(a[1])));
             return true;
         case "transport-prio": // transport-prio 1|0: the panel's priority button
-            Engine.betweenSteps(() -> Rooms.transportPrio(room("transport"), on(a[1])));
+            Rig.later(() -> Rooms.transportPrio(room("transport"), on(a[1])));
             return true;
         case "transport-resource": // transport-resource <res>: the cart's resource
-            Engine.betweenSteps(() -> Rooms.transportResource(room("transport"), res(a[1])));
+            Rig.later(() -> Rooms.transportResource(room("transport"), res(a[1])));
             return true;
         case "stockpile-fetching": // stockpile-fetching 1|0
-            Engine.betweenSteps(() -> Rooms.stockpileFetching(room("stockpile"), on(a[1])));
+            Rig.later(() -> Rooms.stockpileFetching(room("stockpile"), on(a[1])));
             return true;
         case "stockpile-prio": // stockpile-prio: toggles
-            Engine.betweenSteps(() -> ((StockpileInstance) room("stockpile")).prioritizeToggle());
+            Rig.later(() -> ((StockpileInstance) room("stockpile")).prioritizeToggle());
             return true;
         case "stockpile-storing": // stockpile-storing 1|0
-            Engine.betweenSteps(() -> Rooms.stockpileStoring(room("stockpile"), on(a[1])));
+            Rig.later(() -> Rooms.stockpileStoring(room("stockpile"), on(a[1])));
             return true;
         case "stockpile-crates": // stockpile-crates <res> <crates>
-            Engine.betweenSteps(() -> Rooms.stockpileCrates(room("stockpile"), res(a[1]), Integer.parseInt(a[2])));
+            Rig.later(() -> Rooms.stockpileCrates(room("stockpile"), res(a[1]), Integer.parseInt(a[2])));
             return true;
         case "stockpile-special": // stockpile-special <res> <limit>
-            Engine.betweenSteps(() -> Rooms.stockpileSpecial(room("stockpile"), res(a[1]), Integer.parseInt(a[2])));
+            Rig.later(() -> Rooms.stockpileSpecial(room("stockpile"), res(a[1]), Integer.parseInt(a[2])));
             return true;
         case "supply-fetching": // supply-fetching: toggles
-            Engine.betweenSteps(() -> Rooms.supplyFetching(room("supply")));
+            Rig.later(() -> Rooms.supplyFetching(room("supply")));
             return true;
         case "supply-prio": // supply-prio: toggles
-            Engine.betweenSteps(() -> Rooms.supplyPrio(room("supply")));
+            Rig.later(() -> Rooms.supplyPrio(room("supply")));
             return true;
         case "supply-allowed": // supply-allowed <res>: toggles
-            Engine.betweenSteps(() -> Rooms.supplyAllowed(room("supply"), res(a[1])));
+            Rig.later(() -> Rooms.supplyAllowed(room("supply"), res(a[1])));
             return true;
         case "canteen-uses": // canteen-uses <res>: toggles a food
-            Engine.betweenSteps(() -> Rooms.canteenUses(room("canteen"), res(a[1])));
+            Rig.later(() -> Rooms.canteenUses(room("canteen"), res(a[1])));
             return true;
         case "distribution-uses": // distribution-uses eatery|tavern|market <res>: toggles
-            Engine.betweenSteps(() -> {
+            Rig.later(() -> {
                 RoomInstance r = room(a[1]);
                 ((RoomDistributionIns) r).distributionNlueData().usesToggle(res(a[2]), r);
             });
             return true;
         case "punish-race": // punish-race <race>: the cannibal room's races
-            Engine.betweenSteps(() -> {
+            Rig.later(() -> {
                 PUNISHMENT_SERVICE s = SETT.ROOMS().CANNIBAL;
                 Race race = RACES.all().get(Integer.parseInt(a[1]));
                 if (!Rooms.punishRace(s, race)) {
@@ -192,7 +192,7 @@ public final class RoomActions {
             });
             return true;
         case "prisoner-punish": // prisoner-punish <punishment|-1>: the first prisoner's punishment, or cancelled
-            Engine.betweenSteps(() -> {
+            Rig.later(() -> {
                 int pi = Integer.parseInt(a[1]);
                 PUNISHMENT p = pi < 0 ? null : CRIME_PUNISHMENTS.ALL().get(pi);
                 Humanoid h = prisoner();
@@ -203,14 +203,14 @@ public final class RoomActions {
             });
             return true;
         case "prison-fetch": // prison-fetch prison|stockade <res>: toggles a food
-            Engine.betweenSteps(() -> Rooms.prisonFetch(room(a[1]), res(a[2])));
+            Rig.later(() -> Rooms.prisonFetch(room(a[1]), res(a[2])));
             return true;
         case "guard-duty": // guard-duty <division index in the player's army> 1|0
-            Engine.betweenSteps(() -> SETT.ROOMS().GUARD.activeDuty
+            Rig.later(() -> SETT.ROOMS().GUARD.activeDuty
                     .set(GAME.ARMIES().player().divisions().get(Integer.parseInt(a[1])), on(a[2])));
             return true;
         case "gate-lock": // gate-lock 1|0: a click on the first gate tile
-            Engine.betweenSteps(() -> {
+            Rig.later(() -> {
                 for (int ty = 0; ty < SETT.THEIGHT; ty++) {
                     for (int tx = 0; tx < SETT.TWIDTH; tx++) {
                         Room r = SETT.ROOMS().map.get(tx, ty);
@@ -225,42 +225,42 @@ public final class RoomActions {
             });
             return true;
         case "hospital-fetch": // hospital-fetch <k> 1|0
-            Engine.betweenSteps(() -> Rooms.hospitalFetch(room("hospital"), Integer.parseInt(a[1]), on(a[2])));
+            Rig.later(() -> Rooms.hospitalFetch(room("hospital"), Integer.parseInt(a[1]), on(a[2])));
             return true;
         case "breeder-prosecute": // breeder-prosecute 1|0
-            Engine.betweenSteps(() -> Rooms.breederProsecute(SETT.ROOMS().BREEDERS.get(0), on(a[1])));
+            Rig.later(() -> Rooms.breederProsecute(SETT.ROOMS().BREEDERS.get(0), on(a[1])));
             return true;
         case "breeder-limit-total": // breeder-limit-total <n>
-            Engine.betweenSteps(() -> Rooms.breederLimitTotal(SETT.ROOMS().BREEDERS.get(0), Integer.parseInt(a[1])));
+            Rig.later(() -> Rooms.breederLimitTotal(SETT.ROOMS().BREEDERS.get(0), Integer.parseInt(a[1])));
             return true;
         case "breeder-limit-species": // breeder-limit-species <n>
-            Engine.betweenSteps(() -> Rooms.breederLimitSpecies(SETT.ROOMS().BREEDERS.get(0),
+            Rig.later(() -> Rooms.breederLimitSpecies(SETT.ROOMS().BREEDERS.get(0),
                     Integer.parseInt(a[1])));
             return true;
         case "trainer-limit": // trainer-limit <n>: the first barracks type's recruits limit
-            Engine.betweenSteps(() -> Rooms.trainerLimit(SETT.ROOMS().BARRACKS.get(0), Integer.parseInt(a[1])));
+            Rig.later(() -> Rooms.trainerLimit(SETT.ROOMS().BARRACKS.get(0), Integer.parseInt(a[1])));
             return true;
         case "move-new": // move-new <kind> <slot> <source kind>: the "closest source" button's new order
-            Engine.betweenSteps(() -> Rooms.moveOrderNew(room(a[1]), Integer.parseInt(a[2]), room(a[3])));
+            Rig.later(() -> Rooms.moveOrderNew(room(a[1]), Integer.parseInt(a[2]), room(a[3])));
             return true;
         case "move-set": // move-set <kind> <slot> <source kind>: the source picker
-            Engine.betweenSteps(() -> Rooms.moveOrderSet(room(a[1]), Integer.parseInt(a[2]), room(a[3])));
+            Rig.later(() -> Rooms.moveOrderSet(room(a[1]), Integer.parseInt(a[2]), room(a[3])));
             return true;
         case "move-res": // move-res <kind> <slot> all|none|<res>: the order's resource buttons
-            Engine.betweenSteps(() -> {
+            Rig.later(() -> {
                 int op = a[3].equals("all") ? Rooms.RES_ALL : a[3].equals("none") ? Rooms.RES_NONE : Rooms.RES_TOGGLE;
                 Rooms.moveOrderRes(room(a[1]), Integer.parseInt(a[2]), op, op == Rooms.RES_TOGGLE ? res(a[3]) : null);
             });
             return true;
         case "move-limit": // move-limit <kind> <slot> <0-100>: the pull limit slider
-            Engine.betweenSteps(() -> Rooms.moveOrderLimit(room(a[1]), Integer.parseInt(a[2]),
+            Rig.later(() -> Rooms.moveOrderLimit(room(a[1]), Integer.parseInt(a[2]),
                     Integer.parseInt(a[3])));
             return true;
         case "move-remove": // move-remove <kind> <slot>
-            Engine.betweenSteps(() -> Rooms.moveOrderRemove(room(a[1]), Integer.parseInt(a[2])));
+            Rig.later(() -> Rooms.moveOrderRemove(room(a[1]), Integer.parseInt(a[2])));
             return true;
         case "move-paste": // move-paste <kind>: "paste settings" from the first room of the kind onto the second
-            Engine.betweenSteps(() -> {
+            Rig.later(() -> {
                 RoomInstance from = room(a[1]);
                 RoomInstance to = from.blueprintI().getInstance(1);
                 Rooms.movePaste(from, to.mX(), to.mY());

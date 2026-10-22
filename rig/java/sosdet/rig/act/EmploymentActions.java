@@ -8,8 +8,8 @@ import settlement.room.main.employment.RoomEmployment;
 import settlement.room.main.employment.RoomEmploymentSimple;
 import settlement.room.main.employment.RoomEquip;
 import settlement.room.main.job.ROOM_EMPLOY_AUTO;
-import sosdet.Engine;
 import sosdet.game.cmd.Employment;
+import sosdet.rig.Rig;
 
 /**
  * The rig's scripted player: employment actions, each the call the game's UI makes (SOS-34). Workplaces are named by
@@ -27,14 +27,14 @@ public final class EmploymentActions {
         case "empprio": { // empprio <room key> <0-30>: a workplace's master priority (room panel, priority table)
             String key = a[1];
             int v = Integer.parseInt(a[2]);
-            Engine.betweenSteps(() -> work(key).priority.set(v));
+            Rig.later(() -> work(key).priority.set(v));
             return true;
         }
         case "empgroup": { // empgroup <room key> <group> <0-5>: a group card dropped on a priority (priority screen)
             String key = a[1];
             int g = Integer.parseInt(a[2]);
             int v = Integer.parseInt(a[3]);
-            Engine.betweenSteps(() -> {
+            Rig.later(() -> {
                 RoomEmployment e = work(key);
                 WGROUP group = WGROUP.all().get(g);
                 if (!Employment.groupPriority(e, group, v)) {
@@ -47,7 +47,7 @@ public final class EmploymentActions {
             String key = a[1];
             int g = Integer.parseInt(a[2]);
             int by = Integer.parseInt(a[3]);
-            Engine.betweenSteps(() -> {
+            Rig.later(() -> {
                 RoomEmployment e = work(key);
                 WGROUP group = WGROUP.all().get(g);
                 if (!Employment.groupPriorityInc(e, group, by)) {
@@ -57,12 +57,12 @@ public final class EmploymentActions {
             return true;
         }
         case "emptargets": // emptargets: what the priority screen does after a drop
-            Engine.betweenSteps(() -> SETT.ROOMS().employment.setTargets());
+            Rig.later(() -> SETT.ROOMS().employment.setTargets());
             return true;
         case "empskill": { // empskill <room key> <group>: "set all priorities based on work skill"
             String key = a[1];
             int g = Integer.parseInt(a[2]);
-            Engine.betweenSteps(() -> {
+            Rig.later(() -> {
                 RoomEmployment e = work(key);
                 WGROUP group = WGROUP.all().get(g);
                 if (!Employment.prioOnSkill(e, group)) {
@@ -74,7 +74,7 @@ public final class EmploymentActions {
         case "empfulfil": { // empfulfil <room key> <group>: "set all priorities based on fulfillment"
             String key = a[1];
             int g = Integer.parseInt(a[2]);
-            Engine.betweenSteps(() -> {
+            Rig.later(() -> {
                 RoomEmployment e = work(key);
                 WGROUP group = WGROUP.all().get(g);
                 if (!Employment.prioOnFulfillment(e, group)) {
@@ -87,7 +87,7 @@ public final class EmploymentActions {
             String key = a[1];
             int i = Integer.parseInt(a[2]);
             int n = Integer.parseInt(a[3]);
-            Engine.betweenSteps(() -> {
+            Rig.later(() -> {
                 RoomInstance room = room(key, i);
                 if (!Employment.workers(room, n)) {
                     room.employees().neededSet(n);
@@ -99,7 +99,7 @@ public final class EmploymentActions {
             String key = a[1];
             int i = Integer.parseInt(a[2]);
             boolean on = a[3].equals("1");
-            Engine.betweenSteps(() -> {
+            Rig.later(() -> {
                 RoomInstance room = room(key, i);
                 if (!Employment.autoEmploy(room, on)) {
                     ((ROOM_EMPLOY_AUTO) room.blueprint()).autoEmploy(room, on);
@@ -110,7 +110,7 @@ public final class EmploymentActions {
         case "empequip": { // empequip <equipment> <n>: the equipment screen's allocator
             int i = Integer.parseInt(a[1]);
             int n = Integer.parseInt(a[2]);
-            Engine.betweenSteps(() -> {
+            Rig.later(() -> {
                 RoomEquip eq = SETT.ROOMS().employment.equip.ALL.get(i);
                 Employment.equipTargetInput(eq, eq.rooms().get(0)).set(n);
             });
@@ -119,7 +119,7 @@ public final class EmploymentActions {
         case "empequipinc": { // empequipinc <equipment> <+-1>: the equipment screen's category arrows
             int i = Integer.parseInt(a[1]);
             int by = Integer.parseInt(a[2]);
-            Engine.betweenSteps(() -> {
+            Rig.later(() -> {
                 RoomEquip eq = SETT.ROOMS().employment.equip.ALL.get(i);
                 RoomEmploymentSimple e = eq.rooms().get(0);
                 if (!Employment.equipTargetInc(eq, e, by)) {

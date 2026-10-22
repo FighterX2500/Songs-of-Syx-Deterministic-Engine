@@ -778,6 +778,10 @@ def main():
         applied = [str(finished[c.k]["stats"].get("commandsApplied", "?")) for c in copies]
         summary.append("scripted actions sent: %d; commands applied per copy: %s (an action sent after the reference"
                        " copy's last step never applies)" % (len(actions), ", ".join(applied)))
+        skipped = [l for l in copies[0].events.read_text(encoding="utf-8").splitlines() if '"cmdskipped"' in l]
+        if skipped:
+            summary.append("scripted actions skipped on copy 1 (target missing in this save): %d" % len(skipped))
+            summary += ["  " + json.loads(l)["reason"] for l in skipped]
     if args.trace_draws:
         summary_draws = first_draw_difference(run_dir)
         if summary_draws:

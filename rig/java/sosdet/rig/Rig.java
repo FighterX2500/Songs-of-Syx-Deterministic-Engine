@@ -114,6 +114,21 @@ public final class Rig implements SCRIPT {
      */
     private static Instance current;
 
+    /**
+     * Queues a scripted player's action to run outside the step, as the UI would (SOS-34). An action whose target is
+     * missing in this save (a room type it doesn't have) is reported as a "cmdskipped" event instead of crashing the
+     * game; nothing was captured, so the copies stay comparable.
+     */
+    public static void later(Runnable action) {
+        Engine.betweenSteps(() -> {
+            try {
+                action.run();
+            } catch (IllegalStateException | IllegalArgumentException | IndexOutOfBoundsException e) {
+                current.event("cmdskipped", "\"reason\":\"" + Instance.clean(String.valueOf(e.getMessage())) + "\"");
+            }
+        });
+    }
+
     @Override
     public SCRIPT_INSTANCE createInstance() {
         if (current == null) {

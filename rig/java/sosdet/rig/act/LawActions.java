@@ -19,8 +19,8 @@ import settlement.stats.muls.StatsMultipliers.StatMultiplier;
 import settlement.stats.muls.StatsMultipliers.StatMultiplierAction;
 import settlement.stats.service.StatServiceImp;
 import settlement.stats.stat.StatDecree;
-import sosdet.Engine;
 import sosdet.game.cmd.Laws;
+import sosdet.rig.Rig;
 import util.race.PERMISSION;
 
 /**
@@ -38,7 +38,7 @@ public final class LawActions {
         switch (a[0]) {
         case "curfew": { // curfew 1|0: the law screen's curfew button
             boolean on = a[1].equals("1");
-            Engine.betweenSteps(() -> STATS.LAW().getCurfew().setForADay(on));
+            Rig.later(() -> STATS.LAW().getCurfew().setForADay(on));
             return true;
         }
         case "punish": { // punish <crime> <class> <race> <punishment>: the law screen's punishment buttons
@@ -46,7 +46,7 @@ public final class LawActions {
             HCLASS cl = cls(a[2]);
             Race race = race(a[3]);
             int p = Integer.parseInt(a[4]);
-            Engine.betweenSteps(() -> STATS.LAW().crimes.get(crime).punishmentSet(cl, race, CRIME_PUNISHMENTS.ALL().get(p)));
+            Rig.later(() -> STATS.LAW().crimes.get(crime).punishmentSet(cl, race, CRIME_PUNISHMENTS.ALL().get(p)));
             return true;
         }
         case "decree": { // decree <key> <class> <race> <amount>: the decree panel's mark button
@@ -54,7 +54,7 @@ public final class LawActions {
             HCLASS cl = cls(a[2]);
             Race race = race(a[3]);
             int am = Integer.parseInt(a[4]);
-            Engine.betweenSteps(() -> {
+            Rig.later(() -> {
                 if (!Laws.actionMark(dec, cl, race, am)) {
                     dec.mark(cl, race, am);
                 }
@@ -65,7 +65,7 @@ public final class LawActions {
             StatMultiplierAction dec = action(a[1]);
             HCLASS cl = cls(a[2]);
             Race race = race(a[3]);
-            Engine.betweenSteps(() -> {
+            Rig.later(() -> {
                 if (!Laws.actionUnmark(dec, cl, race)) {
                     dec.unmark(cl, race);
                 }
@@ -77,7 +77,7 @@ public final class LawActions {
             HCLASS cl = cls(a[2]);
             Race race = race(a[3]);
             int v = Integer.parseInt(a[4]);
-            Engine.betweenSteps(() -> {
+            Rig.later(() -> {
                 if (!Laws.actionAuto(dec, cl, race, v)) {
                     dec.auto(cl, race).set(v);
                 }
@@ -88,7 +88,7 @@ public final class LawActions {
             StatMultiplierAction dec = action(a[1]);
             HCLASS cl = cls(a[2]);
             boolean set = a[3].equals("1");
-            Engine.betweenSteps(() -> {
+            Rig.later(() -> {
                 Humanoid h = person(cl, dec, set);
                 if (h != null) {
                     dec.mark(h, set);
@@ -100,7 +100,7 @@ public final class LawActions {
             int k = Integer.parseInt(a[1]);
             HCLASS c = cls(a[2]);
             Race race = race(a[3]);
-            Engine.betweenSteps(() -> {
+            Rig.later(() -> {
                 PERMISSION p = STATS.FOOD().allowed(k);
                 if (!Laws.foodAllowed(k, c, race, !p.get(c, race))) {
                     p.toggle(c, race);
@@ -114,7 +114,7 @@ public final class LawActions {
             StatReligion ss = STATS.RELIGION().ALL.get(Integer.parseInt(a[1]));
             HCLASS cl = cls(a[2]);
             Race race = race(a[3]);
-            Engine.betweenSteps(() -> {
+            Rig.later(() -> {
                 PERMISSION p = temple ? ss.permissionTemple : ss.permissionShrine;
                 if (!Laws.religionPermission(ss, temple, cl, race, !p.get(cl, race))) {
                     p.toggle(cl, race);
@@ -126,7 +126,7 @@ public final class LawActions {
             StatGrave ss = STATS.BURIAL().graves().get(Integer.parseInt(a[1]));
             HCLASS cl = cls(a[2]);
             Race race = race(a[3]);
-            Engine.betweenSteps(() -> {
+            Rig.later(() -> {
                 if (!Laws.gravePermission(ss, cl, race, !ss.grave().permission().get(cl, race))) {
                     ss.grave().permission().toggle(cl, race);
                 }
@@ -136,7 +136,7 @@ public final class LawActions {
         case "service": { // service <n> <class> <race>: the services tab's checkbox (toggles)
             StatServiceImp ss = STATS.SERVICE().ALL.get(Integer.parseInt(a[1]));
             HCLASS_RACE cr = cls(a[2]).get(race(a[3]));
-            Engine.betweenSteps(() -> {
+            Rig.later(() -> {
                 if (!Laws.servicePermission(ss, cr, !ss.permission().is(cr))) {
                     ss.permission().toggle(cr);
                 }
@@ -148,7 +148,7 @@ public final class LawActions {
             HCLASS cl = cls(a[2]);
             Race race = race(a[3]);
             int t = Integer.parseInt(a[4]);
-            Engine.betweenSteps(() -> {
+            Rig.later(() -> {
                 RESOURCE res = RACES.res().homeResMax(cl).get(n).resource();
                 STATS.HOME().targetSet(t, cl, race, res);
             });
@@ -159,14 +159,14 @@ public final class LawActions {
             HCLASS cl = cls(a[2]);
             Race race = race(a[3]);
             int t = Integer.parseInt(a[4]);
-            Engine.betweenSteps(() -> STATS.EQUIP().civics().get(n).targetSet(t, cl, race));
+            Rig.later(() -> STATS.EQUIP().civics().get(n).targetSet(t, cl, race));
             return true;
         }
         case "edupolicy": { // edupolicy <class> <race> <policy>: the occupation tab's education policy
             HCLASS cl = cls(a[1]);
             Race race = race(a[2]);
             int p = Integer.parseInt(a[3]);
-            Engine.betweenSteps(() -> STATS.EDUCATION().policySet(cl, race, STATS.EDUCATION().all.get(p)));
+            Rig.later(() -> STATS.EDUCATION().policySet(cl, race, STATS.EDUCATION().all.get(p)));
             return true;
         }
         case "edulimit": { // edulimit <age 0|1> <class> <race> <limit>: the occupation tab's study limit
@@ -174,7 +174,7 @@ public final class LawActions {
             HCLASS cl = cls(a[2]);
             Race race = race(a[3]);
             int l = Integer.parseInt(a[4]);
-            Engine.betweenSteps(() -> STATS.EDUCATION().allAges.get(age).limitSet(cl, race, l));
+            Rig.later(() -> STATS.EDUCATION().allAges.get(age).limitSet(cl, race, l));
             return true;
         }
         case "ration": { // ration food|drink|retire <class> <race> <value>: a stat row's decree slider
@@ -182,19 +182,19 @@ public final class LawActions {
             HCLASS cl = cls(a[2]);
             Race race = race(a[3]);
             int v = Integer.parseInt(a[4]);
-            Engine.betweenSteps(() -> decree(which).getI(cl).set(race, v));
+            Rig.later(() -> decree(which).getI(cl).set(race, v));
             return true;
         }
         case "tech": { // tech <index> <level>: the technology screen's unlock and forget
             int t = Integer.parseInt(a[1]);
             int level = Integer.parseInt(a[2]);
-            Engine.betweenSteps(() -> FACTIONS.player().tech().levelSet(TECHS.ALL().get(t), level));
+            Rig.later(() -> FACTIONS.player().tech().levelSet(TECHS.ALL().get(t), level));
             return true;
         }
         case "admit": { // admit <race> <amount>: the population tab's authorize button
             Race race = race(a[1]);
             int am = Integer.parseInt(a[2]);
-            Engine.betweenSteps(() -> {
+            Rig.later(() -> {
                 if (am > 0 && !Laws.admit(race, am)) {
                     SETT.ENTRY().immi().admit(race, am);
                 }
@@ -204,7 +204,7 @@ public final class LawActions {
         case "admitauto": { // admitauto <race> <value>: the population tab's auto admit limit
             Race race = race(a[1]);
             int v = Integer.parseInt(a[2]);
-            Engine.betweenSteps(() -> {
+            Rig.later(() -> {
                 if (!Laws.admitAuto(race, v)) {
                     SETT.ENTRY().immi().auto(race).set(v);
                 }
@@ -214,7 +214,7 @@ public final class LawActions {
         case "birthlimit": { // birthlimit <class> <race> <value>: the population tab's breeding limit
             HCLASS_RACE cr = HCLASS_RACE.clP(race(a[2]), cls(a[1]));
             int v = Integer.parseInt(a[3]);
-            Engine.betweenSteps(() -> {
+            Rig.later(() -> {
                 if (!Laws.birthLimit(cr, v)) {
                     STATS.POP().reproduction.limit.set(cr, v);
                 }
@@ -224,7 +224,7 @@ public final class LawActions {
         case "breeding": { // breeding <class> <race> <value>: the population tab's forced breeding slider
             HCLASS_RACE cr = HCLASS_RACE.clP(race(a[2]), cls(a[1]));
             int v = Integer.parseInt(a[3]);
-            Engine.betweenSteps(() -> {
+            Rig.later(() -> {
                 if (!Laws.breeding(cr, v)) {
                     STATS.POP().reproduction.settings.set(cr.index, v);
                 }
@@ -232,7 +232,7 @@ public final class LawActions {
             return true;
         }
         case "favourite": { // favourite: the subject panel's heart, on the first citizen (toggles)
-            Engine.betweenSteps(() -> {
+            Rig.later(() -> {
                 Humanoid h = person(HCLASSES.CITIZEN(), null, true);
                 if (h != null && !Laws.favourite(h, STATS.APPEARANCE().favo.get(h.indu()) == 0)) {
                     STATS.APPEARANCE().favo.set(h.indu(), (STATS.APPEARANCE().favo.get(h.indu()) + 1) & 1);
