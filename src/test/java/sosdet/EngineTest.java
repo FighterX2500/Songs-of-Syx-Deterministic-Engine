@@ -37,7 +37,7 @@ class EngineTest {
         }
 
         @Override
-        public String describeDivisions() {
+        public String describeDivisions(long step) {
             return "";
         }
     };

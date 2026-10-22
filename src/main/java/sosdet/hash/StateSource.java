@@ -17,8 +17,8 @@ public interface StateSource {
     String divisionName(int index);
 
     /**
-     * Every division's state as the divisions section hashes it, one line each (not called in the step). Two PCs'
-     * dumps at the same step differ first at the division and field that went differently.
+     * Every division's state as the divisions section hashed it at {@code step}, one line each, if that hash is
+     * still kept. Two PCs' lines for the same step differ at the division and field that went differently.
      */
-    String describeDivisions();
+    String describeDivisions(long step);
 }

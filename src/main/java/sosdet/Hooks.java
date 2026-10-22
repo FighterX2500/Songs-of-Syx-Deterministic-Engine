@@ -40,6 +40,11 @@ public final class Hooks {
         return Engine.session() == null;
     }
 
+    /** The session's current step (the one running, or the last one run). */
+    public static long step() {
+        return Engine.session().clock.step();
+    }
+
     /** The length of the step about to run, in game seconds: it follows the agreed speed, so read it every step. */
     public static double stepSeconds() {
         return Engine.session().clock.stepSeconds();
