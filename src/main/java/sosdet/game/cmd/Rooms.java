@@ -317,7 +317,9 @@ public final class Rooms {
             new Command(DISTRIBUTION_USES, "distributionUses", r -> {
                 RoomInstance ins = Args.room(r);
                 RESOURCE res = Args.resource(r);
-                if (!(ins instanceof RoomDistributionIns) || res == null) {
+                // only a resource the room serves: the game indexes its own list by it
+                if (!(ins instanceof RoomDistributionIns) || res == null
+                        || !((RoomDistributionIns) ins).distributionNlueData().all.contains(res)) {
                     return false;
                 }
                 ((RoomDistributionIns) ins).distributionNlueData().usesToggle(res, ins);

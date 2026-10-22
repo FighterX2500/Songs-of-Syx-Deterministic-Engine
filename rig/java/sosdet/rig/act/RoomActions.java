@@ -31,6 +31,7 @@ import settlement.room.main.RoomBlueprintIns;
 import settlement.room.main.RoomInstance;
 import settlement.room.main.TmpArea;
 import settlement.room.main.job.ROOM_RADIUS.ROOM_RADIUSE;
+import settlement.room.service.food.eatery.RoomDistribution;
 import settlement.room.service.food.eatery.RoomDistribution.RoomDistributionIns;
 import sosdet.game.cmd.Rooms;
 import sosdet.rig.Rig;
@@ -176,10 +177,11 @@ public final class RoomActions {
         case "canteen-uses": // canteen-uses <res>: toggles a food
             Rig.later(() -> Rooms.canteenUses(room("canteen"), res(a[1])));
             return true;
-        case "distribution-uses": // distribution-uses eatery|tavern|market <res>: toggles
+        case "distribution-uses": // distribution-uses eatery|tavern|market <n>: toggles the room's n-th food
             Rig.later(() -> {
                 RoomInstance r = room(a[1]);
-                ((RoomDistributionIns) r).distributionNlueData().usesToggle(res(a[2]), r);
+                RoomDistribution d = ((RoomDistributionIns) r).distributionNlueData();
+                d.usesToggle(d.all.get(Integer.parseInt(a[2])), r);
             });
             return true;
         case "punish-race": // punish-race <race>: the cannibal room's races
