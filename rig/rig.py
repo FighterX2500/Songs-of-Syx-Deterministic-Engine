@@ -125,21 +125,25 @@ class Copy:
 
     def send(self, command, event, timeout=300):
         since = self.events_count()
+        self.command(command)
+        return self.wait(event, since, timeout)
+
+    def command(self, command):
+        """Hands the rig one command: written whole, then renamed into place, so it never reads half of one."""
         cmd = self.rig / "command.txt"
         for _ in range(600):  # the rig deletes the file when it reads it
             if not cmd.exists():
                 break
             time.sleep(0.5)
-        # written whole, then renamed into place: the rig never reads half a command (SOS-32)
         tmp = self.rig / "command.tmp"
         tmp.write_text(command, encoding="utf-8")
         for _ in range(100):
             try:
                 os.replace(tmp, cmd)
-                break
+                return
             except PermissionError:  # the rig has the old file open for a moment
                 time.sleep(0.1)
-        return self.wait(event, since, timeout)
+        fail("copy %d: cannot hand over the command %r" % (self.k, command))
 
 
 def stop_copies():
@@ -657,7 +661,7 @@ def main():
     marks = {c.k: c.events_count() for c in copies if c.k not in finished}
     for c in copies:  # hold the rest now, wherever they are
         if c.k not in finished:
-            (c.rig / "command.txt").write_text("hold", encoding="utf-8")
+            c.command("hold")
     for c in copies:
         if c.k not in finished:
             finished[c.k] = c.wait("finished", marks[c.k], 600)
