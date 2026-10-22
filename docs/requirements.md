@@ -1,6 +1,6 @@
 # SOSDET requirements
 
-Version 0.1 · 2026-10-22
+Version 0.2 · 2026-10-23
 
 What the deterministic engine must do. It does not say how; that belongs in `docs/decisions/` and the cards. Changes to a rule here need the owner's approval, and the change goes in the same PR.
 
@@ -8,19 +8,22 @@ The engine exists for the SoS GSG MP multiplayer mod ([SOSGSGMP](https://github.
 
 ## 1. Purpose
 
-Every PC that starts from the same battle save and seed, and applies the same orders and the same AI log at the same steps, has a bit-identical simulation state after every step. That holds at any game speed and with any local setting (graphics, resolution, language, camera, sound volume, light cycle).
+Every PC that starts from the same save and seed (a battle, a city or the campaign world) and applies the same orders, players' commands and AI log at the same steps has a bit-identical simulation state after every step. That holds at any game speed and with any local setting (graphics, resolution, language, camera, sound volume, light cycle).
 
 ## 2. Scope
 
 - **Game build:** Songs of Syx V71, build 71.44, pinned (mod spec §3). Later game versions are out of scope.
 - **v1:** field battles, as decided in the mod's [ADR 0003](https://github.com/FighterX2500/SOSGSGMP/blob/main/docs/decisions/0003-battle-lockstep.md), including the AI general on the host.
-- **Siege assaults:** the city-side fixes found in SOS-23 are part of the engine, but lockstep for assaults waits on the mod's decision SOS-17.
-- **Not in the engine:** networking, the lobby, the world map and every other multiplayer feature. The engine runs and is tested with no network.
+- **City (owner, 2026-10-23; plan 0002):** the whole city simulation runs in lockstep, including players' city commands (SOS-34). Lockstep for siege assaults still waits on the mod's decision SOS-17.
+- **World map (owner, 2026-10-23; plan 0002):** the world simulation runs in lockstep on every PC, and the host's save recovers a PC that splits. Everything the world reads from a city, and every change the world makes to a city, crosses as a stamped input applied at the same world step on every PC (plan 0002, stage E).
+- **One player faction:** the engine keeps the save's player faction identical on every PC, and a PC's local player never enters the step. Several human factions in one world are the mod's work (owner, 2026-10-23).
+- **Not in the engine:** networking, the lobby and every other multiplayer feature. The engine runs and is tested with no network.
 
 ## 3. What the mod can do through the API
 
 - Read the current step, and set the last step the engine may run. The engine never runs past it, and runs nothing while paused.
 - Give an order to apply at a given step. It is applied at exactly that step on every PC, never on arrival.
+- Give a player's command (a city or world action, carrying the issuing PC) to apply at a given step. It is applied exactly once at that step on every PC; one that moves goods, soldiers or money carries a transaction ID.
 - Set the seed of the simulation random stream.
 - Choose host or peer mode. On the host, the AI general runs and the engine hands out its AI log entries; on every PC, the engine takes the entries in and applies each at its step.
 - Read the state hash at a step.
@@ -39,7 +42,9 @@ On the reference PC (Intel Core i5-11600K, 16 GB RAM; mod spec §13) unless a li
 | Step time | p99.9 at most 20 ms; no step over 1 s; steps over 100 ms no more often than vanilla in the same run, per 10 minutes of game time; for the field battle and the city assault (owner, 2026-10-21). Measured as in SOS-23: one copy running alone, 10 minutes at speed 1. The vanilla load stall at the first step after a battle save loads (about 1.1–1.2 s, `Patrol.find`) is left out (owner, 2026-10-21; SOS-32) |
 | Stall evidence | Each step over 100 ms can be explained: what it was doing (the SOS-23 rig used a stall sampler) |
 | Desync detection | The hash is taken often enough that the mod can detect any desync within 2 s (mod spec §13) |
-| Desync report | Every desync can produce a report: the step, which part of the state differs, recent orders and AI log |
+| Determinism, city | Several game copies stay identical through a 30-minute session in the Mogus-72 city with the owner giving city commands (plan 0002, stage C) |
+| Determinism, world | Several game copies running the world and a city stay identical for 30 minutes with the AI host (plan 0002, stage D) |
+| Desync report | Every desync can produce a report: the step, which part of the state differs, recent orders, commands and AI log |
 | Resync | Saving and loading at a step leaves room for the mod to recover within 10 s (mod spec §13) |
 | AI log delay | Entries are applied 30 steps (0.5 s) after the host's general writes them, inside the 1 s order latency (mod spec §13) |
 
@@ -50,5 +55,5 @@ On the reference PC (Intel Core i5-11600K, 16 GB RAM; mod spec §13) unless a li
 
 ## 6. Open questions
 
-- [ ] **City assault as a target.** Siege assaults wait on the mod's decision SOS-17. Should the engine keep the Mogus-72 city assault as a determinism and timing target now, as SOS-23 did, or only after SOS-17?
+- [x] **City assault as a target.** Settled 2026-10-23: the whole city runs in lockstep (plan 0002), so the Mogus-72 city, invasion included, is a determinism and timing target now. Lockstep for siege assaults between players still waits on SOS-17.
 - [ ] **Test saves.** Where the scenario suite's saves live, since game files are never committed (SOS-31).

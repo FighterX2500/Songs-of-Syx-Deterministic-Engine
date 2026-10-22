@@ -60,6 +60,7 @@ class Copy:
         self.data = self.appdata / "songsofsyx"
         self.rig = self.data / "sosdet-rig"
         self.events = self.rig / "events.jsonl"
+        self.base = 0  # events before this line belong to a warm-up game, not to the run
 
     def prepare(self, saves, window=False):
         shutil.rmtree(self.appdata, ignore_errors=True)
@@ -103,7 +104,7 @@ class Copy:
         end = time.time() + timeout
         while time.time() < end:
             if self.events.exists():
-                lines = self.events.read_text(encoding="utf-8").splitlines()[since:]
+                lines = self.events.read_text(encoding="utf-8").splitlines()[max(since, self.base):]
                 for line in lines:
                     e = json.loads(line)
                     if e["event"] == "error":
@@ -117,7 +118,7 @@ class Copy:
         """The first such event after line `since`, or None (no waiting)."""
         if not self.events.exists():
             return None
-        for line in self.events.read_text(encoding="utf-8").splitlines()[since:]:
+        for line in self.events.read_text(encoding="utf-8").splitlines()[max(since, self.base):]:
             e = json.loads(line)
             if e["event"] == event:
                 return e
@@ -560,6 +561,9 @@ def main():
                     help="the speed every copy agrees on at the start, which sets the step length (1/60 s at 1x or"
                          " slower, 1/16 s above); default: copy 1's speed")
     ap.add_argument("--no-invade", action="store_true", help="city: no invasion, the city as it is")
+    ap.add_argument("--warm", default="",
+                    help="copies (e.g. 3 or 2,3) that play the autoloaded game normally for 30 game seconds before the"
+                         " session, so their session game is not the first one their process has run")
     ap.add_argument("--play", action="store_true",
                     help="the owner plays copy 1 (the host) in a normal window from 1x, giving orders and changing speed;"
                          " the other copies replay its log at 25x; the run ends when the owner closes the window")
@@ -623,7 +627,15 @@ def main():
     host_log = copies[0].rig / "ai-host.log"
     resync_save, resync_state = copies[0].rig / "resync.save", copies[0].rig / "resync.state"
 
+    warm = {int(k) for k in args.warm.split(",") if k}
+
     def start_copy(c, speed):
+        if c.k in warm:
+            # a game played before the session, as a host who played for a while before others joined
+            c.send("vanilla city 30 5 warm-c%d" % c.k, "running")
+            c.wait("finished", 0, 600)
+            c.base = c.events_count()
+            log("copy %d played 30 game seconds before the session" % c.k)
         c.send("begin", "begin")
         if args.ai == "host":
             c.send("ai %s %s" % ("host" if c.k == 1 else "peer", start_id), "ai")
