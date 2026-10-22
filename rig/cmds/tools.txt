@@ -1,0 +1,15 @@
+planmode 1
+planmode 0
+toolarea dormant FARM_GRAIN 0
+toolarea activate FARM_GRAIN 0
+toolarea maintoff FARM_GRAIN 0
+toolarea mainton FARM_GRAIN 0
+toolarea repair FARM_GRAIN 0
+toolarea upgrade WORKSHOP_SMITHY 0
+workgroups FARM_GRAIN 0 all
+workgroups FARM_GRAIN 0 none
+homeassign 0 none
+homeassign 0 all
+homeodd 0
+roomitem WELL_NORMAL 0
+throne

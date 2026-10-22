@@ -1,0 +1,85 @@
+diff -ru -U2 a/settlement/room/main/placement/PlacerItemSingle.java b/settlement/room/main/placement/PlacerItemSingle.java
+--- a/settlement/room/main/placement/PlacerItemSingle.java	2026-06-17 10:48:04.000000000 +0500
++++ b/settlement/room/main/placement/PlacerItemSingle.java	2026-10-23 02:35:06.761447900 +0500
+@@ -108,6 +108,8 @@
+ 		FurnisherItem it = group.item(size(), rot());
+ 		
+ 		if (rx == 0 && ry == 0) {
++			if (sosdet.game.cmd.Tools.roomItem(blueprint, group, size(), rot(), tx, ty, embryo.structure.get(), embryo.autoWalls.getBool())) // SOSDET: a one-item room is a command with the tool state it reads (ADR 0002)
++				return;
+ 
+ 			TBuilding s = blueprint.constructor().mustBeIndoors() ? embryo.structure.get() : null;
+ 			
+diff -ru -U2 a/settlement/room/main/throne/Placer.java b/settlement/room/main/throne/Placer.java
+--- a/settlement/room/main/throne/Placer.java	2025-09-12 16:09:02.000000000 +0500
++++ b/settlement/room/main/throne/Placer.java	2026-10-23 02:35:06.762447700 +0500
+@@ -29,6 +29,8 @@
+ 	@Override
+ 	public void place(int tx, int ty, int rx, int ry) {
+ 		if (rx == 0 && ry == 0 && px != tx && py != ty) {
++			if (sosdet.game.cmd.Tools.throne(tx, ty, rot())) // SOSDET: moving the throne is a command (ADR 0002)
++				return;
+ 			px = tx;
+ 			py = ty;
+ 			new InstanceConstruction(tx, ty, rot());
+diff -ru -U2 a/view/sett/ui/bottom/Options.java b/view/sett/ui/bottom/Options.java
+--- a/view/sett/ui/bottom/Options.java	2026-02-04 10:17:44.000000000 +0500
++++ b/view/sett/ui/bottom/Options.java	2026-10-23 02:35:06.761447900 +0500
+@@ -79,7 +79,8 @@
+ 				
+ 				@Override
+ 				public void exe() {
+-					SETT.JOBS().planMode.toggle();
++					if (!sosdet.game.cmd.Tools.planMode(!SETT.JOBS().planMode.is())) // SOSDET: planning mode is a command (ADR 0002)
++						SETT.JOBS().planMode.toggle();
+ 				}
+ 			};
+ 			
+diff -ru -U2 a/view/sett/ui/home/UIHomeAssign.java b/view/sett/ui/home/UIHomeAssign.java
+--- a/view/sett/ui/home/UIHomeAssign.java	2026-06-09 11:00:04.000000000 +0500
++++ b/view/sett/ui/home/UIHomeAssign.java	2026-10-23 02:35:06.762447700 +0500
+@@ -134,6 +134,8 @@
+ 
+ 	@Override
+ 	public void place(int tx, int ty, AREA area, PLACER_TYPE type) {
++		if (sosdet.game.cmd.Tools.homeAssign(data, tx, ty, area)) // SOSDET: a house's residents setting is a command, one per house (ADR 0002)
++			return;
+ 		settingSet(data, tx, ty);
+ 	}
+ 	
+diff -ru -U2 a/view/sett/ui/home/UIHomeOdd.java b/view/sett/ui/home/UIHomeOdd.java
+--- a/view/sett/ui/home/UIHomeOdd.java	2026-06-17 10:59:30.000000000 +0500
++++ b/view/sett/ui/home/UIHomeOdd.java	2026-10-23 02:35:06.763447900 +0500
+@@ -126,6 +126,8 @@
+ 			return;
+ 		
+ 		if (tx == h.serviceX() && ty == h.serviceY()) {
++			if (sosdet.game.cmd.Tools.homeOdd(tx, ty, ie)) // SOSDET: moving odd-jobbers in is a command with this tool's cursor (ADR 0002)
++				return;
+ 			HTypeBits t = h.availability();
+ 			if (t != null && h.occupants() < h.occupantsMax()) {
+ 				ENTITY[] ee = SETT.ENTITIES().getAllEnts();
+diff -ru -U2 a/view/sett/ui/room/priority/UIRoomRaceAssign.java b/view/sett/ui/room/priority/UIRoomRaceAssign.java
+--- a/view/sett/ui/room/priority/UIRoomRaceAssign.java	2026-06-18 14:39:08.000000000 +0500
++++ b/view/sett/ui/room/priority/UIRoomRaceAssign.java	2026-10-23 02:35:06.763447900 +0500
+@@ -139,6 +139,8 @@
+ 
+ 	@Override
+ 	public void place(int tx, int ty, AREA area, PLACER_TYPE type) {
++		if (sosdet.game.cmd.Tools.workGroups(data, tx, ty, area)) // SOSDET: a workplace's work groups are a command, one per room (ADR 0002)
++			return;
+ 		RoomInstance ins = SETT.ROOMS().map.instance.get(tx, ty);
+ 		if (ins != null && ins.blueprintI().employment() != null) {
+ 			ins.employees().prefferedSet(data);
+diff -ru -U2 a/view/tool/PlacableMultiTool.java b/view/tool/PlacableMultiTool.java
+--- a/view/tool/PlacableMultiTool.java	2025-12-18 09:37:58.000000000 +0500
++++ b/view/tool/PlacableMultiTool.java	2026-10-23 02:35:06.760448500 +0500
+@@ -310,6 +310,8 @@
+ 	}
+ 	
+ 	private void place() {
++		if (sosdet.game.cmd.Tools.multiPlace(placable, type, a)) // SOSDET: a drag with an area tool is one command, its area included (ADR 0002)
++			return;
+ 		
+ 		placable.finishChecking(a);
+ 		
