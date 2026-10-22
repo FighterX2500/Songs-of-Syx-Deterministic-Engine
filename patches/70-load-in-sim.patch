@@ -1,0 +1,19 @@
+diff -ru -U2 a/game/save/GameLoader.java b/game/save/GameLoader.java
+--- a/game/save/GameLoader.java	2026-10-22 16:10:17.954781700 +0500
++++ b/game/save/GameLoader.java	2026-10-22 16:10:17.984781000 +0500
+@@ -27,6 +27,15 @@
+ 	
+ 	@Override
+ 	public CORE_STATE getState() {
++		sosdet.Hooks.loadBegin(); // SOSDET: in a session, a load restarts at step 0 and draws from the simulation (SOS-23)
++		try {
++			return getStateVanilla();
++		} finally {
++			sosdet.Hooks.loadEnd();
++		}
++	}
++
++	private CORE_STATE getStateVanilla() {
+ 		FileGetter fg = null;
+ 		GameSpec ss = null;
+ 		CharSequence error = "No detectable error";

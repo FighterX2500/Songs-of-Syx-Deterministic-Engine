@@ -1,0 +1,31 @@
+diff -ru -U2 a/settlement/path/thread/FinderThread.java b/settlement/path/thread/FinderThread.java
+--- a/settlement/path/thread/FinderThread.java	2026-10-22 16:10:15.189787500 +0500
++++ b/settlement/path/thread/FinderThread.java	2026-10-22 16:10:15.219297700 +0500
+@@ -19,7 +19,11 @@
+ 	private final static Worker[] works = new Worker[1];
+ 	private final Thread[] threads = new Thread[works.length];
+ 	
++	private final SCOMPONENTS comps;
++	private Worker stepWorker;
++
+ 	public FinderThread(SCOMPONENTS comps) {
++		this.comps = comps;
+ 
+ 		
+ 		for (Worker w : works) {
+@@ -88,6 +92,15 @@
+ 		t.dx = (short) dx;
+ 		t.dy = (short) dy;
+ 		t.full = full;
++		if (sosdet.Hooks.pathsNow()) {
++			// SOSDET: compute the path now, on the simulation thread, so the answer comes at a fixed step (B9)
++			if (stepWorker == null)
++				stepWorker = new Worker(this, comps);
++			long start = System.nanoTime();
++			t.status = (byte) (job.doJob(stepWorker.pather, stepWorker.fin, t) ? 3 : 2);
++			sosdet.Hooks.pathDone(System.nanoTime() - start);
++			return;
++		}
+ 		lock();
+ 		if (queueJob.hasRoom()) {
+ 			queueJob.add(job);

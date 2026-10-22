@@ -1,0 +1,50 @@
+diff -ru -U2 a/game/battle/thread/BattleThread.java b/game/battle/thread/BattleThread.java
+--- a/game/battle/thread/BattleThread.java	2026-10-22 16:10:14.699567200 +0500
++++ b/game/battle/thread/BattleThread.java	2026-10-22 16:10:14.727082100 +0500
+@@ -42,6 +42,8 @@
+ 	}
+ 	
+ 	protected void start() {
++		if (sosdet.Hooks.battleThreadsOwned())
++			return; // SOSDET: the job runs inside the step instead (B8)
+ 		thread.start(job);
+ 	}
+ 
+diff -ru -U2 a/game/battle/thread/BattleThreads.java b/game/battle/thread/BattleThreads.java
+--- a/game/battle/thread/BattleThreads.java	2026-10-22 16:10:14.547478300 +0500
++++ b/game/battle/thread/BattleThreads.java	2026-10-22 16:10:14.578534100 +0500
+@@ -33,6 +33,12 @@
+ 	public final BattleOrders orders = new BattleOrders();
+ 	public final Strategos2000 strat = new Strategos2000();
+ 	private final ArrayList<BattleThread> threads = new ArrayList<BattleThread>(orders, centres, status, trajs, strat);
++	// SOSDET: the jobs as the engine runs them inside the step (B8)
++	private final Runnable ordersJob = () -> ((BattleThread)orders).doThreadJob();
++	private final Runnable centresJob = () -> ((BattleThread)centres).doThreadJob();
++	private final Runnable trajsJob = () -> ((BattleThread)trajs).doThreadJob();
++	private final Runnable stratJob = () -> ((BattleThread)strat).doThreadJob();
++	private final Runnable statusJob = () -> ((BattleThread)status).doThreadJob();
+ 	private boolean started = false;
+ 	
+ 	public BattleThreads(GAME game) {
+@@ -107,7 +113,8 @@
+ 	
+ 	@Override
+ 	protected void update(double ds, Profiler prof) {
+-		// TODO Auto-generated method stub
++		if (started && sosdet.Hooks.battleJobsNow(ds))
++			sosdet.Hooks.runBattleJobs(ordersJob, centresJob, trajsJob, stratJob, statusJob);
+ 		
+ 	}
+ 
+diff -ru -U2 a/snake2d/SlaveThread.java b/snake2d/SlaveThread.java
+--- a/snake2d/SlaveThread.java	2026-10-22 16:10:14.836108600 +0500
++++ b/snake2d/SlaveThread.java	2026-10-22 16:10:14.865135000 +0500
+@@ -45,7 +45,7 @@
+ 	}
+ 	
+ 	public boolean working() {
+-		return shouldWork && !shouldDie;
++		return sosdet.Hooks.slaveWorking(shouldWork && !shouldDie); // SOSDET: in a session, only while its job runs in the step (B8)
+ 	}
+ 	
+ 	public void start(ACTION job) {

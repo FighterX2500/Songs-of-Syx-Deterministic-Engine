@@ -13,6 +13,7 @@ SongsOfSyx-sources/
 
 # Build output
 build/
+__pycache__/
 out/
 bin/
 .gradle/

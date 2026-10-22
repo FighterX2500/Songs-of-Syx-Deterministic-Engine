@@ -1,0 +1,83 @@
+diff -ru -U2 a/snake2d/util/rnd/RND.java b/snake2d/util/rnd/RND.java
+--- a/snake2d/util/rnd/RND.java	2026-10-22 16:10:14.197246800 +0500
++++ b/snake2d/util/rnd/RND.java	2026-10-22 16:10:14.226245800 +0500
+@@ -20,26 +20,31 @@
+ 		//seed stuff
+ 	}
+ 	
++	/** SOSDET: the stream this draw comes from; in a session, the simulation's only inside the step (B10). */
++	private static Random r() {
++		return sosdet.Hooks.random(rnd);
++	}
++
+ 	public static int rInt(){
+-		return rnd.nextInt();
++		return r().nextInt();
+ 	}
+ 
+ 	public static boolean rBoolean() {
+-		return rnd.nextBoolean();
++		return r().nextBoolean();
+ 	}
+ 	
+ 	public static int rInt(int max) {
+-		return rnd.nextInt(max);
++		return r().nextInt(max);
+ 	}
+ 
+ 	public static int rInt0(int dist) {
+ 		if (dist == 0)
+ 			return 0;
+-		return -dist + rnd.nextInt(dist*2 + 1);
++		return -dist + r().nextInt(dist*2 + 1);
+ 	}
+ 	
+ 	public static float rFloat() {
+-		return rnd.nextFloat();
++		return r().nextFloat();
+ 	}
+ 	
+ 	public static float rFloatP(float exponent){
+@@ -52,7 +57,7 @@
+ 	}
+ 	
+ 	public static float rFloat(double d) {
+-		return (float) (rnd.nextFloat()*d);
++		return (float) (r().nextFloat()*d);
+ 	}
+ 
+ 	/**
+@@ -61,7 +66,7 @@
+ 	 * @return get a float from 1-d to 1+d
+ 	 */
+ 	public static float rFloat1(double d) {
+-		return (float) ((1.0 -d ) + rnd.nextFloat()*d*2.0);
++		return (float) ((1.0 -d ) + r().nextFloat()*d*2.0);
+ 	}
+ 	
+ 	/**
+@@ -70,13 +75,13 @@
+ 	 * @return a float f, f >= -d, f < d
+ 	 */
+ 	public static float rFloat0(double d) {
+-		return (float) (-d + rnd.nextFloat()*d*2.0);
++		return (float) (-d + r().nextFloat()*d*2.0);
+ 	}
+ 	
+ 	public static boolean oneIn(int what){
+ 		if (what <= 1)
+ 			return true;
+-		return rnd.nextInt(what) == what-1;
++		return r().nextInt(what) == what-1;
+ 	}
+ 	
+ 	public static boolean oneIn(double what){
+@@ -96,7 +101,7 @@
+ 	}
+ 
+ 	public static long rLong() {
+-		return rnd.nextLong();
++		return r().nextLong();
+ 	}
+ 	
+ 	public static float rExpo(){

@@ -2,7 +2,7 @@
 
 Deterministic simulation engine for Songs of Syx V71 (build 71.44). The same battle save, seed, orders and AI log give a bit-identical simulation on every PC. The SoS GSG MP multiplayer mod ([SOSGSGMP](https://github.com/FighterX2500/SOSGSGMP)) uses it for lockstep battles.
 
-**Status:** the build works; the engine itself is being written (cards SOS-27 to SOS-32). The mod it builds doesn't change the game yet.
+**Status:** the engine core works (fixed step, random streams, battle jobs in the step; SOS-27). The AI general on the host, the state hash, resync and the scenario suite follow (SOS-28 to SOS-32). Until something starts an engine session, the game plays as vanilla.
 
 - What it must do: [docs/requirements.md](docs/requirements.md)
 - Coding rules: [AGENTS.md](AGENTS.md); determinism rules: [.claude/rules/determinism.md](.claude/rules/determinism.md)
@@ -58,4 +58,5 @@ The first build downloads Gradle, ECJ 3.40.0 and JUnit. The result is the mod fo
 | `patches/` | The patch set: changes to the game's own source |
 | `src/test/fixtures/patches/` | Patch sets for testing the build (`-Psosdet.patches=<dir>`) |
 | `docs/` | Requirements, decisions, hooks, spike reports |
+| `rig/` | The test rig: a second mod (SOSDET-rig) and its runner, for determinism runs ([rig/README.md](rig/README.md)); never in a release |
 | `spikes/` | Throwaway experiments; never part of the build |
