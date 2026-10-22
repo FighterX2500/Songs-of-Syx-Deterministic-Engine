@@ -228,8 +228,9 @@ public final class Rig implements SCRIPT {
             }
             if (running) {
                 timing();
-                if (city && invadeMen > 0) {
-                    VIEW.inters().messages.hide(); // the invasion's messages would pause the game
+                if (city) {
+                    // the city's messages (the invasion's, a noble's death...) would pause the game waiting for a human
+                    VIEW.inters().messages.hide();
                 }
                 if (vanilla ? gameSeconds >= gameSecondsLeft : Engine.step() >= lastStep) {
                     finish();

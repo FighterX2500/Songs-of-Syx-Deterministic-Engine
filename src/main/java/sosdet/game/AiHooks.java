@@ -1,5 +1,6 @@
 package sosdet.game;
 
+import game.battle.Army;
 import game.battle.div.Div;
 import game.battle.formation.DIV_FORMATION;
 import settlement.room.military.artillery.ArtilleryInstance;
@@ -78,6 +79,22 @@ public final class AiHooks {
         if (!setting(AiEntry.MOP_UP, d, value ? 1 : 0)) {
             d.settings().moppingSet(value);
         }
+    }
+
+    /**
+     * {@code StepBlob}: an army's soldiers. {@code Army.men()} is a lazy count the simulation shares; on the host's
+     * general thread it could be refilled in the middle of a step and leave the simulation a stale value (a host-only
+     * desync, SOS-32). The general counts afresh instead.
+     */
+    public static int armyMen(Army army) {
+        if (!Hooks.aiCapturing()) {
+            return army.men();
+        }
+        int men = 0;
+        for (int i = 0; i < army.divisions().size(); i++) {
+            men += army.divisions().get(i).menNrOf();
+        }
+        return men;
     }
 
     /** {@code StepArtilleryBombard}: the general's target. */
