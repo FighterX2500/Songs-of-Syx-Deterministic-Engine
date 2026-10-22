@@ -155,6 +155,24 @@ def copy_running(k):
     return out not in ("", "0")
 
 
+OFFSCREEN = r"""
+Add-Type -Namespace SosdetRig -Name Win -MemberDefinition @'
+[DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr h, IntPtr a, int x, int y, int cx, int cy, uint f);
+'@
+$p = Get-CimInstance Win32_Process -Filter "Name='java.exe'" | Where-Object { $_.CommandLine -like '*MARKER*' }
+foreach ($q in $p) {
+  $h = (Get-Process -Id $q.ProcessId).MainWindowHandle
+  if ($h -ne [IntPtr]::Zero) { [void][SosdetRig.Win]::SetWindowPos($h, [IntPtr]::Zero, -32000, -32000, 0, 0, 0x0015) }
+}
+"""
+
+
+def move_offscreen(k):
+    """Moves copy k's window off the screen: it still draws and runs (a minimized window could stall), out of sight."""
+    marker = (str(INST / str(k)) + "\\").replace("'", "''")
+    subprocess.run(["powershell", "-NoProfile", "-Command", OFFSCREEN.replace("MARKER", marker)], capture_output=True)
+
+
 def stop_copies():
     """Stops every game process whose class path points into the rig's copies, and waits until they are gone
     (a copy still exiting keeps its data folder locked)."""
@@ -585,6 +603,8 @@ def main():
         time.sleep(3)
     for c in copies:
         c.wait("loaded", 0, 600)
+        if not (args.window or (args.play and c.k == 1)):
+            move_offscreen(c.k)  # test copies out of sight; only a played or watched copy stays on screen
     log("%d copies up; %s, %s test, speeds %s; copy %d runs %d steps, the others until it stops"
         % (len(copies), args.scenario, baseline, speeds, ref, args.steps))
 

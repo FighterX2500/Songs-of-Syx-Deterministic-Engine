@@ -252,7 +252,7 @@ public final class Engine {
             throw new IllegalStateException("SOSDET: no desync to report");
         }
         // player orders come with SOS-33
-        return d.report(s.source(), s.ai().recent(), s.ai().recentOrders());
+        return d.report(s.source(), s.clock.step(), s.ai().recent(), s.ai().recentOrders());
     }
 
     /**

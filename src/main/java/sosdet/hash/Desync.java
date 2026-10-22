@@ -47,7 +47,7 @@ public final class Desync {
      * The desync report (requirements §4): the step, the parts of the state that differ, and what was applied
      * just before. {@code recentAi} and {@code recentOrders} are lines, oldest first.
      */
-    public String report(StateSource names, List<String> recentAi, List<String> recentOrders) {
+    public String report(StateSource names, long now, List<String> recentAi, List<String> recentOrders) {
         StringBuilder b = new StringBuilder();
         b.append(String.format(Locale.ROOT, "SOSDET desync at step %d against PC %d (noticed at step %d)%n%n", step, pc,
                 noticedAt));
@@ -60,7 +60,8 @@ public final class Desync {
         for (int d : divisions) {
             b.append("  ").append(d).append(": ").append(names.divisionName(d)).append('\n');
         }
-        b.append("\nDivisions at step ").append(noticedAt).append(" on this PC (compare with the other PC's report):\n");
+        b.append("\nDivisions on this PC now, at step ").append(now)
+                .append(" (compare only with a report taken at the same step):\n");
         b.append(names.describeDivisions());
         b.append("\nAI log entries applied last (step, sequence, kind, division):\n");
         lines(b, recentAi);

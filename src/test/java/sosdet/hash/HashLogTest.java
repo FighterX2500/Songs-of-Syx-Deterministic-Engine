@@ -198,7 +198,7 @@ class HashLogTest {
         run(a, sa, 1, 30);
         run(b, sb, 1, 30);
         a.in(2, b.out());
-        String report = a.desync().report(sa, List.of("step 12, #0, guard, division 1 = 0"), List.of());
+        String report = a.desync().report(sa, 30, List.of("step 12, #0, guard, division 1 = 0"), List.of());
         assertTrue(report.contains("desync at step 30 against PC 2"), report);
         assertTrue(report.contains("soldiers") && report.contains("DIFFERS"), report);
         assertTrue(report.contains("1: division 1") && report.contains("3: division 3"), report);
