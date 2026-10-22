@@ -1,0 +1,586 @@
+diff -ru -U2 a/settlement/room/food/farm/FarmInstance.java b/settlement/room/food/farm/FarmInstance.java
+--- a/settlement/room/food/farm/FarmInstance.java	2026-05-29 11:08:14.000000000 +0500
++++ b/settlement/room/food/farm/FarmInstance.java	2026-10-23 02:30:41.206878200 +0500
+@@ -207,6 +207,8 @@
+ 	}
+ 	
+ 	public void changeTo(ROOM_FARM f) {
++		if (sosdet.game.cmd.Rooms.farmChange(this, f)) // SOSDET: the crop change is a command (ADR 0002)
++			return;
+ 		ConstructionInit init = new ConstructionInit(0, f.constructor, null, 0, makeState(mX(), mY(), true));
+ 		TmpArea a = remove(mX(), mY(), false, this, true);
+ 		
+diff -ru -U2 a/settlement/room/food/pasture/PastureInstance.java b/settlement/room/food/pasture/PastureInstance.java
+--- a/settlement/room/food/pasture/PastureInstance.java	2026-05-05 09:06:50.000000000 +0500
++++ b/settlement/room/food/pasture/PastureInstance.java	2026-10-23 02:30:41.206878200 +0500
+@@ -314,6 +314,8 @@
+ 	}
+ 	
+ 	void slaughterAll() {
++		if (sosdet.game.cmd.Rooms.slaughterAll(this)) // SOSDET: "slaughter all" is a command (ADR 0002)
++			return;
+ 		double produce = 0;
+ 		for (ENTITY e : ENTITIES().fillTiles(body())){
+ 			if (is(e.physics.tileC())) {
+diff -ru -U2 a/settlement/room/health/hospital/Gui.java b/settlement/room/health/hospital/Gui.java
+--- a/settlement/room/health/hospital/Gui.java	2026-04-14 09:33:04.000000000 +0500
++++ b/settlement/room/health/hospital/Gui.java	2026-10-23 02:30:41.233879600 +0500
+@@ -48,6 +48,8 @@
+ 				
+ 				@Override
+ 				protected void clickA() {
++					if (sosdet.game.cmd.Rooms.hospitalFetch(getter.get(), k, !getter.get().fetch[k])) // SOSDET: a medicine fetched is a command (ADR 0002)
++						return;
+ 					getter.get().fetch[k] = !getter.get().fetch[k];
+ 				}
+ 				
+diff -ru -U2 a/settlement/room/industry/module/consumption/RoomConsumption.java b/settlement/room/industry/module/consumption/RoomConsumption.java
+--- a/settlement/room/industry/module/consumption/RoomConsumption.java	2026-04-29 10:40:50.000000000 +0500
++++ b/settlement/room/industry/module/consumption/RoomConsumption.java	2026-10-23 02:30:41.205876200 +0500
+@@ -90,6 +90,8 @@
+ 	}
+ 	
+ 	public void enabledToggle(IndustryResource res, ROOM_IDATA_INSTANCE ins, RoomInstance i) {
++		if (sosdet.game.cmd.Rooms.consumption(res, i)) // SOSDET: a consumed resource on or off is a command (ADR 0002)
++			return;
+ 		extra.get(res.index()).enabled.set(ins, (extra.get(res.index()).enabled.get(ins)+1)&1);
+ 		ins.getWork().resetResourceSearch();
+ 		if (!enabled(res, ins)) {
+diff -ru -U2 a/settlement/room/infra/export/ExportInstance.java b/settlement/room/infra/export/ExportInstance.java
+--- a/settlement/room/infra/export/ExportInstance.java	2026-06-22 09:26:16.000000000 +0500
++++ b/settlement/room/infra/export/ExportInstance.java	2026-10-23 02:30:41.209877100 +0500
+@@ -126,6 +126,8 @@
+ 	}
+ 	
+ 	void resourceSet(RESOURCE r) {
++		if (sosdet.game.cmd.Rooms.exportResource(this, r)) // SOSDET: the export resource is a command (ADR 0002)
++			return;
+ 		if (r == resource())
+ 			return;
+ 		
+@@ -385,6 +387,8 @@
+ 	}
+ 	
+ 	public void fetchingSet(boolean f) {
++		if (sosdet.game.cmd.Rooms.exportFetching(this, f)) // SOSDET: fetching is a command (ADR 0002)
++			return;
+ 		this.fetching = f;
+ 		coolFetch = 0;
+ 	}
+@@ -447,6 +451,8 @@
+ 	}
+ 	
+ 	void prioSet() {
++		if (sosdet.game.cmd.Rooms.exportPrio(this)) // SOSDET: priority is a command (ADR 0002)
++			return;
+ 		prio = !prio;
+ 		coolFetch = -1;
+ 	}
+diff -ru -U2 a/settlement/room/infra/gate/ROOM_GATE.java b/settlement/room/infra/gate/ROOM_GATE.java
+--- a/settlement/room/infra/gate/ROOM_GATE.java	2026-06-17 10:48:04.000000000 +0500
++++ b/settlement/room/infra/gate/ROOM_GATE.java	2026-10-23 02:30:41.232877200 +0500
+@@ -106,6 +106,8 @@
+ 	private static Coo cooLock = new Coo();
+ 	
+ 	public void lock(int tx, int ty, boolean lock) {
++		if (sosdet.game.cmd.Rooms.gateLock(this, tx, ty, lock)) // SOSDET: a gate's lock is a command (ADR 0002)
++			return;
+ 		if (ROOMS().map.get(tx, ty) == instance) {
+ 			FurnisherItem it = SETT.ROOMS().fData.item.get(tx, ty);
+ 			COORDINATE x1y1 = SETT.ROOMS().fData.itemX1Y1(tx, ty, cooLock);
+diff -ru -U2 a/settlement/room/infra/hauler/HaulerInstance.java b/settlement/room/infra/hauler/HaulerInstance.java
+--- a/settlement/room/infra/hauler/HaulerInstance.java	2026-01-05 09:22:18.000000000 +0500
++++ b/settlement/room/infra/hauler/HaulerInstance.java	2026-10-23 02:30:41.211878500 +0500
+@@ -86,6 +86,8 @@
+ 	}
+ 
+ 	public void setResource(RESOURCE res) {
++		if (sosdet.game.cmd.Rooms.haulerResource(this, res)) // SOSDET: the hauler's resource is a command (ADR 0002)
++			return;
+ 		
+ 		if (resource() != null) {
+ 			for (COORDINATE c : body()) {
+@@ -395,6 +397,8 @@
+ 	}
+ 	
+ 	void storingSet(boolean s) {
++		if (sosdet.game.cmd.Rooms.haulerStoring(this, s)) // SOSDET: storing is a command (ADR 0002)
++			return;
+ 		if (s == storing)
+ 			return;
+ 		for (COORDINATE c : body()) {
+@@ -415,6 +419,8 @@
+ 	}
+ 	
+ 	void prioSet() {
++		if (sosdet.game.cmd.Rooms.haulerPrio(this)) // SOSDET: priority is a command (ADR 0002)
++			return;
+ 		for (COORDINATE c : body()) {
+ 			if (is(c) && blueprintI().crate.get(c.x(), c.y(), this, sdata) != null) {
+ 				blueprintI().crate.remove();
+@@ -433,6 +439,8 @@
+ 	}
+ 	
+ 	void fetchingSet(boolean s) {
++		if (sosdet.game.cmd.Rooms.haulerFetching(this, s)) // SOSDET: fetching is a command (ADR 0002)
++			return;
+ 		if (s == fetching)
+ 			return;
+ 		fetching = s;
+diff -ru -U2 a/settlement/room/infra/importt/ImportInstance.java b/settlement/room/infra/importt/ImportInstance.java
+--- a/settlement/room/infra/importt/ImportInstance.java	2026-02-17 08:55:12.000000000 +0500
++++ b/settlement/room/infra/importt/ImportInstance.java	2026-10-23 02:30:41.212878700 +0500
+@@ -119,6 +119,8 @@
+ 	
+ 	
+ 	void allocate(RESOURCE res){
++		if (sosdet.game.cmd.Rooms.importAllocate(this, res)) // SOSDET: the import resource is a command (ADR 0002)
++			return;
+ 		if (res == resource())
+ 			return;
+ 		dispose();
+diff -ru -U2 a/settlement/room/infra/logistics/MoveOrderPullUI.java b/settlement/room/infra/logistics/MoveOrderPullUI.java
+--- a/settlement/room/infra/logistics/MoveOrderPullUI.java	2026-01-13 14:58:24.000000000 +0500
++++ b/settlement/room/infra/logistics/MoveOrderPullUI.java	2026-10-23 02:30:41.246878700 +0500
+@@ -95,6 +95,8 @@
+ 								for (int ii = 0; ii < source.get().moveOrdersPull().length; ii++) {
+ 									MoveOrderPull o = source.get().moveOrdersPull()[ii];
+ 									if (o == null || o.source() == null || o.source() == ss) {
++										if (sosdet.game.cmd.Rooms.moveOrderNew(room.get(), ii, (RoomInstance) r)) // SOSDET: the new pull order is a command (ADR 0002)
++											break;
+ 										source.get().moveOrdersPull()[ii]  = new MoveOrderPull((RoomInstance) r, source.get().moveOrderPullAccepted());
+ 										source.get().moveOrdersPull()[ii].pullLimit = 0;
+ 										break;
+@@ -316,6 +318,8 @@
+ 				s.addGrid(new GButt.ButtPanel(UI.icons().m.ok) {
+ 					@Override
+ 					protected void clickA() {
++						if (sosdet.game.cmd.Rooms.moveOrderRes(room.get(), oi, sosdet.game.cmd.Rooms.RES_ALL, null)) // SOSDET: the order's resources are a command (ADR 0002)
++							return;
+ 						o.resbits.or(RBIT.ALL);
+ 					}
+ 					
+@@ -325,6 +329,8 @@
+ 					
+ 					@Override
+ 					protected void clickA() {
++						if (sosdet.game.cmd.Rooms.moveOrderRes(room.get(), oi, sosdet.game.cmd.Rooms.RES_NONE, null)) // SOSDET: the order's resources are a command (ADR 0002)
++							return;
+ 						o.resbits.clear();
+ 					}
+ 					
+@@ -341,6 +347,8 @@
+ 						
+ 						@Override
+ 						protected void clickA() {
++							if (sosdet.game.cmd.Rooms.moveOrderRes(room.get(), oi, sosdet.game.cmd.Rooms.RES_TOGGLE, r)) // SOSDET: the order's resources are a command (ADR 0002)
++								return;
+ 							o.resbits.toggle(r);
+ 						}
+ 						
+@@ -380,6 +388,8 @@
+ 				
+ 				@Override
+ 				public void set(int t) {
++					if (sosdet.game.cmd.Rooms.moveOrderLimit(room.get(), oi, t)) // SOSDET: the pull limit is a command (ADR 0002)
++						return;
+ 					o.pullLimit = (byte) t;
+ 				}
+ 			};
+@@ -420,7 +430,8 @@
+ 				
+ 				@Override
+ 				protected void clickA() {
+-					source.get().moveOrdersPull()[oi] = null;
++					if (!sosdet.game.cmd.Rooms.moveOrderRemove(room.get(), oi)) // SOSDET: removing the order is a command (ADR 0002)
++						source.get().moveOrdersPull()[oi] = null;
+ 					VIEW.inters().popup.close();
+ 				}
+ 				
+@@ -567,6 +578,7 @@
+ 			if (i < 0 || i >= prooms.size())
+ 				return;
+ 			MoveJob.ROOM_MOVE_SOURCE s = prooms.get(i);
++			if (!sosdet.game.cmd.Rooms.moveOrderSet(room.get(), placerII, (RoomInstance) s)) // SOSDET: the order's source is a command; the if-else below is this if's body (ADR 0002)
+ 			if (source.get().moveOrdersPull()[placerII]  == null)
+ 				source.get().moveOrdersPull()[placerII]  = new MoveOrderPull((RoomInstance) s, source.get().moveOrderPullAccepted());
+ 			else
+@@ -607,6 +619,7 @@
+ 			VIEW.s().tools.place(null);
+ 
+ 
++			if (!sosdet.game.cmd.Rooms.moveOrderSet(room.get(), placerII, (RoomInstance) r)) // SOSDET: the order's source is a command; the if-else below is this if's body (ADR 0002)
+ 			if (source.get().moveOrdersPull()[placerII]  == null)
+ 				source.get().moveOrdersPull()[placerII]  = new MoveOrderPull((RoomInstance) r, source.get().moveOrderPullAccepted());
+ 			else
+@@ -684,6 +697,8 @@
+ 
+ 		@Override
+ 		public void place(int tx, int ty, AREA area, PLACER_TYPE type) {
++			if (sosdet.game.cmd.Rooms.movePaste((RoomInstance) current, tx, ty)) // SOSDET: pasting the settings is a command, one per tile as the tool places (ADR 0002)
++				return;
+ 			Room r = SETT.ROOMS().map.get(tx, ty);
+ 			MoveOrderPullInstance i = (MoveOrderPullInstance) r;
+ 			
+diff -ru -U2 a/settlement/room/infra/station/StationInstance.java b/settlement/room/infra/station/StationInstance.java
+--- a/settlement/room/infra/station/StationInstance.java	2026-06-27 11:05:12.000000000 +0500
++++ b/settlement/room/infra/station/StationInstance.java	2026-10-23 02:30:41.212878700 +0500
+@@ -113,6 +113,8 @@
+ 	}
+ 
+ 	public void allocate(RESOURCE res, int am) {
++		if (sosdet.game.cmd.Rooms.stationAllocate(this, res, am)) // SOSDET: the station's crates are a command (ADR 0002)
++			return;
+ 		
+ 		am = am-tally(res).crates();
+ 
+diff -ru -U2 a/settlement/room/infra/stockpile/StockpileInstance.java b/settlement/room/infra/stockpile/StockpileInstance.java
+--- a/settlement/room/infra/stockpile/StockpileInstance.java	2026-06-17 18:45:40.000000000 +0500
++++ b/settlement/room/infra/stockpile/StockpileInstance.java	2026-10-23 02:30:41.218877500 +0500
+@@ -188,6 +188,8 @@
+ 	}
+ 
+ 	void allocateCrate(RESOURCE res, int amount){
++		if (sosdet.game.cmd.Rooms.stockpileCrates(this, res, amount)) // SOSDET: a resource's crates are a command (ADR 0002)
++			return;
+ 		setSpecialAmount(res, 0);
+ 		pallocateCrate(res, amount);
+ 		reset();
+@@ -238,6 +240,8 @@
+ 	}
+ 	
+ 	void setSpecialAmount(RESOURCE res, int amount) {
++		if (sosdet.game.cmd.Rooms.stockpileSpecial(this, res, amount)) // SOSDET: a resource's limit is a command (ADR 0002)
++			return;
+ 		amount = CLAMP.i(amount, 0, crateSize());
+ 		if (amount == limits[res.index()])
+ 			return;
+@@ -634,6 +638,8 @@
+ 	}
+ 	
+ 	void storingSet(boolean s) {
++		if (sosdet.game.cmd.Rooms.stockpileStoring(this, s)) // SOSDET: storing is a command (ADR 0002)
++			return;
+ 		if (s == storing)
+ 			return;
+ 		for (int i = 0; i < crates.size(); i++) {
+@@ -652,6 +658,8 @@
+ 	}
+ 	
+ 	void fetchingSet(boolean s) {
++		if (sosdet.game.cmd.Rooms.stockpileFetching(this, s)) // SOSDET: fetching is a command (ADR 0002)
++			return;
+ 		if (s == fetching)
+ 			return;
+ 		fetching = s;
+@@ -659,6 +667,8 @@
+ 	}
+ 	
+ 	public void prioritizeToggle() {
++		if (sosdet.game.cmd.Rooms.stockpilePrio(this)) // SOSDET: priority is a command (ADR 0002)
++			return;
+ 		for (int i = 0; i < crates.size(); i++) {
+ 			blueprintI().crate.get(crates.get().x(), crates.get().y(), this, sdata).remove();
+ 			crates.inc();
+diff -ru -U2 a/settlement/room/infra/transport/Gui.java b/settlement/room/infra/transport/Gui.java
+--- a/settlement/room/infra/transport/Gui.java	2026-04-09 18:45:38.000000000 +0500
++++ b/settlement/room/infra/transport/Gui.java	2026-10-23 02:30:41.214877600 +0500
+@@ -148,6 +148,8 @@
+ 					
+ 					@Override
+ 					protected void clickA() {
++						if (sosdet.game.cmd.Rooms.transportPrio(g.get(), !g.get().prio)) // SOSDET: priority is a command (ADR 0002)
++							return;
+ 						g.get().prio = !g.get().prio;
+ 					}
+ 					
+@@ -191,6 +193,8 @@
+ 				
+ 				@Override
+ 				protected void select(RESOURCE r, int li) {
++					if (sosdet.game.cmd.Rooms.transportResource(g.get(), r)) // SOSDET: the cart's resource is a command (Cart is menu-unsafe) (ADR 0002)
++						return;
+ 					g.get().data.resourceSet(r, g.get());
+ 				}
+ 				
+diff -ru -U2 a/settlement/room/infra/transport/TransportInstance.java b/settlement/room/infra/transport/TransportInstance.java
+--- a/settlement/room/infra/transport/TransportInstance.java	2026-06-24 15:44:12.000000000 +0500
++++ b/settlement/room/infra/transport/TransportInstance.java	2026-10-23 02:30:41.213877600 +0500
+@@ -363,6 +363,8 @@
+ 	}
+ 	
+ 	public void fetchingSet(boolean f) {
++		if (sosdet.game.cmd.Rooms.transportFetching(this, f)) // SOSDET: fetching is a command (ADR 0002)
++			return;
+ 		this.fetching = f;
+ 		coolFetch = 0;
+ 	}
+diff -ru -U2 a/settlement/room/law/guard/ROOM_GUARD.java b/settlement/room/law/guard/ROOM_GUARD.java
+--- a/settlement/room/law/guard/ROOM_GUARD.java	2026-04-09 16:11:58.000000000 +0500
++++ b/settlement/room/law/guard/ROOM_GUARD.java	2026-10-23 02:30:41.232877200 +0500
+@@ -120,6 +120,8 @@
+ 
+ 		@Override
+ 		public BOOLEAN_OE<Div> set(Div t, boolean b) {
++			if (sosdet.game.cmd.Rooms.guardDuty(t, b)) // SOSDET: guard duty is a command (ADR 0002)
++				return this;
+ 			guardMode.set(t.indexArmy(), b);;
+ 			return this;
+ 		}
+diff -ru -U2 a/settlement/room/law/prison/Gui.java b/settlement/room/law/prison/Gui.java
+--- a/settlement/room/law/prison/Gui.java	2026-03-26 10:58:50.000000000 +0500
++++ b/settlement/room/law/prison/Gui.java	2026-10-23 02:30:41.227877200 +0500
+@@ -79,6 +79,8 @@
+ 				
+ 				@Override
+ 				protected void clickA() {
++					if (sosdet.game.cmd.Rooms.prisonFetch(g.get(), e.resource)) // SOSDET: a food fetched is a command (ADR 0002)
++						return;
+ 					g.get().fetch.toggle(e.resource);
+ 					g.get().jobs.resNotFound.clear();
+ 				}
+@@ -124,6 +126,8 @@
+ 						makePrisoners(g.get());
+ 						for (Humanoid h : list) {
+ 							if (AIModule_Prisoner.DATA().punishmentSet.get(h.ai()) != null) {
++								if (sosdet.game.cmd.Rooms.prisonerPunish(h, null)) // SOSDET: a cancelled punishment is a command (ADR 0002)
++									continue;
+ 								AIModule_Prisoner.DATA().punishmentSet.set(h.ai(), null);
+ 								h.interrupt();
+ 							}
+@@ -167,6 +171,8 @@
+ 							makePrisoners(g.get());
+ 							for (Humanoid h : list) {
+ 								if (p.available(AIModule_Prisoner.DATA().clas(h.indu()))) {
++									if (sosdet.game.cmd.Rooms.prisonerPunish(h, p)) // SOSDET: a punishment is a command (ADR 0002)
++										continue;
+ 									AIModule_Prisoner.DATA().punishmentSet.set(h.ai(), p);
+ 									h.interrupt();
+ 								}
+diff -ru -U2 a/settlement/room/law/stockade/Gui.java b/settlement/room/law/stockade/Gui.java
+--- a/settlement/room/law/stockade/Gui.java	2026-03-17 11:11:40.000000000 +0500
++++ b/settlement/room/law/stockade/Gui.java	2026-10-23 02:30:41.230881200 +0500
+@@ -79,6 +79,8 @@
+ 				
+ 				@Override
+ 				protected void clickA() {
++					if (sosdet.game.cmd.Rooms.prisonFetch(g.get(), e.resource)) // SOSDET: a food fetched is a command (ADR 0002)
++						return;
+ 					g.get().fetch.toggle(e.resource);
+ 					g.get().jobs.resNotFound.clear();
+ 				}
+@@ -124,6 +126,8 @@
+ 						makePrisoners(g.get());
+ 						for (Humanoid h : list) {
+ 							if (AIModule_Prisoner.DATA().punishmentSet.get(h.ai()) != null) {
++								if (sosdet.game.cmd.Rooms.prisonerPunish(h, null)) // SOSDET: a cancelled punishment is a command (ADR 0002)
++									continue;
+ 								AIModule_Prisoner.DATA().punishmentSet.set(h.ai(), null);
+ 								h.interrupt();
+ 							}
+@@ -167,6 +171,8 @@
+ 							makePrisoners(g.get());
+ 							for (Humanoid h : list) {
+ 								if (p.available(AIModule_Prisoner.DATA().clas(h.indu()))) {
++									if (sosdet.game.cmd.Rooms.prisonerPunish(h, p)) // SOSDET: a punishment is a command (ADR 0002)
++										continue;
+ 									AIModule_Prisoner.DATA().punishmentSet.set(h.ai(), p);
+ 									h.interrupt();
+ 								}
+diff -ru -U2 a/settlement/room/main/RoomInstance.java b/settlement/room/main/RoomInstance.java
+--- a/settlement/room/main/RoomInstance.java	2026-02-25 17:10:04.000000000 +0500
++++ b/settlement/room/main/RoomInstance.java	2026-10-23 02:30:41.199879200 +0500
+@@ -196,6 +196,8 @@
+ 	}
+ 
+ 	public final void activate(boolean a) {
++		if (sosdet.game.cmd.Rooms.activate(this, a)) // SOSDET: the player's room on/off is a command, applied at its step on every PC (ADR 0002)
++			return;
+ 		
+ 		if (active()) {
+ 			deactivateAction();
+@@ -256,6 +258,8 @@
+ 			throw new RuntimeException();
+ 		if (!is(tx, ty))
+ 			throw new RuntimeException();
++		if (sosdet.game.cmd.Rooms.remove(this, tx, ty, scatter, forced)) // SOSDET: the player's delete is a command; nothing is removed now (ADR 0002)
++			return SETT.ROOMS().tmpArea(obj);
+ 		
+ 		if (!canRemoveAndRemoveAction(tx, ty, scatter, obj, forced))
+ 			return SETT.ROOMS().tmpArea(obj);
+diff -ru -U2 a/settlement/room/military/supply/Gui.java b/settlement/room/military/supply/Gui.java
+--- a/settlement/room/military/supply/Gui.java	2026-06-17 10:48:04.000000000 +0500
++++ b/settlement/room/military/supply/Gui.java	2026-10-23 02:30:41.223877800 +0500
+@@ -220,6 +220,8 @@
+ 				@Override
+ 				protected void clickA() {
+ 					
++					if (sosdet.game.cmd.Rooms.supplyAllowed(g.get(), res)) // SOSDET: an allowed resource is a command (ADR 0002)
++						return;
+ 					g.get().allowedToggle(res);
+ 					g.get().reset();
+ 				}
+@@ -438,6 +440,8 @@
+ 					for (int i = 0; i < blueprint.instancesSize(); i++) {
+ 						SupplyInstance ins = blueprint.getInstance(i);
+ 						if (sel == ins.allowed().has(res)) {
++							if (sosdet.game.cmd.Rooms.supplyAllowed(ins, res)) // SOSDET: an allowed resource is a command (ADR 0002)
++								continue;
+ 							ins.allowedToggle(res);
+ 							ins.reset();
+ 						}	
+diff -ru -U2 a/settlement/room/military/supply/SupplyInstance.java b/settlement/room/military/supply/SupplyInstance.java
+--- a/settlement/room/military/supply/SupplyInstance.java	2025-11-29 09:05:18.000000000 +0500
++++ b/settlement/room/military/supply/SupplyInstance.java	2026-10-23 02:30:41.221878900 +0500
+@@ -184,6 +184,8 @@
+ 	}
+ 	
+ 	public void prioritizeToggle() {
++		if (sosdet.game.cmd.Rooms.supplyPrio(this)) // SOSDET: priority is a command (ADR 0002)
++			return;
+ 		prio = !prio;
+ 		reset();
+ 	}
+@@ -193,6 +195,8 @@
+ 	}
+ 	
+ 	public void fetchingToggle() {
++		if (sosdet.game.cmd.Rooms.supplyFetching(this)) // SOSDET: fetching is a command (ADR 0002)
++			return;
+ 		fetch = !fetch;
+ 		reset();
+ 	}
+diff -ru -U2 a/settlement/room/military/training/Gui.java b/settlement/room/military/training/Gui.java
+--- a/settlement/room/military/training/Gui.java	2026-01-31 09:04:10.000000000 +0500
++++ b/settlement/room/military/training/Gui.java	2026-10-23 02:30:41.237879900 +0500
+@@ -147,6 +147,8 @@
+ 			
+ 			@Override
+ 			public void set(int t) {
++				if (sosdet.game.cmd.Rooms.trainerLimit(blueprint, t)) // SOSDET: the recruits limit is a command (ADR 0002)
++					return;
+ 				blueprint.trainingLimit = t;
+ 			}
+ 		};
+diff -ru -U2 a/settlement/room/service/breeder/Gui.java b/settlement/room/service/breeder/Gui.java
+--- a/settlement/room/service/breeder/Gui.java	2026-07-01 09:30:58.000000000 +0500
++++ b/settlement/room/service/breeder/Gui.java	2026-10-23 02:30:41.236877200 +0500
+@@ -73,6 +73,8 @@
+ 			
+ 			@Override
+ 			protected void clickA() {
++				if (sosdet.game.cmd.Rooms.breederProsecute(blueprint, !blueprint.prosecute)) // SOSDET: prosecution is a command (ADR 0002)
++					return;
+ 				blueprint.prosecute = !blueprint.prosecute;
+ 			}
+ 			
+@@ -147,6 +149,8 @@
+ 				@Override
+ 				public void set(int t) {
+ 					CLAMP.i(t, min(), max());
++					if (sosdet.game.cmd.Rooms.breederLimitTotal(blueprint, t)) // SOSDET: the limit is a command (ADR 0002)
++						return;
+ 					blueprint.limitTotal = t;
+ 				}
+ 			};
+@@ -212,6 +216,8 @@
+ 				@Override
+ 				public void set(int t) {
+ 					CLAMP.i(t, min(), max());
++					if (sosdet.game.cmd.Rooms.breederLimitSpecies(blueprint, t)) // SOSDET: the limit is a command (ADR 0002)
++						return;
+ 					blueprint.limitSpecies = t;
+ 				}
+ 			};
+diff -ru -U2 a/settlement/room/service/food/canteen/CanteenInstance.java b/settlement/room/service/food/canteen/CanteenInstance.java
+--- a/settlement/room/service/food/canteen/CanteenInstance.java	2026-06-17 10:48:06.000000000 +0500
++++ b/settlement/room/service/food/canteen/CanteenInstance.java	2026-10-23 02:30:41.224879700 +0500
+@@ -155,6 +155,8 @@
+ 	}
+ 	
+ 	public void usesToggle(ResG e) {
++		if (sosdet.game.cmd.Rooms.canteenUses(this, e.resource)) // SOSDET: a food served is a command (ADR 0002)
++			return;
+ 		useMask.toggle(e.resource);
+ 		setMask(e);
+ 	}
+diff -ru -U2 a/settlement/room/service/food/eatery/RoomDistribution.java b/settlement/room/service/food/eatery/RoomDistribution.java
+--- a/settlement/room/service/food/eatery/RoomDistribution.java	2026-06-29 10:31:12.000000000 +0500
++++ b/settlement/room/service/food/eatery/RoomDistribution.java	2026-10-23 02:30:41.225880100 +0500
+@@ -307,6 +307,8 @@
+ 	}
+ 	
+ 	public void usesToggle(RESOURCE e, RoomInstance ins) {
++		if (sosdet.game.cmd.Rooms.distributionUses(e, ins)) // SOSDET: a resource handed out is a command (ADR 0002)
++			return;
+ 		InstanceData dd = ((RoomDistributionIns)ins).distributionData();
+ 		
+ 		dump(e, dd, ins);
+diff -ru -U2 a/view/sett/ui/room/ModuleIndustry.java b/view/sett/ui/room/ModuleIndustry.java
+--- a/view/sett/ui/room/ModuleIndustry.java	2026-06-08 10:12:00.000000000 +0500
++++ b/view/sett/ui/room/ModuleIndustry.java	2026-10-23 02:30:41.203878300 +0500
+@@ -589,6 +589,10 @@
+ 						@Override
+ 						protected void clickA() {
+ 							if (i.lockable().passes(FACTIONS.player())) {
++								if (sosdet.game.cmd.Rooms.industry(get.get(), k)) { // SOSDET: the recipe is a command (ADR 0002)
++									VIEW.inters().popup.close();
++									return;
++								}
+ 								ROOM_PRODUCER_INSTANCE p = ((ROOM_PRODUCER_INSTANCE) g(get));
+ 								p.setIndustry(k);
+ 								VIEW.inters().popup.close();
+diff -ru -U2 a/view/sett/ui/room/ModulePunish.java b/view/sett/ui/room/ModulePunish.java
+--- a/view/sett/ui/room/ModulePunish.java	2026-03-19 11:31:50.000000000 +0500
++++ b/view/sett/ui/room/ModulePunish.java	2026-10-23 02:30:41.203878300 +0500
+@@ -73,6 +73,8 @@
+ 						
+ 						@Override
+ 						protected void clickA() {
++							if (sosdet.game.cmd.Rooms.punishRace(pun, r)) // SOSDET: which races are punished is a command (ADR 0002)
++								return;
+ 							pun.punishEnabled().toggle(r);
+ 						}
+ 						
+diff -ru -U2 a/view/sett/ui/room/ModuleRadius.java b/view/sett/ui/room/ModuleRadius.java
+--- a/view/sett/ui/room/ModuleRadius.java	2025-09-12 16:09:02.000000000 +0500
++++ b/view/sett/ui/room/ModuleRadius.java	2026-10-23 02:30:41.202879000 +0500
+@@ -113,6 +113,8 @@
+ 					
+ 					@Override
+ 					public void set(int t) {
++						if (sosdet.game.cmd.Rooms.radius(get.get(), (byte) t)) // SOSDET: the work radius is a command (ADR 0002)
++							return;
+ 						r.radiusInstance(get.get()).radiusRawSet((byte) t);
+ 					}
+ 				};
+diff -ru -U2 a/view/sett/ui/room/ModuleUpgradable.java b/view/sett/ui/room/ModuleUpgradable.java
+--- a/view/sett/ui/room/ModuleUpgradable.java	2026-06-17 10:48:04.000000000 +0500
++++ b/view/sett/ui/room/ModuleUpgradable.java	2026-10-23 02:30:41.201876600 +0500
+@@ -88,6 +88,8 @@
+ 					
+ 					if (ii.upgrade() >= blueprint.upgrades().max() || !ii.blueprintI().upgrades().requires(ii.upgrade()+1).passes(FACTIONS.player()))
+ 						return;
++					if (sosdet.game.cmd.Rooms.upgrade(ii, true)) // SOSDET: "upgrade all" for this room, with its cost, is a command (ADR 0002)
++						return;
+ 					boolean okk = true;
+ 					for (int ri = 0; ri < blueprint.constructor().resources(); ri++) {
+ 						int am = ii.resAmount(ri, ii.upgrade()+1) - ii.resAmount(ri, ii.upgrade());
+@@ -274,6 +276,8 @@
+ 					if (g(get).upgrade() >= blueprint.upgrades().max()) {
+ 						return;
+ 					}
++					if (sosdet.game.cmd.Rooms.upgrade(g(get), false)) // SOSDET: the upgrade and its cost are one command (ADR 0002)
++						return;
+ 					for (int ri = 0; ri < blueprint.constructor().resources(); ri++) {
+ 						int am =  g(get).resAmount(ri, g(get).upgrade()+1)-g(get).resAmount(ri, g(get).upgrade());
+ 						if (am > 0) {
+@@ -343,6 +347,8 @@
+ 	}
+ 
+ 	private void downGrade(RoomInstance ins) {
++		if (sosdet.game.cmd.Rooms.downgrade(ins)) // SOSDET: the downgrade is a command (ADR 0002)
++			return;
+ 		if (ins.upgrade() <= 0)
+ 			return;
+ 		ins.upgradeSet(ins.upgrade()-1);
