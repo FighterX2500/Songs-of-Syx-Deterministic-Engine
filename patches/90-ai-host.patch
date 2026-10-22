@@ -1,0 +1,173 @@
+diff -ru -U2 a/game/battle/thread/general/Strategos2000.java b/game/battle/thread/general/Strategos2000.java
+--- a/game/battle/thread/general/Strategos2000.java	2026-10-22 18:11:17.128084800 +0500
++++ b/game/battle/thread/general/Strategos2000.java	2026-10-22 18:11:17.156731800 +0500
+@@ -105,6 +105,7 @@
+ 
+ 	@Override
+ 	protected void doThreadJob() {
++		sosdet.Hooks.aiGeneralJob(); // SOSDET: on the host, this thread's changes go into the AI log (B15)
+ 		int newDivs = 0;
+ 		for (int di = 0; di < context.getArmy().divisions().size(); di++) {
+ 			if (context.getArmy().divisions().get(di).active())
+diff -ru -U2 a/game/battle/thread/general/offence/StepArtilleryBombard.java b/game/battle/thread/general/offence/StepArtilleryBombard.java
+--- a/game/battle/thread/general/offence/StepArtilleryBombard.java	2026-10-22 18:11:18.090111900 +0500
++++ b/game/battle/thread/general/offence/StepArtilleryBombard.java	2026-10-22 18:11:18.119177200 +0500
+@@ -167,7 +167,7 @@
+ 				if (SETT.PATH().availability.get(x, y).isSolid(c.getArmy()) || GAME.ARMIES().map.attackable.is(x, y, c.getArmy())) {
+ 					for (ArtilleryInstance i : tmp) {
+ 						if (i.testTarget(x, y, traj, false) == null) {
+-							i.targetCooSet(x,y, false, false);
++							sosdet.game.AiHooks.artilleryTarget(i, x, y); // SOSDET: logged on the host (B15)
+ 							tmp.remove(i);
+ 							ins.remove(i);
+ 							break;
+diff -ru -U2 a/game/battle/thread/general/offence/StepAttackEnemyNear.java b/game/battle/thread/general/offence/StepAttackEnemyNear.java
+--- a/game/battle/thread/general/offence/StepAttackEnemyNear.java	2026-10-22 18:11:17.538272300 +0500
++++ b/game/battle/thread/general/offence/StepAttackEnemyNear.java	2026-10-22 18:11:17.566337300 +0500
+@@ -170,12 +170,12 @@
+ 		}
+ 
+ 		if (ee != null && counts[ee.index()] > tot/2) {
+-			d.settings().guard = false;
+-			d.settings().formation = DIV_FORMATION.TIGHT;
++			sosdet.game.AiHooks.guard(d, false); // SOSDET: logged on the host (B15)
++			sosdet.game.AiHooks.formation(d, DIV_FORMATION.TIGHT);
+ 			attack(ee, d);
+ 		}else {
+-			d.settings().guard = true;
+-			d.settings().formation = DIV_FORMATION.TIGHT;
++			sosdet.game.AiHooks.guard(d, true); // SOSDET: logged on the host (B15)
++			sosdet.game.AiHooks.formation(d, DIV_FORMATION.TIGHT);
+ 			task.stop(d);
+ 			d.order().task.set(task);
+ 		}
+@@ -194,7 +194,7 @@
+ 		mDiv.order().task.set(task);
+ 		context.deployedToLine.set(mDiv.indexArmy(), true);
+ 		attacked[d.indexArmy()] += d.menNrOf();
+-		mDiv.settings().formation = d.settings().ammo() == null ? DIV_FORMATION.TIGHT : DIV_FORMATION.LOOSE;
++		sosdet.game.AiHooks.formation(mDiv, d.settings().ammo() == null ? DIV_FORMATION.TIGHT : DIV_FORMATION.LOOSE); // SOSDET: logged on the host (B15)
+ 	}
+ 		
+ }
+diff -ru -U2 a/game/battle/thread/general/offence/StepAttackOthers.java b/game/battle/thread/general/offence/StepAttackOthers.java
+--- a/game/battle/thread/general/offence/StepAttackOthers.java	2026-10-22 18:11:17.676014700 +0500
++++ b/game/battle/thread/general/offence/StepAttackOthers.java	2026-10-22 18:11:17.705468300 +0500
+@@ -139,8 +139,8 @@
+ 		mDiv.order().task.set(task);
+ 		context.deployedToLine.set(mDiv.indexArmy(), true);
+ 		attacked.set(enemy.indexArmy(), true);
+-		mDiv.settings().running = true;
+-		mDiv.settings().formation = enemy.settings().ammo() == null ? DIV_FORMATION.TIGHT : DIV_FORMATION.LOOSE;
++		sosdet.game.AiHooks.running(mDiv, true); // SOSDET: logged on the host (B15)
++		sosdet.game.AiHooks.formation(mDiv, enemy.settings().ammo() == null ? DIV_FORMATION.TIGHT : DIV_FORMATION.LOOSE);
+ 	}
+ 
+ 
+diff -ru -U2 a/game/battle/thread/general/offence/StepLinesMoveTo.java b/game/battle/thread/general/offence/StepLinesMoveTo.java
+--- a/game/battle/thread/general/offence/StepLinesMoveTo.java	2026-10-22 18:11:17.812079000 +0500
++++ b/game/battle/thread/general/offence/StepLinesMoveTo.java	2026-10-22 18:11:17.840050700 +0500
+@@ -139,7 +139,7 @@
+ 		for (int i = 0; i < Config.battle().DIVISIONS_PER_ARMY; i++) {
+ 			if (deployed.get(i)) {
+ 				Div d = util.getArmy().divisions().get(i);
+-				d.settings().running = dists[i] > dist;
++				sosdet.game.AiHooks.running(d, dists[i] > dist); // SOSDET: logged on the host (B15)
+ 			}
+ 		}
+ 		
+@@ -329,7 +329,7 @@
+ 			
+ 		}
+ 		
+-		div.settings().formation = f;
++		sosdet.game.AiHooks.formation(div, f); // SOSDET: logged on the host (B15)
+ 		
+ 	}
+ 	
+diff -ru -U2 a/game/battle/thread/general/offence/Strategos2000UpdaterOffense.java b/game/battle/thread/general/offence/Strategos2000UpdaterOffense.java
+--- a/game/battle/thread/general/offence/Strategos2000UpdaterOffense.java	2026-10-22 18:11:17.946344800 +0500
++++ b/game/battle/thread/general/offence/Strategos2000UpdaterOffense.java	2026-10-22 18:11:17.976344700 +0500
+@@ -130,8 +130,8 @@
+ 				for (int di = 0; di < Config.battle().DIVISIONS_PER_ARMY; di++) {
+ 					Div d = u.getArmy().divisions().get(di);
+ 					if (d.active() && d.settings().ammo() != null && BattleTrajectories.trajectories(d) > d.men()/2) {
+-						d.settings().fireAtWill = true;
+-						d.settings().formation = DIV_FORMATION.LOOSE;
++						sosdet.game.AiHooks.fireAtWill(d, true); // SOSDET: logged on the host (B15)
++						sosdet.game.AiHooks.formation(d, DIV_FORMATION.LOOSE);
+ 						task.stop(d);
+ 						d.order().task.set(task);
+ 						c.deployedToLine.set(di, true);
+diff -ru -U2 a/game/battle/thread/order/BattleOrder.java b/game/battle/thread/order/BattleOrder.java
+--- a/game/battle/thread/order/BattleOrder.java	2026-10-22 18:11:17.268342500 +0500
++++ b/game/battle/thread/order/BattleOrder.java	2026-10-22 18:11:17.296144600 +0500
+@@ -18,6 +18,13 @@
+ 		
+ 	}
+ 	
++	/** SOSDET: which division these orders belong to, for the AI log (B15). */
++	void aiDivision(int div) {
++		path.aiId(div, sosdet.ai.AiEntry.PATH);
++		dest.aiId(div, sosdet.ai.AiEntry.DEST);
++		task.aiId(div, sosdet.ai.AiEntry.TASK);
++	}
++
+ 	void save(FilePutter file) {
+ 		path.save(file);
+ 		dest.save(file);
+@@ -48,6 +55,14 @@
+ 		Locked(T t){
+ 			this.t = t;
+ 		}
++
++		private int aiDiv = -1;
++		private int aiKind;
++
++		void aiId(int div, int kind) {
++			aiDiv = div;
++			aiKind = kind;
++		}
+ 		
+ 		private synchronized void lock() {
+ 			while(lock)
+@@ -62,6 +77,8 @@
+ 		}
+ 		
+ 		public void set(T from) {
++			if (aiDiv >= 0 && sosdet.game.AiHooks.order(aiDiv, aiKind, from))
++				return; // SOSDET: the host's general; every PC applies it at its stamped step (B15)
+ 			lock();
+ 			t.copy(from);
+ 			setI++;
+diff -ru -U2 a/game/battle/thread/order/BattleOrders.java b/game/battle/thread/order/BattleOrders.java
+--- a/game/battle/thread/order/BattleOrders.java	2026-10-22 18:11:17.403099900 +0500
++++ b/game/battle/thread/order/BattleOrders.java	2026-10-22 18:11:17.432091000 +0500
+@@ -23,6 +23,7 @@
+ 		super(1.0/60);
+ 		for (int i = 0; i < orders.length; i++) {
+ 			orders[i] = new BattleOrder();
++			orders[i].aiDivision(i); // SOSDET: AI log (B15)
+ 			nexts[i] = new DivFormationImp();
+ 		}
+ 	}
+diff -ru -U2 a/settlement/thing/projectiles/Updater.java b/settlement/thing/projectiles/Updater.java
+--- a/settlement/thing/projectiles/Updater.java	2026-10-22 18:11:18.227702400 +0500
++++ b/settlement/thing/projectiles/Updater.java	2026-10-22 18:11:18.255447800 +0500
+@@ -21,6 +21,8 @@
+ 
+ 	private final SProjectiles p;
+ 	private static final VectorImp vec = new VectorImp();
++	/** SOSDET: the host's general tests trajectories on its own thread; it must not share vec with the step (B15). */
++	private static final VectorImp vecAi = new VectorImp();
+ 	private final double max = 1/64.0;
+ 	
+ 	Updater(SProjectiles p) {
+@@ -256,6 +258,7 @@
+ 		float vz = (float) traj.vz();
+ //		float vx = (float) traj.vx();
+ //		float vy = (float) traj.vy();
++		final VectorImp vec = sosdet.Hooks.aiCapturing() ? vecAi : Updater.vec; // SOSDET (B15)
+ 		double mag = vec.set(traj.vx(), traj.vy());
+ 		double length = Trajectory.getLength(mag, time);
+ 		

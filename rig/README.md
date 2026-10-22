@@ -39,6 +39,35 @@ Each copy gets its own data folder under `build\rig\inst\<k>`: windowed and tiny
 
 The exit code is 0 when every copy is identical to copy 1. Only one rig run at a time: the game copies compete for the CPU, and the timing numbers mean little while anything else runs.
 
+## The AI general on the host
+
+`--ai host` runs the multiplayer setup:
+- **Copy 1 is the host.** Its AI general plans on its own thread, and every change it makes goes into the AI log. Copy 1 appends that log to a file every frame.
+- **The other copies are peers.** Their general is off. Every frame they read what is new in the host's file and feed it to the engine, which never lets a peer run more than 30 steps past the host's last confirmed step.
+- **The host is the reference.** When it stops, each peer is held once it has passed the host's last step.
+
+This is the flow the multiplayer mod will use, with a file in place of the network. Without `--ai`, every copy runs the general inside the step (in-step mode, the engine's default).
+
+## The timing rule
+
+```
+python rig\rig.py field --tag E1 --evals
+python rig\rig.py city --tag E2 --save Mogus-72-19f86f1e048-47002c-0-121c.save --evals
+```
+
+Not run for SOS-28: the owner deferred the timing evals until timing becomes an issue (2026-10-22).
+
+`--evals` runs one copy at a time, 10 minutes of game time at speed 1 each (requirements §4):
+- **host:** the general on its own thread, writing the AI log;
+- **peer:** replaying that log;
+- **vanilla,** only with `--vanilla`: no engine session, the game's own stepping and threads. By default the baseline is SOS-23's vanilla measurement on the same saves.
+
+All runs start from the same save. The rig-only patch `91-frame-timing` times each frame's game update (the SOS-23 measure: update time per 1/60 s of game time), and a stall sampler records the simulation thread's stack for every step over 100 ms.
+
+`evals.txt` shows the percentiles, the steps over 100 ms per 10 minutes, the steps over 1 s, the most frequent stall causes, whether host and peer stayed identical, and the verdict. The rule passes when p99.9 is at most 20 ms, no step takes over 1 s, and no more steps go over 100 ms than in vanilla.
+
+In the field battle the first frame after the battle save loads is left out (owner, 2026-10-21): it holds the game's own load stall, the guards' patrol search, in vanilla too.
+
 ## The commands
 
 `Rig.java` lists the commands a copy understands (`begin`, `loadseed`, `holdworld`, `load`, `generate`, `loadbattle`, `seed`, `invade`, `run`, `hash`, `end`). A copy reads them from `%APPDATA%\songsofsyx\sosdet-rig\command.txt` in its own data folder and answers in `events.jsonl` there.

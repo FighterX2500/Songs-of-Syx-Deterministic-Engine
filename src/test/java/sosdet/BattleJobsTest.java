@@ -16,13 +16,20 @@ class BattleJobsTest {
 
     private void step(long step) {
         jobs.run(step, () -> ran.add("orders"), () -> ran.add("centres"), () -> ran.add("trajectories"),
-                () -> ran.add("general"), () -> ran.add("status"));
+                () -> ran.add("general"), () -> ran.add("status"), true);
     }
 
     @Test
     void runsInAFixedOrderWithTheGeneralTwice() {
         step(1);
         assertEquals(List.of("orders", "centres", "trajectories", "general", "general"), ran);
+    }
+
+    @Test
+    void theGeneralStaysOutOfTheStepOnHostAndPeer() {
+        jobs.run(30, () -> ran.add("orders"), () -> ran.add("centres"), () -> ran.add("trajectories"),
+                () -> ran.add("general"), () -> ran.add("status"), false);
+        assertEquals(List.of("orders", "centres", "trajectories", "status"), ran);
     }
 
     @Test
@@ -39,7 +46,7 @@ class BattleJobsTest {
         List<Boolean> seen = new ArrayList<>();
         Runnable look = () -> seen.add(jobs.running());
         assertFalse(jobs.running());
-        jobs.run(30, look, look, look, look, look);
+        jobs.run(30, look, look, look, look, look, true);
         assertFalse(jobs.running());
         assertEquals(6, seen.size());
         assertTrue(seen.stream().allMatch(Boolean::booleanValue));
@@ -50,7 +57,7 @@ class BattleJobsTest {
         try {
             jobs.run(1, () -> {
                 throw new IllegalStateException("job failed");
-            }, () -> { }, () -> { }, () -> { }, () -> { });
+            }, () -> { }, () -> { }, () -> { }, () -> { }, true);
         } catch (IllegalStateException expected) {
             assertFalse(jobs.running());
             return;

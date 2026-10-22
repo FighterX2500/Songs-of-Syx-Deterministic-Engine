@@ -16,13 +16,15 @@ final class BattleJobs {
 
     private boolean running;
 
-    void run(long step, Runnable orders, Runnable centres, Runnable trajectories, Runnable general, Runnable status) {
+    /** {@code generalInStep}: false when the general runs on the host's own thread, or not at all (peer). */
+    void run(long step, Runnable orders, Runnable centres, Runnable trajectories, Runnable general, Runnable status,
+            boolean generalInStep) {
         running = true;
         try {
             orders.run();
             centres.run();
             trajectories.run();
-            for (int i = 0; i < GENERAL_RUNS_PER_STEP; i++) {
+            for (int i = 0; generalInStep && i < GENERAL_RUNS_PER_STEP; i++) {
                 general.run();
             }
             if (step % STATUS_EVERY_STEPS == 0) {

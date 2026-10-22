@@ -393,8 +393,8 @@ val applyRigPatches by tasks.registering {
 }
 
 val compileRigPatches by tasks.registering {
-    description = "Compiles the rig's patched game files with ECJ, like the engine's."
-    dependsOn(applyRigPatches, tasks.compileJava)
+    description = "Compiles the rig's patched game files with ECJ, like the engine's (they may call the rig's own classes)."
+    dependsOn(applyRigPatches, tasks.compileJava, tasks.named("compileRigJava"))
     inputs.dir(rigPatchedSourceDir)
     outputs.dir(rigPatchClassesDir)
     doLast {
@@ -402,7 +402,7 @@ val compileRigPatches by tasks.registering {
         out.deleteRecursively()
         out.mkdirs()
         val bySource = patchedSources(rigPatchedSourceDir.get().asFile)
-        val engine = sourceSets.main.get().output.classesDirs.files.toList()
+        val engine = sourceSets.main.get().output.classesDirs.files.toList() + rig.output.classesDirs.files
         ecj("8", engine + gameJar(), bySource["8"].orEmpty(), out)
         ecj("16", listOf(out) + engine + gameJar(), bySource["16"].orEmpty(), out)
     }

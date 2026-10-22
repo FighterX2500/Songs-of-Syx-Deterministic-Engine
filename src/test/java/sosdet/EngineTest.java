@@ -32,7 +32,8 @@ class EngineTest {
         assertFalse(Hooks.battleStateInStep());
         assertSame(simulation, Hooks.random(simulation));
         assertFalse(Hooks.battleJobsNow(1.0 / 60));
-        assertFalse(Hooks.battleThreadsOwned());
+        assertFalse(Hooks.threadRunsInStep(false));
+        assertFalse(Hooks.threadRunsInStep(true));
         assertTrue(Hooks.slaveWorking(true));
         assertFalse(Hooks.slaveWorking(false));
         assertFalse(Hooks.pathsNow());
@@ -115,7 +116,8 @@ class EngineTest {
         assertEquals(1, Hooks.simulationValue(3, 1));
         assertFalse(Hooks.cameraMatters());
         assertFalse(Hooks.autoSaveAllowed());
-        assertTrue(Hooks.battleThreadsOwned());
+        assertTrue(Hooks.threadRunsInStep(false));
+        assertTrue(Hooks.threadRunsInStep(true), "in-step mode: the general's job runs in the step too");
         assertFalse(Hooks.slaveWorking(true), "a battle thread is only working while its job runs in the step");
     }
 

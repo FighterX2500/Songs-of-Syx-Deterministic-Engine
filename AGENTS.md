@@ -18,7 +18,7 @@ Fill these in and keep them current. Agents must not guess them.
 *   **Fast check:** `gradlew.bat compileJava compileTestJava`.
 *   **Tests:** `gradlew.bat test` (JUnit 5).
 *   **Dev install and launch:** `gradlew.bat installMod` / `uninstallMod` (`%APPDATA%\songsofsyx\mods\SOSDET`, then enable it in the launcher); `gradlew.bat runGame` starts the game with the mod, without the launcher. `-Psosdet.patches=<dir>` builds another patch set, for example a test fixture.
-*   **Determinism test:** the test rig, `python rig/rig.py field|city --tag <tag>` after `gradlew.bat assemble` ([rig/README.md](rig/README.md)): 4 copies at different speeds, compared every step. The scenario suite (SOS-31) grows from it.
+*   **Determinism test:** the test rig, `python rig/rig.py field|city --tag <tag>` after `gradlew.bat assemble` ([rig/README.md](rig/README.md)): 4 copies at different speeds, compared every step; `--ai host` for the host and its peers, `--evals` for the timing rule. The scenario suite (SOS-31) grows from it.
 *   **Game log / crash output:** `%APPDATA%\songsofsyx\logs\` (error files `error<date>.txt`); also `<game>/errorLogs/`.
 
 ## Design Review: KISS, DRY, SRP, Cohesion, and Coupling
