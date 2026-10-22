@@ -23,6 +23,10 @@ public final class AiEntry {
     /** The speed every PC agrees on, in thousandths (it sets the step length); not a battle change. */
     public static final int SPEED = 15;
     static final int KINDS = 16;
+    public static String kindName(int kind) {
+        return KIND_NAMES[kind];
+    }
+
     private static final String[] KIND_NAMES = {"path", "dest", "task", "guard", "running", "fireAtWill", "formation",
         "artillery", "holdFire", "ammo", "muster", "mopUp", "artilleryMuster", "artilleryFire", "teleport", "speed"};
 

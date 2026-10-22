@@ -49,6 +49,18 @@ final class DrawTrace {
                 .collect(Collectors.joining(" < "))));
     }
 
+    /** A division's order slot written in the step: what, with the game frames that wrote it. */
+    void orderSet(String what) {
+        if (slot < 0) {
+            return;
+        }
+        sites.get(slot).add(what + " @ " + WALKER.walk(frames -> frames
+                .filter(f -> !f.getClassName().startsWith("sosdet."))
+                .limit(FRAMES)
+                .map(f -> f.getClassName() + "." + f.getMethodName() + ":" + f.getLineNumber())
+                .collect(Collectors.joining(" < "))));
+    }
+
     /** The draws of the steps from {@code from} to {@code to} still kept, one line each, with a line per step. */
     String dump(long from, long to) {
         StringBuilder b = new StringBuilder();

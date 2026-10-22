@@ -40,6 +40,18 @@ public final class Hooks {
         return Engine.session() == null;
     }
 
+    /** Whether order writes should be traced: the draw trace is on and this is the simulation thread in the step. */
+    public static boolean tracingOrders() {
+        Session s = Engine.session();
+        return s != null && s.streams.trace != null && s.streams.inStep() && s.streams.isSimulationThread();
+    }
+
+    /** Debugging: a division's order slot was written in the step, with this content hash (see {@link DrawTrace}). */
+    public static void traceOrder(int kind, int div, int contentHash) {
+        Engine.session().streams.trace.orderSet(String.format(java.util.Locale.ROOT, "SET %s division %d = %08x",
+                sosdet.ai.AiEntry.kindName(kind), div, contentHash));
+    }
+
     /** The session's current step (the one running, or the last one run). */
     public static long step() {
         return Engine.session().clock.step();

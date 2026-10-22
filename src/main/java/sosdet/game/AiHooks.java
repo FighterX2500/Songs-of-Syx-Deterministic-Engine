@@ -21,6 +21,9 @@ public final class AiHooks {
 
     /** {@code BattleOrder.Locked.set}: true when the order was captured and must not be applied now. */
     public static boolean order(int div, int kind, SAVABLE from) {
+        if (Hooks.tracingOrders()) {
+            Hooks.traceOrder(kind, div, java.util.Arrays.hashCode(game().encodeOrder(from)));
+        }
         if (Hooks.aiCapturing()) {
             Hooks.aiCapture(kind, div, game().encode(from));
             return true;
