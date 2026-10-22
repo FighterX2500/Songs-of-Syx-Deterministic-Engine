@@ -1,0 +1,45 @@
+curfew 1
+curfew 0
+punish 0 citizen -1 1
+punish 0 citizen -1 0
+decree DAY_OFF citizen 0 3
+undecree DAY_OFF citizen 0
+decreeauto DAY_OFF citizen 0 20
+decreeauto DAY_OFF citizen 0 0
+decreeperson DAY_OFF citizen 1
+decreeperson DAY_OFF citizen 0
+food 0 citizen -1
+food 0 citizen -1
+temple 0 citizen -1
+temple 0 citizen -1
+shrine 0 slave 0
+shrine 0 slave 0
+grave 0 citizen -1
+grave 0 citizen -1
+service 0 citizen 0
+service 0 citizen 0
+home 0 citizen -1 0
+home 0 citizen -1 1
+civic 0 citizen -1 0
+civic 0 citizen -1 1
+edupolicy citizen -1 1
+edupolicy citizen -1 0
+edulimit 0 citizen -1 10
+edulimit 0 citizen -1 50
+ration food citizen -1 6
+ration food citizen -1 4
+ration drink citizen -1 6
+ration drink citizen -1 4
+ration retire citizen -1 30
+ration retire citizen -1 25
+tech 0 1
+tech 0 0
+admitauto 0 10
+admitauto 0 0
+admit 0 1
+birthlimit citizen 0 100
+birthlimit citizen 0 50000
+breeding citizen 0 80
+breeding citizen 0 50
+favourite
+favourite

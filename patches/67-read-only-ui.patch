@@ -169,8 +169,35 @@ diff -ru -U2 a/settlement/stats/equip/EquipRange.java b/settlement/stats/equip/E
  			double t = TIME.currentSecond();
 diff -ru -U2 a/settlement/stats/muls/StatsMultipliers.java b/settlement/stats/muls/StatsMultipliers.java
 --- a/settlement/stats/muls/StatsMultipliers.java	2026-06-29 09:53:20.000000000 +0500
-+++ b/settlement/stats/muls/StatsMultipliers.java	2026-10-23 01:36:55.667161100 +0500
-@@ -914,7 +914,7 @@
++++ b/settlement/stats/muls/StatsMultipliers.java	2026-10-23 02:21:24.360290100 +0500
+@@ -456,6 +456,8 @@
+ 
+ 		@Override
+ 		public void mark(Humanoid a, boolean set) {
++			if (sosdet.game.cmd.Laws.actionPerson(this, a, set)) // SOSDET: the player's decree for one person is a command, applied at its step on every PC (ADR 0002)
++				return;
+ 			count.inc(a.indu().popCL(), -in.get(a.indu()));
+ 			in.set(a.indu(), set ? 1 : 0);
+ 			if (set)
+@@ -626,6 +628,8 @@
+ 
+ 		@Override
+ 		public void mark(Humanoid h, boolean set) {
++			if (sosdet.game.cmd.Laws.actionPerson(this, h, set)) // SOSDET: the player's decree for one person is a command, applied at its step on every PC (ADR 0002)
++				return;
+ 			data.inc(16);
+ 			if (h.indu().hType() == HTYPES.CHILD_SLAVE()) {
+ 				h.HTypeSet(HTYPES.CHILD(), null, CAUSE_ARRIVES.EMANCIPATED());
+@@ -785,6 +789,8 @@
+ 
+ 		@Override
+ 		public void mark(Humanoid a, boolean set) {
++			if (sosdet.game.cmd.Laws.actionPerson(this, a, set)) // SOSDET: the player's decree for one person is a command, applied at its step on every PC (ADR 0002)
++				return;
+ 			remove(a.indu());
+ 			iActive.setD(a.indu(), 0);
+ 			iSelected.set(a.indu(), set ? 1 : 0);
+@@ -914,7 +920,7 @@
  		@Override
  		public int maxAmount(HCLASS cl, Race race) {
  			
@@ -179,6 +206,15 @@ diff -ru -U2 a/settlement/stats/muls/StatsMultipliers.java b/settlement/stats/mu
  				ai = GAME.updateI();
  				for (int[] i : available)
  					Arrays.fill(i, 0);
+@@ -979,6 +985,8 @@
+ 		
+ 		@Override
+ 		public void mark(Humanoid a, boolean set) {
++			if (sosdet.game.cmd.Laws.actionPerson(this, a, set)) // SOSDET: the player's decree for one person is a command, applied at its step on every PC (ADR 0002)
++				return;
+ 			super.mark(a, set);
+ 			FACTIONS.player().credits().inc(-amount, CTYPE.MISC);
+ 			if (set) {
 diff -ru -U2 a/settlement/tilemap/floor/Floors.java b/settlement/tilemap/floor/Floors.java
 --- a/settlement/tilemap/floor/Floors.java	2026-06-17 18:46:32.000000000 +0500
 +++ b/settlement/tilemap/floor/Floors.java	2026-10-23 01:36:55.670162500 +0500
