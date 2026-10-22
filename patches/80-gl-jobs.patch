@@ -1,0 +1,52 @@
+diff -ru -U2 a/snake2d/CORE.java b/snake2d/CORE.java
+--- a/snake2d/CORE.java	2026-10-22 16:10:18.300528500 +0500
++++ b/snake2d/CORE.java	2026-10-22 16:10:18.328613800 +0500
+@@ -150,7 +150,7 @@
+ 		newState = null;
+ 		while (running && !swapping) {
+ 			if (glJob != null) {
+-				glJob.doJob();
++				doGlJob(glJob);
+ 				glJob = null;
+ 			}
+ 			if (newState != null) {
+@@ -194,7 +194,7 @@
+ 			}
+ 
+ 			if (glJob != null) {
+-				glJob.doJob();
++				doGlJob(glJob);
+ 				glJob = null;
+ 				killSwitch = System.currentTimeMillis();
+ 				kills = 0;
+@@ -326,11 +326,22 @@
+ 		return clientDisposables;
+ 	}
+ 
++	/** SOSDET: a job the waiting simulation thread handed over draws from the simulation while it runs (SOS-23). */
++	private static void doGlJob(GlJob j) {
++		Thread previous = sosdet.Hooks.glJobBegin(j.sosdetSimulation);
++		try {
++			j.doJob();
++		} finally {
++			sosdet.Hooks.glJobEnd(j.sosdetSimulation, previous);
++		}
++	}
++
+ 	public static abstract class GlJob {
+ 		
+ 		protected abstract void doJob();
+ 
+ 		private volatile boolean ru = true;
++		private volatile boolean sosdetSimulation;
+ 		
+ 		public final void gc() {
+ 			System.gc();
+@@ -371,6 +382,7 @@
+ 			if (Thread.currentThread() == glThread && !swapping)
+ 				doJob();
+ 			else {
++				sosdetSimulation = sosdet.Hooks.simulationThreadNow();
+ 				glJob = this;
+ 				while (glJob != null && running)
+ 					sleep(1);

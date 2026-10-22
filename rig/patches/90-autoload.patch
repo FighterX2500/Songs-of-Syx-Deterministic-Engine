@@ -1,0 +1,21 @@
+diff -ru -U2 a/menu/Menu.java b/menu/Menu.java
+--- a/menu/Menu.java	2026-10-22 16:10:18.644188900 +0500
++++ b/menu/Menu.java	2026-10-22 16:10:18.672885100 +0500
+@@ -121,9 +121,17 @@
+ 		current.hover(mCoo);
+ 	}
+ 
++	private static boolean rigAutoloaded;
++
+ 	@Override
+ 	public void update(float ds, double slow) {
+ 		hover(CORE.getInput().getMouse().getCoo(), false);
++		if (!rigAutoloaded && System.getenv("SOSDET_RIG_AUTOLOAD") != null) {
++			// SOSDET rig only: load the named save at start-up, like Continue, so runs need no clicks
++			rigAutoloaded = true;
++			start(new game.save.GameLoader(init.paths.PATHS.local().save().get(System.getenv("SOSDET_RIG_AUTOLOAD"))));
++			return;
++		}
+ 		if (hasLogo) {
+ 			hasLogo = logo.update(ds);
+ 			return;

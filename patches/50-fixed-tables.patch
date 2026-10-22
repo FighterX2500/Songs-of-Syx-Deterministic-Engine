@@ -1,0 +1,61 @@
+diff -ru -U2 a/util/GUTIL.java b/util/GUTIL.java
+--- a/util/GUTIL.java	2026-10-22 16:10:17.118338800 +0500
++++ b/util/GUTIL.java	2026-10-22 16:10:17.154363600 +0500
+@@ -47,8 +47,8 @@
+ 		private final ArrayCooShort coos = new ArrayCooShort(Room.MAX_SIZE+1);
+ 		//final PathThreadManager pathManager;
+ 		private final PathUtilOnline pathOnline;
+-		private final RANMAP ran1 = new RANMAP();
+-		private final RANMAP ran2 = new RANMAP();
++		private final RANMAP ran1 = new RANMAP(sosdet.Hooks.randomTableSeed(1)); // SOSDET: fixed tables (SOS-23)
++		private final RANMAP ran2 = new RANMAP(sosdet.Hooks.randomTableSeed(2));
+ 		private ArrayList<Object> humans = new ArrayList<Object>(ENTETIES.MAX);
+ 
+ 		TextureHolder texture;
+diff -ru -U2 a/util/data/RANMAP.java b/util/data/RANMAP.java
+--- a/util/data/RANMAP.java	2026-10-22 16:10:16.984782100 +0500
++++ b/util/data/RANMAP.java	2026-10-22 16:10:17.012803200 +0500
+@@ -17,6 +17,13 @@
+ 		for (int i = 0; i < ran.length; i++)
+ 			ran[i] = RND.rInt()&0x7FFFFFFF;
+ 	}
++
++	/** SOSDET: a table filled from a fixed seed, the same in every process (SOS-23). */
++	public RANMAP(long seed){
++		java.util.Random r = new java.util.Random(seed);
++		for (int i = 0; i < ran.length; i++)
++			ran[i] = r.nextInt()&0x7FFFFFFF;
++	}
+ 	
+ 	@Override
+ 	public int get(int tile) {
+diff -ru -U2 a/util/updating/TileUpdater.java b/util/updating/TileUpdater.java
+--- a/util/updating/TileUpdater.java	2026-10-22 16:10:16.850732700 +0500
++++ b/util/updating/TileUpdater.java	2026-10-22 16:10:16.877733100 +0500
+@@ -5,7 +5,6 @@
+ import snake2d.util.file.FileGetter;
+ import snake2d.util.file.FilePutter;
+ import snake2d.util.file.SAVABLE;
+-import snake2d.util.rnd.RND;
+ 
+ public abstract class TileUpdater implements SAVABLE{
+ 
+@@ -15,6 +14,7 @@
+ 	private static final byte[][] randomizerY = new byte[64][64];
+ 	
+ 	static {
++		java.util.Random order = sosdet.Hooks.tileOrderRandom(); // SOSDET: the same tile order in every process (B11)
+ 		for (int y = 0; y < randomizerSize; y++) {
+ 			for (int x = 0; x < randomizerSize; x++) {
+ 				randomizerX[y][x] = (byte) x;
+@@ -28,8 +28,8 @@
+ 				byte ax = randomizerX[y][x];
+ 				byte ay = randomizerY[y][x];
+ 				
+-				int x2 = RND.rInt(randomizerSize);
+-				int y2 = RND.rInt(randomizerSize);
++				int x2 = order.nextInt(randomizerSize);
++				int y2 = order.nextInt(randomizerSize);
+ 				
+ 				randomizerX[y][x] = randomizerX[y2][x2];
+ 				randomizerY[y][x] = randomizerY[y2][x2];

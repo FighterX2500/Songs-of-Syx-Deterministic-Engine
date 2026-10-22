@@ -1,0 +1,67 @@
+diff -ru -U2 a/game/GAME.java b/game/GAME.java
+--- a/game/GAME.java	2026-10-22 16:10:13.702343500 +0500
++++ b/game/GAME.java	2026-10-22 16:10:13.730854200 +0500
+@@ -255,7 +255,9 @@
+ 		double speed = SPEED.update(slowDown);
+ 		
+ 		
+-		if (speed == 0) {
++		if (speed == 0 && sosdet.Hooks.skipPausedFrame()) {
++			// SOSDET: a paused frame updates nothing, so paused frames can't change the outcome (B7)
++		}else if (speed == 0) {
+ 			for (GameResource s : GameResource.all) {
+ 				if (s.isBattle || !VIEW.b().isActive())
+ 					s.update(0, game.profiler);
+@@ -263,15 +265,28 @@
+ 			game.updateI++;
+ 		}else {
+ 			ds *= speed;
+-			saver.autoSave(ds);
++			if (sosdet.Hooks.autoSaveAllowed())
++				saver.autoSave(ds);
+ 			int fulls = (int) (ds/max);
+ 			double last = ds - fulls*max;
++			if (sosdet.Hooks.fixedSteps()) {
++				// SOSDET: whole fixed steps; the rest of the frame's game time carries over (B7)
++				fulls = sosdet.Hooks.stepsFor(ds);
++				max = (float) sosdet.Engine.STEP_SECONDS;
++				last = 0;
++			}
+ 			
+ 			for (int i = 0; i < fulls; i++){
++				if (sosdet.Hooks.fixedSteps() && !sosdet.Hooks.stepBegin())
++					break;
+ 				for (GameResource s : GameResource.all) {
+-					if (s.isBattle|| !VIEW.b().isActive())
++					if (s.isBattle|| (!VIEW.b().isActive() && !sosdet.Hooks.worldHeld()))
+ 						s.update(max, game.profiler);
+ 				}
++				if (sosdet.Hooks.battleStateInStep() && VIEW.b().isActive() && VIEW.b().state() != null)
++					VIEW.b().state().update(max);
++				if (sosdet.Hooks.fixedSteps())
++					sosdet.Hooks.stepEnd();
+ 				game.updateI++;
+ 			}
+ 			
+@@ -289,7 +304,8 @@
+ 		
+ 		game.profiler.logEnd(game);
+ 		game.profiler.log();
+-		game.saver.autoSave(ods);
++		if (sosdet.Hooks.autoSaveAllowed())
++			game.saver.autoSave(ods);
+ 		
+ 	}
+ 	
+diff -ru -U2 a/view/battle/BattleView.java b/view/battle/BattleView.java
+--- a/view/battle/BattleView.java	2026-10-22 16:10:13.838392700 +0500
++++ b/view/battle/BattleView.java	2026-10-22 16:10:13.868423500 +0500
+@@ -109,7 +109,7 @@
+ 	@Override
+ 	protected boolean update(float ds, boolean should){
+ 		
+-		if (state != null)
++		if (state != null && !sosdet.Hooks.battleStateInStep()) // SOSDET: in a session it updates inside the step (B7)
+ 			state.update(ds*GAME.SPEED.speedTarget());
+ 		
+ 		window.update(ds);

@@ -150,6 +150,37 @@ fun touchedFiles(patch: File): List<String> = patch.readLines()
 
 val patchedSourceDir = layout.buildDirectory.dir("patched-src")
 
+/**
+ * Copies the game files [patches] touch from the game source to [dest] and applies the patches there.
+ * [ownedElsewhere] maps game files another patch set already changes; each game file belongs to one patch.
+ */
+fun applyPatchSet(patches: List<File>, dest: File, ownedElsewhere: Map<String, String> = emptyMap()) {
+    val src = gameSourcesDir.get().asFile
+    dest.deleteRecursively()
+    dest.mkdirs()
+    val owner = sortedMapOf<String, String>()
+    owner.putAll(ownedElsewhere)
+    for (patch in patches) {
+        for (path in touchedFiles(patch)) {
+            owner[path]?.let {
+                throw GradleException("SOSDET: $path is changed by both $it and ${patch.name}; each game file belongs to exactly one patch")
+            }
+            owner[path] = patch.name
+            val from = src.resolve(path)
+            if (!from.isFile) throw GradleException("SOSDET: ${patch.name} changes $path, which is not in the game source")
+            from.copyTo(dest.resolve(path))
+        }
+    }
+    for (patch in patches) {
+        val process = ProcessBuilder("git", "apply", "--whitespace=nowarn", patch.absolutePath)
+            .directory(dest).redirectErrorStream(true).start()
+        val output = process.inputStream.bufferedReader().readText()
+        if (process.waitFor() != 0) {
+            throw GradleException("SOSDET: ${patch.name} no longer applies to the game source:\n$output")
+        }
+    }
+}
+
 val applyPatches by tasks.registering {
     description = "Copies the game files the patch set touches to build/patched-src and applies the patches."
     dependsOn(gameSources)
@@ -157,30 +188,7 @@ val applyPatches by tasks.registering {
     inputs.dir(gameSourcesDir)
     outputs.dir(patchedSourceDir)
     doLast {
-        val src = gameSourcesDir.get().asFile
-        val dest = patchedSourceDir.get().asFile
-        dest.deleteRecursively()
-        dest.mkdirs()
-        val owner = sortedMapOf<String, String>()
-        for (patch in patchFiles()) {
-            for (path in touchedFiles(patch)) {
-                owner[path]?.let {
-                    throw GradleException("SOSDET: $path is changed by both $it and ${patch.name}; each game file belongs to exactly one patch")
-                }
-                owner[path] = patch.name
-                val from = src.resolve(path)
-                if (!from.isFile) throw GradleException("SOSDET: ${patch.name} changes $path, which is not in the game source")
-                from.copyTo(dest.resolve(path))
-            }
-        }
-        for (patch in patchFiles()) {
-            val process = ProcessBuilder("git", "apply", "--whitespace=nowarn", patch.absolutePath)
-                .directory(dest).redirectErrorStream(true).start()
-            val output = process.inputStream.bufferedReader().readText()
-            if (process.waitFor() != 0) {
-                throw GradleException("SOSDET: ${patch.name} no longer applies to the game source:\n$output")
-            }
-        }
+        applyPatchSet(patchFiles(), patchedSourceDir.get().asFile)
     }
 }
 
@@ -350,6 +358,92 @@ tasks.test {
 
 tasks.check {
     dependsOn(verifyUntouched, fullRebuildCheck)
+}
+
+// ---------------------------------------------------------------- the test rig (rig/; never in a release)
+//
+// A second mod, SOSDET-rig: the harness that drives a game copy (rig/java) and the rig-only patches
+// (rig/patches, for example autoload). rig/rig.py runs several copies with both mods and compares them.
+
+val rigPatchesDir = layout.projectDirectory.dir("rig/patches")
+val rigPatchedSourceDir = layout.buildDirectory.dir("rig/patched-src")
+val rigPatchClassesDir = layout.buildDirectory.dir("rig/classes/game-patches")
+
+val rig: SourceSet = sourceSets.create("rig") {
+    java.srcDir("rig/java")
+}
+
+dependencies {
+    "rigCompileOnly"(files({ gameJar() }))
+    "rigCompileOnly"(sourceSets.main.get().output)
+}
+
+val applyRigPatches by tasks.registering {
+    description = "Applies the rig's patch set to copies of the game files it touches (build/rig/patched-src)."
+    dependsOn(gameSources)
+    inputs.files(fileTree(rigPatchesDir) { include("*.patch") })
+    inputs.files(fileTree(patchesDir) { include("*.patch") })
+    inputs.dir(gameSourcesDir)
+    outputs.dir(rigPatchedSourceDir)
+    doLast {
+        val engineOwned = patchFiles().flatMap { p -> touchedFiles(p).map { it to "${p.name} (engine)" } }.toMap()
+        val rigPatches = rigPatchesDir.asFile.listFiles { f -> f.name.endsWith(".patch") }?.sortedBy { it.name } ?: emptyList()
+        applyPatchSet(rigPatches, rigPatchedSourceDir.get().asFile, engineOwned)
+    }
+}
+
+val compileRigPatches by tasks.registering {
+    description = "Compiles the rig's patched game files with ECJ, like the engine's."
+    dependsOn(applyRigPatches, tasks.compileJava)
+    inputs.dir(rigPatchedSourceDir)
+    outputs.dir(rigPatchClassesDir)
+    doLast {
+        val out = rigPatchClassesDir.get().asFile
+        out.deleteRecursively()
+        out.mkdirs()
+        val bySource = patchedSources(rigPatchedSourceDir.get().asFile)
+        val engine = sourceSets.main.get().output.classesDirs.files.toList()
+        ecj("8", engine + gameJar(), bySource["8"].orEmpty(), out)
+        ecj("16", listOf(out) + engine + gameJar(), bySource["16"].orEmpty(), out)
+    }
+}
+
+val rigJar by tasks.registering(Jar::class) {
+    description = "The rig mod's script jar: the harness and the rig's patched game classes."
+    dependsOn(compileRigPatches)
+    archiveFileName.set("SOSDET-rig.jar")
+    destinationDirectory.set(layout.buildDirectory.dir("rig/libs"))
+    from(rig.output)
+    from(rigPatchClassesDir)
+}
+
+val rigInfo by tasks.registering {
+    val file = layout.buildDirectory.file("rig/mod-info/_Info.txt")
+    val version = project.version.toString()
+    inputs.property("version", version)
+    outputs.file(file)
+    doLast {
+        file.get().asFile.writeText(
+            """
+            VERSION: "$version",
+            NAME: "SOSDET rig",
+            DESC: "Test rig for the SOSDET engine (rig/rig.py). Not for play.",
+            AUTHOR: "FighterX2500",
+            INFO: "https://github.com/FighterX2500/SOSDET",
+            """.trimIndent() + "\n")
+    }
+}
+
+val assembleRig by tasks.registering(Sync::class) {
+    group = "build"
+    description = "Assembles the rig mod folder build/rig/mod/SOSDET-rig."
+    from(rigInfo)
+    from(rigJar) { into("V71/script") }
+    into(layout.buildDirectory.dir("rig/mod/SOSDET-rig"))
+}
+
+tasks.assemble {
+    dependsOn(assembleRig)
 }
 
 // ---------------------------------------------------------------- dev install and launch
