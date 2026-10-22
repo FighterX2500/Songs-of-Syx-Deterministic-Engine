@@ -36,6 +36,11 @@ final class TileArea {
     }
 
     static void write(CmdWriter w, int x1, int y1, int width, int height, Tiles tiles) {
+        of(x1, y1, width, height, tiles).write(w);
+    }
+
+    /** The tiles of a rectangle that {@code tiles} holds. */
+    static TileArea of(int x1, int y1, int width, int height, Tiles tiles) {
         check(width, height);
         int n = width * height;
         int[] words = new int[(n + 31) >>> 5];
@@ -46,8 +51,12 @@ final class TileArea {
                 count++;
             }
         }
-        w.i(x1).i(y1).i(width).i(height).b(count == n);
-        if (count == n) {
+        return new TileArea(x1, y1, width, height, count, count == n ? null : words);
+    }
+
+    void write(CmdWriter w) {
+        w.i(x1).i(y1).i(width).i(height).b(words == null);
+        if (words == null) {
             return;
         }
         for (int word : words) {
