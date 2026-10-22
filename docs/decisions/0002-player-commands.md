@@ -1,6 +1,6 @@
 # 0002: Players' commands go through the host's log, one entry kind with a registry of commands
 
-Status: Proposed (SOS-34) · Card: [SOS-34](https://fighterx2500.atlassian.net/browse/SOS-34) · Builds on: [plan 0002](../plan/0002-city-and-world-lockstep.md) (stage B, owner's decisions of 2026-10-23), requirements §2–§3
+Status: Accepted (owner, 2026-10-23, PR #12) · Card: [SOS-34](https://fighterx2500.atlassian.net/browse/SOS-34) · Builds on: [plan 0002](../plan/0002-city-and-world-lockstep.md) (stage B, owner's decisions of 2026-10-23), requirements §2–§3
 
 ## Context
 
