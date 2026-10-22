@@ -23,8 +23,8 @@ diff -ru -U2 a/game/GAME.java b/game/GAME.java
  			double last = ds - fulls*max;
 +			if (sosdet.Hooks.fixedSteps()) {
 +				// SOSDET: whole fixed steps; the rest of the frame's game time carries over (B7)
-+				fulls = sosdet.Hooks.stepsFor(ds);
-+				max = (float) sosdet.Engine.STEP_SECONDS;
++				fulls = sosdet.Hooks.stepsFor(ds, SPEED.speedTarget());
++				max = (float) sosdet.Hooks.stepSeconds();
 +				last = 0;
 +			}
  			

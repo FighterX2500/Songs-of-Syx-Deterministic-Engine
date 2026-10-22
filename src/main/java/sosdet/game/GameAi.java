@@ -11,17 +11,21 @@ import settlement.main.SETT;
 import settlement.room.main.Room;
 import settlement.room.military.artillery.ArtilleryInstance;
 import snake2d.util.file.SAVABLE;
+import snake2d.util.sets.ArrayList;
+import sosdet.Hooks;
 import sosdet.ai.AiApplier;
 import sosdet.ai.AiEntry;
 
 /**
- * Applies AI log entries to the battle, on the simulation thread at the entry's step; and turns the general's
- * orders into entry payloads on the host's general thread. One per session.
+ * Applies the host's log entries to the battle, on the simulation thread at the entry's step: the AI general's
+ * changes and the players' orders. Also turns orders into entry payloads: the general's on its own thread, a player's
+ * on the game's thread, each with its own codec. One per session.
  */
 public final class GameAi implements AiApplier {
 
     private final GameCodec reader = new GameCodec();
-    private final GameCodec writer = new GameCodec();
+    private final GameCodec generalWriter = new GameCodec();
+    private final GameCodec orderWriter = new GameCodec();
     // Scratch orders the entries are read into; the battle copies them (BattleOrder.Locked.set).
     private final BattleOrderPath path = new BattleOrderPath();
     private final DivFormationImp dest = new DivFormationImp();
@@ -30,21 +34,38 @@ public final class GameAi implements AiApplier {
 
     /** The general's thread only. */
     byte[] encode(SAVABLE order) {
-        return writer.encode(order);
+        return generalWriter.encode(order);
+    }
+
+    /** The game's thread only: a player's order. */
+    byte[] encodeOrder(SAVABLE order) {
+        return orderWriter.encode(order);
     }
 
     @Override
     public void apply(AiEntry e) {
-        if (e.kind == AiEntry.ARTILLERY) {
-            Room r = SETT.ROOMS().map.get(e.intAt(0), e.intAt(1));
-            if (r instanceof ArtilleryInstance) {
-                ((ArtilleryInstance) r).targetCooSet(e.intAt(2), e.intAt(3), false, false);
-            } else {
-                artilleryMissed++; // the artillery is gone by the stamped step, the same on every PC
-            }
+        switch (e.kind) {
+        case AiEntry.SPEED:
+            Hooks.agreedSpeed(e.intAt(0) / 1000.0);
             return;
+        case AiEntry.ARTILLERY:
+        case AiEntry.ARTILLERY_MUSTER:
+        case AiEntry.ARTILLERY_FIRE:
+            artillery(e);
+            return;
+        case AiEntry.TELEPORT:
+            ArrayList<Div> divs = new ArrayList<>(e.ints());
+            for (int i = 0; i < e.ints(); i++) {
+                divs.add(GAME.ARMIES().division((short) e.intAt(i)));
+            }
+            GAME.ARMIES().initAndTeleport(divs);
+            return;
+        default:
+            division(GAME.ARMIES().division((short) e.div), e);
         }
-        Div d = GAME.ARMIES().division((short) e.div);
+    }
+
+    private void division(Div d, AiEntry e) {
         BattleOrder o = d.order();
         switch (e.kind) {
         case AiEntry.PATH:
@@ -71,8 +92,37 @@ public final class GameAi implements AiApplier {
         case AiEntry.FORMATION:
             d.settings().formation = DIV_FORMATION.all.get(e.intAt(0));
             break;
+        case AiEntry.HOLD_FIRE:
+            d.settings().shouldNotMoveToFire = e.intAt(0) != 0;
+            break;
+        case AiEntry.AMMO:
+            d.settings().ammoI = (short) e.intAt(0);
+            break;
+        case AiEntry.MUSTER:
+            d.settings().musteringSet(e.intAt(0) != 0);
+            break;
+        case AiEntry.MOP_UP:
+            d.settings().moppingSet(e.intAt(0) != 0);
+            break;
         default:
-            throw new IllegalStateException("SOSDET: AI entry kind " + e.kind);
+            throw new IllegalStateException("SOSDET: AI log entry kind " + e.kind);
+        }
+    }
+
+    /** An artillery piece is found again at its stamped step by one of its tiles. */
+    private void artillery(AiEntry e) {
+        Room r = SETT.ROOMS().map.get(e.intAt(0), e.intAt(1));
+        if (!(r instanceof ArtilleryInstance)) {
+            artilleryMissed++; // the artillery is gone by the stamped step, the same on every PC
+            return;
+        }
+        ArtilleryInstance a = (ArtilleryInstance) r;
+        if (e.kind == AiEntry.ARTILLERY) {
+            a.targetCooSet(e.intAt(2), e.intAt(3), e.intAt(4) != 0, e.intAt(5) != 0);
+        } else if (e.kind == AiEntry.ARTILLERY_MUSTER) {
+            a.muster(e.intAt(2) != 0);
+        } else {
+            a.fireAtWill(e.intAt(2) != 0);
         }
     }
 

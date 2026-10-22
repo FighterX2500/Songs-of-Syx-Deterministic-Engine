@@ -8,26 +8,29 @@ import java.util.List;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
- * The AI log (hook B15; ADR 0003, amended in SOS-23).
+ * The host's log of battle changes (hooks B15 and B16; ADR 0003, amended in SOS-23): the AI general's, and the
+ * players' orders and speed changes (SOS-32).
  *
- * <p>Host: the general's changes are captured from its own thread. At the start of step N the simulation thread
- * stamps them N + {@link #DELAY_STEPS}, numbers them, and writes them to the outgoing log. Peer: the host's log
- * comes in; the peer never runs past the host's last confirmed step + {@link #DELAY_STEPS}. Every PC, host included,
- * applies each entry at its step, in sequence order, from the same bytes.
+ * <p>Host: the general's changes are captured from its own thread; the host's player's orders from the game's UI,
+ * outside the step; a peer's player's orders arrive through {@link #ordersIn}. At the start of step N the simulation
+ * thread stamps them N + {@link #DELAY_STEPS}, numbers them, and writes them to the outgoing log. Peer: its player's
+ * orders go out through {@link #ordersOut}; the host's log comes in, and the peer never runs past the host's last
+ * confirmed step + {@link #DELAY_STEPS}. Every PC, host included, applies each entry at its step, in sequence order,
+ * from the same bytes.
  *
  * <p>The log as bytes: a header (magic, format version, delay, start ID), then records of a tag, a length and a body:
- * an entry (step, sequence, kind, division, payload) or a confirmation (the host's last drained step).
+ * an entry (step, sequence, kind, division, PC, payload) or a confirmation (the host's last drained step).
  */
 public final class AiLog {
 
-    /** Steps between the host taking a change and every PC applying it: 0.5 s. */
+    /** Steps between the host taking a change and every PC applying it: 0.5 s at 1x. */
     public static final int DELAY_STEPS = 30;
-    static final int FORMAT_VERSION = 1;
+    static final int FORMAT_VERSION = 2;
     static final int MAGIC = 0x53444149; // "SDAI"
     static final int HEADER_BYTES = 4 + 4 + 4 + 8;
     static final byte ENTRY = 1;
     static final byte CONFIRM = 2;
-    /** Applied entries kept for a desync report. */
+    /** Applied entries kept for a desync report, the general's and the players' each. */
     static final int RECENT = 32;
     /** Applied entries kept for a resync to an earlier step: a peer is never more than the delay past the host. */
     static final int HISTORY_STEPS = 4 * DELAY_STEPS;
@@ -44,11 +47,14 @@ public final class AiLog {
     /** Host: the last step drained. Peer: the host's last confirmed step. */
     private long confirmed;
     private long applied;
+    private long appliedOrders;
     private final long[] appliedByKind = new long[AiEntry.KINDS];
-    private final AiEntry[] recent = new AiEntry[RECENT];
-    private long recentCount;
+    private final Recent recentAi = new Recent();
+    private final Recent recentOrders = new Recent();
     /** Peer: entries applied in the last {@link #HISTORY_STEPS}, oldest first. */
     private final ArrayDeque<AiEntry> history = new ArrayDeque<>();
+    /** The players' orders: a peer's going out, the host's coming in from each peer. */
+    private final Orders orders;
 
     private ByteBuffer out = ByteBuffer.allocate(1 << 12);
     private boolean headerWritten;
@@ -59,6 +65,7 @@ public final class AiLog {
         this.mode = mode;
         this.startId = startId;
         this.applier = applier;
+        this.orders = new Orders(startId);
     }
 
     public static AiLog inStep() {
@@ -109,7 +116,47 @@ public final class AiLog {
         if (mode != AiMode.HOST) {
             throw new IllegalStateException("SOSDET: AI capture in mode " + mode);
         }
-        captured.add(new AiEntry(-1, -1, kind, div, payload.clone()));
+        captured.add(new AiEntry(-1, -1, kind, div, AiEntry.AI, payload.clone()));
+    }
+
+    // ------------------------------------------------------------ the players' orders (B16)
+
+    /** True when a player's order is captured instead of applied: with a log (host or peer), and not the general. */
+    public boolean capturingOrders() {
+        return mode != AiMode.IN_STEP && Thread.currentThread() != generalThread;
+    }
+
+    /**
+     * This PC's player gave an order: the host logs it like the general's changes (its player is PC 0); a peer sends it
+     * to the host through {@link #ordersOut}. Either way it is applied at the step the host stamps.
+     */
+    public void captureOrder(int kind, int div, byte[] payload) {
+        if (mode == AiMode.HOST) {
+            captured.add(new AiEntry(-1, -1, kind, div, 0, payload.clone()));
+        } else if (mode == AiMode.PEER) {
+            orders.add(kind, div, payload);
+        } else {
+            throw new IllegalStateException("SOSDET: an order to capture in mode " + mode);
+        }
+    }
+
+    /** Peer: its player's orders given since the last call, for the mod to send to the host. */
+    public byte[] ordersOut() {
+        if (mode != AiMode.PEER) {
+            throw new IllegalStateException("SOSDET: ordersOut in mode " + mode);
+        }
+        return orders.out();
+    }
+
+    /** Host: more of peer {@code pc}'s orders, in any pieces; a repeated order changes nothing. */
+    public void ordersIn(int pc, byte[] bytes) {
+        if (mode != AiMode.HOST) {
+            throw new IllegalStateException("SOSDET: ordersIn in mode " + mode);
+        }
+        if (pc <= 0) {
+            throw new IllegalArgumentException("SOSDET: orders from PC " + pc + " (the host's own player is 0)");
+        }
+        orders.in(pc, bytes, captured);
     }
 
     // ------------------------------------------------------------ the step (simulation thread)
@@ -119,7 +166,7 @@ public final class AiLog {
         return mode != AiMode.PEER || step <= confirmed + DELAY_STEPS;
     }
 
-    /** Start of a step: the host stamps what the general captured; every PC applies the entries due now. */
+    /** Start of a step: the host stamps what was captured; every PC applies the entries due now. */
     public void stepBegin(long step) {
         if (mode == AiMode.IN_STEP) {
             return;
@@ -136,13 +183,16 @@ public final class AiLog {
         while (!pending.isEmpty() && pending.peekFirst().step <= step) {
             AiEntry due = pending.pollFirst();
             if (due.step != step) {
-                throw new IllegalStateException("SOSDET: AI entry " + due.seq + " for step " + due.step
+                throw new IllegalStateException("SOSDET: AI log entry " + due.seq + " for step " + due.step
                         + " is still pending at step " + step);
             }
             applier.apply(due);
-            recent[(int) (recentCount++ % RECENT)] = due;
+            (due.pc == AiEntry.AI ? recentAi : recentOrders).add(due);
             applied++;
             appliedByKind[due.kind]++;
+            if (due.pc != AiEntry.AI) {
+                appliedOrders++;
+            }
             if (mode == AiMode.PEER) {
                 history.add(due);
             }
@@ -248,11 +298,12 @@ public final class AiLog {
     }
 
     private static int entryBytes(AiEntry e) {
-        return 8 + 4 + 1 + 2 + 4 + e.payloadLength();
+        return 8 + 4 + 1 + 2 + 2 + 4 + e.payloadLength();
     }
 
     private static void putEntry(ByteBuffer b, AiEntry e) {
-        b.putLong(e.step).putInt(e.seq).put((byte) e.kind).putShort((short) e.div).putInt(e.payloadLength());
+        b.putLong(e.step).putInt(e.seq).put((byte) e.kind).putShort((short) e.div).putShort((short) e.pc)
+                .putInt(e.payloadLength());
         e.payloadTo(b);
     }
 
@@ -261,9 +312,10 @@ public final class AiLog {
         int seq = b.getInt();
         int kind = b.get();
         int div = b.getShort();
+        int pc = b.getShort();
         byte[] payload = new byte[b.getInt()];
         b.get(payload);
-        return new AiEntry(step, seq, kind, div, payload);
+        return new AiEntry(step, seq, kind, div, pc, payload);
     }
 
     // ------------------------------------------------------------ resync (B14)
@@ -296,8 +348,9 @@ public final class AiLog {
     }
 
     /**
-     * Every PC loads a resync. The host's log is the source and stays as it is. A peer continues from the host's counts with the entries due after the resync step: the
-     * host's, plus any later ones this peer already had (applied past that step or still pending).
+     * Every PC loads a resync. The host's log is the source and stays as it is. A peer continues from the host's
+     * counts with the entries due after the resync step: the host's, plus any later ones this peer already had
+     * (applied past that step or still pending).
      */
     public void resyncIn(byte[] bytes) {
         if (mode == AiMode.IN_STEP) {
@@ -360,21 +413,45 @@ public final class AiLog {
         return applied;
     }
 
+    /** The players' orders applied (speed changes included). */
+    public long appliedOrders() {
+        return appliedOrders;
+    }
+
     public long applied(int kind) {
         return appliedByKind[kind];
     }
 
-    /** The last entries applied, oldest first, one line each (for a desync report). */
+    /** The general's last entries applied, oldest first, one line each (for a desync report). */
     public List<String> recent() {
-        List<String> lines = new ArrayList<>();
-        for (long i = Math.max(0, recentCount - RECENT); i < recentCount; i++) {
-            lines.add(recent[(int) (i % RECENT)].line());
-        }
-        return lines;
+        return recentAi.lines();
+    }
+
+    /** The players' last orders applied, oldest first, one line each (for a desync report). */
+    public List<String> recentOrders() {
+        return recentOrders.lines();
     }
 
     /** Entries known but not applied yet. */
     public int pending() {
         return pending.size() + captured.size();
+    }
+
+    /** The last {@link #RECENT} entries applied, in a ring. */
+    private static final class Recent {
+        private final AiEntry[] ring = new AiEntry[RECENT];
+        private long count;
+
+        void add(AiEntry e) {
+            ring[(int) (count++ % RECENT)] = e;
+        }
+
+        List<String> lines() {
+            List<String> lines = new ArrayList<>();
+            for (long i = Math.max(0, count - RECENT); i < count; i++) {
+                lines.add(ring[(int) (i % RECENT)].line());
+            }
+            return lines;
+        }
     }
 }

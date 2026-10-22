@@ -173,6 +173,27 @@ class EngineTest {
     }
 
     @Test
+    void theStepLengthFollowsTheAgreedSpeed() {
+        begin();
+        Engine.runFreely();
+        assertEquals(60, Hooks.stepsFor(1.0, 1), "1x: 1/60 s steps");
+        assertEquals(1.0 / 60, Hooks.stepSeconds());
+        assertEquals(16, Hooks.stepsFor(1.0, 5), "in-step, one PC: 5x is the agreed speed at once, 1/16 s steps");
+        assertEquals(1.0 / 16, Hooks.stepSeconds());
+        assertEquals(16, Hooks.stepsFor(1.0, 0), "paused: the length stays");
+        Engine.end();
+        begin();
+        Engine.speed(25);
+        assertEquals(1.0 / 16, Hooks.stepSeconds(), "the starting speed, set at step 0");
+        assertEquals(25.0, Engine.stats().agreedSpeed);
+        Engine.runFreely();
+        Hooks.stepsFor(0.1, 25);
+        Hooks.stepBegin();
+        Hooks.stepEnd();
+        assertThrows(IllegalStateException.class, () -> Engine.speed(1), "only at step 0");
+    }
+
+    @Test
     void stepZeroRunsInsideTheSimulationAndOnlyOnce() {
         begin();
         Random[] drawn = new Random[1];

@@ -4,7 +4,6 @@ import sosdet.ai.AiEntry;
 import sosdet.ai.AiLog;
 import sosdet.ai.AiMode;
 import java.nio.file.Path;
-import java.util.Collections;
 
 import sosdet.game.GameAi;
 import sosdet.game.GameResync;
@@ -83,6 +82,20 @@ public final class Engine {
         s.seed = seed;
     }
 
+    /**
+     * The speed every PC agreed on at the start (1x by default). It sets the step length: 1/60 s at 1x or slower,
+     * 1/16 s above. Set it at step 0, the same on every PC; later the host's speed changes go through the log and
+     * every PC switches at the stamped step. A PC's own game speed only sets its pace.
+     */
+    public static void speed(double agreed) {
+        Session s = required();
+        if (s.clock.step() != 0) {
+            throw new IllegalStateException("SOSDET: the starting speed is set at step 0 (step " + s.clock.step() + ")");
+        }
+        s.clock.agreedSpeed(agreed);
+        s.seenSpeed = agreed;
+    }
+
     /** From the next load on, loading runs on the simulation stream seeded with this; 0 = vanilla loading. */
     public static void armLoadSeed(int seed) {
         required().loadSeed = seed;
@@ -119,8 +132,8 @@ public final class Engine {
         long step = s.clock.step();
         GameResync.save(file);
         s.clock.runUntil(step); // the host waits for its own load too
-        return new Resync(step, s.seed, s.hashes.interval(), s.hashes.epoch() + 1, s.streams.drawsSinceLoad(),
-                s.ai().resyncOut(), GameResync.capture()).toBytes();
+        return new Resync(step, s.seed, s.clock.agreedSpeed(), s.hashes.interval(), s.hashes.epoch() + 1,
+                s.streams.drawsSinceLoad(), s.ai().resyncOut(), GameResync.capture()).toBytes();
     }
 
     /**
@@ -168,6 +181,19 @@ public final class Engine {
     /** Host: the AI log written since the last call, for the mod to send to every peer. */
     public static byte[] aiLogOut() {
         return required().ai().logOut();
+    }
+
+    /** Peer: its player's orders given since the last call, for the mod to send to the host. */
+    public static byte[] ordersOut() {
+        return required().ai().ordersOut();
+    }
+
+    /**
+     * Host: more of peer {@code pc}'s orders (the mod's number for it, from 1; the host's own player is 0), in any
+     * pieces. They go into the log like the general's changes and apply at the step the host stamps.
+     */
+    public static void ordersIn(int pc, byte[] bytes) {
+        required().ai().ordersIn(pc, bytes);
     }
 
     /** Peer: more of the host's AI log, in any pieces. The peer runs at most 30 steps past what it confirms. */
@@ -226,7 +252,7 @@ public final class Engine {
             throw new IllegalStateException("SOSDET: no desync to report");
         }
         // player orders come with SOS-33
-        return d.report(s.source(), s.ai().recent(), Collections.<String>emptyList());
+        return d.report(s.source(), s.ai().recent(), s.ai().recentOrders());
     }
 
     /** When the running step started (System.nanoTime), or 0 between steps: for a stall sampler on another thread. */
@@ -242,7 +268,8 @@ public final class Engine {
         return new Stats(s.clock.step(), s.streams.simulationDraws(), s.streams.foreignDraws(), s.pathJobs,
                 s.pathNanos, t.steps(), t.meanMs(), t.percentileMs(0.5), t.percentileMs(0.95), t.percentileMs(0.99),
                 t.percentileMs(0.999), t.maxMs(), t.over100Ms(), t.over1S(), s.ai().mode(), s.ai().applied(),
-                s.ai().applied(AiEntry.ARTILLERY), s.ai().pending(), s.hashes.taken(), s.hashes.meanMs(), s.hashes.maxMs(),
+                s.ai().applied(AiEntry.ARTILLERY), s.ai().pending(), s.ai().appliedOrders(), s.clock.agreedSpeed(),
+                s.hashes.taken(), s.hashes.meanMs(), s.hashes.maxMs(),
                 s.hashes.compared(), s.hashes.missed());
     }
 

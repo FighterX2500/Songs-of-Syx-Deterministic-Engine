@@ -39,6 +39,26 @@ public final class Hooks {
         return Engine.session() == null;
     }
 
+    /** The length of the step about to run, in game seconds: it follows the agreed speed, so read it every step. */
+    public static double stepSeconds() {
+        return Engine.session().clock.stepSeconds();
+    }
+
+    /**
+     * Whole steps this frame's game time completes. {@code setSpeed} is this PC's game speed as the player set it
+     * (never the throttled one): the host logs a change of it (B16).
+     */
+    public static int stepsFor(double gameSeconds, double setSpeed) {
+        Session s = Engine.session();
+        s.speedSeen(setSpeed);
+        return s.clock.stepsFor(gameSeconds);
+    }
+
+    /** A speed change from the log, at its step: the step length from the next step on. */
+    public static void agreedSpeed(double speed) {
+        Engine.session().clock.agreedSpeed(speed);
+    }
+
     /** Whole steps this frame's game time completes. */
     public static int stepsFor(double gameSeconds) {
         return Engine.session().clock.stepsFor(gameSeconds);
@@ -165,6 +185,20 @@ public final class Hooks {
     /** A change from the host's general thread, applied by every PC at step N + 30. */
     public static void aiCapture(int kind, int div, byte[] payload) {
         Engine.session().ai().capture(kind, div, payload);
+    }
+
+    /**
+     * True when a player's order is captured into the log instead of applied: with a log, outside the step, and not
+     * on the general's thread (B16).
+     */
+    public static boolean ordersCapturing() {
+        Session s = Engine.session();
+        return s != null && !s.streams.inStep() && s.ai().capturingOrders();
+    }
+
+    /** A player's order on this PC: into the host's log, through it on a peer. */
+    public static void orderCapture(int kind, int div, byte[] payload) {
+        Engine.session().ai().captureOrder(kind, div, payload);
     }
 
     /** The session's game adapter for the AI (host or peer mode), which also encodes the general's orders. */
