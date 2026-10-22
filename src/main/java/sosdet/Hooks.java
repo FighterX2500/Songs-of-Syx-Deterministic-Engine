@@ -223,7 +223,7 @@ public final class Hooks {
      */
     public static boolean ordersCapturing() {
         Session s = Engine.session();
-        return s != null && !s.streams.inStep() && s.ai().capturingOrders();
+        return s != null && !s.streams.inStep() && !s.loading && s.ai().capturingOrders();
     }
 
     /** A player's order on this PC: into the host's log, through it on a peer. */
@@ -258,6 +258,7 @@ public final class Hooks {
             return;
         }
         s.afterLoad();
+        s.loading = true;
         if (s.loadSeed != 0) {
             // Draws made while loading (prisoners' crimes) belong to the simulation, seeded the same everywhere.
             RND.setSeed(s.loadSeed);
@@ -270,6 +271,7 @@ public final class Hooks {
         if (s == null) {
             return;
         }
+        s.loading = false;
         if (s.loadSeed != 0) {
             s.streams.leave();
         }

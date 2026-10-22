@@ -89,6 +89,27 @@ class CommandsTest {
     }
 
     @Test
+    void aRepeatOfTheLastCommandIsDroppedUntilItApplies() {
+        Applied applied = new Applied();
+        AiLog host = AiLog.host(START, applied);
+        applied.log = host;
+        byte[] drag = new CmdWriter(3005).i(7).i(12).i(5).bytes();
+        host.captureOrder(AiEntry.COMMAND, -1, drag);
+        host.captureOrder(AiEntry.COMMAND, -1, drag.clone()); // the slider still held: a frame later
+        host.stepBegin(1);
+        host.captureOrder(AiEntry.COMMAND, -1, drag.clone()); // still held, not applied yet
+        assertEquals(2, host.commandRepeatsDropped());
+        for (long s = 2; s <= 31; s++) {
+            host.stepBegin(s);
+        }
+        host.captureOrder(AiEntry.COMMAND, -1, drag.clone()); // applied at 31: given again, it counts
+        for (long s = 32; s <= 62; s++) {
+            host.stepBegin(s);
+        }
+        assertEquals(List.of("31:0:3005:true", "62:0:3005:true"), applied.lines, "once at 31, once more at 62");
+    }
+
+    @Test
     void aPcNumberIsNeverNegative() {
         assertThrows(IllegalArgumentException.class, () -> AiLog.host(START, new Applied()).localPc(-1));
     }

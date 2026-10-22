@@ -58,6 +58,9 @@ public final class AiLog {
     /** The mod's number for this PC (the host is 0), and the issuer of the entry being applied, if any. */
     private int localPc;
     private int applyingPc = NOT_APPLYING;
+    /** This PC's last captured command until it applies, and how many repeats of it were dropped. */
+    private byte[] lastCommand;
+    private long repeatsDropped;
     private static final int NOT_APPLYING = Integer.MIN_VALUE;
     private long appliedOrders;
     private final long[] appliedByKind = new long[AiEntry.KINDS];
@@ -148,6 +151,14 @@ public final class AiLog {
      * to the host through {@link #ordersOut}. Either way it is applied at the step the host stamps.
      */
     public void captureOrder(int kind, int div, byte[] payload) {
+        if (kind == AiEntry.COMMAND) {
+            // A slider dragged or a button held repeats the same command every frame until it applies; once is enough.
+            if (Arrays.equals(payload, lastCommand)) {
+                repeatsDropped++;
+                return;
+            }
+            lastCommand = payload.clone();
+        }
         if (mode == AiMode.HOST) {
             captured.add(new AiEntry(-1, -1, kind, div, 0, payload.clone()));
         } else if (mode == AiMode.PEER) {
@@ -216,6 +227,10 @@ public final class AiLog {
                 applier.apply(due);
             } finally {
                 applyingPc = NOT_APPLYING;
+            }
+            if (due.kind == AiEntry.COMMAND && lastCommand != null && due.pc == localPc
+                    && Arrays.equals(due.payload(), lastCommand)) {
+                lastCommand = null; // applied: the same command may be given again
             }
             (due.pc == AiEntry.AI ? recentAi : recentOrders).add(due);
             applied++;
@@ -444,6 +459,11 @@ public final class AiLog {
         synchronized (aiBatch) {
             return coalesced;
         }
+    }
+
+    /** This PC's commands dropped as repeats of the one it gave last, before that one applied. */
+    public long commandRepeatsDropped() {
+        return repeatsDropped;
     }
 
     /** Players' commands skipped because their target was gone at their step. */
