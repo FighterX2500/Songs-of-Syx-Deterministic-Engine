@@ -177,6 +177,23 @@ class AiLogTest {
     }
 
     @Test
+    void theLastEntriesAppliedAreKeptForADesyncReport() throws InterruptedException {
+        Recorder r = new Recorder();
+        AiLog host = AiLog.host(START, r);
+        for (int i = 0; i < AiLog.RECENT + 3; i++) {
+            captureOnGeneralThread(host, AiEntry.FORMATION, i, 1);
+        }
+        assertTrue(host.recent().isEmpty());
+        for (long s = 1; s <= 31; s++) {
+            runStep(host, r, s);
+        }
+        List<String> recent = host.recent();
+        assertEquals(AiLog.RECENT, recent.size());
+        assertEquals("step 31, #3, formation, division 3 = 1", recent.get(0));
+        assertEquals("step 31, #34, formation, division 34 = 1", recent.get(AiLog.RECENT - 1));
+    }
+
+    @Test
     void inStepModeDoesNothing() {
         AiLog log = AiLog.inStep();
         assertEquals(AiMode.IN_STEP, log.mode());

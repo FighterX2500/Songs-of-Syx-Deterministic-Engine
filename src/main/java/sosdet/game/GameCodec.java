@@ -2,6 +2,7 @@ package sosdet.game;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
+import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -17,7 +18,8 @@ import snake2d.util.file.SAVABLE;
  * lists. The game's FilePutter and FileGetter only work with files; the engine reads the putter's buffer and points
  * a getter at its own bytes, one private field each (AGENTS.md "Adapter Boundary").
  *
- * <p>Not thread-safe: the host's general thread encodes, the simulation thread decodes, each with its own codec.
+ * <p>Not thread-safe: the host's general thread encodes, the simulation thread decodes and hashes, each with its own
+ * codec.
  */
 final class GameCodec {
 
@@ -25,11 +27,23 @@ final class GameCodec {
     private static final Field GETTER_BUFFER = field(FileGetter.class, "buffer");
     private static final int MAX_BYTES = 1 << 16;
 
-    private final FilePutter putter = new FilePutter(Paths.get("sosdet-ai-unused"), MAX_BYTES);
-    private final ByteBuffer putterBuffer = (ByteBuffer) get(PUTTER_BUFFER, putter);
+    private final FilePutter putter;
+    private final ByteBuffer putterBuffer;
     /** The putter's own stream header comes first; payloads start after it. */
-    private final int payloadStart = putterBuffer.position();
+    private final int payloadStart;
     private final FileGetter getter = getter();
+
+    /** For AI log entries (small). */
+    GameCodec() {
+        this(MAX_BYTES);
+    }
+
+    /** Room for {@code maxBytes} of save data at once. */
+    GameCodec(int maxBytes) {
+        putter = new FilePutter(Paths.get("sosdet-unused"), maxBytes);
+        putterBuffer = (ByteBuffer) get(PUTTER_BUFFER, putter);
+        payloadStart = putterBuffer.position();
+    }
 
     private static Field field(Class<?> owner, String name) {
         try {
@@ -69,6 +83,28 @@ final class GameCodec {
         putterBuffer.position(payloadStart);
         object.save(putter);
         return Arrays.copyOfRange(putterBuffer.array(), payloadStart, putterBuffer.position());
+    }
+
+    /** Starts hashing save data: the caller writes to the returned putter, then calls {@link #hashEnd}. */
+    FilePutter hashBegin() {
+        putterBuffer.position(payloadStart);
+        return putter;
+    }
+
+    /** Mixes what was written since {@link #hashBegin} into {@code h}; no allocation. */
+    long hashEnd(long h) {
+        return sosdet.hash.HashLog.mix(h, putterBuffer.array(), payloadStart, putterBuffer.position());
+    }
+
+    /** Mixes one object's save data into {@code h}. */
+    long hash(long h, SAVABLE object) {
+        try {
+            object.save(hashBegin());
+        } catch (BufferOverflowException e) {
+            throw new IllegalStateException("SOSDET: save data of " + object.getClass().getName() + " over "
+                    + (putterBuffer.capacity() - payloadStart) + " bytes", e);
+        }
+        return hashEnd(h);
     }
 
     void decode(byte[] bytes, SAVABLE into) {

@@ -5,6 +5,7 @@ import java.util.Random;
 import snake2d.util.rnd.RND;
 import sosdet.ai.AiApplier;
 import sosdet.ai.AiMode;
+import sosdet.hash.HashLog;
 
 /**
  * What the engine's patches to the game call (docs/hooks.md). Each hook asks one question or reports one
@@ -63,8 +64,15 @@ public final class Hooks {
         return true;
     }
 
+    /** Ends a step; every 30th step (by default) the state hash is taken first, still inside the step (B13). */
     public static void stepEnd() {
         Session s = Engine.session();
+        long step = s.clock.step();
+        if (s.hashes.due(step)) {
+            long clock = HashLog.mix(HashLog.mix(HashLog.mix(HashLog.start(), step), s.streams.drawsSinceLoad()),
+                    s.ai.applied());
+            s.hashes.take(step, clock, s.source());
+        }
         s.times.record(System.nanoTime() - s.stepStartNanos);
         s.stepStartNanos = 0;
         s.streams.leave();

@@ -2,7 +2,7 @@
 
 Deterministic simulation engine for Songs of Syx V71 (build 71.44). The same battle save, seed, orders and AI log give a bit-identical simulation on every PC. The SoS GSG MP multiplayer mod ([SOSGSGMP](https://github.com/FighterX2500/SOSGSGMP)) uses it for lockstep battles.
 
-**Status:** the engine core works (fixed step, random streams, battle jobs in the step; SOS-27), and the AI general can run on the host with its AI log (SOS-28). The state hash, resync and the scenario suite follow (SOS-29 to SOS-32). Until something starts an engine session, the game plays as vanilla.
+**Status:** the engine core works (fixed step, random streams, battle jobs in the step; SOS-27), the AI general can run on the host with its AI log (SOS-28), and every 30 steps the state is hashed and compared with the other PCs', with a desync report on the first difference (SOS-29). Resync, the scenario suite and player orders follow (SOS-30 to SOS-33). Until something starts an engine session, the game plays as vanilla.
 
 - What it must do: [docs/requirements.md](docs/requirements.md)
 - Coding rules: [AGENTS.md](AGENTS.md); determinism rules: [.claude/rules/determinism.md](.claude/rules/determinism.md)

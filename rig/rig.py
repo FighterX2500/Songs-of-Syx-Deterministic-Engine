@@ -38,6 +38,7 @@ RUNS = BUILD / "rig" / "runs"
 REAL = pathlib.Path(os.environ["APPDATA"]) / "songsofsyx"
 BASE_SAVE = "sosmp-det-base.save"  # the SOS-11 base save in the user's saves
 BATTLE_SEED, MEN_PER_SIDE, LOAD_SEED, RUN_SEED, INVADE_MEN = 12345, 2000, 555, 777, 1000
+HASH_EVERY = 30  # the engine's default hash interval (steps)
 
 
 def log(msg):
@@ -450,12 +451,16 @@ def main():
     ap.add_argument("--run-on", action="store_true", help="don't stop at the first difference; run the whole length")
     ap.add_argument("--ai", choices=["instep", "host"], default="instep",
                     help="host: copy 1 hosts the AI general and is the reference, the others are peers fed its AI log")
+    ap.add_argument("--nudge", type=int, default=0,
+                    help="forced desync: fatal injuries to one soldier in one copy at this step; runs on past the difference")
+    ap.add_argument("--nudge-copy", type=int, default=0, help="the copy to nudge (default: the last)")
     ap.add_argument("--evals", action="store_true",
                     help="the timing rule instead: host and peer, one copy alone each, at speed 1")
     ap.add_argument("--vanilla", action="store_true", help="with --evals: measure vanilla again (default: SOS-23's figures)")
     args = ap.parse_args()
     if args.evals:
         return run_evals(args)
+    nudged = (args.nudge_copy or args.copies) if args.nudge else 0
 
     game = pathlib.Path(os.environ.get("SOS_GAME_DIR") or fail("SOS_GAME_DIR is not set"))
     for name, path in MODS.items():
@@ -512,6 +517,13 @@ def main():
         time.sleep(5)
         if args.ai == "host":
             c.send("ailog %s %s" % ("host" if c.k == 1 else "peer", host_log), "ailog")
+        # every copy sends its engine's state hashes to the others through files, as the mod will over the network
+        c.send("hashes %s" % (c.rig / "hashes.bin"), "hashes")
+        for o in copies:
+            if o.k != c.k:
+                c.send("hashpeer %d %s" % (o.k, o.rig / "hashes.bin"), "hashpeer")
+        if c.k == nudged:
+            c.send("nudge %d" % args.nudge, "nudge")
         c.send("seed %d" % RUN_SEED, "seeded")
         starts[c.k] = c.send("hash", "hash")
         if args.scenario == "city":
@@ -538,7 +550,7 @@ def main():
             finished[ref] = done
             break
         diverged = watcher.check()
-        if diverged is not None and not args.run_on:
+        if diverged is not None and not args.run_on and not args.nudge:
             log("copies differ at step %d; holding every copy" % diverged)
             break
         time.sleep(2)
@@ -568,7 +580,30 @@ def main():
                        % (c.k, speeds[c.k - 1], starts[c.k]["battle" if args.scenario == "field" else "city"],
                           f["endStep"], f["endHash"], f["men"], f["wallSeconds"], json.dumps(f["stats"])))
     summary += lines
-    summary.append("RESULT: " + ("all copies identical to step %d" % args.steps if identical else "copies differ"))
+    desyncs = {c.k: c.find("desync", 0) for c in copies}
+    for c in copies:
+        d = desyncs[c.k]
+        if d:
+            summary.append("copy %d: engine desync at step %d against copy %d, noticed at its step %d; sections %s, divisions %s"
+                           % (c.k, d["step"], d["pc"], d["noticedAt"], ",".join(d["sections"]), d["divisions"]))
+            shutil.copy2(c.rig / ("%s-c%d-desync.txt" % (args.tag, c.k)), run_dir / ("desync-c%d.txt" % c.k))
+        else:
+            summary.append("copy %d: no engine desync (%d hashes compared, %d missed)"
+                           % (c.k, finished[c.k]["stats"].get("hashesCompared", 0), finished[c.k]["stats"].get("hashesMissed", 0)))
+    if args.nudge:
+        nudge = copies[nudged - 1].find("nudged", 0)
+        first_hash = -(-args.nudge // HASH_EVERY) * HASH_EVERY
+        found = [k for k, d in desyncs.items() if d and d["step"] == first_hash and "soldiers" in d["sections"]
+                 and (k == nudged or d["pc"] == nudged)]
+        ok = nudge is not None and sorted(found) == [c.k for c in copies]
+        summary.append("forced change in copy %d at step %d (division %s); first hash after it: step %d"
+                       % (nudged, args.nudge, nudge and nudge["division"], first_hash))
+        summary.append("RESULT: " + ("every copy found it at step %d, in soldiers" % first_hash if ok
+                                     else "NOT found as expected: %s" % desyncs))
+    else:
+        clean = not any(desyncs.values())
+        summary.append("RESULT: " + ("all copies identical to step %d" % args.steps if identical else "copies differ")
+                       + ("; engine hashes agree" if clean else "; ENGINE FOUND A DESYNC"))
     (run_dir / "summary.txt").write_text("\n".join(summary) + "\n", encoding="utf-8")
     print("\n".join(summary))
     if not args.keep:
