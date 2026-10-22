@@ -43,6 +43,12 @@ import snake2d.util.file.FilePutter;
 import snake2d.util.misc.ACTION;
 import snake2d.util.rnd.RND;
 import sosdet.Engine;
+import sosdet.rig.act.EmploymentActions;
+import sosdet.rig.act.LawActions;
+import sosdet.rig.act.MilitaryActions;
+import sosdet.rig.act.NameActions;
+import sosdet.rig.act.RoomActions;
+import sosdet.rig.act.ToolActions;
 import sosdet.hash.Desync;
 import view.main.VIEW;
 
@@ -607,17 +613,8 @@ public final class Rig implements SCRIPT {
 
         /** The UI call behind one player action, queued to run after this frame's update, outside the step. */
         private void playerAction(String[] a) {
-            switch (a[0]) {
-            case "curfew": // the law screen's curfew button
-                boolean on = a[1].equals("1");
-                Engine.betweenSteps(() -> STATS.LAW().getCurfew().setForADay(on));
-                return;
-            case "men": // a division's target size on the army screen: the player's division by its index in the army
-                int div = Integer.parseInt(a[1]);
-                int men = Integer.parseInt(a[2]);
-                Engine.betweenSteps(() -> GAME.ARMIES().player().divisions().get(div).info.menSet(men));
-                return;
-            default:
+            if (!(LawActions.run(a) || RoomActions.run(a) || EmploymentActions.run(a) || MilitaryActions.run(a)
+                    || NameActions.run(a) || ToolActions.run(a))) {
                 throw new IllegalArgumentException("SOSDET rig: no player action " + a[0]);
             }
         }
