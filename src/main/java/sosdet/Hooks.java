@@ -30,6 +30,15 @@ public final class Hooks {
         return Engine.session() != null;
     }
 
+    /**
+     * With a session, clearing a formation clears its whole direction table. Formations are scratch objects the UI
+     * shares with the simulation (the move preview and the invasion's deployment use one deployer); a table copied
+     * whole, saved whole and grown without being recomputed would carry this PC's preview into the step (SOS-32).
+     */
+    public static boolean clearWholeFormations() {
+        return Engine.session() != null;
+    }
+
     /** A paused frame updates nothing, so paused frames can't change the outcome. */
     public static boolean skipPausedFrame() {
         return Engine.session() != null;
