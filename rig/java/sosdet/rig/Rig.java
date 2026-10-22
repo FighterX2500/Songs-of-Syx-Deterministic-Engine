@@ -25,6 +25,7 @@ import game.battle.util.DivGeneration;
 import game.faction.FACTIONS;
 import game.faction.Faction;
 import game.save.GameLoader;
+import game.time.TIME;
 import init.constant.Config;
 import init.paths.PATHS;
 import init.race.RACES;
@@ -209,7 +210,8 @@ public final class Rig implements SCRIPT {
                 nudge();
             }
             try {
-                log.write(step + "," + Long.toHexString(city ? cityHash() : battleHash()) + "," + men() + "\n");
+                log.write(step + "," + Long.toHexString(city ? cityHash() : battleHash()) + "," + men() + ","
+                        + TIME.currentSecond() + "\n");
             } catch (IOException e) {
                 throw new IllegalStateException("SOSDET rig: cannot write the hash log", e);
             }
@@ -497,8 +499,12 @@ public final class Rig implements SCRIPT {
                 loadBattle(rest(c));
                 return;
             case "steplength":
-                Engine.stepSeconds(1.0 / Integer.parseInt(c[1]));
-                event("steplength", "\"perSecond\":" + c[1]);
+                if (c[1].equals("byspeed")) {
+                    Engine.stepsBySpeed();
+                } else {
+                    Engine.stepSeconds(1.0 / Integer.parseInt(c[1]));
+                }
+                event("steplength", "\"perSecond\":\"" + c[1] + "\"");
                 return;
             case "seed":
                 Engine.seed(Integer.parseInt(c[1]));
@@ -597,7 +603,7 @@ public final class Rig implements SCRIPT {
             }
             VIEW.inters().load.deactivate(); // the "click to continue" screen after a load would pause the game
             log = Files.newBufferedWriter(dir.resolve(tag + ".csv"), StandardCharsets.UTF_8);
-            log.write("step,hash,men\n");
+            log.write("step,hash,men,gameSeconds\n");
             openTiming();
             startStallSampler(dir.resolve(tag + "-stalls.txt"));
             Engine.resetStats();

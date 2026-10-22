@@ -44,6 +44,11 @@ public final class Hooks {
         return Engine.session().clock.stepSeconds();
     }
 
+    /** Whole steps this frame's game time completes, with the speed the player set (it can choose the step length). */
+    public static int stepsFor(double gameSeconds, double setSpeed) {
+        return Engine.session().clock.stepsFor(gameSeconds, setSpeed);
+    }
+
     /** Whole steps this frame's game time completes. */
     public static int stepsFor(double gameSeconds) {
         return Engine.session().clock.stepsFor(gameSeconds);

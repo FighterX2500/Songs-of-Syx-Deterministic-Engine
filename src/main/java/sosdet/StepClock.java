@@ -14,8 +14,13 @@ final class StepClock {
     /** No last step: run as long as game time advances. */
     static final long NO_LIMIT = -1;
 
+    /** Vanilla's longest sub-step. */
+    static final double LONG_STEP_SECONDS = 1.0 / 16.0;
+
     /** This session's step length (experiment: 1/16 s, vanilla's longest sub-step). */
     private double stepSeconds = STEP_SECONDS;
+    /** Experiment: 1/60 s steps at a set speed of 1x or less, 1/16 s above. */
+    private boolean bySpeed;
     private double accumulator;
     private long step;
     private long lastStep;
@@ -55,6 +60,19 @@ final class StepClock {
 
     void stepSeconds(double seconds) {
         stepSeconds = seconds;
+        bySpeed = false;
+    }
+
+    void stepsBySpeed() {
+        bySpeed = true;
+    }
+
+    /** Like {@link #stepsFor(double)}, with the speed the player set (never the throttled one: it differs per PC). */
+    int stepsFor(double gameSeconds, double setSpeed) {
+        if (bySpeed) {
+            stepSeconds = setSpeed <= 1 ? STEP_SECONDS : LONG_STEP_SECONDS;
+        }
+        return stepsFor(gameSeconds);
     }
 
     long step() {

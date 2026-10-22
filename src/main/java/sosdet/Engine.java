@@ -92,6 +92,15 @@ public final class Engine {
         s.clock.stepSeconds(seconds);
     }
 
+    /** Experiment: 1/60 s steps at a set speed of 1x or less, 1/16 s steps above; set at step 0. */
+    public static void stepsBySpeed() {
+        Session s = required();
+        if (s.clock.step() != 0) {
+            throw new IllegalStateException("SOSDET: the step length is set at step 0 (step " + s.clock.step() + ")");
+        }
+        s.clock.stepsBySpeed();
+    }
+
     /** From the next load on, loading runs on the simulation stream seeded with this; 0 = vanilla loading. */
     public static void armLoadSeed(int seed) {
         required().loadSeed = seed;
