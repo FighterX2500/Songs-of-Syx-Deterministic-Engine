@@ -8,6 +8,7 @@ import java.nio.file.Path;
 import sosdet.game.GameAi;
 import sosdet.game.GameResync;
 import sosdet.hash.Desync;
+import sosdet.report.Shape;
 
 /**
  * The engine's API for the mod and the test rig (requirements §3). The patched game calls {@link Hooks}.
@@ -335,7 +336,8 @@ public final class Engine {
                 s.ai().commandsSkipped(), s.clock.agreedSpeed(),
                 s.hashes.taken(), s.hashes.meanMs(), s.hashes.maxMs(),
                 s.hashes.compared(), s.hashes.missed(), s.reportsTaken, s.reportNanos, s.reportBytes, s.reportMaxBytes,
-                s.reportMisses);
+                s.reportMisses, s.city == null ? 0 : s.city.layout().count(Shape.BOOST),
+                s.city == null ? 0 : s.city.layout().count(Shape.VALUE));
     }
 
     public static void resetStats() {

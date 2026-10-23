@@ -108,6 +108,41 @@ These are the scan's five hardest problems, with the proposed answer to each.
   - the city's world area (`initCity`).
 - **What milestone 2 must add:** world entities (caravans) in the world hash's world section. In the spike, only the clock section caught an extra caravan.
 
+## Milestone 2 as built
+
+**The report.** `sosdet.report`: `Field` lists every value, `Shape` says how many each holds, `Count` names the list sizes from the game's data, and `ReportLayout` places them. `CityReport` writes one report in a versioned format: a whole number takes a few bytes, any other value 9. `GameReport` (the adapter) fills it in the city part every 30 steps, and the world part reads it 30 steps later. The first world part after a load takes one at once.
+
+**The reads (patches 12, 13, 14 and 98).** In the world part, each leaf read of the city returns its report field. The game's own rules around those reads stay as they are.
+
+| Codes | What the world part reads from the report |
+| --- | --- |
+| A1, A2 | Stock, export and import tallies, stockpile space, deliveries on their way, the trade settings, slaves and the stockade |
+| A3, B7 | The treasury |
+| A4, B3 | Population by class and race, citizens, the capitol's population per race, city soldiers |
+| A5 | The capitol garrison: which divisions, and each one's men, race, training, equipment after supplies and experience. Also whether the city is invaded and how hard, and the equipment `FWorth` counts |
+| A6 | The city divisions world divisions are made of |
+| A7 | Every boost value's player value, plus raid security and the proximity toll (the two class boosts the world reads) |
+| A8 | Every `GVALUES.FACTION` value's player value |
+| A9, A10, B5 | Laws per race, the entry, mercy |
+
+**Boosts (A7).** The game has no list of boost values. The adapter finds them by asking each booster of each boostable (`BOOSTING.ALL()`, all boosters and `fGlobal`) what it reads, through a `BOOSTABLE_O` that only takes notes. Every booster reads its value that way; `RDBuilding`'s one exception reads nothing. In the world part, two routes read the report:
+- `Player.boostableValue`, which every booster calls on the player;
+- the default `BValue.vGet(Faction)`, where a player region, division or person ends up.
+
+A value the report has no slot for is read live and counted in `Stats.reportMisses`. That happens only for a booster added after the first report. `Stats.reportBoosts` and `reportValues` give the counts; M2B measures them.
+
+**Faction values (A8).** The report holds every `GVALUES.FACTION` value for the player. In the world part, three places read it: the requirement lockers (`Locker.LockerValue`), the region values made of faction values (`FACTION_*`), and the world camps' deltas (`WHavenType.amount`). Code-defined unlockers (tech, levels) read the player's progress on the `Player` object, which is world data, so they stay live.
+
+**The hash.** The world section now hashes every world entity (caravans, camps) by slot, kind, tile and faction. A new report section hashes the report in force (hash format 4).
+
+**Menu safety.** `menuSafetyCheck` fails the build when a shipped class's static initializer reaches a singleton that is still unset at the main menu (the game's script scan initializes every class in the mod jar). Edits keep their line counts wherever the outer class's initializer is unsafe.
+
+**Known gaps, for milestone 3:**
+- City code that runs inside the world part reads report values too. Today that's the listeners fired by world changes, invasions of the capitol (C5, C6) and scripted events (B6). Milestone 3 turns them into transactions.
+- The event booster `_BOOST` has routes of its own (`vGet(Faction)`, `vGet(Div)`, `vGet(HCLASS_RACE)`). They read the city's event stat live (B6).
+- Caches keyed on `GAME.updateI()`: both parts run at the same `updateI`, so a cache filled in the city part can serve the world part. The garrison list keeps one cache per part; the boost compound's cache is never reached in the world part. Others may show up as desyncs in follower mode (milestone 4).
+- Size: a typical report is a few KB. The worst case, 120 garrison divisions with fractional training and equipment plus several hundred fractional boost and faction values, is about 20 KB every 30 steps.
+
 ## Estimates
 
 In working time (a day ≈ 6–8 h). The earlier "about 3 days for all of stage E" came before the scan, and was too low.
