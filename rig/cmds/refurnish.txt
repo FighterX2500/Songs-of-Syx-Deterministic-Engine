@@ -11,9 +11,11 @@ build
 refurnish REFINER
 plan-drop-item 1
 plan-cancel
-# 3. A refurnish held open while time runs (the room works under the plan), then Build
+# 3. A refurnish held open while time runs (the room works under the plan), saved through the game's menu (the plan
+#    stays out of the save), then Build
 refurnish REFINER
 plan-drop-item 1
+game-save
 wait 10
 build
 # 4. The meeting: a refurnish open while the delete of the same room lands; the local plan ends with the room

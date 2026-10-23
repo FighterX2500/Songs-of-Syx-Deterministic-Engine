@@ -2,6 +2,7 @@ package sosdet;
 
 import java.util.Random;
 
+import game.GAME;
 import snake2d.util.rnd.RND;
 import sosdet.ai.AiApplier;
 import sosdet.ai.AiMode;
@@ -285,6 +286,30 @@ public final class Hooks {
         }
     }
 
+    /**
+     * True with a session: a number box ({@code GInputInt}) keeps what was typed while it has the keyboard. The value
+     * applies 30 steps later, so showing the current value turned a typed "12" into "02".
+     */
+    public static boolean keepTypedNumber() {
+        return Engine.session() != null;
+    }
+
+    /**
+     * Around the game's own save (menu, quick and auto saves) in a session: this PC's room plan stays out of it. A
+     * second session on the same game registers again; both calls then find the plan already handled.
+     */
+    private static void gameSave(boolean before) {
+        Session s = Engine.session();
+        if (s == null) {
+            return;
+        }
+        if (before) {
+            s.plans().beforeGameSave();
+        } else {
+            s.plans().afterGameSave();
+        }
+    }
+
     /** Whether a job handed to the graphics thread now comes from the simulation (so its draws are simulation draws). */
     public static boolean simulationThreadNow() {
         Session s = Engine.session();
@@ -338,6 +363,11 @@ public final class Hooks {
         if (s != null) {
             s.lastFrameUpdateNanos = nanos;
             s.plans().restore();
+            if (s.plans().inGame() && s.planSaver != GAME.saver()) { // game saves leave the room plan out (ADR 0003)
+                s.planSaver = GAME.saver(); // a load makes a new game and saver
+                GAME.saver().onBeforeSave(path -> gameSave(true));
+                GAME.saver().onAfterSave(path -> gameSave(false));
+            }
             Runnable action;
             while ((action = s.betweenSteps.poll()) != null) {
                 action.run();

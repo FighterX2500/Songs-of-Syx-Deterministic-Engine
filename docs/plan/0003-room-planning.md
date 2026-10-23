@@ -33,17 +33,18 @@ Status: in progress (2026-10-23). Design: [ADR 0003](../decisions/0003-room-plan
 ## Next steps, in order
 
 1. **Done, see above.** Owner play test: `--play` on Mogus-72 (or a field-less city save). The owner plans and builds rooms of several kinds, pauses mid-plan, and plans while time runs. Watch for desyncs and for anything the stash misses: a hash split right after planning means a planning write we haven't found.
-2. **Milestone 2, refurnish:** see "Milestone 2 plan" below (proposed, waiting for the owner's approval).
-3. **Milestone 3, copier, mass copier and saved blueprints:** each becomes a command carrying what it copies:
+2. **Done (2026-10-23), milestone 2, refurnish:** see "Milestone 2 plan" below; the owner's answers are built in (trash = 2001 roomRemove with scatter, leave = discard, late failure = vanilla demolish). Command 6008 roomRefurnish.
+   - **Rig runs:** Q34E (3 copies, 14,000 steps) identical, 7 commands applied on every copy. Q34F and Q34G found that a fresh construction site's doorway comes back only if vanilla could place its ceiling job at refurnish time; the script places the door again (`rig/cmds/refurnish.txt`, case 6). Q34H, the SOS-34 smoke run (plan 0002, decision 6): 3 copies identical to step 14,000, no engine desync, 8 commands applied on every copy; the menu save held 0 plan tiles and the 226-tile plan came back after it.
+3. **After V0.1 (plan 0002, decision 6), milestone 3, copier, mass copier and saved blueprints:** until then all three are refused in a session with a notice (`CopyTools`). Each becomes a command carrying what it copies:
    - the copier: source room, transform, structure, walls;
    - the mass copier: source bitmap, destination, rotation;
    - a saved blueprint: its `SavedPrint` contents, since it lives in the issuer's profile.
 
    Inventory section 1.15–1.17 (`docs/plan/notes/placement-inventory.md`) has the call sites.
 4. **Open items from part 1, to close in this card:**
-   - **Saves:** a save made through the game's menu during a session still contains the local plan. Lift around `GameSaver` too, or route session saves through the engine only.
+   - **Done, saves:** the game's own saves in a session (menu, quick save) lift the local plan too (`PlanStash.beforeGameSave`, `afterGameSave`); rig action `game-save`.
    - **Wall material:** `UtilStructure.set` writes a saved game property on each PC separately. Check whether anything in the step reads it; if so, make it a command or keep it out of the save.
-   - **Number inputs (`GInputInt`):** with the 30-step delay, typing a multi-digit number comes out wrong. Keep the typed text while focused.
+   - **Done, number inputs (`GInputInt`):** in a session the box keeps the typed text while it has the keyboard. Checked by reasoning only; the owner's session tries it.
    - **Rig coverage:**
      - hunter, station, transport and canteen room commands need a save that has those rooms;
      - artillery commands 4007 and 4008 need a field battle with artillery (`rig.py field --artillery N` plus a scripted aim);

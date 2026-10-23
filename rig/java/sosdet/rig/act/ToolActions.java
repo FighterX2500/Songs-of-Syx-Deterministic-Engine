@@ -4,6 +4,7 @@ import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
 
+import game.GAME;
 import init.type.HGROUP;
 import init.type.WGROUP;
 import settlement.main.SETT;
@@ -144,6 +145,10 @@ public final class ToolActions {
                 build();
                 plan(bkey, bw, bh, 0, built, over);
             });
+            return true;
+        case "game-save": // game-save: the game's own quick save (the menu's), here while a plan is open; the plan stays
+            // out of the save (ADR 0003) and the copies stay identical
+            Rig.later(ToolActions::gameSave);
             return true;
         case "plan-cancel": // plan-cancel: the room tool closing without a build
             Rig.later(ToolActions::cancel);
@@ -486,6 +491,35 @@ public final class ToolActions {
     }
 
     /** The room placer's plan (its class is package-private in V71.44). */
+    /** The menu's quick save; the save itself notes the plan tiles it finds on the map (none), then the plan's own. */
+    private static void gameSave() {
+        boolean[] first = {true};
+        GAME.saver().onBeforeSave(path -> {
+            if (first[0]) {
+                first[0] = false;
+                Rig.note("game-save: plan tiles in the save " + planTiles());
+            }
+        });
+        if (!GAME.saver().saveNamed("QuickSave", 3, true)) {
+            throw new IllegalStateException("SOSDET rig: game-save: the game refused to save now");
+        }
+        Rig.note("game-save: plan tiles after it " + planTiles());
+    }
+
+    private static int planTiles() {
+        Room.RoomInstanceImp ins = instance();
+        RECTANGLE b = new Rec(ins.body());
+        int n = 0;
+        for (int y = b.y1(); y < b.y2(); y++) {
+            for (int x = b.x1(); x < b.x2(); x++) {
+                if (ins.is(x, y)) {
+                    n++;
+                }
+            }
+        }
+        return n;
+    }
+
     private static Room.RoomInstanceImp instance() {
         return (Room.RoomInstanceImp) SETT.ROOMS().placement.embryo;
     }

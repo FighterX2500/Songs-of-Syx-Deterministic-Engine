@@ -30,6 +30,8 @@ final class Session {
      * running game; tests without one put in {@link PlanStash#off()}.
      */
     PlanStash plans;
+    /** The game's saver that lifts the plan around its saves ({@link Hooks#frameUpdated}), registered once per game. */
+    Object planSaver;
 
     /** Host: the game speed last seen, so a change goes into the log once (B16). */
     double seenSpeed;

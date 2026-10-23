@@ -35,6 +35,8 @@ public final class PlanStash {
     /** The game's tile stores, reached at first use. */
     private PlanStores stores;
     private boolean lifted;
+    /** True while the game's own save has the plan lifted ({@link #beforeGameSave()}). */
+    private boolean liftedForSave;
     /** The local plan as a command inside this frame's steps found it; rebuilt from this after the steps. */
     private PlanRecord local;
     /** The room this PC's plan refurnishes, or null. */
@@ -57,6 +59,11 @@ public final class PlanStash {
     /** A stash for a session without a running game (unit tests): it never lifts anything. */
     public static PlanStash off() {
         return new PlanStash(false);
+    }
+
+    /** False in unit tests: no running game, so nothing to lift. */
+    public boolean inGame() {
+        return game;
     }
 
     public boolean lifted() {
@@ -120,9 +127,29 @@ public final class PlanStash {
         }
     }
 
+    /**
+     * Before the game's own save during a session (menu, quick and auto saves): the plan is lifted out of it, unless it
+     * is out already (a resync save, or a save inside the steps).
+     */
+    public void beforeGameSave() {
+        if (game && !lifted) {
+            lift();
+            liftedForSave = true;
+        }
+    }
+
+    /** After the game's own save: the plan goes back if {@link #beforeGameSave()} lifted it. */
+    public void afterGameSave() {
+        if (liftedForSave) {
+            liftedForSave = false;
+            restore();
+        }
+    }
+
     /** A load replaces the world and resets the placer: a lifted plan is gone with it. */
     public void discard() {
         lifted = false;
+        liftedForSave = false;
         local = null;
         tiles.clear();
         roomTiles.clear();
