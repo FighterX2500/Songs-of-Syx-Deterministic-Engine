@@ -14,7 +14,7 @@ set MORE=%MORE% %1
 shift
 goto more
 :run
-call gradlew.bat assemble --console=plain -q
+call .\gradlew.bat assemble --console=plain -q
 if errorlevel 1 exit /b 1
 python rig\rig.py city --play --no-invade --copies 3 --tag %TAG% --save Mogus-72-19f86f1e048-47002c-0-121c.save %MORE%
 echo.
