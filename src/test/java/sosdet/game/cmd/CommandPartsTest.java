@@ -9,7 +9,7 @@ import sosdet.ai.CmdWriter;
 
 class CommandPartsTest {
 
-    /** ADR 0005: world commands apply in the world part; city ones, and the world-battle prompt's, at the step's start. */
+    /** ADR 0005: world commands apply in the world part; city ones, and the yes/no questions, at the step's start. */
     @Test
     void worldCommandsAreTheArmyRegionDiplomacyAndRaiderOnes() {
         assertTrue(CommandParts.world(new CmdWriter(World.ARMY_MOVE).i(3).bytes()));
@@ -19,8 +19,9 @@ class CommandPartsTest {
         assertTrue(CommandParts.world(Diplomacy.EMISSARIES));
         assertTrue(CommandParts.world(Events.RAIDER_PAY));
         assertTrue(CommandParts.world(Events.RAIDER_ALLY_HELP));
+        assertTrue(CommandParts.world(WorldBattles.DECIDE));
+        assertTrue(CommandParts.world(WorldBattles.SIEGE_RESULT));
 
-        assertFalse(CommandParts.world(WorldBattles.DECIDE));
         assertFalse(CommandParts.world(StepPrompts.ANSWER));
         assertFalse(CommandParts.world(Events.EVENT_CHOICE));
         assertFalse(CommandParts.world(Events.KILLER_SUSPECT));
