@@ -350,9 +350,9 @@ val modDir = layout.buildDirectory.dir("mod/SOSDET")
 
 val assembleMod by tasks.registering(Sync::class) {
     group = "build"
-    description = "Assembles the mod folder build/mod/SOSDET (_Info.txt, THIRD-PARTY-NOTICES.md, V71/script/SOSDET.jar)."
+    description = "Assembles the mod folder build/mod/SOSDET (_Info.txt, LICENSE, THIRD-PARTY-NOTICES.md, V71/script/SOSDET.jar)."
     from(modInfo)
-    from("THIRD-PARTY-NOTICES.md") // the MIT notices travel with every copy of the mod
+    from("LICENSE", "THIRD-PARTY-NOTICES.md") // the MIT notices travel with every copy of the mod
     from(tasks.jar) { into("V71/script") }
     into(modDir)
 }
