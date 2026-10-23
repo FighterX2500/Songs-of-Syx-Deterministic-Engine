@@ -60,6 +60,8 @@ public enum Field {
     PROSECUTION(Shape.RACE),
     WAR_STANDING(Shape.RACE),
     TOURISM_PERMIT(Shape.RACE),
+    /** The retirement age law, as a share ({@code RETIREMENT_AGE.decree().getD}); 0 in the null rows. */
+    RETIREMENT(Shape.CLASS_RACE),
     // B5
     MERCY(Shape.ONE),
     // A6: the city divisions that world divisions are made of

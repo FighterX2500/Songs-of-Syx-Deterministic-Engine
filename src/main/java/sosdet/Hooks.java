@@ -9,11 +9,15 @@ import game.faction.FACTIONS;
 import game.faction.FCredits.CTYPE;
 import game.faction.Faction;
 import game.faction.player.PCredits;
+import init.type.CAUSE_LEAVE;
 import init.trade.TRADABLE;
 import init.trade.TRADE_TYPE;
 import init.value.Value;
 import settlement.trade.PBuyer;
+import settlement.entity.humanoid.Humanoid;
+import settlement.stats.Induvidual;
 import settlement.trade.PSeller;
+import snake2d.util.datatypes.COORDINATE;
 import snake2d.util.rnd.RND;
 import sosdet.ai.AiApplier;
 import sosdet.ai.AiMode;
@@ -26,6 +30,7 @@ import sosdet.report.Field;
 import sosdet.report.Reports;
 import sosdet.txn.Txn;
 import sosdet.txn.TxnKind;
+import world.entity.army.WArmy;
 
 /**
  * What the engine's patches to the game call (docs/hooks.md). Each hook asks one question or reports one
@@ -184,9 +189,9 @@ public final class Hooks {
 
     /**
      * The step enters a part: 0 the city part, 1 the world part. Between them, every 30 steps, the city part takes its
-     * report for 30 steps later; the world part then reads the report due now (the first one is taken at once). The
-     * world part takes a random stream of its own, seeded from the seed and the step, so the city's draws on this PC
-     * never shift the world's.
+     * report for 30 steps later; the world part then reads the report due now (the first one is taken at once), and
+     * first applies its inputs. The world part takes a random stream of its own, seeded from the seed and the step, so
+     * the city's draws on this PC never shift the world's.
      */
     public static void stepPart(int part) {
         Session s = Engine.session();
@@ -198,9 +203,9 @@ public final class Hooks {
             if (Reports.takenAt(step)) {
                 s.takeReport(step, step + Reports.DELAY);
             }
-            s.reports.applyDue(step);
             s.part = part;
             s.streams.reseed(s.worldSeed(step));
+            s.reports.applyDue(step, s.inputApplier());
             return;
         }
         s.part = part;
@@ -412,6 +417,113 @@ public final class Hooks {
         t.i = resAm;
         Engine.session().reports.change(Engine.session().clock.step(), Field.CREDITS, 0, (int) amount);
         return true;
+    }
+
+    /**
+     * {@code WDivStoredAll.update} (C4): in the world part, the entry point a returning soldier takes is picked in the
+     * city tail; this stands in for it and carries the pick's seed as its x.
+     */
+    public static COORDINATE entryLater(int seed) {
+        return sosdet.game.GameTxns.entryLater(seed); // there, so the game types load only in a game
+    }
+
+    /**
+     * {@code WDivStored.popSoldier} (C4): true when queued. The world part goes on to take the soldier out of their
+     * division; the city tail brings a copy of them, as they were now, into the city at an entry point.
+     */
+    public static boolean soldierReturns(Induvidual t, int div, int entrySeed) {
+        Txn x = toCity(TxnKind.SOLDIER_RETURNS);
+        if (x == null) {
+            return false;
+        }
+        Induvidual copy = new Induvidual(t.hType(), t.race());
+        copy.copyFrom(t);
+        x.a = copy;
+        x.i = div;
+        x.j = entrySeed;
+        return true;
+    }
+
+    /** {@code WDivStored.age} (C4): true when queued; the world part has taken the retiree out of their division. */
+    public static boolean retiree(Induvidual i) {
+        Txn x = toCity(TxnKind.RETIREE);
+        if (x == null) {
+            return false;
+        }
+        x.a = i;
+        return true;
+    }
+
+    /** {@code StatsRelations.setSoldier} (C5): the city's relation table; true when queued. */
+    public static boolean relSoldier(Induvidual i, int storedId) {
+        Txn x = toCity(TxnKind.REL_SOLDIER);
+        if (x == null) {
+            return false;
+        }
+        x.a = i;
+        x.i = storedId;
+        return true;
+    }
+
+    /** {@code StatsRelations.setDeath} (C5): true when queued. */
+    public static boolean relDeath(Induvidual i, CAUSE_LEAVE cause) {
+        Txn x = toCity(TxnKind.REL_DEATH);
+        if (x == null) {
+            return false;
+        }
+        x.a = i;
+        x.b = cause;
+        return true;
+    }
+
+    /** {@code StatsRelations.setHumanoid} (C5): true when queued. */
+    public static boolean relHumanoid(Humanoid h) {
+        Txn x = toCity(TxnKind.REL_HUMANOID);
+        if (x == null) {
+            return false;
+        }
+        x.a = h;
+        return true;
+    }
+
+    // ------------------------------------------------------------ city inputs to the world (ADR 0005 §2)
+
+    /** In the city part, an input for the next report; outside it, null. */
+    private static Session inCityPart() {
+        Session s = Engine.session();
+        return s != null && s.part == StepParts.CITY ? s : null;
+    }
+
+    /**
+     * {@code WDivStoredAll.add} (B1): in the city part, the soldier joins their world division when the city's next
+     * report applies; true when sent.
+     */
+    public static boolean soldierJoins(Induvidual i, int div) {
+        Session s = inCityPart();
+        if (s == null) {
+            return false;
+        }
+        s.cityInputs.add(s.inputs().soldierJoins(i, div));
+        return true;
+    }
+
+    /** {@code ADSupply.current().set} (B2): in the city part, the change goes to the world in the next report. */
+    public static boolean supplyFromCity(int supply, WArmy a, int delta) {
+        Session s = inCityPart();
+        if (s == null || a == null) {
+            return false;
+        }
+        if (delta != 0) {
+            s.cityInputs.add(s.inputs().supply(supply, a, delta));
+        }
+        return true;
+    }
+
+    /** {@code ADSupply.current().get}: outside the world part, what the city sent the army that the world has not applied. */
+    public static int supplyPending(int supply, WArmy a) {
+        Session s = Engine.session();
+        return s == null || a == null || s.part == StepParts.WORLD_PART ? 0
+                : s.sentSupplies.pending(supply, a.armyIndex(), a.iteration());
     }
 
     // ------------------------------------------------------------ RND: the two streams (B10)

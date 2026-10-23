@@ -6,7 +6,9 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
@@ -46,6 +48,25 @@ class CityReportTest {
         // ADR 0005: "a few KB". Fractions take 9 bytes each; the worst case, 120 garrison divisions with fractional
         // training and equipment and 600 fractional boost and faction values, is about 20 KB
         assertTrue(bytes.length < 21_000, bytes.length + " bytes");
+    }
+
+    /** B1, B2: what the city did to the world travels in the report, in order, and is part of its hash. */
+    @Test
+    void inputsReadBackInOrderAndChangeTheHash() {
+        List<Input> inputs = new ArrayList<>();
+        inputs.add(new Input(InputKind.SOLDIER_JOINS, 17, new byte[] {1, 2, 3, -1}));
+        inputs.add(new Input(InputKind.SUPPLY, -2, new byte[0]));
+        inputs.add(new Input(InputKind.SOLDIER_JOINS, 0, new byte[300]));
+        CityReport r = new CityReport(V71, 0, 30, 60, values(V71), inputs);
+        CityReport back = CityReport.fromBytes(r.toBytes(), V71);
+        assertEquals(r, back);
+        assertEquals(inputs, back.inputs);
+        CityReport none = new CityReport(V71, 0, 30, 60, values(V71));
+        assertTrue(none.inputs.isEmpty());
+        assertTrue(none.hash() != r.hash());
+        assertTrue(!none.equals(r));
+        inputs.clear(); // the report keeps its own list
+        assertEquals(3, r.inputs.size());
     }
 
     @Test

@@ -5,6 +5,7 @@ import sosdet.ai.AiLog;
 import sosdet.ai.AiMode;
 import sosdet.game.GameAi;
 import sosdet.game.GameHash;
+import sosdet.game.GameInputs;
 import sosdet.game.GameReport;
 import sosdet.game.GameTxns;
 import sosdet.game.cmd.PlanStash;
@@ -12,6 +13,8 @@ import sosdet.hash.HashLog;
 import sosdet.hash.StateSource;
 import sosdet.report.CityReport;
 import sosdet.report.CitySource;
+import sosdet.report.Input;
+import sosdet.report.SentSupplies;
 import sosdet.report.Reports;
 import sosdet.txn.Txn;
 import sosdet.txn.TxnQueue;
@@ -93,6 +96,10 @@ final class Session {
     long reportNanos;
     int reportBytes;
     int reportMaxBytes;
+    /** What the city did to the world since its last report, for the next one (B1, B2). */
+    final java.util.ArrayList<Input> cityInputs = new java.util.ArrayList<>();
+    /** The supplies among them, which the city reads as sent until the world applies them. */
+    final SentSupplies sentSupplies = new SentSupplies();
     /** The world part's changes to the city, applied in the step's city tail (ADR 0005 §3). */
     final TxnQueue txns = new TxnQueue();
     /** What applies them: the game, made at first use; tests put in their own. */
@@ -118,6 +125,8 @@ final class Session {
         playerUpdateAcc = 0;
         reports.clear(); // every PC reloads, so every PC takes its load report from the loaded city
         txns.dropQueued();
+        cityInputs.clear(); // the loaded world has the city's state as saved
+        sentSupplies.clear();
         if (resync != null) {
             Resync r = resync;
             resync = null;
@@ -147,7 +156,8 @@ final class Session {
         CitySource c = city();
         double[] v = new double[c.layout().size()];
         c.fill(v);
-        CityReport r = new CityReport(c.layout(), c.faction(), step, appliesAt, v);
+        CityReport r = new CityReport(c.layout(), c.faction(), step, appliesAt, v, cityInputs);
+        cityInputs.clear();
         reportBytes = r.toBytes().length;
         reportMaxBytes = Math.max(reportMaxBytes, reportBytes);
         reports.stamp(r);
@@ -203,9 +213,23 @@ final class Session {
         return plans;
     }
 
+    private GameInputs inputs;
+
+    /** Makes the city's inputs and applies them in the world part: the game, made at first use. */
+    GameInputs inputs() {
+        if (inputs == null) {
+            inputs = new GameInputs(sentSupplies);
+        }
+        return inputs;
+    }
+
+    java.util.function.Consumer<CityReport> inputApplier() {
+        return inputs();
+    }
+
     java.util.function.Consumer<Txn> txnApplier() {
         if (txnApplier == null) {
-            txnApplier = new GameTxns();
+            txnApplier = new GameTxns(inputs(), cityInputs);
         }
         return txnApplier;
     }

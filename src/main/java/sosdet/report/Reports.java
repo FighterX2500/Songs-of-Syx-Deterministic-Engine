@@ -1,6 +1,7 @@
 package sosdet.report;
 
 import java.util.ArrayDeque;
+import java.util.function.Consumer;
 
 /**
  * When reports are taken and read (ADR 0005 §2): the city part takes one every 30 steps, and the world part reads it
@@ -33,9 +34,15 @@ public final class Reports {
 
     /** The world part of a step begins: the reports due by now apply, the latest one last. */
     public void applyDue(long step) {
+        applyDue(step, r -> { });
+    }
+
+    /** As {@link #applyDue(long)}; {@code applied} gets each report as it applies, for its inputs. */
+    public void applyDue(long step, Consumer<CityReport> applied) {
         while (!pending.isEmpty() && pending.peekFirst().appliesAt <= step) {
             current = pending.pollFirst();
             ledger.reportApplied(current.takenAt);
+            applied.accept(current);
         }
     }
 

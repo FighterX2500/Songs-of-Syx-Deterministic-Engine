@@ -11,5 +11,13 @@ public enum TxnKind {
     /** C3: credits in or out ({@code PCredits.inc}). */
     CREDITS,
     /** C3: credits for traded goods, also in the trade history ({@code PCredits.inc} with a tradable). */
-    CREDITS_TRADE
+    CREDITS_TRADE,
+    /** C4: a soldier out of their world division enters the city ({@code WDivStored.popSoldier}). */
+    SOLDIER_RETURNS,
+    /** C4: a soldier out of their world division retires into the city ({@code WDivStored.age}). */
+    RETIREE,
+    /** C5: the city's relation table, written by world code ({@code StatsRelations}). */
+    REL_SOLDIER,
+    REL_DEATH,
+    REL_HUMANOID
 }

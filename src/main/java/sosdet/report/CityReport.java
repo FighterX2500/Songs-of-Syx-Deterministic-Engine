@@ -3,19 +3,23 @@ package sosdet.report;
 import java.io.ByteArrayOutputStream;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 
 import sosdet.hash.HashLog;
 
 /**
  * One city's report to the world (ADR 0005 §2): the city values the world part reads, taken in the city part at one
- * step and read by the world part from a later one. Its bytes carry a protocol version; a whole value is written in a
- * few bytes, any other one in 8, and every value reads back bit for bit.
+ * step and read by the world part from a later one, with the inputs the city part made since its last report. Its
+ * bytes carry a protocol version; a whole value is written in a few bytes, any other one in 9, and every value reads
+ * back bit for bit.
  */
 public final class CityReport {
 
     static final int MAGIC = 0x53444352; // "SDCR"
-    public static final int PROTOCOL_VERSION = 1;
+    public static final int PROTOCOL_VERSION = 2;
 
     /** The faction whose city this is. */
     public final int faction;
@@ -25,8 +29,15 @@ public final class CityReport {
     public final long appliesAt;
     final ReportLayout layout;
     private final double[] values;
+    /** What the city part did to the world since its last report, in order (B1, B2). */
+    public final List<Input> inputs;
 
     public CityReport(ReportLayout layout, int faction, long takenAt, long appliesAt, double[] values) {
+        this(layout, faction, takenAt, appliesAt, values, Collections.emptyList());
+    }
+
+    public CityReport(ReportLayout layout, int faction, long takenAt, long appliesAt, double[] values,
+            List<Input> inputs) {
         if (values.length != layout.size()) {
             throw new IllegalArgumentException(
                     "SOSDET: a report of " + values.length + " values, the layout holds " + layout.size());
@@ -39,6 +50,7 @@ public final class CityReport {
         this.takenAt = takenAt;
         this.appliesAt = appliesAt;
         this.values = values.clone();
+        this.inputs = Collections.unmodifiableList(new ArrayList<>(inputs));
     }
 
     public double get(Field f, int i) {
@@ -76,6 +88,13 @@ public final class CityReport {
                 }
             }
         }
+        varint(out, inputs.size());
+        for (Input in : inputs) {
+            varint(out, in.kind.ordinal());
+            varint(out, ((long) in.arg << 1) ^ (in.arg >> 31));
+            varint(out, in.length());
+            out.write(in.raw(), 0, in.length());
+        }
         return out.toByteArray();
     }
 
@@ -112,10 +131,23 @@ public final class CityReport {
                     values[i] = Double.longBitsToDouble(b.getLong());
                 }
             }
+            int n = (int) varint(b);
+            List<Input> inputs = new ArrayList<>();
+            for (int i = 0; i < n; i++) {
+                int kind = (int) varint(b);
+                if (kind < 0 || kind >= InputKind.values().length) {
+                    throw new IllegalArgumentException("SOSDET: a city report input of kind " + kind);
+                }
+                long z = varint(b);
+                int arg = (int) ((z >>> 1) ^ -(z & 1));
+                byte[] data = new byte[(int) varint(b)];
+                b.get(data);
+                inputs.add(new Input(InputKind.values()[kind], arg, data));
+            }
             if (b.hasRemaining()) {
                 throw new IllegalArgumentException("SOSDET: " + b.remaining() + " bytes after the city report");
             }
-            return new CityReport(layout, faction, takenAt, appliesAt, values);
+            return new CityReport(layout, faction, takenAt, appliesAt, values, inputs);
         } catch (BufferUnderflowException | NegativeArraySizeException e) {
             throw new IllegalArgumentException("SOSDET: city report cut short (" + bytes.length + " bytes)", e);
         }
@@ -156,7 +188,7 @@ public final class CityReport {
                 return false;
             }
         }
-        return true;
+        return r.inputs.equals(inputs);
     }
 
     /** The report's step and every value's bits, for the state hash. */
@@ -164,6 +196,9 @@ public final class CityReport {
         long h = HashLog.mix(HashLog.mix(HashLog.mix(HashLog.start(), faction), takenAt), appliesAt);
         for (double v : values) {
             h = HashLog.mix(h, Double.doubleToRawLongBits(v));
+        }
+        for (Input in : inputs) {
+            h = HashLog.mix(HashLog.mix(HashLog.mix(h, in.kind.ordinal()), in.arg), in.raw(), 0, in.length());
         }
         return h;
     }

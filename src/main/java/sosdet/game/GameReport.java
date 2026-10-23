@@ -159,6 +159,8 @@ public final class GameReport implements CitySource {
                 Race r = ri == 0 ? null : races.get(ri - 1);
                 v[l.slot(Field.PHYSICAL, ci, ri)] = POP.physical(c, r);
                 v[l.slot(Field.NEXT_EXTRA, ci, ri)] = POP.next(c, r) - POP.tot(c, r);
+                v[l.slot(Field.RETIREMENT, ci, ri)] = c == null || r == null ? 0
+                        : STATS.WORK().RET.RETIREMENT_AGE.decree().getD(c, r);
             }
         }
         v[l.slot(Field.POP_TOTAL, 0)] = STATS.POP().POP.data(null).get(null);
