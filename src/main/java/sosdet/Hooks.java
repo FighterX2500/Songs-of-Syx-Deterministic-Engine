@@ -262,6 +262,8 @@ public final class Hooks {
             return;
         }
         s.plans().discard();
+        s.worldPrompt = null; // a load builds a new view: no prompt is open
+        s.worldPromptClose = null;
         s.afterLoad();
         s.loading = true;
         if (s.loadSeed != 0) {
@@ -378,6 +380,36 @@ public final class Hooks {
     /** This PC's room plan and its stash around the steps (ADR 0003), for the room placer's commands. */
     public static PlanStash planStash() {
         return Engine.session().plans();
+    }
+
+    /**
+     * The world step opened the world-battle prompt: {@code decides} is the battle, siege or result it decides, and
+     * {@code close} hides it. Kept for the decision command (SOS-35, {@code cmd.WorldBattles}).
+     */
+    public static void worldPromptOpened(Object decides, Runnable close) {
+        Session s = Engine.session();
+        if (s != null) {
+            s.worldPrompt = decides;
+            s.worldPromptClose = close;
+        }
+    }
+
+    /** What the open world-battle prompt decides, or null. */
+    public static Object worldPrompt() {
+        Session s = Engine.session();
+        return s == null ? null : s.worldPrompt;
+    }
+
+    /** A decision command closes the world-battle prompt, inside the step on every PC. */
+    public static void worldPromptClose() {
+        Session s = Engine.session();
+        if (s == null || s.worldPrompt == null) {
+            return;
+        }
+        Runnable close = s.worldPromptClose;
+        s.worldPrompt = null;
+        s.worldPromptClose = null;
+        close.run();
     }
 
     /** While a command or order is being applied: whether this PC's player gave it (ADR 0002, issuer feedback). */

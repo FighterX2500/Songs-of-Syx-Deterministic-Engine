@@ -211,7 +211,7 @@ Status: **done** (hooked, with its command id), **to do**, or why it needs no co
 | tools | `view.tool.PlacableMultiTool.place()V` (private) | B | done: command 6000 toolArea, patch 96-cmd-tools |
 | city military | `BattleOrder$Locked.set(Copyable)V` | B | done: battle orders (SOS-32, patch 90) |
 | city military (generated battle deploy) | `game.battle.Armies.initAndTeleport(LIST)V` | - | done: deployment (SOS-32, patch 95) |
-| world | `UIWBattlePrompt.battle/assist/lastStand/battleSally(WBattleSpec)`, `siege(WBattleSiege)`, `result(WBattleSiege$Result)`, `result(WBattleResult,Z)` | D | to do |
+| world | `UIWBattlePrompt.battle/assist/lastStand/battleSally(WBattleSpec)`, `siege(WBattleSiege)`, `result(WBattleSiege$Result)`, `result(WBattleResult,Z)` | D | done: not a command; the world step opens it on every PC alike, the engine keeps what it decides, and in a session it doesn't pause the game (SOS-35, patch 99-world-battles) |
 | world | `view.world.ui.army.ArmyRecruit$3.clickA()V` | D | to do |
 | world | `view.world.ui.army.UIMerenaries$4.clickA()V` | D | to do |
 | world | `view.world.ui.region.PlayInfo$9$1.exe()V` | D | to do |
@@ -224,7 +224,7 @@ Status: **done** (hooked, with its command id), **to do**, or why it needs no co
 | tools | `view.sett.ui.room.construction.UIRoomPlacer.init(Room$RoomInstanceImp)V` | B | done: in a session the room keeps working under the plan; Build is 6008 roomRefurnish, the trash button 2001 roomRemove (patch 97-room-plans, `Refurnish`) |
 | diplomacy | `view.ui.diplomacy.UIDipMessDeal$3.clickA`, `$4.clickA` | D | to do |
 | battle infra | `game.save.GameLoader.set()V` | - | -: engine load path (SOS-30) |
-| world (generated battle) | `view.battle.IDeploy.update(F)Z`, `BattleState$ILiveConclude.update(F)Z`, `BattleState$ILiveConclude$1.close()V` | D | to do |
+| world (generated battle) | `view.battle.IDeploy.update(F)Z`, `BattleState$ILiveConclude.update(F)Z`, `BattleState$ILiveConclude$1.close()V` | D | after V0.1: Engage is refused in a session (SOS-35) |
 | laws/stats | `settlement.entry.Immigration.admit(Race,I)V` | B | done: command 1016 admit, patch 96-cmd-laws (call sites; Immigration holds the menu-unsafe Immigrator) |
 
 ## Call sites
@@ -239,7 +239,7 @@ Status: **done** (hooked, with its command id), **to do**, or why it needs no co
 | diplomacy | `Deal.execute(Z)D` at `view.world.ui.faction.UIDiplomacy$4`, `view.ui.diplomacy.UIDipMessDeal$3` | D | to do |
 | events | `MessDemand$Demand.pay()`, `RaidingCurrent.clear()`, `Messages.hide()` at `game.raiding.MessDemand$Demand$3` (pay), `$4` (decline hide) | D | to do |
 | world | `RDLevelsTmp.accept()V` at `view.world.ui.region.PlayBuildingsPop$Info$1` | D | to do |
-| world | `WBattleSpec.engage/auto/retreat`, `WBattleSiege.retreat`, `WBattleResult.accept([I[I)`, `WBattleSiege$Result.occupy/abandon/puppet(DD[I[I)`, `DOUBLE_OE.incD` (mercy), `ACTION.exe` (close) at `view.world.ui.battle.BattleAssist$1-3, BattleBattle$1-3, BattleLastStand$1-2, BattleSally$1-3, BattleSiege$1-3, Conquer$7-9, Res$1` | D | to do |
+| world | `WBattleSpec.engage/auto/retreat`, `WBattleSiege.retreat`, `WBattleResult.accept([I[I)`, `WBattleSiege$Result.occupy/abandon/puppet(DD[I[I)`, `DOUBLE_OE.incD` (mercy), `ACTION.exe` (close) at `view.world.ui.battle.BattleAssist$1-3, BattleBattle$1-3, BattleLastStand$1-2, BattleSally$1-3, BattleSiege$1-3, Conquer$7-9, Res$1` | D | done: 7900 worldBattleDecide (auto, retreat, the siege's Wait), 7901 worldBattleAccept, 7902 worldSiegeResult (SOS-35, patch 99-world-battles); Engage is refused in a session with a notice until generated battles are ported (after V0.1) |
 | world | `WArmyConstructor.create(IILFaction;)WArmy`, `UIArmies.openList(WArmy)` at `view.world.ui.army.List$9`, `List$Placer` | D | to do |
 | names/colours | `Str.clear()`, `Str.add(CharSequence)` at `Army$2` (army name), `PlayInfo$11` (region), `UIProfile$3` (capital), `UIRoom$Detail$1` (room), `UIMiniHotSpots$Panel$1` (mark) | B | room 5001 and mark 5006 done, capital through 5002 factionName, patch 96-cmd-names; army and region names stage D |
 | names/colours | `Str.add(C)`, `Str.add(CharSequence)`, `Str.clear()` at `snake2d.util.sprite.text.StringInputSprite` (faction name), `view.ui.div.UIDivEditor$3` (division name) | B | done: 5002 factionName (+5003 rulerName) and 5000 divisionName, patch 96-cmd-names |
@@ -247,4 +247,4 @@ Status: **done** (hooked, with its command id), **to do**, or why it needs no co
 | names/colours | `SettMarks$SettMark.remove()V` at `view.sett.ui.right.UIMiniHotSpots$Panel$2` | B | done: command 5005 markRemove, patch 96-cmd-names |
 | rooms | `RBIT$RBITImp.or(RBIT)` at `MoveOrderPullUI$Detail$3` | B | done: command 2044 moveOrderRes, patch 96-cmd-rooms |
 | laws/stats, world | `RMapInt.set`, `ArrayInt.set`, `INT_OE.set` at `CatPopulationGrowth$8`, `CatPopulationGrowth$9`, `UISubjectType$2`, `PlayPop$15`, `Army$10` | B/D | city side done: 1018 birthLimit, 1019 breeding, 1020 favourite, patch 96-cmd-laws; world side (PlayPop$15, Army$10) stage D |
-| world (generated battle) | `BattleState.deploy()`, `liveRetreat()`, `reloadBattle()` at `view.battle.IDeploy$1`, `BattlePanel$12$1`, `BattlePanel$11$1`, `UIBattleResult$3` | D | to do |
+| world (generated battle) | `BattleState.deploy()`, `liveRetreat()`, `reloadBattle()` at `view.battle.IDeploy$1`, `BattlePanel$12$1`, `BattlePanel$11$1`, `UIBattleResult$3` | D | after V0.1: Engage is refused in a session (SOS-35) |

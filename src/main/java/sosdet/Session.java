@@ -32,6 +32,9 @@ final class Session {
     PlanStash plans;
     /** The game's saver that lifts the plan around its saves ({@link Hooks#frameUpdated}), registered once per game. */
     Object planSaver;
+    /** The world-battle prompt open on this PC (and, opened by the step, on every PC): what it decides, and its close. */
+    Object worldPrompt;
+    Runnable worldPromptClose;
 
     /** Host: the game speed last seen, so a change goes into the log once (B16). */
     double seenSpeed;
