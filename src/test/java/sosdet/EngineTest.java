@@ -80,6 +80,11 @@ class EngineTest {
         assertFalse(Hooks.pathsNow());
         assertEquals(3, Hooks.simulationValue(3, 1));
         assertTrue(Hooks.cameraMatters());
+        assertTrue(Hooks.localDraft(true));
+        assertEquals(7, Hooks.cacheKey(7));
+        assertTrue(Hooks.developerFlag(true));
+        assertEquals(0.75, Hooks.simulationValue(0.75, 0.0));
+        assertFalse(Hooks.sharedStateOnly());
         Hooks.cosmeticBegin(); // no-ops, no failure
         Hooks.cosmeticEnd();
         Hooks.loadBegin();
@@ -242,6 +247,23 @@ class EngineTest {
         assertTrue(Hooks.threadRunsInStep(false));
         assertTrue(Hooks.threadRunsInStep(true), "in-step mode: the general's job runs in the step too");
         assertFalse(Hooks.slaveWorking(true), "a battle thread is only working while its job runs in the step");
+    }
+
+    @Test
+    void theWorldStepReadsNoLocalDraftDeveloperFlagOrProfileValue() {
+        begin();
+        assertTrue(Hooks.localDraft(true), "between steps the UI still shows this PC's upgrade draft");
+        assertFalse(Hooks.localDraft(false));
+        assertFalse(Hooks.developerFlag(true));
+        assertEquals(0.0, Hooks.simulationValue(0.75, 0.0));
+        assertTrue(Hooks.sharedStateOnly());
+        Engine.runFreely();
+        Hooks.stepsFor(Engine.STEP_SECONDS + 1e-9);
+        assertTrue(Hooks.stepBegin());
+        assertFalse(Hooks.localDraft(true), "inside the step the real levels count");
+        assertFalse(Hooks.outsideStep());
+        Hooks.stepEnd();
+        assertTrue(Hooks.outsideStep());
     }
 
     @Test
