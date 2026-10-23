@@ -6,6 +6,7 @@ import init.trade.TR;
 import sosdet.Hooks;
 import sosdet.game.cmd.StepPrompts;
 import sosdet.game.cmd.WorldBattles;
+import view.main.VIEW;
 import world.battle.spec.BATTLE_RESULT;
 import world.battle.spec.WBattleResult;
 import world.battle.spec.WBattleSiege;
@@ -28,6 +29,9 @@ public final class PromptAnswers {
         long question = Hooks.stepPromptOldest();
         if (question >= 0 && question != answeredQuestion) {
             answeredQuestion = question;
+            if (Hooks.stepPromptShown() == question && VIEW.inters().yesNo.isActivated()) {
+                VIEW.inters().yesNo.deactivate(); // the button hides the dialog as it is clicked; nobody clicks here
+            }
             StepPrompts.answer(question, true);
             return "question yes";
         }
