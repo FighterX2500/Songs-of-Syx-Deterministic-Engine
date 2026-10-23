@@ -6,6 +6,8 @@ Deterministic simulation engine for Songs of Syx V71: the same battle save, seed
 
 AGENTS.md holds the coding rules; `.claude/rules/determinism.md` holds the determinism rules. This file holds the project workflow. If they ever seem to conflict, stop and ask.
 
+Read [docs/architecture.md](docs/architecture.md) first: how a session runs, the code map, the known desync causes and the pitfalls. The workflow below is the owner's own; contributors from outside can skip its Jira and approval steps.
+
 ## Source of truth
 
 - `docs/requirements.md`: what the engine must do. Read the relevant section before any work. Never change a rule in it without asking me first; when I approve a change, update it in the same PR.

@@ -12,6 +12,7 @@ Deterministic simulation engine for Songs of Syx V71 (build 71.44). The same sav
 
 Until something starts an engine session, the game plays as vanilla.
 
+- **Start here, especially as an AI agent:** [docs/architecture.md](docs/architecture.md): how a session runs, the code map, every known desync cause and where it is fixed, and the pitfalls
 - What it must do: [docs/requirements.md](docs/requirements.md)
 - Coding rules: [AGENTS.md](AGENTS.md); determinism rules: [.claude/rules/determinism.md](.claude/rules/determinism.md)
 - Changes to the game's code: [docs/hooks.md](docs/hooks.md); the patch set: [patches/](patches/README.md)
