@@ -1,0 +1,71 @@
+diff -ru -U2 a/game/faction/FWorth.java b/game/faction/FWorth.java
+--- a/game/faction/FWorth.java	2026-06-25 10:49:36.000000000 +0500
++++ b/game/faction/FWorth.java	2026-10-23 16:12:04.785043900 +0500
+@@ -151,7 +151,7 @@
+ 		if (fa instanceof FactionNPC) {
+ 			FactionNPC f = (FactionNPC) fa;
+ 			DIP.TMP2().setFactionAndClear(f);
+-			return (int) Math.ceil(DIP.TMP().npc.offerableWorth()*0.05);
++			return (int) Math.ceil((sosdet.Hooks.sharedStateOnly() ? DIP.TMP2() : DIP.TMP()).npc.offerableWorth()*0.05); // SOSDET: the deal just set, not the UI's scratch deal (SOS-35)
+ 		}
+ 		return 0;
+ 	}
+diff -ru -U2 a/game/faction/diplomacy/deal/DealBools.java b/game/faction/diplomacy/deal/DealBools.java
+--- a/game/faction/diplomacy/deal/DealBools.java	2026-05-18 09:29:22.000000000 +0500
++++ b/game/faction/diplomacy/deal/DealBools.java	2026-10-23 16:12:04.784010100 +0500
+@@ -286,7 +286,7 @@
+ //			if (DIP.get(a.f(), b.f()).minLoyalty > 0 && DIP.get(a.f(), b.f()).minLoyalty > ss.minLoyalty)
+ //				return ¤¤pDowngrade;
+ //			
+-			if (ROPINION.get(b.npc()) < ss.opinionNeeded && !S.get().developer) {
++			if (ROPINION.get(b.npc()) < ss.opinionNeeded && !sosdet.Hooks.developerFlag(S.get().developer)) { // SOSDET: no developer shortcut in a session, every PC judges the deal alike (SOS-35)
+ 				Str.TMP.clear().add(¤¤pOpinion).insert(0, ss.opinionNeeded, 1);
+ 				return Str.TMP;
+ 			}
+diff -ru -U2 a/game/faction/player/PTitles.java b/game/faction/player/PTitles.java
+--- a/game/faction/player/PTitles.java	2026-06-12 10:34:58.000000000 +0500
++++ b/game/faction/player/PTitles.java	2026-10-23 16:12:04.785043900 +0500
+@@ -147,7 +147,7 @@
+ 
+ 			@Override
+ 			protected double getValue(PTitle t) {
+-				return t.selected ? (0.5+0.5*t.raceValue/RACES.playable().size()) : 0;
++				return t.selected ? (0.5+0.5*sosdet.Hooks.simulationValue(t.raceValue, 0)/RACES.playable().size()) : 0; // SOSDET: the race bonus comes from this PC's profile; none in a session (SOS-35)
+ 			}
+ 			
+ 			@Override
+@@ -472,7 +472,7 @@
+ 
+ 		public double boosterValue() {
+ 			if (unlocked || selected)
+-				return 0.5 + 0.5*raceValue/RACES.playable().size();
++				return 0.5 + 0.5*sosdet.Hooks.simulationValue(raceValue, 0)/RACES.playable().size(); // SOSDET: the race bonus comes from this PC's profile; none in a session (SOS-35)
+ 			return 0;
+ 		}
+ 		
+diff -ru -U2 a/game/faction/player/emmi/Emissaries.java b/game/faction/player/emmi/Emissaries.java
+--- a/game/faction/player/emmi/Emissaries.java	2026-03-25 20:23:06.000000000 +0500
++++ b/game/faction/player/emmi/Emissaries.java	2026-10-23 16:12:04.783011700 +0500
+@@ -233,8 +233,8 @@
+ 	private int viewI = -1;
+ 	
+ 	public double penaltyMul() {
+-		if (VIEW.RI() != viewI) {
+-			viewI = VIEW.RI();
++		if (sosdet.Hooks.cacheKey(VIEW.RI()) != viewI) { // SOSDET: keyed on the step in a session: the step reads it, however often this PC drew (SOS-35)
++			viewI = sosdet.Hooks.cacheKey(VIEW.RI());
+ 			double am = BOOSTABLES.CIVICS().DIPLOMACY.get(FACTIONS.player());
+ 			if (am < 0) {
+ 				am = Math.floor(am);
+diff -ru -U2 a/world/region/building/RDLevelsTmp.java b/world/region/building/RDLevelsTmp.java
+--- a/world/region/building/RDLevelsTmp.java	2026-06-17 10:48:06.000000000 +0500
++++ b/world/region/building/RDLevelsTmp.java	2026-10-23 16:12:04.783011700 +0500
+@@ -29,7 +29,7 @@
+ 	}
+ 	
+ 	public int level(RDBuilding bu, Region reg) {
+-		if (active > 0 && reg == this.reg)
++		if (sosdet.Hooks.localDraft(active > 0) && reg == this.reg) // SOSDET: the step reads the real levels, never this PC's upgrade draft (SOS-35)
+ 			return levels[bu.index()];
+ 		return bu.level.get(reg);
+ 	}
