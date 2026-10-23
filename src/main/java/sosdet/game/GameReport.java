@@ -120,8 +120,14 @@ public final class GameReport implements CitySource {
         for (TRADABLE t : TR.ALL()) {
             int i = t.index();
             v[l.slot(Field.INCOMING, i, 0)] = t.pb().attempting(null);
+            v[l.slot(Field.QUEUED, i, 0)] = t.pb().toBeAdded().get(null) + t.pb().toBeStored().get(null);
+            v[l.slot(Field.PROMISED, i, 0)] = t.ps().promised().get(null);
+            v[l.slot(Field.OUTGOING, i, 0)] = t.ps().attempting(null);
             for (TRADE_TYPE tt : TRADE_TYPE.all) {
                 v[l.slot(Field.INCOMING, i, tt.index + 1)] = t.pb().attempting(tt);
+                v[l.slot(Field.QUEUED, i, tt.index + 1)] = t.pb().toBeAdded().get(tt) + t.pb().toBeStored().get(tt);
+                v[l.slot(Field.PROMISED, i, tt.index + 1)] = t.ps().promised().get(tt);
+                v[l.slot(Field.OUTGOING, i, tt.index + 1)] = t.ps().attempting(tt);
             }
             v[l.slot(Field.SELL_PRICE_CAP, i)] = t.ps().priceCapsI.get();
             v[l.slot(Field.SELL_LIMIT, i)] = t.ps().limit.get();

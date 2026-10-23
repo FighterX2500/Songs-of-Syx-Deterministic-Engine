@@ -23,7 +23,7 @@ public final class CityReport {
     public final long takenAt;
     /** The first step whose world part reads it. */
     public final long appliesAt;
-    private final ReportLayout layout;
+    final ReportLayout layout;
     private final double[] values;
 
     public CityReport(ReportLayout layout, int faction, long takenAt, long appliesAt, double[] values) {

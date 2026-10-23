@@ -1,18 +1,44 @@
 diff -ru -U2 a/init/resources/RESOURCE.java b/init/resources/RESOURCE.java
 --- a/init/resources/RESOURCE.java	2026-06-24 12:45:50.000000000 +0500
-+++ b/init/resources/RESOURCE.java	2026-10-23 21:27:48.303433000 +0500
++++ b/init/resources/RESOURCE.java	2026-10-23 22:27:20.583626100 +0500
 @@ -535,6 +535,8 @@
  	}
  	
  	public int owned() {
 +		if (sosdet.Hooks.reportRead()) // SOSDET: the world part reads the city's report (ADR 0005)
-+			return sosdet.Hooks.reportI(sosdet.report.Field.HELD, tr().index()) - FACTIONS.player().seller(tr()).promised().get(null);
++			return sosdet.Hooks.reportI(sosdet.report.Field.HELD, tr().index()) - sosdet.Hooks.reportI(sosdet.report.Field.PROMISED, tr().index(), 0);
  		int stocked = SETT.ROOMS().STOCKPILE.tally().amountReservable.get(this);
  		stocked += SETT.ROOMS().EXPORT.tally.amount.get(this);
  		stocked += SETT.ROOMS().IMPORT.tally.amount.get(this);
 diff -ru -U2 a/settlement/trade/PBuyer.java b/settlement/trade/PBuyer.java
 --- a/settlement/trade/PBuyer.java	2026-06-25 09:47:24.000000000 +0500
-+++ b/settlement/trade/PBuyer.java	2026-10-23 21:27:48.296499200 +0500
++++ b/settlement/trade/PBuyer.java	2026-10-23 22:27:20.567126500 +0500
+@@ -74,7 +74,7 @@
+ 		
+ 		@Override
+ 		public int get(TRADE_TYPE t) {
+-			return toBeAdded.get(t) + toBeStored.get(t) + attempting(t);
++			return (sosdet.Hooks.reportRead() ? sosdet.Hooks.reportI(sosdet.report.Field.QUEUED, tradable.index(), t == null ? 0 : t.index + 1) : toBeAdded.get(t) + toBeStored.get(t)) + attempting(t); // SOSDET: the world part reads the city's report (ADR 0005)
+ 		}
+ 	};
+ 	
+@@ -129,14 +129,14 @@
+ 	
+ 	@Override
+ 	public void addReserve(int amount, TRADE_TYPE type, int price, Faction seller) {
+-
++		if (sosdet.Hooks.buyerReserve(this, amount, type, price, seller)) return; // SOSDET: in the world part, a transaction for the step's city tail (ADR 0005)
+ 		FACTIONS.player().credits().inc(-price, type.ctype, tradable, amount);
+ 		GAME.count().TRADE_PURCHASES.inc(price);
+ 		toBeAdded.inc(type, amount);
+ 	}
+ 	
+ 	@Override
+-	public void addDeliver(int amount, TRADE_TYPE type) {
++	public void addDeliver(int amount, TRADE_TYPE type) { if (sosdet.Hooks.buyerDeliver(this, amount, type)) return; // SOSDET: in the world part, a transaction for the step's city tail (ADR 0005)
+ 		toBeAdded.inc(type, -amount);
+ 		toBeStored.inc(type, amount);
+ 	}
 @@ -167,10 +167,10 @@
  		if (SETT.ENTRY().isClosed())
  			return 0;
@@ -28,7 +54,7 @@ diff -ru -U2 a/settlement/trade/PBuyer.java b/settlement/trade/PBuyer.java
  			return 0;
 diff -ru -U2 a/settlement/trade/PBuyerRes.java b/settlement/trade/PBuyerRes.java
 --- a/settlement/trade/PBuyerRes.java	2026-06-25 09:48:26.000000000 +0500
-+++ b/settlement/trade/PBuyerRes.java	2026-10-23 21:27:48.299434000 +0500
++++ b/settlement/trade/PBuyerRes.java	2026-10-23 22:27:20.545127700 +0500
 @@ -41,6 +41,8 @@
  	
  	@Override
@@ -82,7 +108,7 @@ diff -ru -U2 a/settlement/trade/PBuyerRes.java b/settlement/trade/PBuyerRes.java
  		double dd =  (double)(samount+amount)/sspace;
 diff -ru -U2 a/settlement/trade/PBuyerSlave.java b/settlement/trade/PBuyerSlave.java
 --- a/settlement/trade/PBuyerSlave.java	2026-06-25 09:52:44.000000000 +0500
-+++ b/settlement/trade/PBuyerSlave.java	2026-10-23 21:27:48.302439200 +0500
++++ b/settlement/trade/PBuyerSlave.java	2026-10-23 22:27:20.575626300 +0500
 @@ -42,6 +42,8 @@
  	
  	@Override
@@ -101,13 +127,17 @@ diff -ru -U2 a/settlement/trade/PBuyerSlave.java b/settlement/trade/PBuyerSlave.
  		if (p == CRIME_PUNISHMENTS.BANISH() || p == CRIME_PUNISHMENTS.PARDON()) {
  			return tfree;
  		}else if (p == CRIME_PUNISHMENTS.ENSLAVE()) {
-@@ -159,6 +161,23 @@
+@@ -159,6 +161,27 @@
  		}
  	}
  	
 +	// SOSDET: the world part reads these from the city's report (ADR 0005)
 +	private int limitNow() {
 +		return sosdet.Hooks.reportRead() ? sosdet.Hooks.reportI(sosdet.report.Field.BUY_LIMIT, tradable.index()) : limit.get();
++	}
++	
++	private int queuedNow() {
++		return sosdet.Hooks.reportRead() ? sosdet.Hooks.reportI(sosdet.report.Field.QUEUED, tradable.index(), 0) : toBeAdded().get(null) + toBeStored().get(null);
 +	}
 +	
 +	private static int stockadeUsed() {
@@ -125,7 +155,13 @@ diff -ru -U2 a/settlement/trade/PBuyerSlave.java b/settlement/trade/PBuyerSlave.
  	private interface Type {
  		
  		public abstract int capacity();
-@@ -175,7 +194,7 @@
+@@ -170,12 +193,12 @@
+ 		
+ 		@Override
+ 		public int capacityUsed() {
+-			return POP.next(HCLASSES.SLAVE(), slave.t) + toBeAdded().get(null) + toBeStored().get(null);
++			return POP.next(HCLASSES.SLAVE(), slave.t) + queuedNow();
+ 		}
  		
  		@Override
  		public int capacity() {
@@ -134,7 +170,7 @@ diff -ru -U2 a/settlement/trade/PBuyerSlave.java b/settlement/trade/PBuyerSlave.
  		}
  
  		@Override
-@@ -194,7 +213,7 @@
+@@ -194,7 +217,7 @@
  		
  		@Override
  		public int capacity() {
@@ -143,12 +179,12 @@ diff -ru -U2 a/settlement/trade/PBuyerSlave.java b/settlement/trade/PBuyerSlave.
  		}
  
  		@Override
-@@ -208,12 +227,12 @@
+@@ -208,12 +231,12 @@
  		
  		@Override
  		public int capacityUsed() {
 -			return toBeAdded().get(null) + toBeStored().get(null) + SETT.ROOMS().STOCKADE.punishUsed();
-+			return toBeAdded().get(null) + toBeStored().get(null) + stockadeUsed();
++			return queuedNow() + stockadeUsed();
  		}
  		
  		@Override
@@ -160,8 +196,17 @@ diff -ru -U2 a/settlement/trade/PBuyerSlave.java b/settlement/trade/PBuyerSlave.
  		@Override
 diff -ru -U2 a/settlement/trade/PSeller.java b/settlement/trade/PSeller.java
 --- a/settlement/trade/PSeller.java	2026-06-05 09:20:50.000000000 +0500
-+++ b/settlement/trade/PSeller.java	2026-10-23 21:27:48.293848700 +0500
-@@ -133,6 +133,8 @@
++++ b/settlement/trade/PSeller.java	2026-10-23 22:27:20.577625900 +0500
+@@ -67,7 +67,7 @@
+ 		
+ 		@Override
+ 		public int get(TRADE_TYPE t) {
+-			return promised.get(t) + attempting(t);
++			return sosdet.Hooks.reportRead() ? sosdet.Hooks.reportI(sosdet.report.Field.PROMISED, type.index(), t == null ? 0 : t.index + 1) + sosdet.Hooks.reportI(sosdet.report.Field.OUTGOING, type.index(), t == null ? 0 : t.index + 1) : promised.get(t) + attempting(t); // SOSDET: the world part reads the city's report (ADR 0005)
+ 		}
+ 	};
+ 	
+@@ -133,11 +133,13 @@
  	
  	@Override
  	public int removePrice(int amount) {
@@ -170,9 +215,15 @@ diff -ru -U2 a/settlement/trade/PSeller.java b/settlement/trade/PSeller.java
  		return priceCapsI.get()*amount;
  	}
  
+ 	@Override
+-	public void remove(int amount, TRADE_TYPE type, int price, Faction buyer) {
++	public void remove(int amount, TRADE_TYPE type, int price, Faction buyer) { if (sosdet.Hooks.sellerRemove(this, amount, type, price, buyer)) return; // SOSDET: in the world part, a transaction for the step's city tail (ADR 0005)
+ 		FACTIONS.player().credits().inc(price, type.ctype, this.type, amount);
+ 		promised.inc(type, amount);
+ 		GAME.count().TRADE_SALES.inc(price);
 diff -ru -U2 a/settlement/trade/PSellerRes.java b/settlement/trade/PSellerRes.java
 --- a/settlement/trade/PSellerRes.java	2026-06-25 09:23:16.000000000 +0500
-+++ b/settlement/trade/PSellerRes.java	2026-10-23 21:27:48.295857100 +0500
++++ b/settlement/trade/PSellerRes.java	2026-10-23 22:27:20.581624700 +0500
 @@ -49,10 +49,10 @@
  
  	@Override
@@ -182,7 +233,7 @@ diff -ru -U2 a/settlement/trade/PSellerRes.java b/settlement/trade/PSellerRes.ja
  		if (cap <= 0)
  			return 0;
 -		double ava = SETT.ROOMS().EXPORT.tally.amount.get(res.t) - promised.get(null);
-+		double ava = (sosdet.Hooks.reportRead() ? sosdet.Hooks.reportI(sosdet.report.Field.EXPORT_AMOUNT, type.index()) : SETT.ROOMS().EXPORT.tally.amount.get(res.t)) - promised.get(null); // SOSDET: the world part reads the city's report (ADR 0005)
++		double ava = (sosdet.Hooks.reportRead() ? sosdet.Hooks.reportI(sosdet.report.Field.EXPORT_AMOUNT, type.index()) : SETT.ROOMS().EXPORT.tally.amount.get(res.t)) - (sosdet.Hooks.reportRead() ? sosdet.Hooks.reportI(sosdet.report.Field.PROMISED, type.index(), 0) : promised.get(null)); // SOSDET: the world part reads the city's report (ADR 0005)
  		if (ava <= 0)
  			return 0;
  
@@ -191,13 +242,13 @@ diff -ru -U2 a/settlement/trade/PSellerRes.java b/settlement/trade/PSellerRes.ja
  		if (SETT.ENTRY().isClosed())
  			return 0;
 -		return SETT.ROOMS().EXPORT.tally.amount.get(res.t) - promised.get(null);
-+		return (sosdet.Hooks.reportRead() ? sosdet.Hooks.reportI(sosdet.report.Field.EXPORT_AMOUNT, type.index()) : SETT.ROOMS().EXPORT.tally.amount.get(res.t)) - promised.get(null); // SOSDET: the world part reads the city's report (ADR 0005)
++		return (sosdet.Hooks.reportRead() ? sosdet.Hooks.reportI(sosdet.report.Field.EXPORT_AMOUNT, type.index()) : SETT.ROOMS().EXPORT.tally.amount.get(res.t)) - (sosdet.Hooks.reportRead() ? sosdet.Hooks.reportI(sosdet.report.Field.PROMISED, type.index(), 0) : promised.get(null)); // SOSDET: the world part reads the city's report (ADR 0005)
  	}
  
  	@Override
 diff -ru -U2 a/settlement/trade/PSellerSlave.java b/settlement/trade/PSellerSlave.java
 --- a/settlement/trade/PSellerSlave.java	2026-06-05 09:21:10.000000000 +0500
-+++ b/settlement/trade/PSellerSlave.java	2026-10-23 21:27:48.296499200 +0500
++++ b/settlement/trade/PSellerSlave.java	2026-10-23 22:27:20.553625800 +0500
 @@ -72,7 +72,7 @@
  	
  	@Override

@@ -14,6 +14,7 @@ public final class Reports {
 
     private CityReport current;
     private final ArrayDeque<CityReport> pending = new ArrayDeque<>();
+    private final Ledger ledger = new Ledger();
 
     /** True at the steps the city part takes a report. */
     public static boolean takenAt(long step) {
@@ -34,7 +35,31 @@ public final class Reports {
     public void applyDue(long step) {
         while (!pending.isEmpty() && pending.peekFirst().appliesAt <= step) {
             current = pending.pollFirst();
+            ledger.reportApplied(current.takenAt);
         }
+    }
+
+    /** What the world part reads: the current report's value plus the world's own changes it doesn't show yet. */
+    public double value(Field f, int i) {
+        return current.get(f, i) + ledger.pending(current.layout.slot(f, i));
+    }
+
+    public double value(Field f, int i, int j) {
+        return current.get(f, i, j) + ledger.pending(current.layout.slot(f, i, j));
+    }
+
+    /** A transaction made at this world step changes a value the world part reads, from the next read on. */
+    public void change(long step, Field f, int i, long delta) {
+        ledger.add(step, current.layout.slot(f, i), delta);
+    }
+
+    public void change(long step, Field f, int i, int j, long delta) {
+        ledger.add(step, current.layout.slot(f, i, j), delta);
+    }
+
+    /** Changes the world part still adds to the report it reads. */
+    public int open() {
+        return ledger.size();
     }
 
     /** The report the world part reads now, or null before the first one. */
@@ -51,5 +76,6 @@ public final class Reports {
     public void clear() {
         current = null;
         pending.clear();
+        ledger.clear();
     }
 }

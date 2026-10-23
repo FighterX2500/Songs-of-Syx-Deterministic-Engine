@@ -6,7 +6,14 @@ import game.GAME;
 import game.GAME.GameResource;
 import game.boosting.BValue;
 import game.faction.FACTIONS;
+import game.faction.FCredits.CTYPE;
+import game.faction.Faction;
+import game.faction.player.PCredits;
+import init.trade.TRADABLE;
+import init.trade.TRADE_TYPE;
 import init.value.Value;
+import settlement.trade.PBuyer;
+import settlement.trade.PSeller;
 import snake2d.util.rnd.RND;
 import sosdet.ai.AiApplier;
 import sosdet.ai.AiMode;
@@ -17,6 +24,8 @@ import sosdet.hash.HashLog;
 import sosdet.report.CityReport;
 import sosdet.report.Field;
 import sosdet.report.Reports;
+import sosdet.txn.Txn;
+import sosdet.txn.TxnKind;
 
 /**
  * What the engine's patches to the game call (docs/hooks.md). Each hook asks one question or reports one
@@ -139,6 +148,10 @@ public final class Hooks {
             s.pathNanos += System.nanoTime() - start;
             s.pathQueue = null;
         }
+        if (!s.txns.isEmpty()) {
+            s.part = StepParts.CITY; // the city tail: the world part's changes to the city apply (ADR 0005 §3)
+            s.txns.apply(s.txnApplier());
+        }
         if (s.hashes.due(step)) {
             long clock = HashLog.mix(HashLog.mix(HashLog.mix(HashLog.start(), step), s.streams.drawsSinceLoad()),
                     s.ai().applied());
@@ -258,11 +271,11 @@ public final class Hooks {
     }
 
     public static double reportD(Field f, int i) {
-        return Engine.session().reports.current().get(f, i);
+        return Engine.session().reports.value(f, i);
     }
 
     public static double reportD(Field f, int i, int j) {
-        return Engine.session().reports.current().get(f, i, j);
+        return Engine.session().reports.value(f, i, j);
     }
 
     public static int reportI(Field f, int i) {
@@ -302,6 +315,103 @@ public final class Hooks {
             s.reportMisses++;
         }
         return v.d.getD(t);
+    }
+
+    // ------------------------------------------------------------ transactions (ADR 0005 §3, SOS-38)
+
+    /**
+     * In the world part: a new transaction of this kind, queued for the step's city tail. Null anywhere else: the
+     * caller changes the city at once, as in vanilla (the city part, the tail itself, the UI, no session).
+     */
+    private static Txn toCity(TxnKind kind) {
+        Session s = Engine.session();
+        if (s == null || s.part != StepParts.WORLD_PART) {
+            return null;
+        }
+        Txn t = s.txns.add(s.clock.step());
+        t.kind = kind;
+        return t;
+    }
+
+    /**
+     * {@code PBuyer.addReserve}: true when queued. The world part reads the credits paid and the goods queued at once,
+     * through the report's ledger.
+     */
+    public static boolean buyerReserve(PBuyer b, int amount, TRADE_TYPE type, int price, Faction seller) {
+        Txn t = toCity(TxnKind.BUYER_RESERVE);
+        if (t == null) {
+            return false;
+        }
+        t.a = b;
+        t.b = type;
+        t.c = seller;
+        t.i = amount;
+        t.j = price;
+        Session s = Engine.session();
+        long step = s.clock.step();
+        s.reports.change(step, Field.CREDITS, 0, -price);
+        s.reports.change(step, Field.QUEUED, b.tradable.index(), 0, amount);
+        s.reports.change(step, Field.QUEUED, b.tradable.index(), type.index + 1, amount);
+        return true;
+    }
+
+    /** {@code PBuyer.addDeliver}: true when queued. The goods stay queued, so the ledger has nothing to add. */
+    public static boolean buyerDeliver(PBuyer b, int amount, TRADE_TYPE type) {
+        Txn t = toCity(TxnKind.BUYER_DELIVER);
+        if (t == null) {
+            return false;
+        }
+        t.a = b;
+        t.b = type;
+        t.i = amount;
+        return true;
+    }
+
+    /** {@code PSeller.remove}: true when queued. The world part reads the credits paid and the goods promised at once. */
+    public static boolean sellerRemove(PSeller p, int amount, TRADE_TYPE type, int price, Faction buyer) {
+        Txn t = toCity(TxnKind.SELLER_REMOVE);
+        if (t == null) {
+            return false;
+        }
+        t.a = p;
+        t.b = type;
+        t.c = buyer;
+        t.i = amount;
+        t.j = price;
+        Session s = Engine.session();
+        long step = s.clock.step();
+        s.reports.change(step, Field.CREDITS, 0, price);
+        s.reports.change(step, Field.PROMISED, p.type.index(), 0, amount);
+        s.reports.change(step, Field.PROMISED, p.type.index(), type.index + 1, amount);
+        return true;
+    }
+
+    /** {@code PCredits.inc}: true when queued. The treasury counts whole credits ({@code CredHistory}), as here. */
+    public static boolean credits(PCredits c, double amount, CTYPE type) {
+        Txn t = toCity(TxnKind.CREDITS);
+        if (t == null) {
+            return false;
+        }
+        t.a = c;
+        t.b = type;
+        t.d = amount;
+        Engine.session().reports.change(Engine.session().clock.step(), Field.CREDITS, 0, (int) amount);
+        return true;
+    }
+
+    /** {@code PCredits.inc} for traded goods: true when queued. */
+    public static boolean credits(PCredits c, double amount, CTYPE type, TRADABLE res, int resAm) {
+        Txn t = toCity(TxnKind.CREDITS_TRADE);
+        if (t == null) {
+            return false;
+        }
+        t.a = c;
+        t.b = type;
+        t.c = res;
+        t.d = amount;
+        t.i = resAm;
+        Engine.session().reports.change(Engine.session().clock.step(), Field.CREDITS, 0, (int) amount);
+        return true;
     }
 
     // ------------------------------------------------------------ RND: the two streams (B10)

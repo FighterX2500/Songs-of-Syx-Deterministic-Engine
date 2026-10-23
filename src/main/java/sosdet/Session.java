@@ -6,12 +6,15 @@ import sosdet.ai.AiMode;
 import sosdet.game.GameAi;
 import sosdet.game.GameHash;
 import sosdet.game.GameReport;
+import sosdet.game.GameTxns;
 import sosdet.game.cmd.PlanStash;
 import sosdet.hash.HashLog;
 import sosdet.hash.StateSource;
 import sosdet.report.CityReport;
 import sosdet.report.CitySource;
 import sosdet.report.Reports;
+import sosdet.txn.Txn;
+import sosdet.txn.TxnQueue;
 
 /** The state of one deterministic run: from {@link Engine#begin()} to {@link Engine#end()}. */
 final class Session {
@@ -90,6 +93,10 @@ final class Session {
     long reportNanos;
     int reportBytes;
     int reportMaxBytes;
+    /** The world part's changes to the city, applied in the step's city tail (ADR 0005 §3). */
+    final TxnQueue txns = new TxnQueue();
+    /** What applies them: the game, made at first use; tests put in their own. */
+    java.util.function.Consumer<Txn> txnApplier;
 
     /** The seed of the random stream at a step: the same on every PC, whatever happened before. */
     int stepSeed(long step) {
@@ -110,10 +117,12 @@ final class Session {
     void afterLoad() {
         playerUpdateAcc = 0;
         reports.clear(); // every PC reloads, so every PC takes its load report from the loaded city
+        txns.dropQueued();
         if (resync != null) {
             Resync r = resync;
             resync = null;
             clock.resetTo(r.step);
+            txns.appliedThrough(r.step); // the loaded city has every transaction up to the resync step
             clock.agreedSpeed(r.speed);
             seed = r.seed;
             resyncDraws = r.draws; // the load's own draws don't count: set when it ends
@@ -122,6 +131,7 @@ final class Session {
             return;
         }
         clock.reset();
+        txns.appliedThrough(-1);
         streams.loaded();
         int interval = hashes.interval();
         hashes = new HashLog();
@@ -193,6 +203,13 @@ final class Session {
         return plans;
     }
 
+    java.util.function.Consumer<Txn> txnApplier() {
+        if (txnApplier == null) {
+            txnApplier = new GameTxns();
+        }
+        return txnApplier;
+    }
+
     StateSource source() {
         if (source == null) {
             source = new GameHash();
@@ -209,6 +226,7 @@ final class Session {
         reportNanos = 0;
         reportMaxBytes = 0;
         reportMisses = 0;
+        txns.resetStats();
         java.util.Arrays.fill(jobs.nanos, 0);
     }
 }

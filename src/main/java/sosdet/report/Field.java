@@ -2,8 +2,8 @@ package sosdet.report;
 
 /**
  * The city values the world part reads, one field each (ADR 0005, SOS-38; the codes are the scan's, in
- * docs/plan/notes/city-world-link-scan.md). The world part reads a field instead of the live city; counters the world
- * itself writes ({@code promised}, {@code toBeAdded}, {@code toBeStored}) stay live and are not in the report.
+ * docs/plan/notes/city-world-link-scan.md). The world part reads a field instead of the live city, plus the changes its
+ * own transactions made since the report was taken ({@link Reports#value}).
  */
 public enum Field {
     // A3, B7: the treasury
@@ -24,6 +24,12 @@ public enum Field {
     STOCK_KEPT(Shape.TRADABLE),
     /** A buyer's deliveries on their way inside the city ({@code attempting}). */
     INCOMING(Shape.TRADABLE_TYPE),
+    /** A buyer's goods bought and not yet sent into the city ({@code toBeAdded + toBeStored}). */
+    QUEUED(Shape.TRADABLE_TYPE),
+    /** A seller's goods sold and not yet taken out ({@code promised}). */
+    PROMISED(Shape.TRADABLE_TYPE),
+    /** A seller's goods on their way out inside the city ({@code attempting}). */
+    OUTGOING(Shape.TRADABLE_TYPE),
     // A2: the city's trade settings
     SELL_PRICE_CAP(Shape.TRADABLE),
     SELL_LIMIT(Shape.TRADABLE),

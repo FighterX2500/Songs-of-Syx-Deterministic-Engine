@@ -337,7 +337,8 @@ public final class Engine {
                 s.hashes.taken(), s.hashes.meanMs(), s.hashes.maxMs(),
                 s.hashes.compared(), s.hashes.missed(), s.reportsTaken, s.reportNanos, s.reportBytes, s.reportMaxBytes,
                 s.reportMisses, s.city == null ? 0 : s.city.layout().count(Shape.BOOST),
-                s.city == null ? 0 : s.city.layout().count(Shape.VALUE));
+                s.city == null ? 0 : s.city.layout().count(Shape.VALUE), s.txns.applied(), s.txns.skipped(),
+                s.txns.maxInStep());
     }
 
     public static void resetStats() {

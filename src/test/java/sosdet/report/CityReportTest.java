@@ -108,4 +108,46 @@ class CityReportTest {
         reports.clear();
         assertNull(reports.current());
     }
+
+    /**
+     * The world's own changes add to the report it reads until a report taken after them applies, so 500 credits
+     * spent at step 40 are never spent again from the step-30 report (ADR 0005 §3).
+     */
+    @Test
+    void theLedgerAddsTheWorldsChangesUntilAReportShowsThem() {
+        ReportLayout small = new ReportLayout(2, 1, 1, 1, 1, 1, 1, 1, 1);
+        double[] v = new double[small.size()];
+        v[small.slot(Field.CREDITS, 0)] = 1_000;
+        Reports reports = new Reports();
+        reports.stamp(new CityReport(small, 0, 30, 60, v));
+        reports.applyDue(60);
+
+        reports.change(40, Field.CREDITS, 0, -500); // made before the step-60 report was taken
+        reports.change(61, Field.CREDITS, 0, -200);
+        reports.change(61, Field.PROMISED, 1, 0, 7);
+        assertEquals(300, reports.value(Field.CREDITS, 0));
+        assertEquals(7, reports.value(Field.PROMISED, 1, 0));
+        assertEquals(0, reports.value(Field.PROMISED, 0, 0));
+        assertEquals(3, reports.open());
+
+        double[] after = v.clone();
+        after[small.slot(Field.CREDITS, 0)] = 500; // the city paid the 500 before step 60
+        reports.stamp(new CityReport(small, 0, 60, 90, after));
+        reports.applyDue(90);
+        assertEquals(300, reports.value(Field.CREDITS, 0));
+        assertEquals(2, reports.open());
+
+        double[] later = v.clone();
+        later[small.slot(Field.CREDITS, 0)] = 300;
+        later[small.slot(Field.PROMISED, 1, 0)] = 7;
+        reports.stamp(new CityReport(small, 0, 90, 120, later));
+        reports.applyDue(120);
+        assertEquals(300, reports.value(Field.CREDITS, 0));
+        assertEquals(7, reports.value(Field.PROMISED, 1, 0));
+        assertEquals(0, reports.open());
+
+        reports.change(121, Field.CREDITS, 0, 5);
+        reports.clear();
+        assertEquals(0, reports.open());
+    }
 }
