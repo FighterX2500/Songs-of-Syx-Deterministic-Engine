@@ -2,6 +2,9 @@ package sosdet.game.cmd;
 
 import game.GAME;
 import game.battle.div.Div;
+import game.faction.FACTIONS;
+import game.faction.Faction;
+import game.faction.npc.FactionNPC;
 import init.race.RACES;
 import init.race.Race;
 import init.resources.RESOURCE;
@@ -16,6 +19,12 @@ import settlement.room.main.RoomBlueprint;
 import settlement.room.main.RoomInstance;
 import sosdet.ai.CmdReader;
 import sosdet.ai.CmdWriter;
+import world.WORLD;
+import world.army.ADDiv;
+import world.army.WDivMercenary;
+import world.army.WDivRegional;
+import world.entity.army.WArmy;
+import world.map.regions.Region;
 
 /**
  * Game objects as command arguments (ADR 0002): each by a stable index that every PC resolves to the same object at
@@ -110,5 +119,81 @@ public final class Args {
 
     public static Div div(CmdReader r) {
         return GAME.ARMIES().division((short) r.i());
+    }
+
+    /**
+     * A world army: its slot and the slot's iteration, so that a new army in a freed slot is not mistaken for it.
+     * Null (written as -1) for "no army", where the call allows one.
+     */
+    public static CmdWriter army(CmdWriter w, WArmy a) {
+        return a == null ? w.i(-1).i(0) : w.i(a.armyIndex()).i(a.iteration());
+    }
+
+    /** The army {@link #army(CmdWriter, WArmy)} wrote; null when it was null, or is gone or disbanded since. */
+    public static WArmy army(CmdReader r) {
+        int index = r.i();
+        int iteration = r.i();
+        if (index < 0 || index >= WORLD.ENTITIES().armies.max()) {
+            return null;
+        }
+        WArmy a = WORLD.ENTITIES().armies.get(index);
+        return a != null && a.added() && a.iteration() == iteration ? a : null;
+    }
+
+    /** A world region, by its index (fixed for the map). */
+    public static CmdWriter region(CmdWriter w, Region reg) {
+        return w.i(reg.index());
+    }
+
+    public static Region region(CmdReader r) {
+        int i = r.i();
+        return i >= 0 && i < WORLD.REGIONS().all().size() ? WORLD.REGIONS().getByIndex(i) : null;
+    }
+
+    /** A faction: its index, and an NPC faction's iteration, so that a faction re-founded in its slot differs. */
+    public static CmdWriter faction(CmdWriter w, Faction f) {
+        return w.i(f.index()).i(f instanceof FactionNPC ? ((FactionNPC) f).iteration() : 0);
+    }
+
+    /** The NPC faction {@link #faction(CmdWriter, Faction)} wrote; null when it is gone, re-founded or the player. */
+    public static FactionNPC npc(CmdReader r) {
+        Faction f = FACTIONS.getByIndex(r.i());
+        int iteration = r.i();
+        if (!(f instanceof FactionNPC) || !f.isActive() || ((FactionNPC) f).iteration() != iteration) {
+            return null;
+        }
+        return (FactionNPC) f;
+    }
+
+    /**
+     * A division of a world army: the army, the division's kind (raised in a region, the city's, mercenary) and its
+     * index among its kind. Null when the army is gone or the division has left it.
+     */
+    public static CmdWriter worldDiv(CmdWriter w, ADDiv d) {
+        return army(w, d.army()).i(divKind(d)).i(d.index);
+    }
+
+    public static ADDiv worldDiv(CmdReader r) {
+        WArmy a = army(r);
+        int kind = r.i();
+        int index = r.i();
+        if (a == null) {
+            return null;
+        }
+        for (int i = 0; i < a.divs().size(); i++) {
+            ADDiv d = a.divs().get(i);
+            if (d.index == index && divKind(d) == kind) {
+                return d;
+            }
+        }
+        return null;
+    }
+
+    /** 0 raised in a region, 2 mercenary, 1 the city's own (its class is not public). */
+    private static int divKind(ADDiv d) {
+        if (d instanceof WDivRegional) {
+            return 0;
+        }
+        return d instanceof WDivMercenary ? 2 : 1;
     }
 }
