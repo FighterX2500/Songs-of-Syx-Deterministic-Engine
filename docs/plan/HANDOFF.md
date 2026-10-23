@@ -21,7 +21,7 @@
 - PR #11: the repo rename.
 - PR #12 SOS-34 part 1: 106 city commands, ADR 0002.
 
-**Open PR #13, branch `SOS-34-room-planning`:** SOS-34 part 2, pushed. It holds:
+**Merged PR #13, branch `SOS-34-room-planning`:** SOS-34 part 2. It holds:
 - ADR 0003 and plan 0003;
 - milestone 1, area-room planning (6007 `roomBuild`);
 - milestone 2, refurnish (6008 `roomRefurnish`);
@@ -32,7 +32,7 @@
 
 Smoke run Q34H: 3 copies identical to step 14,000, with 8 commands applied on every copy.
 
-**Current branch `SOS-35-world-lockstep`** (local, from `SOS-34-room-planning`): stage D of plan 0002, world lockstep. Rebase it onto main after #13 merges, then open its PR. Never stack PRs.
+**Current branch `SOS-35-world-lockstep`** (PR #14, main merged in): stage D of plan 0002, world lockstep, and the V0.1 package.
 - **Done here:**
   - the wave brief (`docs/plan/notes/world-wave-brief.md`);
   - the world-battle prompt as commands 7900 to 7902 (`cmd.WorldBattles`, patch `99-world-battles`): the world holds while a prompt is open, the city goes on, and Engage is refused with a notice;
@@ -43,7 +43,10 @@ Smoke run Q34H: 3 copies identical to step 14,000, with 8 commands applied on ev
   - `cmds` (branch `SOS-35-world-cmds`, patch `96-cmd-world`): the world, diplomacy and event commands, with rig script `rig/cmds/world.txt`.
   - Both merged, with their `docs/hooks.md` and `docs/commands.md` rows.
 - **Smoke run D35B passed** (plan 0002 stage D, item 6), with the world now in the state hash.
-- **Then:** package SOSDET V0.1 (the release mod folder, a short readme, how to start a 3-copy `--play` session), then the owner's 30-minute session.
+- **PR #14** (SOS-35) is open; SOS-34 is closed (PR #13 merged).
+- **V0.1 is packaged:** release notes `docs/release/V0.1.md`, `rig\play-v01.bat` starts the owner's session, `gradlew.bat releaseZip` makes `build
+elease\SOSDET-0.1.0.zip`.
+- **Next:** the owner's 30-minute session; then fix what it finds, then stage E.
 
 **After V0.1:**
 - stage E, the city↔world link;
@@ -53,8 +56,8 @@ Smoke run Q34H: 3 copies identical to step 14,000, with 8 commands applied on ev
 
 **Jira:**
 - SOS-32 is open (M2b and M3 left).
-- SOS-34 is in progress (PR #13).
-- SOS-35, stage D, is in progress.
+- SOS-34 is done (PR #13 merged).
+- SOS-35, stage D and the V0.1 package, is in review (PR #14).
 - Cards close only after the owner says the PR is merged.
 
 ## 3. How to work here
