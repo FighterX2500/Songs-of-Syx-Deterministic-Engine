@@ -249,7 +249,9 @@ public final class AiLog {
 
     /** Start of the step's world part: the commands that act on the world apply there (ADR 0005). */
     public void worldPart() {
-        applier.worldPart();
+        if (applier != null) { // in-step, commands apply as they are given
+            applier.worldPart();
+        }
     }
 
     // ------------------------------------------------------------ the log as bytes
@@ -482,6 +484,10 @@ public final class AiLog {
             throw new IllegalArgumentException("SOSDET: PC " + pc);
         }
         localPc = pc;
+    }
+
+    public int localPc() {
+        return localPc;
     }
 
     /** While an entry is being applied: whether this PC's player gave it (feedback such as sounds only for them). */

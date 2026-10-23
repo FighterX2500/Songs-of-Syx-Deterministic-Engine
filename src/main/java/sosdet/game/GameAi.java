@@ -79,6 +79,9 @@ public final class GameAi implements AiApplier {
                 worldCommands.add(payload);
                 return;
             }
+            if (!CommandParts.everyPc(payload) && !Hooks.cityCommandHere(e.pc)) {
+                return; // own-city mode: another PC's own city
+            }
             if (!Commands.apply(payload)) {
                 commandsSkipped++; // its target was gone at its step, on every PC alike
             }

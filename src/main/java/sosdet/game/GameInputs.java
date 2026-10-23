@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
 import game.GAME;
@@ -49,14 +50,17 @@ public final class GameInputs implements Consumer<CityReport> {
     private final GameCodec codec = new GameCodec(1 << 20);
     private final SentSupplies sent;
     private final EventMarks marks;
+    /** True while the reports applied are this PC's own: only those settle what its city has sent (SOS-38). */
+    private final BooleanSupplier ownReports;
     /** {@code WDivStoredAll.add(Induvidual, Div)}: patch 96-cmd-world adds it, so the game jar compiled against lacks it. */
     private final Method addSoldier;
     /** {@code Invador.tell(int, int, int, int)}: patch 14-report-reads adds it. */
     private final Method tell;
 
-    public GameInputs(SentSupplies sent, EventMarks marks) {
+    public GameInputs(SentSupplies sent, EventMarks marks, BooleanSupplier ownReports) {
         this.sent = sent;
         this.marks = marks;
+        this.ownReports = ownReports;
         try {
             addSoldier = WDivStoredAll.class.getMethod("add", Induvidual.class, Div.class);
         } catch (NoSuchMethodException e) {
@@ -196,7 +200,9 @@ public final class GameInputs implements Consumer<CityReport> {
                 int index = b.getInt();
                 int iteration = b.getInt();
                 int delta = b.getInt();
-                sent.applied(in.arg, index, iteration, delta);
+                if (ownReports.getAsBoolean()) {
+                    sent.applied(in.arg, index, iteration, delta);
+                }
                 WArmy a = Args.army(index, iteration);
                 if (a != null) { // an army disbanded since: the goods are lost with it
                     ADSupply s = AD.supplies().all.get(in.arg);
@@ -242,7 +248,9 @@ public final class GameInputs implements Consumer<CityReport> {
     }
 
     private void applyEventMark(int target, int kind, int index, int value) {
-        marks.applied(target, kind, index);
+        if (ownReports.getAsBoolean()) {
+            marks.applied(target, kind, index);
+        }
         boolean flag = kind == Hooks.EVENT_FLAG;
         if (target == Hooks.EVENT_REGION) {
             Region reg = WORLD.REGIONS().getByIndex(index);

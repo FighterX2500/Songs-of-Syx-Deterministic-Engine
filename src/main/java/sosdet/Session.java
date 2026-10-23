@@ -24,6 +24,8 @@ final class Session {
 
     /** Mixed into the world part's seed ("WORL"). */
     private static final long WORLD_STREAM = 0x574F524CL;
+    /** Mixed into an own city's seed ("CITY"), with the PC's number. */
+    private static final long CITY_STREAM = 0x43495459L;
 
     final StepClock clock = new StepClock();
     final Streams streams = new Streams();
@@ -109,9 +111,37 @@ final class Session {
     /** What applies them: the game, made at first use; tests put in their own. */
     java.util.function.Consumer<Txn> txnApplier;
 
+    /**
+     * Own-city mode (ADR 0005 §1, §6): this PC's city is its own. Its commands apply on this PC only, its stream is
+     * seeded apart from every other PC's, and the hash compares the world only. Off: co-op, every PC runs one city.
+     */
+    boolean ownCity;
+    /** Whose city the world part reads: -1 this PC's own; otherwise the PC whose reports come in (SOS-38's follower). */
+    int reportsFrom = -1;
+    /** Own-city mode: this PC's reports going out, and the source PC's coming in. */
+    final sosdet.report.ReportFeed reportFeed = new sosdet.report.ReportFeed();
+    /** The step the last report from {@link #reportsFrom} was taken at (-1: none since the load). */
+    long receivedTakenAt = -1;
+    long reportsReceived;
+    /** A world resync's load is running: its resets of the world never reach the city (SOS-38). */
+    boolean worldLoading;
+
     /** The seed of the random stream at a step: the same on every PC, whatever happened before. */
     int stepSeed(long step) {
         long h = HashLog.mix(HashLog.mix(HashLog.start(), seed), step);
+        return (int) (h ^ (h >>> 32));
+    }
+
+    /**
+     * The seed of the city's stream at a step: in co-op the step's seed; an own city's also mixes in the PC, so no
+     * two cities draw alike and nothing the city draws can stand in for a world draw.
+     */
+    int citySeed(long step) {
+        if (!ownCity) {
+            return stepSeed(step);
+        }
+        long h = HashLog.mix(HashLog.mix(HashLog.mix(HashLog.mix(HashLog.start(), seed), step), CITY_STREAM),
+                ai().localPc());
         return (int) (h ^ (h >>> 32));
     }
 
@@ -128,6 +158,8 @@ final class Session {
     void afterLoad() {
         playerUpdateAcc = 0;
         reports.clear(); // every PC reloads, so every PC takes its load report from the loaded city
+        reportFeed.clear();
+        receivedTakenAt = -1;
         txns.dropQueued();
         cityInputs.clear(); // the loaded world has the city's state as saved
         sentSupplies.clear();
@@ -150,6 +182,26 @@ final class Session {
         int interval = hashes.interval();
         hashes = new HashLog();
         hashes.every(interval);
+        hashes.worldOnly(ownCity);
+    }
+
+    /** Whether the world part of this step may run: a follower waits for the source's report it reads (ADR 0005 §4). */
+    boolean worldMayRun(long step) {
+        return reportsFrom < 0 || (receivedTakenAt >= 0 && step <= Reports.lastReadableStep(receivedTakenAt));
+    }
+
+    /** A report from {@link #reportsFrom}: it applies at its step as this PC's own would have. */
+    void reportReceived(CityReport r) {
+        if (r.faction != city().faction()) {
+            throw new IllegalArgumentException("SOSDET: a city report of faction " + r.faction + ", the world reads "
+                    + city().faction() + "'s");
+        }
+        if (r.takenAt <= receivedTakenAt) {
+            return; // a repeat changes nothing
+        }
+        reports.stamp(r);
+        receivedTakenAt = r.takenAt;
+        reportsReceived++;
     }
 
     /**
@@ -164,9 +216,15 @@ final class Session {
         CityReport r = new CityReport(c.layout(), c.faction(), step, appliesAt, v, cityInputs);
         inputsSent += cityInputs.size();
         cityInputs.clear();
-        reportBytes = r.toBytes().length;
+        byte[] bytes = r.toBytes();
+        reportBytes = bytes.length;
         reportMaxBytes = Math.max(reportMaxBytes, reportBytes);
-        reports.stamp(r);
+        if (ownCity) {
+            reportFeed.write(bytes);
+        }
+        if (reportsFrom < 0) {
+            reports.stamp(r); // a follower's world reads the source's report instead
+        }
         reportsTaken++;
         reportNanos += System.nanoTime() - start;
     }
@@ -224,13 +282,19 @@ final class Session {
     /** Makes the city's inputs and applies them in the world part: the game, made at first use. */
     GameInputs inputs() {
         if (inputs == null) {
-            inputs = new GameInputs(sentSupplies, eventMarks);
+            inputs = new GameInputs(sentSupplies, eventMarks, () -> reportsFrom < 0);
         }
         return inputs;
     }
 
+    /** What applies a report's inputs in the world part: the game, made at first use; tests put in their own. */
+    java.util.function.Consumer<CityReport> inputApplier;
+
     java.util.function.Consumer<CityReport> inputApplier() {
-        return inputs();
+        if (inputApplier == null) {
+            inputApplier = inputs();
+        }
+        return inputApplier;
     }
 
     java.util.function.Consumer<Txn> txnApplier() {
@@ -257,6 +321,7 @@ final class Session {
         reportMaxBytes = 0;
         reportMisses = 0;
         inputsSent = 0;
+        reportsReceived = 0;
         txns.resetStats();
         java.util.Arrays.fill(jobs.nanos, 0);
     }

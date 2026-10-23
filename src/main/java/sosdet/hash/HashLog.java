@@ -44,6 +44,7 @@ public final class HashLog {
     private static final long FNV_PRIME = 0x100000001b3L;
 
     private int interval = DEFAULT_INTERVAL;
+    private boolean worldOnly;
     private int divisions = -1;
     // the ring, allocated at the first hash
     private long[] steps;
@@ -102,6 +103,14 @@ public final class HashLog {
         return interval;
     }
 
+    /**
+     * Own-city mode (ADR 0005 §1): each PC's city is its own, so the city's sections (soldiers, divisions,
+     * projectiles, entities) are left out, and every PC compares the world, the report and the clock only.
+     */
+    public void worldOnly(boolean on) {
+        worldOnly = on;
+    }
+
     public boolean due(long step) {
         return step > 0 && step % interval == 0;
     }
@@ -122,6 +131,12 @@ public final class HashLog {
         sec[CLOCK] = clock;
         sec[REPORT] = report;
         source.hash(sec, div);
+        if (worldOnly) {
+            Arrays.fill(div, FNV_OFFSET);
+            sec[DIVISIONS] = 0;
+            sec[PROJECTILES] = 0;
+            sec[ENTITIES] = 0;
+        }
         long soldiers = FNV_OFFSET;
         for (long d : div) {
             soldiers = mix(soldiers, d);

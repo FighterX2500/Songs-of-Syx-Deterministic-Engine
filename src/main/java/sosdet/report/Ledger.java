@@ -1,5 +1,7 @@
 package sosdet.report;
 
+import java.nio.BufferUnderflowException;
+import java.nio.ByteBuffer;
 import java.util.Arrays;
 
 /**
@@ -50,6 +52,37 @@ final class Ledger {
 
     int size() {
         return size;
+    }
+
+    /** The open changes in order: their count, then step, slot and change each. */
+    byte[] toBytes() {
+        ByteBuffer b = ByteBuffer.allocate(4 + size * (8 + 4 + 8));
+        b.putInt(size);
+        for (int k = 0; k < size; k++) {
+            int i = (head + k) % steps.length;
+            b.putLong(steps[i]).putInt(slots[i]).putLong(deltas[i]);
+        }
+        return b.array();
+    }
+
+    /** Replaces the open changes with these ({@link #toBytes}). */
+    void fromBytes(byte[] bytes) {
+        ByteBuffer b = ByteBuffer.wrap(bytes);
+        clear();
+        try {
+            int n = b.getInt();
+            if (n < 0) {
+                throw new IllegalArgumentException("SOSDET: a ledger of " + n + " changes");
+            }
+            for (int k = 0; k < n; k++) {
+                add(b.getLong(), b.getInt(), b.getLong());
+            }
+        } catch (BufferUnderflowException e) {
+            throw new IllegalArgumentException("SOSDET: ledger cut short (" + bytes.length + " bytes)", e);
+        }
+        if (b.hasRemaining()) {
+            throw new IllegalArgumentException("SOSDET: " + b.remaining() + " bytes after the ledger");
+        }
     }
 
     void clear() {

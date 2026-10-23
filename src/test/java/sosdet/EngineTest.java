@@ -7,14 +7,21 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.Arrays;
 import java.util.Random;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import sosdet.game.StepParts;
 import sosdet.game.cmd.PlanStash;
 import sosdet.hash.HashLog;
 import sosdet.hash.StateSource;
+import sosdet.report.CityReport;
+import sosdet.report.CitySource;
+import sosdet.report.Field;
+import sosdet.report.ReportFeed;
+import sosdet.report.ReportLayout;
 
 /** The engine through the hooks the game calls: vanilla without a session, deterministic with one. */
 class EngineTest {
@@ -56,6 +63,101 @@ class EngineTest {
         Engine.begin();
         Engine.aiInStep();
         Engine.session().plans = PlanStash.off();
+    }
+
+    /** One player faction, a small report layout, values that never change. */
+    private static final ReportLayout SMALL = new ReportLayout(1, 1, 1, 1, 1, 1, 1, 1, 1);
+    private static final CitySource CITY = new CitySource() {
+        @Override
+        public ReportLayout layout() {
+            return SMALL;
+        }
+
+        @Override
+        public int faction() {
+            return 0;
+        }
+
+        @Override
+        public void fill(double[] values) {
+        }
+
+        @Override
+        public int indexOf(Field f, Object key) {
+            return -1;
+        }
+    };
+
+    /** An own-city session as PC {@code pc}: the world reads the reports through the fakes, nothing crosses. */
+    private static Session ownCity(int pc) {
+        begin();
+        Session s = Engine.session();
+        s.source = NO_BATTLE;
+        s.city = CITY;
+        s.inputApplier = r -> { };
+        s.txnApplier = t -> { };
+        Engine.localPc(pc);
+        Engine.ownCity();
+        Engine.seed(5);
+        return s;
+    }
+
+    /** Runs whole steps, the city part drawing {@code cityDraws} times and the world part once; returns steps run. */
+    private int steps(int max, int cityDraws) {
+        int run = 0;
+        while (run < max && Hooks.stepBegin()) {
+            Hooks.stepPart(StepParts.CITY);
+            for (int d = 0; d < cityDraws; d++) {
+                Hooks.random(simulation).nextInt();
+            }
+            Hooks.stepPart(StepParts.WORLD_PART);
+            Hooks.random(simulation).nextInt();
+            Hooks.stepEnd();
+            run++;
+        }
+        return run;
+    }
+
+    private static byte[] reportRecord(long takenAt, long appliesAt) {
+        ReportFeed f = new ReportFeed();
+        f.write(new CityReport(SMALL, 0, takenAt, appliesAt, new double[SMALL.size()]).toBytes());
+        return f.drain();
+    }
+
+    /** ADR 0005 §1: an own city's draws are its own; the hash counts the world part's, so two cities compare equal. */
+    @Test
+    void anOwnCitysDrawsNeverReachTheHash() {
+        ownCity(0);
+        Engine.runFreely();
+        assertEquals(30, steps(30, 0));
+        long quiet = Engine.hash(30);
+        Engine.end();
+        ownCity(1);
+        Engine.runFreely();
+        assertEquals(30, steps(30, 3));
+        assertEquals(quiet, Engine.hash(30));
+        assertThrows(IllegalStateException.class, () -> Engine.resyncSave(null), "a whole-game resync would take the city");
+    }
+
+    /** SOS-38's follower: the world part waits at each step for the source's report it reads (ADR 0005 §4). */
+    @Test
+    void aFollowerRunsTheWorldOnTheSourcesReportsAndWaitsForThem() {
+        Session s = ownCity(1);
+        Engine.reportsFrom(0);
+        Engine.runFreely();
+        assertEquals(0, steps(10, 1), "no load report from PC 0 yet");
+        byte[] load = reportRecord(1, 1);
+        Engine.reportsIn(0, Arrays.copyOf(load, 3)); // in any pieces
+        Engine.reportsIn(0, Arrays.copyOfRange(load, 3, load.length));
+        assertEquals(59, steps(100, 1), "the report taken at 30 is read from 60");
+        Engine.reportsIn(0, reportRecord(30, 60));
+        Engine.reportsIn(0, reportRecord(30, 60)); // a repeat changes nothing
+        assertEquals(30, steps(100, 1));
+        assertEquals(89, Engine.step());
+        assertEquals(30, s.reports.current().takenAt);
+        assertEquals(2, Engine.stats().reportsReceived);
+        assertTrue(Engine.reportsOut().length > 0, "the follower's own reports still go out");
+        assertThrows(IllegalArgumentException.class, () -> Engine.reportsIn(2, load), "the world reads PC 0's city");
     }
 
     @AfterEach

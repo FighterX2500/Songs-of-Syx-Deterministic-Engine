@@ -28,4 +28,15 @@ class CommandPartsTest {
         assertFalse(CommandParts.world(6999));
         assertFalse(CommandParts.world(1000));
     }
+
+    /** Own-city mode (SOS-38): a city command acts on its issuer's city only; world ones and answers on every PC. */
+    @Test
+    void everyPcAppliesTheWorldsCommandsAndTheAnswers() {
+        assertTrue(CommandParts.everyPc(new CmdWriter(World.ARMY_MOVE).i(3).bytes()));
+        assertTrue(CommandParts.everyPc(Diplomacy.DEAL_ACCEPT));
+        assertTrue(CommandParts.everyPc(StepPrompts.ANSWER));
+        assertFalse(CommandParts.everyPc(Events.EVENT_CHOICE));
+        assertFalse(CommandParts.everyPc(Events.KILLER_SUSPECT));
+        assertFalse(CommandParts.everyPc(1000));
+    }
 }

@@ -110,9 +110,10 @@ public final class GameHash implements StateSource {
 
     /**
      * The world map: every army's slot, faction, tile, state and men; every world entity; every region's owner; every
-     * faction's credits and wars.
+     * faction's credits and wars. In own-city mode the player's credits are the city's and are left out (ADR 0005).
+     * Public for the rig's per-step log of a follower run.
      */
-    private static long worldHash() {
+    public static long worldHash() {
         long h = HashLog.start();
         for (int i = 0; i < WORLD.ENTITIES().armies.max(); i++) {
             WArmy a = WORLD.ENTITIES().armies.get(i);
@@ -135,10 +136,13 @@ public final class GameHash implements StateSource {
             h = HashLog.mix(h, f == null ? -1 : f.index());
         }
         LIST<Faction> factions = FACTIONS.active();
+        boolean ownCity = Hooks.ownCity();
         for (int i = 0; i < factions.size(); i++) {
             Faction f = factions.get(i);
             h = HashLog.mix(h, f.index());
-            h = HashLog.mix(h, Double.doubleToLongBits(f.credits().getD()));
+            if (!ownCity || f != FACTIONS.player()) {
+                h = HashLog.mix(h, Double.doubleToLongBits(f.credits().getD()));
+            }
             for (int k = i + 1; k < factions.size(); k++) {
                 h = HashLog.mix(h, DIP.WAR().is(f, factions.get(k)) ? 1 : 0);
             }

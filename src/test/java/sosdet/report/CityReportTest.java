@@ -131,6 +131,39 @@ class CityReportTest {
         assertNull(reports.current());
     }
 
+    /** A follower runs the world part only as far as the reports it has (ADR 0005 §4): to the step before the next. */
+    @Test
+    void theNextReportIsDueThirtyStepsAfterItIsTaken() {
+        assertEquals(59, Reports.lastReadableStep(1)); // the load report; the next is taken at 30, read from 60
+        assertEquals(89, Reports.lastReadableStep(30));
+        assertEquals(89, Reports.lastReadableStep(59));
+        assertEquals(119, Reports.lastReadableStep(60));
+        assertThrows(IllegalArgumentException.class, () -> Reports.lastReadableStep(-1));
+    }
+
+    /** A world resync hands every PC the host's open changes (SOS-38). */
+    @Test
+    void theLedgerTravelsInAWorldResync() {
+        ReportLayout small = new ReportLayout(2, 1, 1, 1, 1, 1, 1, 1, 1);
+        double[] v = new double[small.size()];
+        v[small.slot(Field.CREDITS, 0)] = 1_000;
+        Reports host = new Reports();
+        host.stamp(new CityReport(small, 0, 30, 60, v));
+        host.applyDue(60);
+        host.change(61, Field.CREDITS, 0, -200);
+        host.change(62, Field.PROMISED, 1, 0, 7);
+
+        Reports peer = new Reports();
+        peer.stamp(new CityReport(small, 0, 30, 60, v));
+        peer.applyDue(60);
+        peer.change(61, Field.CREDITS, 0, -999); // the peer's world went another way
+        peer.ledgerIn(host.ledgerOut());
+        assertEquals(800, peer.value(Field.CREDITS, 0));
+        assertEquals(7, peer.value(Field.PROMISED, 1, 0));
+        assertEquals(2, peer.open());
+        assertThrows(IllegalArgumentException.class, () -> peer.ledgerIn(new byte[] {0, 0, 0, 1}));
+    }
+
     /**
      * The world's own changes add to the report it reads until a report taken after them applies, so 500 credits
      * spent at step 40 are never spent again from the step-30 report (ADR 0005 §3).

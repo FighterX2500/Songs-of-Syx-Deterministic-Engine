@@ -22,6 +22,17 @@ public final class Reports {
         return step % EVERY == 0;
     }
 
+    /**
+     * The last step whose world part can run with the reports taken up to {@code takenAt} (ADR 0005 §4): the next
+     * report is taken at the next multiple of {@link #EVERY} and applies {@link #DELAY} steps after it.
+     */
+    public static long lastReadableStep(long takenAt) {
+        if (takenAt < 0) {
+            throw new IllegalArgumentException("SOSDET: a report taken at step " + takenAt);
+        }
+        return (takenAt / EVERY + 1) * EVERY + DELAY - 1;
+    }
+
     /** A report taken now, for {@link #DELAY} steps from now; the reports must come in the order they apply. */
     public void stamp(CityReport r) {
         CityReport last = pending.isEmpty() ? current : pending.peekLast();
@@ -77,6 +88,15 @@ public final class Reports {
     /** True while a report taken for this step or later has yet to apply. */
     public boolean pending() {
         return !pending.isEmpty();
+    }
+
+    /** The world's open changes, for a world resync: every PC continues with the host's. */
+    public byte[] ledgerOut() {
+        return ledger.toBytes();
+    }
+
+    public void ledgerIn(byte[] bytes) {
+        ledger.fromBytes(bytes);
     }
 
     /** A load or resync: the city's reports start again. */

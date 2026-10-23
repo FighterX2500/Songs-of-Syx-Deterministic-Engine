@@ -118,13 +118,14 @@ public final class Hooks {
 
     /**
      * Starts a step; false when the session may not run further (the frame's other steps are dropped): at its last
-     * step, or as a peer that is already 30 steps past the host's last confirmed step. This PC's room plan is lifted out
+     * step, as a peer that is already 30 steps past the host's last confirmed step, or as a follower whose source's
+     * report for the step has not come in (ADR 0005 §4). This PC's room plan is lifted out
      * of the simulation before the frame's first step (ADR 0003). The AI log entries due at this step are applied
      * first, before anything else runs.
      */
     public static boolean stepBegin() {
         Session s = Engine.session();
-        if (!s.ai().mayRun(s.clock.step() + 1)) {
+        if (!s.ai().mayRun(s.clock.step() + 1) || !s.worldMayRun(s.clock.step() + 1)) {
             s.clock.hold();
             return false;
         }
@@ -134,7 +135,7 @@ public final class Hooks {
         s.plans().lift();
         s.streams.enter();
         // Reseeded every step: the stream depends only on the seed and the step, so a resync needs no random state
-        s.streams.reseed(s.stepSeed(s.clock.step()));
+        s.streams.reseed(s.citySeed(s.clock.step()));
         if (s.streams.trace != null) {
             s.streams.trace.step(s.clock.step());
         }
@@ -153,13 +154,15 @@ public final class Hooks {
             s.pathNanos += System.nanoTime() - start;
             s.pathQueue = null;
         }
+        s.streams.worldPart(false);
         if (!s.txns.isEmpty()) {
             s.part = StepParts.CITY; // the city tail: the world part's changes to the city apply (ADR 0005 §3)
             s.txns.apply(s.txnApplier());
         }
         if (s.hashes.due(step)) {
-            long clock = HashLog.mix(HashLog.mix(HashLog.mix(HashLog.start(), step), s.streams.drawsSinceLoad()),
-                    s.ai().applied());
+            // an own city's draws are its own: the world part's alone are counted (ADR 0005 §1)
+            long draws = s.ownCity ? s.streams.worldDraws() : s.streams.drawsSinceLoad();
+            long clock = HashLog.mix(HashLog.mix(HashLog.mix(HashLog.start(), step), draws), s.ai().applied());
             CityReport r = s.reports.current();
             s.hashes.take(step, clock, r == null ? 0 : r.hash(), s.source());
         }
@@ -205,11 +208,27 @@ public final class Hooks {
             }
             s.part = part;
             s.streams.reseed(s.worldSeed(step));
+            s.streams.worldPart(true);
             s.reports.applyDue(step, s.inputApplier());
+            if (s.reports.current() == null) {
+                throw new IllegalStateException("SOSDET: no city report from PC " + s.reportsFrom + " for step " + step);
+            }
             s.ai().worldPart();
             return;
         }
         s.part = part;
+    }
+
+    /** True in own-city mode (ADR 0005 §1): the hash leaves this PC's city out, the player's credits included. */
+    public static boolean ownCity() {
+        Session s = Engine.session();
+        return s != null && s.ownCity;
+    }
+
+    /** Whether a city command PC {@code pc} gave applies here: always in co-op; an own city's only on its own PC. */
+    public static boolean cityCommandHere(int pc) {
+        Session s = Engine.session();
+        return s == null || !s.ownCity || pc == s.ai().localPc();
     }
 
     /** True when the resource updates in this part of the step. */
@@ -568,6 +587,10 @@ public final class Hooks {
 
     /** {@code Invador.cancel} (C6): true when queued. */
     public static boolean invasionCancel(int ref) {
+        Session s = Engine.session();
+        if (s != null && s.worldLoading) {
+            return true; // a world resync clears the raiders it reloads; the city's invasion goes on
+        }
         Txn x = toCity(TxnKind.INVASION_CANCEL);
         if (x == null) {
             return false;
