@@ -103,7 +103,8 @@ Each stage is one card (or a card's milestone) with its own PR, in this order.
 4. **The player faction:** inside the step, "the player" is the save's player faction on every PC. This PC's local player never enters the step (AGENTS.md, Determinism).
    - *As built (SOS-35):* in V0.1 co-op every PC loads the same save, so `FACTIONS.player()` is that faction everywhere; several human factions are the mod's work.
 5. **World commands:** 46 of the 225 (world 30, diplomacy 10, events 6).
-6. **Exit:**
+6. **Smoke run (SOS-35, decision 6):** D35B, 3 copies, 14,000 steps, the world running, `rig/cmds/world.txt` (16 world, diplomacy and event commands applied on every copy): identical to step 14,000, no engine desync. The state hash now has a world section (armies, region owners, credits, wars; hash format 3); it took 379 different values in 466 hashes, so the world moved. D35A, before the world section, only showed the city identical. No world-battle prompt or invasion question came up in the run, so those paths are checked by reasoning only.
+7. **Exit:**
    - the rig runs world and city 30 minutes identical with the AI host;
    - the owner plays the world map for 10 minutes or more with no desync.
 

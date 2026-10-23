@@ -41,8 +41,9 @@ Smoke run Q34H: 3 copies identical to step 14,000, with 8 commands applied on ev
 - **Two agents, in worktrees under `C:\ClaudeFolder\SOSDET-wt\`:**
   - `fixes` (branch `SOS-35-world-fixes`, patch `98-world-fixes`): the W3 world determinism items;
   - `cmds` (branch `SOS-35-world-cmds`, patch `96-cmd-world`): the world, diplomacy and event commands, with rig script `rig/cmds/world.txt`.
-  - Merge both into `SOS-35-world-lockstep` and write their `docs/hooks.md` and `docs/commands.md` rows.
-- **Then:** one smoke run with city and world (plan 0002, decision 6), then package SOSDET V0.1 (the release mod folder, a short readme, how to start a 3-copy `--play` session), then the owner's 30-minute session.
+  - Both merged, with their `docs/hooks.md` and `docs/commands.md` rows.
+- **Smoke run D35B passed** (plan 0002 stage D, item 6), with the world now in the state hash.
+- **Then:** package SOSDET V0.1 (the release mod folder, a short readme, how to start a 3-copy `--play` session), then the owner's 30-minute session.
 
 **After V0.1:**
 - stage E, the city↔world link;

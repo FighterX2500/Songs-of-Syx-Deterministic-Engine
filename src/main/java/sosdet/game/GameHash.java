@@ -6,6 +6,9 @@ import java.util.Locale;
 import game.GAME;
 import game.battle.div.Div;
 import game.battle.setting.DivSettings;
+import game.faction.FACTIONS;
+import game.faction.Faction;
+import game.faction.diplomacy.DIP;
 import settlement.entity.ENTITY;
 import settlement.entity.humanoid.Humanoid;
 import settlement.main.SETT;
@@ -14,11 +17,15 @@ import snake2d.util.sets.LIST;
 import sosdet.Hooks;
 import sosdet.hash.HashLog;
 import sosdet.hash.StateSource;
+import world.WORLD;
+import world.army.AD;
+import world.entity.army.WArmy;
+import world.map.regions.Region;
 
 /**
  * The battle state for the state hash (hook B13), read through the game's public members. Soldiers and other
  * entities as the rig hashed them (SOS-11, SOS-23); divisions by their counts, settings and orders; projectiles by
- * the bytes of their own save.
+ * the bytes of their own save; the world map by its armies, region owners, credits and wars (SOS-35).
  */
 public final class GameHash implements StateSource {
 
@@ -97,6 +104,40 @@ public final class GameHash implements StateSource {
         sections[HashLog.ENTITIES] = others;
         sections[HashLog.DIVISIONS] = divisionsHash();
         sections[HashLog.PROJECTILES] = projectilesHash();
+        sections[HashLog.WORLD] = worldHash();
+    }
+
+    /** The world map: every army's slot, faction, tile, state and men; every region's owner; every faction's credits and wars. */
+    private static long worldHash() {
+        long h = HashLog.start();
+        for (int i = 0; i < WORLD.ENTITIES().armies.max(); i++) {
+            WArmy a = WORLD.ENTITIES().armies.get(i);
+            if (a == null || !a.added()) {
+                continue;
+            }
+            h = HashLog.mix(h, i);
+            h = HashLog.mix(h, a.iteration());
+            h = HashLog.mix(h, a.faction() == null ? -1 : a.faction().index());
+            h = HashLog.mix(h, a.body().x1());
+            h = HashLog.mix(h, a.body().y1());
+            h = HashLog.mix(h, a.state().index());
+            h = HashLog.mix(h, AD.men(null).get(a));
+        }
+        LIST<Region> regions = WORLD.REGIONS().all();
+        for (int i = 0; i < regions.size(); i++) {
+            Faction f = regions.get(i).faction();
+            h = HashLog.mix(h, f == null ? -1 : f.index());
+        }
+        LIST<Faction> factions = FACTIONS.active();
+        for (int i = 0; i < factions.size(); i++) {
+            Faction f = factions.get(i);
+            h = HashLog.mix(h, f.index());
+            h = HashLog.mix(h, Double.doubleToLongBits(f.credits().getD()));
+            for (int k = i + 1; k < factions.size(); k++) {
+                h = HashLog.mix(h, DIP.WAR().is(f, factions.get(k)) ? 1 : 0);
+            }
+        }
+        return h;
     }
 
     private long divisionsHash() {

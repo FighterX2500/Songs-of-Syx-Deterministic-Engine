@@ -29,10 +29,12 @@ public final class HashLog {
     public static final int DIVISIONS = 2;
     public static final int PROJECTILES = 3;
     public static final int ENTITIES = 4;
-    public static final int SECTIONS = 5;
-    static final String[] SECTION_NAMES = {"clock", "soldiers", "divisions", "projectiles", "entities"};
+    /** The world map: armies, region owners, faction credits and wars (SOS-35). */
+    public static final int WORLD = 5;
+    public static final int SECTIONS = 6;
+    static final String[] SECTION_NAMES = {"clock", "soldiers", "divisions", "projectiles", "entities", "world"};
 
-    static final int FORMAT_VERSION = 2;
+    static final int FORMAT_VERSION = 3;
     static final int MAGIC = 0x53444853; // "SDHS"
     static final int HEADER_BYTES = 4 * 5;
     static final long FNV_OFFSET = 0xcbf29ce484222325L;
