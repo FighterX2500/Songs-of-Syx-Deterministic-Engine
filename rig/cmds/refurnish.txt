@@ -23,13 +23,15 @@ wait 3
 refurnish FARM
 plan-grow 1
 build
-# 6. A construction site: a new smithy built (6007), then refurnished at once (6008 on a site)
+# 6. A construction site: a new smithy built (6007), then refurnished at once (6008 on a site). The doorway comes back
+#    only if its ceiling job could be placed (vanilla); when it couldn't, the player places it again, as here
 plan WORKSHOP_SMITHY 5 5
 plan-items 1 0
 plan-items 2 1
 plan-door
 build
 refurnish site
+plan-door
 plan-drop-item 1 1
 build
 # 7. The trash button: on a site (6008 with an empty plan), then on a room (2001)
