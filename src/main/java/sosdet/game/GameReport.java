@@ -171,7 +171,7 @@ public final class GameReport implements CitySource {
                 v[l.slot(Field.NEXT_EXTRA, ci, ri)] = POP.next(c, r) - POP.tot(c, r);
                 v[l.slot(Field.RETIREMENT, ci, ri)] = c == null || r == null ? 0
                         : STATS.WORK().RET.RETIREMENT_AGE.decree().getD(c, r);
-                v[l.slot(Field.EVENT_CLASS_RACE, ci, ri)] = c == null ? 0 : STATS.EVENT().stat().data(c).getD(r);
+                v[l.slot(Field.EVENT_CLASS_RACE, ci, ri)] = STATS.EVENT().stat().data(c).getD(r); // c null: every class, as HCLASS_RACE.clP() reads it
             }
         }
         v[l.slot(Field.POP_TOTAL, 0)] = STATS.POP().POP.data(null).get(null);
