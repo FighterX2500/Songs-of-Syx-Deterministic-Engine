@@ -17,5 +17,9 @@ public enum Count {
     /** Battle equipment types, by {@code indexMilitary()}. */
     EQUIPS,
     /** {@code STATS.BATTLE().TRAINING_ALL}. */
-    TRAININGS
+    TRAININGS,
+    /** The boost values ({@code BValue}) the game's boosters read, as the city report found them. */
+    BOOSTS,
+    /** {@code GVALUES.FACTION.all()}. */
+    VALUES
 }

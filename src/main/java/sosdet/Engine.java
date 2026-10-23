@@ -334,7 +334,8 @@ public final class Engine {
                 s.ai().applied(AiEntry.ARTILLERY), s.ai().pending(), s.ai().appliedOrders(), s.ai().applied(AiEntry.COMMAND),
                 s.ai().commandsSkipped(), s.clock.agreedSpeed(),
                 s.hashes.taken(), s.hashes.meanMs(), s.hashes.maxMs(),
-                s.hashes.compared(), s.hashes.missed(), s.reportsTaken, s.reportNanos, s.reportBytes, s.reportMaxBytes);
+                s.hashes.compared(), s.hashes.missed(), s.reportsTaken, s.reportNanos, s.reportBytes, s.reportMaxBytes,
+                s.reportMisses);
     }
 
     public static void resetStats() {

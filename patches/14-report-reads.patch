@@ -1,6 +1,18 @@
+diff -ru -U2 a/game/boosting/BValue.java b/game/boosting/BValue.java
+--- a/game/boosting/BValue.java	2026-03-23 09:37:16.000000000 +0500
++++ b/game/boosting/BValue.java	2026-10-23 22:06:48.702251100 +0500
+@@ -35,7 +35,7 @@
+ 		if (f instanceof FactionNPC) {
+ 			return vGet((FactionNPC) f);
+ 		}
+-		return vGet(FACTIONS.player());
++		return sosdet.Hooks.reportRead() ? sosdet.Hooks.reportBoost(this) : vGet(FACTIONS.player()); // SOSDET: the world part reads the city's report (ADR 0005)
+ 	}
+ 	
+ 	public class BValueNone implements BValue {
 diff -ru -U2 a/game/faction/player/PCredits.java b/game/faction/player/PCredits.java
 --- a/game/faction/player/PCredits.java	2026-06-03 12:16:02.000000000 +0500
-+++ b/game/faction/player/PCredits.java	2026-10-23 21:56:41.376809000 +0500
++++ b/game/faction/player/PCredits.java	2026-10-23 22:06:48.669749600 +0500
 @@ -171,6 +171,20 @@
  		super.clear();
  	}
@@ -24,7 +36,7 @@ diff -ru -U2 a/game/faction/player/PCredits.java b/game/faction/player/PCredits.
  	}
 diff -ru -U2 a/game/faction/royalty/opinion/OpsOther.java b/game/faction/royalty/opinion/OpsOther.java
 --- a/game/faction/royalty/opinion/OpsOther.java	2026-05-13 08:36:34.000000000 +0500
-+++ b/game/faction/royalty/opinion/OpsOther.java	2026-10-23 21:56:41.379809700 +0500
++++ b/game/faction/royalty/opinion/OpsOther.java	2026-10-23 22:06:48.671248000 +0500
 @@ -138,7 +138,7 @@
  			public double pget(Royalty roy) {
  				double c = 0;
@@ -45,7 +57,7 @@ diff -ru -U2 a/game/faction/royalty/opinion/OpsOther.java b/game/faction/royalty
  				
 diff -ru -U2 a/game/faction/royalty/opinion/OpsStance.java b/game/faction/royalty/opinion/OpsStance.java
 --- a/game/faction/royalty/opinion/OpsStance.java	2026-06-24 16:26:36.000000000 +0500
-+++ b/game/faction/royalty/opinion/OpsStance.java	2026-10-23 21:56:41.382309500 +0500
++++ b/game/faction/royalty/opinion/OpsStance.java	2026-10-23 22:06:48.673247900 +0500
 @@ -153,7 +153,7 @@
  			}
  			@Override
@@ -64,9 +76,21 @@ diff -ru -U2 a/game/faction/royalty/opinion/OpsStance.java b/game/faction/royalt
  				if (d > 0)
  					return CLAMP.d(d, 0, 1);
  				return 0;
+diff -ru -U2 a/game/faction/trade/TradeManager.java b/game/faction/trade/TradeManager.java
+--- a/game/faction/trade/TradeManager.java	2026-06-04 09:04:14.000000000 +0500
++++ b/game/faction/trade/TradeManager.java	2026-10-23 22:06:48.703750400 +0500
+@@ -86,7 +86,7 @@
+ 
+ 		
+ 		if (f == FACTIONS.player() || f2 == FACTIONS.player()) {
+-			return distance / RD.DIST().bProximityToll.get(HCLASSES.CITIZEN().get(null));
++			return distance / (sosdet.Hooks.reportRead() ? sosdet.Hooks.reportD(sosdet.report.Field.PROXIMITY_TOLL, 0) : RD.DIST().bProximityToll.get(HCLASSES.CITIZEN().get(null))); // SOSDET: the world part reads the city's report (ADR 0005)
+ 		}else {
+ 			return distance / 4.0;
+ 		}
 diff -ru -U2 a/game/raiding/Raider.java b/game/raiding/Raider.java
 --- a/game/raiding/Raider.java	2026-04-09 19:01:40.000000000 +0500
-+++ b/game/raiding/Raider.java	2026-10-23 21:56:41.383309500 +0500
++++ b/game/raiding/Raider.java	2026-10-23 22:06:48.675249400 +0500
 @@ -97,7 +97,7 @@
  	public boolean hasInterrest() {
  		if (!SETT.ROOMS().BARRACKS.get(0).reqs.passes(FACTIONS.player()))
@@ -76,9 +100,42 @@ diff -ru -U2 a/game/raiding/Raider.java b/game/raiding/Raider.java
  			return false;
  		return GAME.raiders().util.ransomCurrent() > worth;
  	}
+diff -ru -U2 a/init/value/GValuesInit.java b/init/value/GValuesInit.java
+--- a/init/value/GValuesInit.java	2026-03-25 14:53:10.000000000 +0500
++++ b/init/value/GValuesInit.java	2026-10-23 22:06:48.714751100 +0500
+@@ -92,7 +92,7 @@
+ 
+ 				@Override
+ 				public double getD(Region t) {
+-					return t.faction() == null ? 0 : v.d.getD(t.faction());
++					return t.faction() == null ? 0 : sosdet.Hooks.reportValue(v, t.faction()); // SOSDET: the world part reads the city's report (ADR 0005)
+ 				}
+ 				
+ 			};
+diff -ru -U2 a/init/value/Locker.java b/init/value/Locker.java
+--- a/init/value/Locker.java	2025-09-12 10:46:16.000000000 +0500
++++ b/init/value/Locker.java	2026-10-23 22:06:48.712249300 +0500
+@@ -55,7 +55,7 @@
+ 		
+ 		@Override
+ 		public boolean inUnlocked(T t) {
+-			return comp.passes(getter.d.getD(t), value);
++			return comp.passes(sosdet.Hooks.reportValue(getter, t), value); // SOSDET: the world part reads the city's report (ADR 0005)
+ 		}
+ 		
+ 		@Override
+@@ -117,7 +117,7 @@
+ 
+ 		@Override
+ 		public double progress(T t) {
+-			return comp.progress(getter.d.getD(t), value	);
++			return comp.progress(sosdet.Hooks.reportValue(getter, t), value	); // SOSDET: the world part reads the city's report (ADR 0005)
+ 		}
+ 
+ 	}
 diff -ru -U2 a/settlement/battle/invasion/Invador.java b/settlement/battle/invasion/Invador.java
 --- a/settlement/battle/invasion/Invador.java	2026-05-29 20:35:38.000000000 +0500
-+++ b/settlement/battle/invasion/Invador.java	2026-10-23 21:56:41.417309300 +0500
++++ b/settlement/battle/invasion/Invador.java	2026-10-23 22:06:48.676251600 +0500
 @@ -259,10 +259,12 @@
  	}
  	
@@ -95,7 +152,7 @@ diff -ru -U2 a/settlement/battle/invasion/Invador.java b/settlement/battle/invas
  			p += i.spec.power;
 diff -ru -U2 a/settlement/entry/EntryPoints.java b/settlement/entry/EntryPoints.java
 --- a/settlement/entry/EntryPoints.java	2026-02-03 11:48:06.000000000 +0500
-+++ b/settlement/entry/EntryPoints.java	2026-10-23 21:56:41.391810600 +0500
++++ b/settlement/entry/EntryPoints.java	2026-10-23 22:06:48.680249600 +0500
 @@ -344,6 +344,8 @@
  	
  	
@@ -107,7 +164,7 @@ diff -ru -U2 a/settlement/entry/EntryPoints.java b/settlement/entry/EntryPoints.
  	
 diff -ru -U2 a/settlement/entry/SENTRY.java b/settlement/entry/SENTRY.java
 --- a/settlement/entry/SENTRY.java	2026-05-24 09:27:36.000000000 +0500
-+++ b/settlement/entry/SENTRY.java	2026-10-23 21:56:41.393811500 +0500
++++ b/settlement/entry/SENTRY.java	2026-10-23 22:06:48.683275900 +0500
 @@ -99,6 +99,8 @@
  	}
  	
@@ -119,7 +176,7 @@ diff -ru -U2 a/settlement/entry/SENTRY.java b/settlement/entry/SENTRY.java
  	
 diff -ru -U2 a/settlement/stats/POP.java b/settlement/stats/POP.java
 --- a/settlement/stats/POP.java	2026-06-18 08:35:38.000000000 +0500
-+++ b/settlement/stats/POP.java	2026-10-23 21:56:41.395309600 +0500
++++ b/settlement/stats/POP.java	2026-10-23 22:06:48.684248700 +0500
 @@ -23,6 +23,8 @@
  	}
  	
@@ -140,7 +197,7 @@ diff -ru -U2 a/settlement/stats/POP.java b/settlement/stats/POP.java
  			pop += SETT.ENTRY().onTheirWay(r, HTYPES.SUBJECT());
 diff -ru -U2 a/world/army/ADStats.java b/world/army/ADStats.java
 --- a/world/army/ADStats.java	2026-06-25 10:46:44.000000000 +0500
-+++ b/world/army/ADStats.java	2026-10-23 21:56:41.396810300 +0500
++++ b/world/army/ADStats.java	2026-10-23 22:06:48.685248300 +0500
 @@ -211,7 +211,7 @@
  		ADStats.this.losses.f.inc(a, losses);
  		double men = 1+AD.men(null).faction(a) + losses;
@@ -152,7 +209,7 @@ diff -ru -U2 a/world/army/ADStats.java b/world/army/ADStats.java
  			double d = 0.25*(double)kills/men;
 diff -ru -U2 a/world/army/WDivStored.java b/world/army/WDivStored.java
 --- a/world/army/WDivStored.java	2026-06-24 13:04:24.000000000 +0500
-+++ b/world/army/WDivStored.java	2026-10-23 21:56:41.398311600 +0500
++++ b/world/army/WDivStored.java	2026-10-23 22:06:48.691750800 +0500
 @@ -76,7 +76,7 @@
  	
  	@Override
@@ -180,9 +237,21 @@ diff -ru -U2 a/world/army/WDivStored.java b/world/army/WDivStored.java
  		return GAME.ARMIES().player().divisions().get(index).info.men();
  	}
  
+diff -ru -U2 a/world/entity/haven/WHavenType.java b/world/entity/haven/WHavenType.java
+--- a/world/entity/haven/WHavenType.java	2026-04-06 09:00:42.000000000 +0500
++++ b/world/entity/haven/WHavenType.java	2026-10-23 22:06:48.716249000 +0500
+@@ -186,7 +186,7 @@
+ 			if (de.to == Double.NaN)
+ 				continue;
+ 			
+-			double v = de.value.d.getD(FACTIONS.player());
++			double v = sosdet.Hooks.reportValue(de.value, FACTIONS.player()); // SOSDET: the world part reads the city's report (ADR 0005)
+ 			
+ 			if (de.from == Double.NaN) {
+ 				//d += CLAMP.d(de.comp.progress(v, de.to), 0, 1);
 diff -ru -U2 a/world/region/pop/RDEdicts.java b/world/region/pop/RDEdicts.java
 --- a/world/region/pop/RDEdicts.java	2025-09-22 07:59:34.000000000 +0500
-+++ b/world/region/pop/RDEdicts.java	2026-10-23 21:56:41.401311100 +0500
++++ b/world/region/pop/RDEdicts.java	2026-10-23 22:06:48.693248000 +0500
 @@ -75,7 +75,7 @@
  
  				@Override
@@ -194,7 +263,7 @@ diff -ru -U2 a/world/region/pop/RDEdicts.java b/world/region/pop/RDEdicts.java
  			}.add(r.loyalty.target);
 diff -ru -U2 a/world/region/pop/RDRace.java b/world/region/pop/RDRace.java
 --- a/world/region/pop/RDRace.java	2026-06-08 10:31:04.000000000 +0500
-+++ b/world/region/pop/RDRace.java	2026-10-23 21:56:41.402812900 +0500
++++ b/world/region/pop/RDRace.java	2026-10-23 22:06:48.695249000 +0500
 @@ -191,7 +191,7 @@
  						
  						@Override

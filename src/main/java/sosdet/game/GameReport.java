@@ -1,8 +1,19 @@
 package sosdet.game;
 
+import java.util.ArrayList;
+import java.util.IdentityHashMap;
+
 import game.GAME;
 import game.battle.div.Div;
+import game.boosting.BOOSTABLES;
+import game.boosting.BOOSTABLE_O;
+import game.boosting.BOOSTING;
+import game.boosting.BValue;
+import game.boosting.Boostable;
+import game.boosting.Booster;
 import game.faction.FACTIONS;
+import game.faction.Faction;
+import game.faction.player.Player;
 import game.tourism.TOURISM;
 import init.race.RACES;
 import init.race.Race;
@@ -13,8 +24,11 @@ import init.trade.TRADABLEO;
 import init.trade.TRADE_TYPE;
 import init.type.CRIMES;
 import init.type.HCLASS;
+import init.type.HCLASS_RACE;
 import init.type.HCLASSES;
 import init.type.HTYPES;
+import init.value.GVALUES;
+import init.value.Value;
 import settlement.main.SETT;
 import settlement.stats.POP;
 import settlement.stats.STATS;
@@ -34,14 +48,49 @@ import world.region.RD;
  */
 public final class GameReport implements CitySource {
 
-    /** In {@link sosdet.report.Count} order. */
-    private final ReportLayout layout = new ReportLayout(TR.ALL().size(), TRADE_TYPE.all.size(), RACES.all().size(),
-            HCLASSES.ALL().size(), GAME.ARMIES().player().divisions().size(), STATS.EQUIP().BATTLE_ALL().size(),
-            STATS.BATTLE().TRAINING_ALL.size());
+    /** Every boost value a booster reads, in the order the boostables and their boosters list them. */
+    private final ArrayList<BValue> boosts = new ArrayList<>();
+    private final IdentityHashMap<BValue, Integer> boostIndex = new IdentityHashMap<>();
+    private final LIST<Value<Faction>> values = GVALUES.FACTION.all();
+    private final IdentityHashMap<Value<Faction>, Integer> valueIndex = new IdentityHashMap<>();
+    private final ReportLayout layout;
+
+    public GameReport() {
+        // A booster hands its boost value to what it boosts; this one only notes it. Every booster in the game
+        // reads its value this way (RDBuilding's one exception reads nothing)
+        BOOSTABLE_O seen = v -> {
+            if (!boostIndex.containsKey(v)) {
+                boostIndex.put(v, boosts.size());
+                boosts.add(v);
+            }
+            return 0;
+        };
+        for (Boostable bo : BOOSTING.ALL()) {
+            for (Booster b : bo.all()) {
+                b.get(seen);
+            }
+            for (Booster b : bo.fGlobal) {
+                b.get(seen);
+            }
+        }
+        for (int i = 0; i < values.size(); i++) {
+            valueIndex.put(values.get(i), i);
+        }
+        // in sosdet.report.Count order
+        layout = new ReportLayout(TR.ALL().size(), TRADE_TYPE.all.size(), RACES.all().size(), HCLASSES.ALL().size(),
+                GAME.ARMIES().player().divisions().size(), STATS.EQUIP().BATTLE_ALL().size(),
+                STATS.BATTLE().TRAINING_ALL.size(), boosts.size(), values.size());
+    }
 
     @Override
     public ReportLayout layout() {
         return layout;
+    }
+
+    @Override
+    public int indexOf(Field f, Object key) {
+        Integer i = f == Field.BOOST ? boostIndex.get(key) : f == Field.VALUE ? valueIndex.get(key) : null;
+        return i == null ? -1 : i;
     }
 
     @Override
@@ -130,6 +179,16 @@ public final class GameReport implements CitySource {
         fillGarrison(v, divs, equips);
         v[l.slot(Field.INVADING, 0)] = bool(SETT.INVADOR().invading());
         v[l.slot(Field.INVADING_POWER, 0)] = SETT.INVADOR().invadingPower();
+
+        Player player = FACTIONS.player();
+        for (int i = 0; i < boosts.size(); i++) {
+            v[l.slot(Field.BOOST, i)] = boosts.get(i).vGet(player);
+        }
+        v[l.slot(Field.RAID_SECURITY, 0)] = BOOSTABLES.CIVICS().RAID_SECURITY.get(HCLASS_RACE.clP());
+        v[l.slot(Field.PROXIMITY_TOLL, 0)] = RD.DIST().bProximityToll.get(HCLASSES.CITIZEN().get(null));
+        for (int i = 0; i < values.size(); i++) {
+            v[l.slot(Field.VALUE, i)] = values.get(i).d.getD(player);
+        }
     }
 
     /** The capital's garrison as the world sees it: the game's own list and its own getters. */

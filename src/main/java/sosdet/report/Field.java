@@ -74,7 +74,17 @@ public enum Field {
     /** The equipment the city's divisions are set to carry, men times kit, as {@code FWorth} counts it. */
     EQUIP_IN_DIVS(Shape.EQUIP),
     INVADING(Shape.ONE),
-    INVADING_POWER(Shape.ONE);
+    INVADING_POWER(Shape.ONE),
+    // A7: boosts
+    /** The player's value of each boost value: what every booster reads on the player, a player region or division. */
+    BOOST(Shape.BOOST),
+    /** {@code RAID_SECURITY} on the city's population class, as raiders' ransom reads it. */
+    RAID_SECURITY(Shape.ONE),
+    /** The proximity toll boost on the city's citizens, as the toll on the player's trade reads it. */
+    PROXIMITY_TOLL(Shape.ONE),
+    // A8: data-driven values
+    /** The player's value of each faction value: requirement locks and the world camps read them. */
+    VALUE(Shape.VALUE);
 
     public final Shape shape;
 

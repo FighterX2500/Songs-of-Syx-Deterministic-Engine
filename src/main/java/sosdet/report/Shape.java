@@ -19,7 +19,9 @@ public enum Shape {
     /** One per city battle division and battle equipment type. */
     DIVISION_EQUIP(Count.DIVISIONS, false, Count.EQUIPS, false),
     /** One per city battle division and training. */
-    DIVISION_TRAINING(Count.DIVISIONS, false, Count.TRAININGS, false);
+    DIVISION_TRAINING(Count.DIVISIONS, false, Count.TRAININGS, false),
+    BOOST(Count.BOOSTS, false, null, false),
+    VALUE(Count.VALUES, false, null, false);
 
     /** The first list, or {@code null} for one value. */
     final Count first;

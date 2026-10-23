@@ -85,6 +85,8 @@ final class Session {
     /** Where the reports come from: the game, made at the first report; tests put in their own. */
     CitySource city;
     long reportsTaken;
+    /** World-part reads of a boost or faction value the report has no slot for: read live instead. */
+    long reportMisses;
     long reportNanos;
     int reportBytes;
     int reportMaxBytes;
@@ -206,6 +208,7 @@ final class Session {
         reportsTaken = 0;
         reportNanos = 0;
         reportMaxBytes = 0;
+        reportMisses = 0;
         java.util.Arrays.fill(jobs.nanos, 0);
     }
 }

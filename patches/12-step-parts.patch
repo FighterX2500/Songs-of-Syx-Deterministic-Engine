@@ -1,6 +1,6 @@
 diff -ru -U2 a/game/events/EVENTS.java b/game/events/EVENTS.java
 --- a/game/events/EVENTS.java	2026-02-17 17:15:30.000000000 +0500
-+++ b/game/events/EVENTS.java	2026-10-23 21:29:02.680069800 +0500
++++ b/game/events/EVENTS.java	2026-10-23 22:06:46.889249400 +0500
 @@ -131,7 +131,7 @@
  			return;
  		prof.logStart(EVENTS.class);
@@ -12,7 +12,7 @@ diff -ru -U2 a/game/events/EVENTS.java b/game/events/EVENTS.java
  	}
 diff -ru -U2 a/game/faction/FACTIONS.java b/game/faction/FACTIONS.java
 --- a/game/faction/FACTIONS.java	2026-03-25 10:31:18.000000000 +0500
-+++ b/game/faction/FACTIONS.java	2026-10-23 21:29:02.680069800 +0500
++++ b/game/faction/FACTIONS.java	2026-10-23 22:06:46.890250700 +0500
 @@ -41,7 +41,7 @@
  
  		@Override
@@ -39,7 +39,7 @@ diff -ru -U2 a/game/faction/FACTIONS.java b/game/faction/FACTIONS.java
  		updater.update(ds);
 diff -ru -U2 a/game/faction/player/Player.java b/game/faction/player/Player.java
 --- a/game/faction/player/Player.java	2026-06-17 10:48:04.000000000 +0500
-+++ b/game/faction/player/Player.java	2026-10-23 21:29:02.684063800 +0500
++++ b/game/faction/player/Player.java	2026-10-23 22:06:46.901748600 +0500
 @@ -158,21 +158,22 @@
  	}
  	
@@ -86,6 +86,15 @@ diff -ru -U2 a/game/faction/player/Player.java b/game/faction/player/Player.java
  		
  		
  		
+@@ -324,7 +330,7 @@
+ 	
+ 	@Override
+ 	public double boostableValue(BValue v) {
+-		return v.vGet(this);
++		return sosdet.Hooks.reportRead() ? sosdet.Hooks.reportBoost(v) : v.vGet(this); // SOSDET: the world part reads the city's report (ADR 0005)
+ 	}
+ 
+ 	@Override
 @@ -349,6 +355,8 @@
  
  	@Override

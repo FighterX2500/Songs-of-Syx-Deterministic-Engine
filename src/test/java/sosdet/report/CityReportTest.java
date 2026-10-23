@@ -12,8 +12,11 @@ import org.junit.jupiter.api.Test;
 
 class CityReportTest {
 
-    /** V71's sizes: 50 tradables, 4 trade types, 8 races, 4 classes, 120 divisions, 8 equipment types, 6 trainings. */
-    private static final ReportLayout V71 = new ReportLayout(50, 4, 8, 4, 120, 8, 6);
+    /**
+     * V71's sizes: 50 tradables, 4 trade types, 8 races, 4 classes, 120 divisions, 8 equipment types, 6 trainings,
+     * and boost and faction values in the hundreds.
+     */
+    private static final ReportLayout V71 = new ReportLayout(50, 4, 8, 4, 120, 8, 6, 400, 200);
 
     private static double[] values(ReportLayout layout) {
         double[] v = new double[layout.size()];
@@ -41,8 +44,8 @@ class CityReportTest {
         assertTrue(Double.isNaN(back.get(Field.WAR_STANDING, 3)));
         assertEquals(1L << 53, (long) back.get(Field.HELD, 7));
         // ADR 0005: "a few KB". Fractions take 9 bytes each; the worst case, 120 garrison divisions with fractional
-        // training and equipment, is about 15 KB
-        assertTrue(bytes.length < 16_000, bytes.length + " bytes");
+        // training and equipment and 600 fractional boost and faction values, is about 20 KB
+        assertTrue(bytes.length < 21_000, bytes.length + " bytes");
     }
 
     @Test
@@ -52,13 +55,14 @@ class CityReportTest {
         assertEquals(V71.slot(Field.DIV_EQUIP, 0, 7) + 1, V71.slot(Field.DIV_EQUIP, 1, 0));
         assertEquals(V71.slot(Field.GARRISON, 0), V71.slot(Field.DIV_EQUIP, 119, 7) + 1);
         assertEquals(V71.slot(Field.GAR_TRAINING, 0, 5) + 1, V71.slot(Field.GAR_TRAINING, 1, 0));
-        assertEquals(V71.size() - 1, V71.slot(Field.INVADING_POWER, 0));
+        assertEquals(V71.slot(Field.BOOST, 0), V71.slot(Field.INVADING_POWER, 0) + 1);
+        assertEquals(V71.size() - 1, V71.slot(Field.VALUE, 199));
         assertThrows(IllegalArgumentException.class, () -> V71.slot(Field.HELD, 50));
         assertThrows(IllegalArgumentException.class, () -> V71.slot(Field.PHYSICAL, 3));
         assertThrows(IllegalArgumentException.class, () -> V71.slot(Field.INCOMING, 0, 5));
         assertThrows(IllegalArgumentException.class, () -> V71.slot(Field.CREDITS, 0, 0));
         assertThrows(IllegalArgumentException.class, () -> V71.slot(Field.EQUIP_IN_DIVS, 8));
-        assertThrows(IllegalArgumentException.class, () -> new ReportLayout(50, 4, 8, 4, 120, 8));
+        assertThrows(IllegalArgumentException.class, () -> new ReportLayout(50, 4, 8, 4, 120, 8, 6, 400));
     }
 
     @Test
@@ -68,7 +72,7 @@ class CityReportTest {
         wrongVersion[7] = 9;
         assertThrows(IllegalArgumentException.class, () -> CityReport.fromBytes(wrongVersion, V71));
         assertThrows(IllegalArgumentException.class,
-                () -> CityReport.fromBytes(bytes, new ReportLayout(51, 4, 8, 4, 120, 8, 6)));
+                () -> CityReport.fromBytes(bytes, new ReportLayout(51, 4, 8, 4, 120, 8, 6, 400, 200)));
         assertThrows(IllegalArgumentException.class,
                 () -> CityReport.fromBytes(Arrays.copyOf(bytes, bytes.length - 1), V71));
         assertThrows(IllegalArgumentException.class,
@@ -78,7 +82,7 @@ class CityReportTest {
 
     @Test
     void theWorldReadsEachReportFromItsStepUntilTheNext() {
-        ReportLayout small = new ReportLayout(1, 1, 1, 1, 1, 1, 1);
+        ReportLayout small = new ReportLayout(1, 1, 1, 1, 1, 1, 1, 1, 1);
         double[] v = new double[small.size()];
         Reports reports = new Reports();
         assertTrue(Reports.takenAt(0) && Reports.takenAt(30) && !Reports.takenAt(31));

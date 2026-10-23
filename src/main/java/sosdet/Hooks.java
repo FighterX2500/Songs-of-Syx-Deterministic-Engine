@@ -4,6 +4,9 @@ import java.util.Random;
 
 import game.GAME;
 import game.GAME.GameResource;
+import game.boosting.BValue;
+import game.faction.FACTIONS;
+import init.value.Value;
 import snake2d.util.rnd.RND;
 import sosdet.ai.AiApplier;
 import sosdet.ai.AiMode;
@@ -270,6 +273,33 @@ public final class Hooks {
 
     public static boolean reportB(Field f, int i) {
         return reportD(f, i) != 0;
+    }
+
+    /**
+     * In the world part: the player's value of a boost value, from the report. One the report has no slot for (a
+     * booster added after the report's layout was made) is read live and counted in {@link Stats#reportMisses}.
+     */
+    public static double reportBoost(BValue v) {
+        Session s = Engine.session();
+        int i = s.city().indexOf(Field.BOOST, v);
+        if (i >= 0) {
+            return s.reports.current().get(Field.BOOST, i);
+        }
+        s.reportMisses++;
+        return v.vGet(FACTIONS.player());
+    }
+
+    /** A faction value's value: the player's from the report in the world part, otherwise the game's own. */
+    public static <T> double reportValue(Value<T> v, T t) {
+        if (reportRead() && t == (Object) FACTIONS.player()) {
+            Session s = Engine.session();
+            int i = s.city().indexOf(Field.VALUE, v);
+            if (i >= 0) {
+                return s.reports.current().get(Field.VALUE, i);
+            }
+            s.reportMisses++;
+        }
+        return v.d.getD(t);
     }
 
     // ------------------------------------------------------------ RND: the two streams (B10)
