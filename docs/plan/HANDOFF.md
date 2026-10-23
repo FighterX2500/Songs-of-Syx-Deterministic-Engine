@@ -44,8 +44,7 @@ Smoke run Q34H: 3 copies identical to step 14,000, with 8 commands applied on ev
   - Both merged, with their `docs/hooks.md` and `docs/commands.md` rows.
 - **Smoke run D35B passed** (plan 0002 stage D, item 6), with the world now in the state hash.
 - **PR #14** (SOS-35) is open; SOS-34 is closed (PR #13 merged).
-- **V0.1 is packaged:** release notes `docs/release/V0.1.md`, `rig\play-v01.bat` starts the owner's session, `gradlew.bat releaseZip` makes `build
-elease\SOSDET-0.1.0.zip`.
+- **V0.1 is packaged:** release notes `docs/release/V0.1.md`, `rig\play-v01.bat` starts the owner's session, `gradlew.bat releaseZip` makes `build\release\SOSDET-0.1.0.zip`.
 - **Next:** the owner's 30-minute session; then fix what it finds, then stage E.
 
 **After V0.1:**
