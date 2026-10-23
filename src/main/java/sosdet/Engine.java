@@ -199,6 +199,7 @@ public final class Engine {
         }
         s.ownCity = true;
         s.hashes.worldOnly(true);
+        s.streams.traceWorldOnly = true;
     }
 
     /** Own-city mode: this PC's city reports taken since the last call, for the mod to send to every other PC. */

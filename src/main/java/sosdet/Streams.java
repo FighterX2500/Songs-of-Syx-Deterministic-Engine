@@ -31,6 +31,8 @@ final class Streams {
     private boolean reseed;
     /** Debugging: where every simulation draw comes from; null when off. */
     DrawTrace trace;
+    /** Own-city mode: the trace keeps the world part's draws only, as the hash counts them (each city's are its own). */
+    boolean traceWorldOnly;
 
     Random pick(Random simulation) {
         if (!inStep || cosmeticDepth > 0) {
@@ -49,7 +51,7 @@ final class Streams {
         if (worldPart) {
             worldDraws++;
         }
-        if (trace != null) {
+        if (trace != null && (worldPart || !traceWorldOnly)) {
             trace.draw();
         }
         return simulation;
