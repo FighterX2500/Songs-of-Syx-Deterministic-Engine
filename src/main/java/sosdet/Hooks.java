@@ -6,6 +6,7 @@ import game.GAME;
 import snake2d.util.rnd.RND;
 import sosdet.ai.AiApplier;
 import sosdet.ai.AiMode;
+import sosdet.game.WorldStatics;
 import sosdet.game.cmd.PlanStash;
 import sosdet.hash.HashLog;
 
@@ -269,6 +270,9 @@ public final class Hooks {
         s.plans().discard();
         s.worldPrompt = null; // a load builds a new view: no prompt is open
         s.worldPromptClose = null;
+        if (s.plans().inGame()) { // unit tests have no game to reset
+            WorldStatics.reset();
+        }
         s.afterLoad();
         s.loading = true;
         if (s.loadSeed != 0) {
@@ -439,6 +443,43 @@ public final class Hooks {
      */
     public static boolean placementPreview(boolean localPreview) {
         return Engine.session() == null && localPreview;
+    }
+
+    // ------------------------------------------------------------ world state between steps (SOS-35)
+
+    /**
+     * Whether a region's building levels read from this PC's upgrade draft ({@code RDLevelsTmp}): as vanilla, except
+     * that the simulation inside its step reads the region's real levels.
+     */
+    public static boolean localDraft(boolean draftOpen) {
+        Session s = Engine.session();
+        return draftOpen && (s == null || !s.streams.isSimulationThread());
+    }
+
+    /**
+     * The key of a cache the simulation reads that vanilla keys on the render frame: that frame without a session,
+     * the step ({@code GAME.updateI()}) with one, so the step recomputes it however often this PC drew.
+     */
+    public static int cacheKey(int renderFrame) {
+        return Engine.session() == null ? renderFrame : GAME.updateI();
+    }
+
+    /** This PC's developer launcher flag, as the simulation reads it: never set with a session. */
+    public static boolean developerFlag(boolean local) {
+        return Engine.session() == null && local;
+    }
+
+    /** A value that changes the simulation: this PC's without a session, the shared one with one. */
+    public static double simulationValue(double local, double shared) {
+        return Engine.session() == null ? local : shared;
+    }
+
+    /**
+     * True with a session: where vanilla's result depends on what this PC did before (a sum never cleared, a deal read
+     * from the UI's scratch copy), the game takes the route that depends on the shared state alone.
+     */
+    public static boolean sharedStateOnly() {
+        return Engine.session() != null;
     }
 
     /**
