@@ -18,12 +18,15 @@ import init.type.HTYPES;
 import settlement.main.SETT;
 import settlement.stats.POP;
 import settlement.stats.STATS;
+import settlement.stats.colls.StatsBattle.StatTraining;
 import settlement.stats.equip.EquipBattle;
 import snake2d.util.sets.LIST;
 import sosdet.report.CitySource;
 import sosdet.report.Field;
 import sosdet.report.ReportLayout;
 import world.army.AD;
+import world.army.WDIV;
+import world.region.RD;
 
 /**
  * Takes the player's city report from the live city (ADR 0005, SOS-38): each field as the game's own code reads it.
@@ -31,8 +34,10 @@ import world.army.AD;
  */
 public final class GameReport implements CitySource {
 
+    /** In {@link sosdet.report.Count} order. */
     private final ReportLayout layout = new ReportLayout(TR.ALL().size(), TRADE_TYPE.all.size(), RACES.all().size(),
-            HCLASSES.ALL().size(), GAME.ARMIES().player().divisions().size(), STATS.EQUIP().BATTLE_ALL().size());
+            HCLASSES.ALL().size(), GAME.ARMIES().player().divisions().size(), STATS.EQUIP().BATTLE_ALL().size(),
+            STATS.BATTLE().TRAINING_ALL.size());
 
     @Override
     public ReportLayout layout() {
@@ -115,6 +120,49 @@ public final class GameReport implements CitySource {
                 v[l.slot(Field.DIV_EQUIP, d, equips.get(e).indexMilitary())] = equips.get(e).target(div);
             }
         }
+        for (EquipBattle e : equips) {
+            int am = 0; // FWorth's count, which has no getter of its own
+            for (int d = 0; d < divs.size(); d++) {
+                am += divs.get(d).info.equipI(e) * divs.get(d).menNrOf();
+            }
+            v[l.slot(Field.EQUIP_IN_DIVS, e.indexMilitary())] = am;
+        }
+        fillGarrison(v, divs, equips);
+        v[l.slot(Field.INVADING, 0)] = bool(SETT.INVADOR().invading());
+        v[l.slot(Field.INVADING_POWER, 0)] = SETT.INVADOR().invadingPower();
+    }
+
+    /** The capital's garrison as the world sees it: the game's own list and its own getters. */
+    private void fillGarrison(double[] v, LIST<Div> divs, LIST<EquipBattle> equips) {
+        ReportLayout l = layout;
+        LIST<StatTraining> trainings = STATS.BATTLE().TRAINING_ALL;
+        for (int n = 0; n < divs.size(); n++) {
+            v[l.slot(Field.GARRISON, n)] = -1;
+        }
+        LIST<WDIV> garrison = RD.MILITARY().divisions(FACTIONS.player().capitolRegion());
+        for (int n = 0; n < garrison.size(); n++) {
+            WDIV w = garrison.get(n);
+            int d = divisionOf(divs, w);
+            v[l.slot(Field.GARRISON, n)] = d;
+            v[l.slot(Field.GAR_MEN, d)] = w.men();
+            v[l.slot(Field.GAR_EXPERIENCE, d)] = w.experience();
+            for (int t = 0; t < trainings.size(); t++) {
+                v[l.slot(Field.GAR_TRAINING, d, t)] = w.training(trainings.get(t));
+            }
+            for (EquipBattle e : equips) {
+                v[l.slot(Field.GAR_EQUIP, d, e.indexMilitary())] = w.equip(e);
+            }
+        }
+    }
+
+    /** A garrison division's index: its settings are its city division's own. */
+    private static int divisionOf(LIST<Div> divs, WDIV w) {
+        for (int d = 0; d < divs.size(); d++) {
+            if (divs.get(d).info == w.target()) {
+                return d;
+            }
+        }
+        throw new IllegalStateException("SOSDET: garrison division " + w.name() + " is not one of the city's");
     }
 
     private static double bool(boolean b) {

@@ -53,10 +53,11 @@ public final class CityReport {
 
     public byte[] toBytes() {
         ByteArrayOutputStream out = new ByteArrayOutputStream(64 + values.length * 2);
-        ByteBuffer head = ByteBuffer.allocate(4 + 4 + 4 + 8 + 8 + 4 + 6 * 4 + 4);
+        int[] sizes = layout.sizes();
+        ByteBuffer head = ByteBuffer.allocate(4 + 4 + 4 + 8 + 8 + 4 + 4 + sizes.length * 4 + 4);
         head.putInt(MAGIC).putInt(PROTOCOL_VERSION).putInt(faction).putLong(takenAt).putLong(appliesAt)
-                .putInt(Field.values().length);
-        for (int n : layout.sizes()) {
+                .putInt(Field.values().length).putInt(sizes.length);
+        for (int n : sizes) {
             head.putInt(n);
         }
         head.putInt(values.length);
@@ -90,7 +91,7 @@ public final class CityReport {
             long takenAt = b.getLong();
             long appliesAt = b.getLong();
             int fields = b.getInt();
-            int[] sizes = new int[6];
+            int[] sizes = new int[b.getInt()];
             for (int i = 0; i < sizes.length; i++) {
                 sizes[i] = b.getInt();
             }

@@ -58,8 +58,23 @@ public enum Field {
     MERCY(Shape.ONE),
     // A6: the city divisions that world divisions are made of
     DIV_RACE(Shape.DIVISION),
+    /** The men a division is set to have ({@code info.men()}). */
     DIV_MEN(Shape.DIVISION),
-    DIV_EQUIP(Shape.DIVISION_EQUIP);
+    /** The equipment a division is set to carry ({@code EquipBattle.target}). */
+    DIV_EQUIP(Shape.DIVISION_EQUIP),
+    // A5: the capital's garrison and invasions
+    /** The division index of each garrison division in the game's order, then -1. */
+    GARRISON(Shape.DIVISION),
+    /** The men a garrison division has now; 0 for a division not in the garrison, as are the next three. */
+    GAR_MEN(Shape.DIVISION),
+    GAR_EXPERIENCE(Shape.DIVISION),
+    GAR_TRAINING(Shape.DIVISION_TRAINING),
+    /** The equipment share a garrison division has, after the city's supplies. */
+    GAR_EQUIP(Shape.DIVISION_EQUIP),
+    /** The equipment the city's divisions are set to carry, men times kit, as {@code FWorth} counts it. */
+    EQUIP_IN_DIVS(Shape.EQUIP),
+    INVADING(Shape.ONE),
+    INVADING_POWER(Shape.ONE);
 
     public final Shape shape;
 

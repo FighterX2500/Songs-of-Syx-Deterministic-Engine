@@ -1,6 +1,17 @@
 diff -ru -U2 a/game/faction/FWorth.java b/game/faction/FWorth.java
 --- a/game/faction/FWorth.java	2026-06-25 10:49:36.000000000 +0500
-+++ b/game/faction/FWorth.java	2026-10-23 16:16:21.917923300 +0500
++++ b/game/faction/FWorth.java	2026-10-23 21:56:40.170311000 +0500
+@@ -58,8 +58,8 @@
+ 			}
+ 			for (int ei = 0; ei < STATS.EQUIP().BATTLE_ALL().size(); ei++) {
+ 				EquipBattle e = STATS.EQUIP().BATTLE_ALL().get(ei);
+-				int am = 0;
+-				for (int di = 0; di < GAME.ARMIES().player().divisions().size(); di++) {
++				int am = sosdet.Hooks.reportRead() ? sosdet.Hooks.reportI(sosdet.report.Field.EQUIP_IN_DIVS, e.indexMilitary()) : 0; // SOSDET: the world part reads the city's report (ADR 0005)
++				for (int di = 0; !sosdet.Hooks.reportRead() && di < GAME.ARMIES().player().divisions().size(); di++) {
+ 					Div d = GAME.ARMIES().player().divisions().get(di);
+ 					am += d.info.equipI(e)*d.menNrOf();
+ 				}
 @@ -151,7 +151,7 @@
  		if (fa instanceof FactionNPC) {
  			FactionNPC f = (FactionNPC) fa;
@@ -12,7 +23,7 @@ diff -ru -U2 a/game/faction/FWorth.java b/game/faction/FWorth.java
  	}
 diff -ru -U2 a/game/faction/diplomacy/DipWarPlayer.java b/game/faction/diplomacy/DipWarPlayer.java
 --- a/game/faction/diplomacy/DipWarPlayer.java	2026-04-04 17:39:24.000000000 +0500
-+++ b/game/faction/diplomacy/DipWarPlayer.java	2026-10-23 16:16:21.917923300 +0500
++++ b/game/faction/diplomacy/DipWarPlayer.java	2026-10-23 21:56:40.114809700 +0500
 @@ -71,7 +71,7 @@
  	
  	
@@ -33,7 +44,7 @@ diff -ru -U2 a/game/faction/diplomacy/DipWarPlayer.java b/game/faction/diplomacy
  		d.upI = GAME.updateI();
 diff -ru -U2 a/game/faction/diplomacy/deal/DealBools.java b/game/faction/diplomacy/deal/DealBools.java
 --- a/game/faction/diplomacy/deal/DealBools.java	2026-05-18 09:29:22.000000000 +0500
-+++ b/game/faction/diplomacy/deal/DealBools.java	2026-10-23 16:16:21.918954200 +0500
++++ b/game/faction/diplomacy/deal/DealBools.java	2026-10-23 21:56:40.116809200 +0500
 @@ -286,7 +286,7 @@
  //			if (DIP.get(a.f(), b.f()).minLoyalty > 0 && DIP.get(a.f(), b.f()).minLoyalty > ss.minLoyalty)
  //				return ¤¤pDowngrade;
@@ -45,7 +56,7 @@ diff -ru -U2 a/game/faction/diplomacy/deal/DealBools.java b/game/faction/diploma
  			}
 diff -ru -U2 a/game/faction/player/PTitles.java b/game/faction/player/PTitles.java
 --- a/game/faction/player/PTitles.java	2026-06-12 10:34:58.000000000 +0500
-+++ b/game/faction/player/PTitles.java	2026-10-23 16:16:21.918954200 +0500
++++ b/game/faction/player/PTitles.java	2026-10-23 21:56:40.119311400 +0500
 @@ -147,7 +147,7 @@
  
  			@Override
@@ -66,7 +77,7 @@ diff -ru -U2 a/game/faction/player/PTitles.java b/game/faction/player/PTitles.ja
  		
 diff -ru -U2 a/game/faction/player/emmi/Emissaries.java b/game/faction/player/emmi/Emissaries.java
 --- a/game/faction/player/emmi/Emissaries.java	2026-03-25 20:23:06.000000000 +0500
-+++ b/game/faction/player/emmi/Emissaries.java	2026-10-23 16:16:21.919956100 +0500
++++ b/game/faction/player/emmi/Emissaries.java	2026-10-23 21:56:40.121309400 +0500
 @@ -233,8 +233,8 @@
  	private int viewI = -1;
  	
@@ -80,7 +91,7 @@ diff -ru -U2 a/game/faction/player/emmi/Emissaries.java b/game/faction/player/em
  				am = Math.floor(am);
 diff -ru -U2 a/game/raiding/RaidingUtil.java b/game/raiding/RaidingUtil.java
 --- a/game/raiding/RaidingUtil.java	2026-02-06 15:19:52.000000000 +0500
-+++ b/game/raiding/RaidingUtil.java	2026-10-23 16:16:21.919956100 +0500
++++ b/game/raiding/RaidingUtil.java	2026-10-23 21:56:40.122310200 +0500
 @@ -125,7 +125,7 @@
  	
  	private void cache() {
@@ -92,7 +103,7 @@ diff -ru -U2 a/game/raiding/RaidingUtil.java b/game/raiding/RaidingUtil.java
  		if (cp == GAME.updateI())
 diff -ru -U2 a/util/data/DOUBLE_O.java b/util/data/DOUBLE_O.java
 --- a/util/data/DOUBLE_O.java	2024-05-08 10:24:34.000000000 +0500
-+++ b/util/data/DOUBLE_O.java	2026-10-23 16:16:21.923921600 +0500
++++ b/util/data/DOUBLE_O.java	2026-10-23 21:56:40.123810700 +0500
 @@ -28,8 +28,8 @@
  		
  		@Override
@@ -106,7 +117,7 @@ diff -ru -U2 a/util/data/DOUBLE_O.java b/util/data/DOUBLE_O.java
  			}
 diff -ru -U2 a/world/region/RDBoostCache.java b/world/region/RDBoostCache.java
 --- a/world/region/RDBoostCache.java	2024-11-22 17:46:48.000000000 +0500
-+++ b/world/region/RDBoostCache.java	2026-10-23 16:16:21.919956100 +0500
++++ b/world/region/RDBoostCache.java	2026-10-23 21:56:40.125310400 +0500
 @@ -29,6 +29,8 @@
  	public double get(Region reg) {
  		if (reg == null)
@@ -118,8 +129,35 @@ diff -ru -U2 a/world/region/RDBoostCache.java b/world/region/RDBoostCache.java
  			cache.set(reg, upI);
 diff -ru -U2 a/world/region/RDMilitaryGar.java b/world/region/RDMilitaryGar.java
 --- a/world/region/RDMilitaryGar.java	2026-07-01 08:35:36.000000000 +0500
-+++ b/world/region/RDMilitaryGar.java	2026-10-23 16:16:21.920954800 +0500
-@@ -428,7 +428,7 @@
++++ b/world/region/RDMilitaryGar.java	2026-10-23 21:56:40.169310100 +0500
+@@ -348,6 +348,7 @@
+ 	final static class WDivsCapitol implements LIST<WDIV>, SAVABLE {
+ 
+ 		private int updateTick = -1;
++		private boolean fromReport; // SOSDET: whether the list was made from the city's report (ADR 0005)
+ 		private final ArrayList<WDivCity> list = new ArrayList<WDivCity>(Config.battle().DIVISIONS_PER_ARMY);
+ 		private final WDivCity[] all = new WDivCity[Config.battle().DIVISIONS_PER_ARMY];
+ 		private static COLOR cols = COLOR.BLUE100.makeSaturated(0.5).shade(0.75);
+@@ -376,11 +377,17 @@
+ 
+ 		private void init() {
+ 
+-			if (updateTick == GAME.updateI())
++			if (updateTick == GAME.updateI() && fromReport == sosdet.Hooks.reportRead()) // SOSDET: one list per part (ADR 0005)
+ 				return;
+ 
+ 			updateTick = GAME.updateI();
++			fromReport = sosdet.Hooks.reportRead();
+ 			list.clear();
++			if (fromReport) { // SOSDET: the world part reads the city's report (ADR 0005)
++				for (int n = 0; n < GAME.ARMIES().player().divisions().size() && sosdet.Hooks.reportI(sosdet.report.Field.GARRISON, n) >= 0; n++)
++					list.add(all[sosdet.Hooks.reportI(sosdet.report.Field.GARRISON, n)]);
++				return;
++			}
+ 
+ 			for (int di = 0; di < GAME.ARMIES().player().divisions().size(); di++) {
+ 				Div d = GAME.ARMIES().player().ordered().get(di);
+@@ -428,7 +435,7 @@
  				suppliesNeeded = Alloc.ii(RESOURCES.ALL().size());
  			}
  			
@@ -128,9 +166,54 @@ diff -ru -U2 a/world/region/RDMilitaryGar.java b/world/region/RDMilitaryGar.java
  				upI = GAME.updateI();
  				
  				
+@@ -510,26 +517,32 @@
+ 
+ 			@Override
+ 			public int men() {
+-				return div().menNrOf();
++				return sosdet.Hooks.reportRead() ? sosdet.Hooks.reportI(sosdet.report.Field.GAR_MEN, div().indexArmy()) : div().menNrOf(); // SOSDET: the world part reads the city's report (ADR 0005)
+ 			}
+ 
+ 			@Override
+ 			public Race race() {
++				if (sosdet.Hooks.reportRead()) { // SOSDET: the world part reads the city's report (ADR 0005)
++					int ri = sosdet.Hooks.reportI(sosdet.report.Field.DIV_RACE, div().indexArmy());
++					return ri < 0 ? null : init.race.RACES.all().get(ri);
++				}
+ 				return div().info.race();
+ 			}
+ 
+ 			@Override
+ 			public int menTarget() {
+-				return div().menNrOf();
++				return sosdet.Hooks.reportRead() ? sosdet.Hooks.reportI(sosdet.report.Field.GAR_MEN, div().indexArmy()) : div().menNrOf(); // SOSDET: the world part reads the city's report (ADR 0005)
+ 			}
+ 
+ 			@Override
+ 			public double training(StatTraining tr) {
+-				return tr.stat.div().getD(div());
++				return sosdet.Hooks.reportRead() ? sosdet.Hooks.reportD(sosdet.report.Field.GAR_TRAINING, div().indexArmy(), tr.tIndex) : tr.stat.div().getD(div()); // SOSDET: the world part reads the city's report (ADR 0005)
+ 			}
+ 			
+ 			@Override
+ 			public double equip(EquipBattle e) {
++				if (sosdet.Hooks.reportRead()) // SOSDET: the world part reads the city's report (ADR 0005)
++					return sosdet.Hooks.reportD(sosdet.report.Field.GAR_EQUIP, div().indexArmy(), e.indexMilitary());
+ 				initSupplies();
+ 				double ee = (e.target(div())*supplies[e.indexMilitary()]);
+ 				ee = CLAMP.d(ee, 0, e.target(div()));
+@@ -538,7 +551,7 @@
+ 
+ 			@Override
+ 			public double experience() {
+-				return STATS.BATTLE().COMBAT_EXPERIENCE.div().getD(div());
++				return sosdet.Hooks.reportRead() ? sosdet.Hooks.reportD(sosdet.report.Field.GAR_EXPERIENCE, div().indexArmy()) : STATS.BATTLE().COMBAT_EXPERIENCE.div().getD(div()); // SOSDET: the world part reads the city's report (ADR 0005)
+ 			}
+ 
+ 			@Override
 diff -ru -U2 a/world/region/building/RDLevelsTmp.java b/world/region/building/RDLevelsTmp.java
 --- a/world/region/building/RDLevelsTmp.java	2026-06-17 10:48:06.000000000 +0500
-+++ b/world/region/building/RDLevelsTmp.java	2026-10-23 16:16:21.920954800 +0500
++++ b/world/region/building/RDLevelsTmp.java	2026-10-23 21:56:40.135308700 +0500
 @@ -29,7 +29,7 @@
  	}
  	
@@ -142,7 +225,7 @@ diff -ru -U2 a/world/region/building/RDLevelsTmp.java b/world/region/building/RD
  	}
 diff -ru -U2 a/world/region/pop/RDRaces.java b/world/region/pop/RDRaces.java
 --- a/world/region/pop/RDRaces.java	2026-06-08 10:30:50.000000000 +0500
-+++ b/world/region/pop/RDRaces.java	2026-10-23 16:16:21.921925400 +0500
++++ b/world/region/pop/RDRaces.java	2026-10-23 21:56:40.137809300 +0500
 @@ -341,11 +341,15 @@
  		}
  		
