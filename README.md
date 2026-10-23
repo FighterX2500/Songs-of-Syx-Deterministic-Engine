@@ -18,6 +18,7 @@ Until something starts an engine session, the game plays as vanilla.
 - How it is built and shipped: [ADR 0001](docs/decisions/0001-build-and-packaging.md)
 - Why it is a separate project: [ADR 0004](https://github.com/FighterX2500/SOSGSGMP/blob/main/docs/decisions/0004-engine-split.md) in SOSGSGMP
 - Code and ideas adapted from other projects: [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)
+- License: MIT for SOSDET's own code ([LICENSE](LICENSE)). The game source lines in `patches/` stay the game developer's, published with their permission; the mod is free and must not be sold.
 
 No game files or game source are ever committed. The build reads the game from `SOS_GAME_DIR`. Where the scenario suite keeps its test saves is settled in SOS-31.
 
