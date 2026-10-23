@@ -57,13 +57,15 @@ public final class Stats {
     public final long txnsApplied;
     public final long txnsSkipped;
     public final int txnsMaxInStep;
+    /** Inputs the city's reports carried to the world (ADR 0005 §2). */
+    public final long inputsSent;
 
     Stats(long step, long simulationDraws, long foreignDraws, long pathJobs, long pathNanos, long[] battleJobNanos, long timedSteps,
             double meanMs, double p50Ms, double p95Ms, double p99Ms, double p999Ms, double maxMs,
             long stepsOver100Ms, long stepsOver1S, AiMode aiMode, long aiApplied, long aiArtillery, int aiPending,
             long ordersApplied, long commandsApplied, long commandsSkipped, double agreedSpeed, long hashes, double hashMeanMs, double hashMaxMs, long hashesCompared, long hashesMissed,
             long reports, long reportNanos, int reportBytes, int reportMaxBytes, long reportMisses,
-            int reportBoosts, int reportValues, long txnsApplied, long txnsSkipped, int txnsMaxInStep) {
+            int reportBoosts, int reportValues, long txnsApplied, long txnsSkipped, int txnsMaxInStep, long inputsSent) {
         this.step = step;
         this.simulationDraws = simulationDraws;
         this.foreignDraws = foreignDraws;
@@ -102,6 +104,7 @@ public final class Stats {
         this.txnsApplied = txnsApplied;
         this.txnsSkipped = txnsSkipped;
         this.txnsMaxInStep = txnsMaxInStep;
+        this.inputsSent = inputsSent;
     }
 
     /** Time in a battle job, in ms per timed step: 0 orders, 1 centres, 2 trajectories, 3 general, 4 status. */
@@ -129,12 +132,12 @@ public final class Stats {
                         + "\"maxMs\":%.1f,\"over100Ms\":%d,\"over1S\":%d,\"ai\":\"%s\",\"aiApplied\":%d,\"aiArtillery\":%d,\"aiPending\":%d,"
                         + "\"ordersApplied\":%d,\"commandsApplied\":%d,\"commandsSkipped\":%d,\"agreedSpeed\":%.2f,\"hashes\":%d,\"hashMeanMs\":%.3f,\"hashMaxMs\":%.1f,\"hashesCompared\":%d,\"hashesMissed\":%d,"
                         + "\"reports\":%d,\"reportMeanMs\":%.3f,\"reportBytes\":%d,\"reportMaxBytes\":%d,\"reportMisses\":%d,\"reportBoosts\":%d,\"reportValues\":%d,"
-                        + "\"txnsApplied\":%d,\"txnsSkipped\":%d,\"txnsMaxInStep\":%d}",
+                        + "\"txnsApplied\":%d,\"txnsSkipped\":%d,\"txnsMaxInStep\":%d,\"inputsSent\":%d}",
                 step, simulationDraws, foreignDraws, pathJobs, timedSteps == 0 ? 0 : pathNanos / 1e6 / timedSteps,
                 msPerStep(java.util.Arrays.stream(battleJobNanos).sum()), eachMsPerStep(),
                 timedSteps, meanMs, p50Ms, p95Ms, p99Ms, p999Ms, maxMs, stepsOver100Ms, stepsOver1S, aiMode, aiApplied, aiArtillery,
                 aiPending, ordersApplied, commandsApplied, commandsSkipped, agreedSpeed, hashes, hashMeanMs, hashMaxMs, hashesCompared, hashesMissed,
                 reports, reportMeanMs, reportBytes, reportMaxBytes, reportMisses, reportBoosts,
-                reportValues, txnsApplied, txnsSkipped, txnsMaxInStep);
+                reportValues, txnsApplied, txnsSkipped, txnsMaxInStep, inputsSent);
     }
 }

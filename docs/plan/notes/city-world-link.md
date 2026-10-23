@@ -143,6 +143,40 @@ A value the report has no slot for is read live and counted in `Stats.reportMiss
 - Caches keyed on `GAME.updateI()`: both parts run at the same `updateI`, so a cache filled in the city part can serve the world part. The garrison list keeps one cache per part; the boost compound's cache is never reached in the world part. Others may show up as desyncs in follower mode (milestone 4).
 - Size: a typical report is a few KB. The worst case, 120 garrison divisions with fractional training and equipment plus several hundred fractional boost and faction values, is about 20 KB every 30 steps.
 
+## Milestone 3 as built
+
+**The step.** Part −1 applies the city's commands. The city part runs the city. The world part starts with `stepPart(WORLD)`: it takes a report when one is due, reseeds the world stream, applies the reports now due (and their inputs), then applies the world commands of the step, then runs the world. The step's end runs the city tail: the transactions the world part queued, then the hash.
+
+**Two directions.**
+- *World → city: transactions* (`sosdet.txn`). In the world part, a hook queues a `Txn` instead of changing the city. Its ID is `step << 20 | seq`, and the city keeps the last ID it applied, so a repeat changes nothing. The tail makes the same game call outside the world part, so the game's own code changes the city as in vanilla. A transaction that changes something the world part reads (credits, queued and promised goods, the next invasion's ref) also goes in the ledger, which adds it to the report's value until a report taken after it applies.
+- *City → world: report inputs* (`sosdet.report.Input`). In the city part (and part −1 and the tail), a hook adds an input instead of changing the world. Inputs travel in the next report and apply in the world part, in order, when it does, about 30 to 60 steps later. Supplies sent (`SentSupplies`) and world marks set (`EventMarks`) are read by the city as sent until then.
+
+| Codes | Direction | What crosses |
+| --- | --- | --- |
+| C1, C2, C3 | transaction | goods bought, delivered, sold; credits in and out (M3.1) |
+| C1 two-phase | transaction, then input | supplies for a division sent out or a recruit: the tail takes what the stockpiles have, and that goes back as a supply input (M3.3) |
+| C4 | transaction | a soldier out of a world division comes home or retires; the relation table's writes (M3.2) |
+| B1, B2 | input | a soldier joins their world division, with their save data; goods into an army's supplies (M3.2) |
+| C5 | transaction | a world battle's survivors and experience for the capitol garrison (M3.4) |
+| C6 | transaction | an invasion of the city with the ref the world gives it, its cancel, a war's end calling off that faction's invasions (M3.4) |
+| B4 | input | an invasion's outcome for its listeners (raiders), the army stats, the vassal stance after a lost invasion, a world division's survivors of a battle in the city (M3.4) |
+| B6 | input | a scripted event's world marks on regions, factions and royals, and its world actions: permanent boosts, opinions, region population, raids (M3.5) |
+
+**World commands in the world part (M3.3).** Commands 7000 up to the step prompts' answer (world actions and world battle decisions), 8000–8999 (diplomacy, emissaries), and the raider payments now wait for the world part, so they change the world where the world changes. The city's commands still apply at part −1.
+
+**Scripted events are the city's (M3.5).** Milestone 2 ran `EVENT_HANDLER` in the world part. It now runs in the city part, as the scan proposed: its conditions read the live city, its people selection marks the city's people, and a choice applies at part −1. What it does to the world crosses as inputs. The event booster `_BOOST` reads the running event and the selected shares (`EVENT_CURRENT`, `EVENT_CLASS_RACE`, `EVENT_DIV`) from the report in the world part, and its cache keeps the two parts' values apart. That closes milestone 2's `_BOOST` gap.
+
+**Known gaps:**
+- *Draws in the tail.* The tail's own draws (`randomReachable`, a garrison's experience roll) use the stream state the world part left. They are the same on every PC, but they count in `drawsSinceLoad`, so the world-only draw count of milestone 4 must leave them out.
+- *A soldier with nowhere to enter.* When the city has no reachable entry, a returning soldier goes back to their division as an input, and tries again later. Their kit stays in the army's supplies.
+- *Relation order.* A soldier joining their division writes the relation table's death (army) record in the world part's next report, after the city has already moved on. The table ends the same; the order of its entries can differ from vanilla's.
+- *Faction totals.* `ADSupply.current().faction()` doesn't add the supplies the city has sent but the world hasn't applied yet. Only the per-army reads do.
+- *An army slot reused.* Supplies sent to an army that is disbanded, and whose slot a new army takes in the same report window, are dropped by the iteration check; a new army with the same iteration would get them.
+- *Moved targets.* A world division that moved or was disbanded before its survivors arrive loses them; a royal whose court changed loses an event mark.
+- *World marks read live.* Event code that reads a world mark directly (a requirement on a region or faction, not through `EContext`) sees the world's value, not the one the city has sent.
+- *Dormant paths.* `WDivCity.generate` and `resolve(Induvidual[])` in the world part are reachable only through Engage, which the engine refuses. The step prompts (the declare-war prompt in `WArmyState`) stay at part −1.
+- *Not checked against the game.* Goods moved by diplomacy deals, `_INVASION`'s raid from an input, and the vanilla bug that registers an invasion's listeners with the next ref (kept as it is).
+
 ## Estimates
 
 In working time (a day ≈ 6–8 h). The earlier "about 3 days for all of stage E" came before the scan, and was too low.

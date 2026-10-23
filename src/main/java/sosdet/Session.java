@@ -100,6 +100,8 @@ final class Session {
     final java.util.ArrayList<Input> cityInputs = new java.util.ArrayList<>();
     /** The supplies among them, which the city reads as sent until the world applies them. */
     final SentSupplies sentSupplies = new SentSupplies();
+    /** Inputs the city's reports carried (ADR 0005 §2). */
+    long inputsSent;
     /** World marks the city's scripted events set that its reports have yet to apply (B6). */
     final sosdet.report.EventMarks eventMarks = new sosdet.report.EventMarks();
     /** The world part's changes to the city, applied in the step's city tail (ADR 0005 §3). */
@@ -160,6 +162,7 @@ final class Session {
         double[] v = new double[c.layout().size()];
         c.fill(v);
         CityReport r = new CityReport(c.layout(), c.faction(), step, appliesAt, v, cityInputs);
+        inputsSent += cityInputs.size();
         cityInputs.clear();
         reportBytes = r.toBytes().length;
         reportMaxBytes = Math.max(reportMaxBytes, reportBytes);
@@ -253,6 +256,7 @@ final class Session {
         reportNanos = 0;
         reportMaxBytes = 0;
         reportMisses = 0;
+        inputsSent = 0;
         txns.resetStats();
         java.util.Arrays.fill(jobs.nanos, 0);
     }

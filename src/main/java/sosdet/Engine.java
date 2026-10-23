@@ -338,7 +338,7 @@ public final class Engine {
                 s.hashes.compared(), s.hashes.missed(), s.reportsTaken, s.reportNanos, s.reportBytes, s.reportMaxBytes,
                 s.reportMisses, s.city == null ? 0 : s.city.layout().count(Shape.BOOST),
                 s.city == null ? 0 : s.city.layout().count(Shape.VALUE), s.txns.applied(), s.txns.skipped(),
-                s.txns.maxInStep());
+                s.txns.maxInStep(), s.inputsSent);
     }
 
     public static void resetStats() {
