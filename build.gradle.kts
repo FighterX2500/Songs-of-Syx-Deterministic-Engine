@@ -516,8 +516,67 @@ val staticDrawCheck by tasks.registering {
     }
 }
 
+// ---------------------------------------------------------------- menu safety (SOS-38)
+//
+// The game's script scan initializes every class in the mod jar while it builds the main menu (SOS-25), before any
+// game exists. A shipped game class whose static initializer reaches a game singleton that is still null there
+// (TIME, SETT, STATS and the like) crashes the menu (M2B: RDEdicts read TIME.secondsPerDay). Same call graph as
+// staticDrawCheck: constructor and static calls are followed, virtual dispatch is not. Config is not listed: it is
+// read before the menu (Invasion's initializer reads Config.battle() and has shipped since SOS-35).
+
+val menuUnsafe = listOf(
+    "game/time/TIME.", "game/GAME.", "settlement/main/SETT.", "settlement/stats/STATS.", "world/WORLD.",
+    "game/faction/FACTIONS.", "world/region/RD.", "world/army/AD.", "game/boosting/BOOSTABLES.", "init/race/RACES.",
+    "init/type/HCLASSES.", "init/value/GVALUES.", "game/tourism/TOURISM.", "init/type/CRIMES.", "init/trade/TR.",
+)
+
+val menuSafetyCheck by tasks.registering {
+    group = "verification"
+    description = "Fails if a shipped game class's static initializer reaches a game singleton that is null at the main menu."
+    dependsOn(compileGamePatches)
+    inputs.file(gameJar())
+    inputs.dir(gamePatchClassesDir)
+    val report = layout.buildDirectory.file("menu-safety.txt")
+    outputs.file(report)
+    doLast {
+        val methods = HashMap<String, MethodCalls>()
+        ZipFile(gameJar()).use { jar ->
+            jar.entries().asSequence().filter { it.name.endsWith(".class") }.forEach { entry ->
+                readMethodCalls(jar.getInputStream(entry).use { it.readBytes() })?.let { methods.putAll(it) }
+            }
+        }
+        val shippedOwners = ArrayList<String>()
+        classesUnder(gamePatchClassesDir.get().asFile).values.forEach { file ->
+            val shipped = readMethodCalls(file.readBytes()) ?: return@forEach
+            val owner = shipped.keys.first().substringBefore('.')
+            methods.keys.removeIf { it.substringBefore('.') == owner }
+            methods.putAll(shipped)
+            shippedOwners.add(owner)
+        }
+        // the shortest known chain from a method to a menu-unsafe call (outside the singleton's own class), or null
+        val chains = HashMap<String, List<String>?>()
+        fun chain(key: String, seen: MutableSet<String>): List<String>? {
+            if (chains.containsKey(key)) return chains[key]
+            val m = methods[key] ?: return null
+            if (!seen.add(key)) return null
+            val self = key.substringBefore('.') + "."
+            val direct = m.calls.firstOrNull { c -> menuUnsafe.any { c.startsWith(it) && !self.startsWith(it) } }
+            val result = if (direct != null) listOf(key, direct)
+                else m.calls.firstNotNullOfOrNull { c -> chain(c, seen)?.let { listOf(key) + it } }
+            chains[key] = result
+            return result
+        }
+        val found = shippedOwners.sorted().mapNotNull { o -> chain("$o.<clinit> ()V", HashSet())?.let { o to it } }
+        report.get().asFile.writeText("Shipped static initializers that reach a menu-unsafe singleton: ${found.size}\n" +
+            found.joinToString("") { (c, path) -> "$c\n    " + path.joinToString("\n    -> ") + "\n" })
+        if (found.isNotEmpty()) {
+            throw GradleException("SOSDET: shipped static initializers crash the main menu (see ${report.get().asFile}): ${found.map { it.first }}")
+        }
+    }
+}
+
 tasks.check {
-    dependsOn(verifyUntouched, fullRebuildCheck, staticDrawCheck)
+    dependsOn(verifyUntouched, fullRebuildCheck, staticDrawCheck, menuSafetyCheck)
 }
 
 // ---------------------------------------------------------------- the test rig (rig/; never in a release)

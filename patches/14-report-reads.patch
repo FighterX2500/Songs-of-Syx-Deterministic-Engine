@@ -1,0 +1,189 @@
+diff -ru -U2 a/game/faction/player/PCredits.java b/game/faction/player/PCredits.java
+--- a/game/faction/player/PCredits.java	2026-06-03 12:16:02.000000000 +0500
++++ b/game/faction/player/PCredits.java	2026-10-23 21:35:02.032939400 +0500
+@@ -171,6 +171,20 @@
+ 		super.clear();
+ 	}
+ 	
++	@Override
++	public double credits() {
++		if (sosdet.Hooks.reportRead()) // SOSDET: the world part reads the city's report (ADR 0005)
++			return sosdet.Hooks.reportD(sosdet.report.Field.CREDITS, 0);
++		return super.credits();
++	}
++	
++	@Override
++	public double getD() {
++		if (sosdet.Hooks.reportRead()) // SOSDET: the world part reads the city's report (ADR 0005)
++			return sosdet.Hooks.reportD(sosdet.report.Field.CREDITS, 0);
++		return super.getD();
++	}
++	
+ 	public LIST<CredHistory> all(){
+ 		return all;
+ 	}
+diff -ru -U2 a/game/faction/royalty/opinion/OpsOther.java b/game/faction/royalty/opinion/OpsOther.java
+--- a/game/faction/royalty/opinion/OpsOther.java	2026-05-13 08:36:34.000000000 +0500
++++ b/game/faction/royalty/opinion/OpsOther.java	2026-10-23 21:35:02.034941600 +0500
+@@ -138,7 +138,7 @@
+ 			public double pget(Royalty roy) {
+ 				double c = 0;
+ 				Race ra = roy.induvidual.race();
+-				c += STATS.MULTIPLIERS().PROSECUTION.value(HCLASSES.CITIZEN(), ra, 0);
++				c += sosdet.Hooks.reportRead() ? sosdet.Hooks.reportD(sosdet.report.Field.PROSECUTION, ra.index()) : STATS.MULTIPLIERS().PROSECUTION.value(HCLASSES.CITIZEN(), ra, 0); // SOSDET: the world part reads the city's report (ADR 0005)
+ 				c += 20*POP.tot(HCLASSES.SLAVE(),ra)/(1+POP.tot(null, null));
+ 				RDRace rr = RD.RACE(ra);
+ 				if (rr != null) {
+@@ -147,7 +147,7 @@
+ 					c += RD.RACES().edicts.massacre.realm(rr).getD(FACTIONS.player());
+ 				}
+ 				
+-				if (!TOURISM.permit(ra)) {
++				if (!(sosdet.Hooks.reportRead() ? sosdet.Hooks.reportB(sosdet.report.Field.TOURISM_PERMIT, ra.index()) : TOURISM.permit(ra))) { // SOSDET: the world part reads the city's report (ADR 0005)
+ 					c += 0.1;
+ 				}
+ 				
+diff -ru -U2 a/game/faction/royalty/opinion/OpsStance.java b/game/faction/royalty/opinion/OpsStance.java
+--- a/game/faction/royalty/opinion/OpsStance.java	2026-06-24 16:26:36.000000000 +0500
++++ b/game/faction/royalty/opinion/OpsStance.java	2026-10-23 21:35:02.037941900 +0500
+@@ -153,7 +153,7 @@
+ 			}
+ 			@Override
+ 			public double pget(Royalty roy) {
+-				double d = AD.stats().mercy().getD(FACTIONS.player());
++				double d = sosdet.Hooks.reportRead() ? sosdet.Hooks.reportD(sosdet.report.Field.MERCY, 0) : AD.stats().mercy().getD(FACTIONS.player()); // SOSDET: the world part reads the city's report (ADR 0005)
+ 				if (d > 0)
+ 					return CLAMP.d(d, 0, 1);
+ 				return 0;
+@@ -173,7 +173,7 @@
+ 
+ 			@Override
+ 			public double pget(Royalty roy) {
+-				double d = -AD.stats().mercy().getD(FACTIONS.player());
++				double d = -(sosdet.Hooks.reportRead() ? sosdet.Hooks.reportD(sosdet.report.Field.MERCY, 0) : AD.stats().mercy().getD(FACTIONS.player())); // SOSDET: the world part reads the city's report (ADR 0005)
+ 				if (d > 0)
+ 					return CLAMP.d(d, 0, 1);
+ 				return 0;
+diff -ru -U2 a/game/raiding/Raider.java b/game/raiding/Raider.java
+--- a/game/raiding/Raider.java	2026-04-09 19:01:40.000000000 +0500
++++ b/game/raiding/Raider.java	2026-10-23 21:35:02.043440700 +0500
+@@ -97,7 +97,7 @@
+ 	public boolean hasInterrest() {
+ 		if (!SETT.ROOMS().BARRACKS.get(0).reqs.passes(FACTIONS.player()))
+ 			return false;
+-		if ( STATS.POP().POP.data(null).get(null) < 200)
++		if ((sosdet.Hooks.reportRead() ? sosdet.Hooks.reportI(sosdet.report.Field.POP_TOTAL, 0) : STATS.POP().POP.data(null).get(null)) < 200) // SOSDET: the world part reads the city's report (ADR 0005)
+ 			return false;
+ 		return GAME.raiders().util.ransomCurrent() > worth;
+ 	}
+diff -ru -U2 a/settlement/entry/EntryPoints.java b/settlement/entry/EntryPoints.java
+--- a/settlement/entry/EntryPoints.java	2026-02-03 11:48:06.000000000 +0500
++++ b/settlement/entry/EntryPoints.java	2026-10-23 21:35:02.044941000 +0500
+@@ -344,6 +344,8 @@
+ 	
+ 	
+ 	public boolean hasAny() {
++		if (sosdet.Hooks.reportRead()) // SOSDET: the world part reads the city's report (ADR 0005)
++			return sosdet.Hooks.reportB(sosdet.report.Field.ENTRY_POINTS, 0);
+ 		return reachable.size() > 0;
+ 	}
+ 	
+diff -ru -U2 a/settlement/entry/SENTRY.java b/settlement/entry/SENTRY.java
+--- a/settlement/entry/SENTRY.java	2026-05-24 09:27:36.000000000 +0500
++++ b/settlement/entry/SENTRY.java	2026-10-23 21:35:02.046941300 +0500
+@@ -99,6 +99,8 @@
+ 	}
+ 	
+ 	public boolean isClosed() {
++		if (sosdet.Hooks.reportRead()) // SOSDET: the world part reads the city's report (ADR 0005)
++			return sosdet.Hooks.reportB(sosdet.report.Field.ENTRY_CLOSED, 0);
+ 		return updater.isClosed() || SETT.INVADOR().invading();
+ 	}
+ 	
+diff -ru -U2 a/settlement/stats/POP.java b/settlement/stats/POP.java
+--- a/settlement/stats/POP.java	2026-06-18 08:35:38.000000000 +0500
++++ b/settlement/stats/POP.java	2026-10-23 21:35:02.048939800 +0500
+@@ -23,6 +23,8 @@
+ 	}
+ 	
+ 	public static int physical(HCLASS c, Race r) {
++		if (sosdet.Hooks.reportRead()) // SOSDET: the world part reads the city's report (ADR 0005)
++			return sosdet.Hooks.reportI(sosdet.report.Field.PHYSICAL, c == null ? 0 : c.index()+1, r == null ? 0 : r.index()+1);
+ 		int pop = pop(c, r);
+ 		if (c == null || c == HCLASSES.CITIZEN()) {
+ 			pop += STATS.POP().pop(r, HTYPES.CHILD());
+@@ -49,6 +51,8 @@
+ 	
+ 	public static int next(HCLASS c, Race r) {
+ 		int pop = tot(c, r);
++		if (sosdet.Hooks.reportRead()) // SOSDET: the world part reads the city's report (ADR 0005)
++			return pop + sosdet.Hooks.reportI(sosdet.report.Field.NEXT_EXTRA, c == null ? 0 : c.index()+1, r == null ? 0 : r.index()+1);
+ 		if (c == null || c == HCLASSES.CITIZEN()) {
+ 			pop += STATS.POP().POP.type().get(HTYPE_RACE.get(r, HTYPES.PARENT()));
+ 			pop += SETT.ENTRY().onTheirWay(r, HTYPES.SUBJECT());
+diff -ru -U2 a/world/army/ADStats.java b/world/army/ADStats.java
+--- a/world/army/ADStats.java	2026-06-25 10:46:44.000000000 +0500
++++ b/world/army/ADStats.java	2026-10-23 21:35:02.050938500 +0500
+@@ -211,7 +211,7 @@
+ 		ADStats.this.losses.f.inc(a, losses);
+ 		double men = 1+AD.men(null).faction(a) + losses;
+ 		if (a == FACTIONS.player())
+-			men += STATS.BATTLE().DIV.stat().data().get(null);
++			men += sosdet.Hooks.reportRead() ? sosdet.Hooks.reportI(sosdet.report.Field.CITY_SOLDIERS, 0) : STATS.BATTLE().DIV.stat().data().get(null); // SOSDET: the world part reads the city's report (ADR 0005)
+ 		
+ 		if (victory) {
+ 			double d = 0.25*(double)kills/men;
+diff -ru -U2 a/world/army/WDivStored.java b/world/army/WDivStored.java
+--- a/world/army/WDivStored.java	2026-06-24 13:04:24.000000000 +0500
++++ b/world/army/WDivStored.java	2026-10-23 21:35:02.052941000 +0500
+@@ -76,7 +76,7 @@
+ 	
+ 	@Override
+ 	public double equip(EquipBattle e) {
+-		return e.target(div())*AD.supplies().get(e).amountValue(army())/e.equipMax;
++		return (sosdet.Hooks.reportRead() ? sosdet.Hooks.reportI(sosdet.report.Field.DIV_EQUIP, index, e.indexMilitary()) : e.target(div()))*AD.supplies().get(e).amountValue(army())/e.equipMax; // SOSDET: the world part reads the city's report (ADR 0005)
+ 	}
+ 	
+ 	private Div div() {
+@@ -90,11 +90,17 @@
+ 
+ 	@Override
+ 	public Race race() {
++		if (sosdet.Hooks.reportRead()) { // SOSDET: the world part reads the city's report (ADR 0005)
++			int ri = sosdet.Hooks.reportI(sosdet.report.Field.DIV_RACE, index);
++			return ri < 0 ? null : init.race.RACES.all().get(ri);
++		}
+ 		return div().info.race();
+ 	}
+ 
+ 	@Override
+ 	public int menTarget() {
++		if (sosdet.Hooks.reportRead()) // SOSDET: the world part reads the city's report (ADR 0005)
++			return sosdet.Hooks.reportI(sosdet.report.Field.DIV_MEN, index);
+ 		return GAME.ARMIES().player().divisions().get(index).info.men();
+ 	}
+ 
+diff -ru -U2 a/world/region/pop/RDEdicts.java b/world/region/pop/RDEdicts.java
+--- a/world/region/pop/RDEdicts.java	2025-09-22 07:59:34.000000000 +0500
++++ b/world/region/pop/RDEdicts.java	2026-10-23 21:35:02.072441900 +0500
+@@ -75,7 +75,7 @@
+ 
+ 				@Override
+ 				public double get(Region t) {
+-					return STATS.MULTIPLIERS().PROSECUTION.value(HCLASSES.CITIZEN(), r.race, 0);
++					return sosdet.Hooks.reportRead() ? sosdet.Hooks.reportD(sosdet.report.Field.PROSECUTION, r.race.index()) : STATS.MULTIPLIERS().PROSECUTION.value(HCLASSES.CITIZEN(), r.race, 0); // SOSDET: the world part reads the city's report (ADR 0005)
+ 				}
+ 			
+ 			}.add(r.loyalty.target);
+diff -ru -U2 a/world/region/pop/RDRace.java b/world/region/pop/RDRace.java
+--- a/world/region/pop/RDRace.java	2026-06-08 10:31:04.000000000 +0500
++++ b/world/region/pop/RDRace.java	2026-10-23 21:35:02.062939600 +0500
+@@ -191,7 +191,7 @@
+ 						
+ 						@Override
+ 						protected double get(Region reg) {
+-							return CLAMP.d(STATS.BATTLE().WAR.data(HCLASSES.CITIZEN()).getD(race, 0), 0, 1);
++							return CLAMP.d(sosdet.Hooks.reportRead() ? sosdet.Hooks.reportD(sosdet.report.Field.WAR_STANDING, race.index()) : STATS.BATTLE().WAR.data(HCLASSES.CITIZEN()).getD(race, 0), 0, 1); // SOSDET: the world part reads the city's report (ADR 0005)
+ 						}
+ 					}.add(target);
+ 					

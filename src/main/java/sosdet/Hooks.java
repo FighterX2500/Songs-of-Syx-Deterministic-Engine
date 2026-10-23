@@ -11,6 +11,8 @@ import sosdet.game.StepParts;
 import sosdet.game.WorldStatics;
 import sosdet.game.cmd.PlanStash;
 import sosdet.hash.HashLog;
+import sosdet.report.Field;
+import sosdet.report.Reports;
 
 /**
  * What the engine's patches to the game call (docs/hooks.md). Each hook asks one question or reports one
@@ -163,15 +165,27 @@ public final class Hooks {
     // ------------------------------------------------------------ the step's two parts (ADR 0005, SOS-38)
 
     /**
-     * The step enters a part: 0 the city part, 1 the world part. The world part takes a random stream of its own,
-     * seeded from the seed and the step, so the city's draws on this PC never shift the world's.
+     * The step enters a part: 0 the city part, 1 the world part. Between them, every 30 steps, the city part takes its
+     * report for 30 steps later; the world part then reads the report due now (the first one is taken at once). The
+     * world part takes a random stream of its own, seeded from the seed and the step, so the city's draws on this PC
+     * never shift the world's.
      */
     public static void stepPart(int part) {
         Session s = Engine.session();
-        s.part = part;
         if (part == StepParts.WORLD_PART) {
-            s.streams.reseed(s.worldSeed(s.clock.step()));
+            long step = s.clock.step();
+            if (s.reports.current() == null) {
+                s.takeReport(step, step);
+            }
+            if (Reports.takenAt(step)) {
+                s.takeReport(step, step + Reports.DELAY);
+            }
+            s.reports.applyDue(step);
+            s.part = part;
+            s.streams.reseed(s.worldSeed(step));
+            return;
         }
+        s.part = part;
     }
 
     /** True when the resource updates in this part of the step. */
@@ -225,6 +239,37 @@ public final class Hooks {
         }
         s.playerUpdateAcc -= period;
         return period;
+    }
+
+    // ------------------------------------------------------------ the city report (ADR 0005 §2, SOS-38)
+
+    /**
+     * True in a session's world part: a city value it reads comes from the city's report, not the live city. Outside
+     * the step (the UI) and in the city part the live city is read.
+     */
+    public static boolean reportRead() {
+        Session s = Engine.session();
+        return s != null && s.part == StepParts.WORLD_PART;
+    }
+
+    public static double reportD(Field f, int i) {
+        return Engine.session().reports.current().get(f, i);
+    }
+
+    public static double reportD(Field f, int i, int j) {
+        return Engine.session().reports.current().get(f, i, j);
+    }
+
+    public static int reportI(Field f, int i) {
+        return (int) reportD(f, i);
+    }
+
+    public static int reportI(Field f, int i, int j) {
+        return (int) reportD(f, i, j);
+    }
+
+    public static boolean reportB(Field f, int i) {
+        return reportD(f, i) != 0;
     }
 
     // ------------------------------------------------------------ RND: the two streams (B10)

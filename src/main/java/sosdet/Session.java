@@ -5,9 +5,13 @@ import sosdet.ai.AiLog;
 import sosdet.ai.AiMode;
 import sosdet.game.GameAi;
 import sosdet.game.GameHash;
+import sosdet.game.GameReport;
 import sosdet.game.cmd.PlanStash;
 import sosdet.hash.HashLog;
 import sosdet.hash.StateSource;
+import sosdet.report.CityReport;
+import sosdet.report.CitySource;
+import sosdet.report.Reports;
 
 /** The state of one deterministic run: from {@link Engine#begin()} to {@link Engine#end()}. */
 final class Session {
@@ -76,6 +80,14 @@ final class Session {
     int part = -1;
     /** Game time since the player's own faction update last ran in the city part; 0 after every load. */
     double playerUpdateAcc;
+    /** The player's city reports, which the world part reads instead of the live city (ADR 0005 §2). */
+    final Reports reports = new Reports();
+    /** Where the reports come from: the game, made at the first report; tests put in their own. */
+    CitySource city;
+    long reportsTaken;
+    long reportNanos;
+    int reportBytes;
+    int reportMaxBytes;
 
     /** The seed of the random stream at a step: the same on every PC, whatever happened before. */
     int stepSeed(long step) {
@@ -95,6 +107,7 @@ final class Session {
      */
     void afterLoad() {
         playerUpdateAcc = 0;
+        reports.clear(); // every PC reloads, so every PC takes its load report from the loaded city
         if (resync != null) {
             Resync r = resync;
             resync = null;
@@ -111,6 +124,30 @@ final class Session {
         int interval = hashes.interval();
         hashes = new HashLog();
         hashes.every(interval);
+    }
+
+    /**
+     * The city part ends: a report of the city as it is now, which the world part reads from {@code appliesAt}. Its
+     * bytes are counted, as another PC would receive them.
+     */
+    void takeReport(long step, long appliesAt) {
+        long start = System.nanoTime();
+        CitySource c = city();
+        double[] v = new double[c.layout().size()];
+        c.fill(v);
+        CityReport r = new CityReport(c.layout(), c.faction(), step, appliesAt, v);
+        reportBytes = r.toBytes().length;
+        reportMaxBytes = Math.max(reportMaxBytes, reportBytes);
+        reports.stamp(r);
+        reportsTaken++;
+        reportNanos += System.nanoTime() - start;
+    }
+
+    CitySource city() {
+        if (city == null) {
+            city = new GameReport();
+        }
+        return city;
     }
 
     AiLog ai() {
@@ -166,6 +203,9 @@ final class Session {
         streams.resetCounts();
         pathJobs = 0;
         pathNanos = 0;
+        reportsTaken = 0;
+        reportNanos = 0;
+        reportMaxBytes = 0;
         java.util.Arrays.fill(jobs.nanos, 0);
     }
 }

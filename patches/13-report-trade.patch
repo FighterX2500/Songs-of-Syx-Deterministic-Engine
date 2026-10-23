@@ -1,0 +1,218 @@
+diff -ru -U2 a/init/resources/RESOURCE.java b/init/resources/RESOURCE.java
+--- a/init/resources/RESOURCE.java	2026-06-24 12:45:50.000000000 +0500
++++ b/init/resources/RESOURCE.java	2026-10-23 21:27:48.303433000 +0500
+@@ -535,6 +535,8 @@
+ 	}
+ 	
+ 	public int owned() {
++		if (sosdet.Hooks.reportRead()) // SOSDET: the world part reads the city's report (ADR 0005)
++			return sosdet.Hooks.reportI(sosdet.report.Field.HELD, tr().index()) - FACTIONS.player().seller(tr()).promised().get(null);
+ 		int stocked = SETT.ROOMS().STOCKPILE.tally().amountReservable.get(this);
+ 		stocked += SETT.ROOMS().EXPORT.tally.amount.get(this);
+ 		stocked += SETT.ROOMS().IMPORT.tally.amount.get(this);
+diff -ru -U2 a/settlement/trade/PBuyer.java b/settlement/trade/PBuyer.java
+--- a/settlement/trade/PBuyer.java	2026-06-25 09:47:24.000000000 +0500
++++ b/settlement/trade/PBuyer.java	2026-10-23 21:27:48.296499200 +0500
+@@ -167,10 +167,10 @@
+ 		if (SETT.ENTRY().isClosed())
+ 			return 0;
+ 		
+-		if (FACTIONS.player().credits().getD()-price < minMoney.get())
++		if (FACTIONS.player().credits().getD()-price < (sosdet.Hooks.reportRead() ? sosdet.Hooks.reportI(sosdet.report.Field.BUY_MIN_MONEY, tradable.index()) : minMoney.get())) // SOSDET: the world part reads the city's report (ADR 0005)
+ 			return 0;
+ 		
+-		if (price/amount >= priceCapsI.get())
++		if (price/amount >= (sosdet.Hooks.reportRead() ? sosdet.Hooks.reportI(sosdet.report.Field.BUY_PRICE_CAP, tradable.index()) : priceCapsI.get()))
+ 			return 0;
+ 		if (GAME.player().credits().credits() < price) {
+ 			return 0;
+diff -ru -U2 a/settlement/trade/PBuyerRes.java b/settlement/trade/PBuyerRes.java
+--- a/settlement/trade/PBuyerRes.java	2026-06-25 09:48:26.000000000 +0500
++++ b/settlement/trade/PBuyerRes.java	2026-10-23 21:27:48.299434000 +0500
+@@ -41,6 +41,8 @@
+ 	
+ 	@Override
+ 	public int attempting(TRADE_TYPE t) {
++		if (sosdet.Hooks.reportRead()) // SOSDET: the world part reads the city's report (ADR 0005)
++			return sosdet.Hooks.reportI(sosdet.report.Field.INCOMING, tradable.index(), t == null ? 0 : t.index + 1);
+ 		return SETT.HALFENTS().caravans.deliveries(res.t, t);
+ 	}
+ 	
+@@ -51,10 +53,14 @@
+ 	}
+ 	
+ 	public int capacityTotal() {
++		if (sosdet.Hooks.reportRead()) // SOSDET: the world part reads the city's report (ADR 0005)
++			return sosdet.Hooks.reportI(sosdet.report.Field.IMPORT_CAP, tradable.index());
+ 		return SETT.ROOMS().IMPORT.tally.capacity.get(res.t);
+ 	}
+ 
+ 	public int capacityUsed() {
++		if (sosdet.Hooks.reportRead()) // SOSDET: the world part reads the city's report (ADR 0005)
++			return capacityTotal()-sosdet.Hooks.reportI(sosdet.report.Field.IMPORT_FREE, tradable.index());
+ 		return SETT.ROOMS().IMPORT.tally.capacity.get(res.t)-SETT.ROOMS().IMPORT.tally.spaceForTribute(res.t); 
+ 	}
+ 	
+@@ -77,6 +83,8 @@
+ 	}
+ 	
+ 	public int owned() {
++		if (sosdet.Hooks.reportRead()) // SOSDET: the world part reads the city's report (ADR 0005)
++			return sosdet.Hooks.reportI(sosdet.report.Field.STOCK_KEPT, tradable.index())+capacityUsed() + incoming.get(null);
+ 		return (int) SETT.ROOMS().STOCKPILE.tally().spaceReserved.total(res.t)+SETT.ROOMS().STOCKPILE.tally().amount.total(res.t)+capacityUsed() + incoming.get(null);
+ 	}
+ 	
+@@ -94,7 +102,7 @@
+ 		
+ 		double p = 1.0-(double)incoming.get(null)/capacityTotal();
+ 		
+-		double d = limit.getD();
++		double d = sosdet.Hooks.reportRead() ? sosdet.Hooks.reportD(sosdet.report.Field.BUY_LIMIT_SHARE, tradable.index()) : limit.getD(); // SOSDET: the world part reads the city's report (ADR 0005)
+ 		if (d == 1.0)
+ 			return super.buyPriority(amount, price)*p;
+ 		if (d == 0)
+@@ -103,7 +111,7 @@
+ 		if (capacityTotal() <= 0)
+ 			return -1;
+ 		
+-		int sspace = (int) SETT.ROOMS().STOCKPILE.tally().space.total(res.t);
++		int sspace = sosdet.Hooks.reportRead() ? sosdet.Hooks.reportI(sosdet.report.Field.STOCK_SPACE, tradable.index()) : (int) SETT.ROOMS().STOCKPILE.tally().space.total(res.t); // SOSDET: the world part reads the city's report (ADR 0005)
+ 		int samount = owned();
+ 		
+ 		double dd =  (double)(samount+amount)/sspace;
+diff -ru -U2 a/settlement/trade/PBuyerSlave.java b/settlement/trade/PBuyerSlave.java
+--- a/settlement/trade/PBuyerSlave.java	2026-06-25 09:52:44.000000000 +0500
++++ b/settlement/trade/PBuyerSlave.java	2026-10-23 21:27:48.302439200 +0500
+@@ -42,6 +42,8 @@
+ 	
+ 	@Override
+ 	public int attempting(TRADE_TYPE t) {
++		if (sosdet.Hooks.reportRead()) // SOSDET: the world part reads the city's report (ADR 0005)
++			return sosdet.Hooks.reportI(sosdet.report.Field.INCOMING, tradable.index(), t == null ? 0 : t.index + 1);
+ 		return SETT.ENTRY().onTheirWay(slave.t, HTYPES.PRISONER());
+ 	}
+ 	
+@@ -149,7 +151,7 @@
+ 	}
+ 
+ 	private Type type() {
+-		PUNISHMENT p = CRIMES.WAR().stat().punishment(HCLASSES.OTHER(), slave.t).punish;
++		PUNISHMENT p = sosdet.Hooks.reportRead() ? CRIME_PUNISHMENTS.ALL().get(sosdet.Hooks.reportI(sosdet.report.Field.SLAVE_PUNISH, slave.t.index())) : CRIMES.WAR().stat().punishment(HCLASSES.OTHER(), slave.t).punish; // SOSDET: the world part reads the city's report (ADR 0005)
+ 		if (p == CRIME_PUNISHMENTS.BANISH() || p == CRIME_PUNISHMENTS.PARDON()) {
+ 			return tfree;
+ 		}else if (p == CRIME_PUNISHMENTS.ENSLAVE()) {
+@@ -159,6 +161,23 @@
+ 		}
+ 	}
+ 	
++	// SOSDET: the world part reads these from the city's report (ADR 0005)
++	private int limitNow() {
++		return sosdet.Hooks.reportRead() ? sosdet.Hooks.reportI(sosdet.report.Field.BUY_LIMIT, tradable.index()) : limit.get();
++	}
++	
++	private static int stockadeUsed() {
++		return sosdet.Hooks.reportRead() ? sosdet.Hooks.reportI(sosdet.report.Field.STOCKADE_USED, 0) : SETT.ROOMS().STOCKADE.punishUsed();
++	}
++	
++	private static int stockadeTotal() {
++		return sosdet.Hooks.reportRead() ? sosdet.Hooks.reportI(sosdet.report.Field.STOCKADE_TOTAL, 0) : SETT.ROOMS().STOCKADE.punishTotal();
++	}
++	
++	private static int warCriminals() {
++		return sosdet.Hooks.reportRead() ? sosdet.Hooks.reportI(sosdet.report.Field.WAR_CRIMINALS, 0) : CRIMES.WAR().stat().criminals(null);
++	}
++	
+ 	private interface Type {
+ 		
+ 		public abstract int capacity();
+@@ -175,7 +194,7 @@
+ 		
+ 		@Override
+ 		public int capacity() {
+-			return limit.get();
++			return limitNow();
+ 		}
+ 
+ 		@Override
+@@ -194,7 +213,7 @@
+ 		
+ 		@Override
+ 		public int capacity() {
+-			return limit.get();
++			return limitNow();
+ 		}
+ 
+ 		@Override
+@@ -208,12 +227,12 @@
+ 		
+ 		@Override
+ 		public int capacityUsed() {
+-			return toBeAdded().get(null) + toBeStored().get(null) + SETT.ROOMS().STOCKADE.punishUsed();
++			return toBeAdded().get(null) + toBeStored().get(null) + stockadeUsed();
+ 		}
+ 		
+ 		@Override
+ 		public int capacity() {
+-			return Math.min(SETT.ROOMS().STOCKADE.punishTotal()-(Math.max(CRIMES.WAR().stat().criminals(null), SETT.ROOMS().STOCKADE.punishUsed())+incoming.get(null)), limit.get());
++			return Math.min(stockadeTotal()-(Math.max(warCriminals(), stockadeUsed())+incoming.get(null)), limitNow());
+ 		}
+ 
+ 		@Override
+diff -ru -U2 a/settlement/trade/PSeller.java b/settlement/trade/PSeller.java
+--- a/settlement/trade/PSeller.java	2026-06-05 09:20:50.000000000 +0500
++++ b/settlement/trade/PSeller.java	2026-10-23 21:27:48.293848700 +0500
+@@ -133,6 +133,8 @@
+ 	
+ 	@Override
+ 	public int removePrice(int amount) {
++		if (sosdet.Hooks.reportRead()) // SOSDET: the world part reads the city's report (ADR 0005)
++			return sosdet.Hooks.reportI(sosdet.report.Field.SELL_PRICE_CAP, type.index())*amount;
+ 		return priceCapsI.get()*amount;
+ 	}
+ 
+diff -ru -U2 a/settlement/trade/PSellerRes.java b/settlement/trade/PSellerRes.java
+--- a/settlement/trade/PSellerRes.java	2026-06-25 09:23:16.000000000 +0500
++++ b/settlement/trade/PSellerRes.java	2026-10-23 21:27:48.295857100 +0500
+@@ -49,10 +49,10 @@
+ 
+ 	@Override
+ 	public double prio() {
+-		double cap = SETT.ROOMS().EXPORT.tally.capacity.get(res.t);
++		double cap = sosdet.Hooks.reportRead() ? sosdet.Hooks.reportI(sosdet.report.Field.EXPORT_CAP, type.index()) : SETT.ROOMS().EXPORT.tally.capacity.get(res.t); // SOSDET: the world part reads the city's report (ADR 0005)
+ 		if (cap <= 0)
+ 			return 0;
+-		double ava = SETT.ROOMS().EXPORT.tally.amount.get(res.t) - promised.get(null);
++		double ava = (sosdet.Hooks.reportRead() ? sosdet.Hooks.reportI(sosdet.report.Field.EXPORT_AMOUNT, type.index()) : SETT.ROOMS().EXPORT.tally.amount.get(res.t)) - promised.get(null); // SOSDET: the world part reads the city's report (ADR 0005)
+ 		if (ava <= 0)
+ 			return 0;
+ 
+@@ -63,7 +63,7 @@
+ 	public int removeMax() {
+ 		if (SETT.ENTRY().isClosed())
+ 			return 0;
+-		return SETT.ROOMS().EXPORT.tally.amount.get(res.t) - promised.get(null);
++		return (sosdet.Hooks.reportRead() ? sosdet.Hooks.reportI(sosdet.report.Field.EXPORT_AMOUNT, type.index()) : SETT.ROOMS().EXPORT.tally.amount.get(res.t)) - promised.get(null); // SOSDET: the world part reads the city's report (ADR 0005)
+ 	}
+ 
+ 	@Override
+diff -ru -U2 a/settlement/trade/PSellerSlave.java b/settlement/trade/PSellerSlave.java
+--- a/settlement/trade/PSellerSlave.java	2026-06-05 09:21:10.000000000 +0500
++++ b/settlement/trade/PSellerSlave.java	2026-10-23 21:27:48.296499200 +0500
+@@ -72,7 +72,7 @@
+ 	
+ 	@Override
+ 	public int playerOwned() {
+-		int stocked = STATS.POP().pop(slave.t, HTYPES.SLAVE()); 
++		int stocked = sosdet.Hooks.reportRead() ? sosdet.Hooks.reportI(sosdet.report.Field.SLAVES, slave.t.index()) : STATS.POP().pop(slave.t, HTYPES.SLAVE()); // SOSDET: the world part reads the city's report (ADR 0005)
+ 		stocked -= outbound.get(null);
+ 		return stocked;
+ 	}
+@@ -141,7 +141,7 @@
+ 	public int removeMax() {
+ 		if (SETT.ENTRY().isClosed())
+ 			return 0;
+-		int mustHave = ENTETIES.MAX- limit.get();
++		int mustHave = ENTETIES.MAX- (sosdet.Hooks.reportRead() ? sosdet.Hooks.reportI(sosdet.report.Field.SELL_LIMIT, type.index()) : limit.get()); // SOSDET: the world part reads the city's report (ADR 0005)
+ 		int am = playerOwned()-outbound.get(null)-mustHave;
+ 		return Math.max(am, 0);
+ 	}
