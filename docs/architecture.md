@@ -92,7 +92,8 @@ Each line is a class of cause found in practice. The patch named holds the fix; 
 | | Caches filled by whoever calls first; caches keyed on the render frame (`VIEW.RI()`) | `67`, `98` |
 | | Drafts the UI refills every frame and the step reads (`DIP.TMP`, `RDLevelsTmp`) | `98` |
 | | A formation's unused tail carrying this PC's move preview | `66` |
-| **Static state surviving a load** | Garrison supply sums, a static world generator | `98` (`WorldStatics`) |
+| **Tick order** | Commands applied before the tick counted up, so they read a tick-keyed cache only this PC's UI had filled | `10` |
+| **Static state surviving a load** | Garrison supply sums, a static world generator, static tick keys (race target, employee list) | `98` (`WorldStatics`) |
 | **A player action applied at once on one PC** | Every UI setter, tool and dialog | commands: `95`, `96-*`, `97`, `99` |
 | **Iteration and maths** | Object-keyed `HashMap` order; `Math` against `StrictMath` | rules only: [determinism.md](../.claude/rules/determinism.md) |
 
