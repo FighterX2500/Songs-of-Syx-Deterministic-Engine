@@ -49,6 +49,7 @@ import sosdet.rig.act.MilitaryActions;
 import sosdet.rig.act.NameActions;
 import sosdet.rig.act.RoomActions;
 import sosdet.rig.act.ToolActions;
+import sosdet.rig.act.WorldActions;
 import sosdet.hash.Desync;
 import view.main.VIEW;
 
@@ -634,7 +635,7 @@ public final class Rig implements SCRIPT {
         /** The UI call behind one player action, queued to run after this frame's update, outside the step. */
         private void playerAction(String[] a) {
             if (!(LawActions.run(a) || RoomActions.run(a) || EmploymentActions.run(a) || MilitaryActions.run(a)
-                    || NameActions.run(a) || ToolActions.run(a))) {
+                    || NameActions.run(a) || ToolActions.run(a) || WorldActions.run(a))) {
                 throw new IllegalArgumentException("SOSDET rig: no player action " + a[0]);
             }
         }
