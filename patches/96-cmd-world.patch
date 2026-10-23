@@ -1,0 +1,451 @@
+diff -ru -U2 a/game/event/engine/EventMessage.java b/game/event/engine/EventMessage.java
+--- a/game/event/engine/EventMessage.java	2026-01-29 11:18:42.000000000 +0500
++++ b/game/event/engine/EventMessage.java	2026-10-23 16:21:40.418312700 +0500
+@@ -116,6 +116,10 @@
+ 					}
+ 					if (!c.request.passes(FACTIONS.player()))
+ 						return;
++					if (sosdet.game.cmd.Events.eventChoice(e, k, iteration)) { // SOSDET: the event's choice is a command (ADR 0002)
++						super.clickA();
++						return;
++					}
+ 					GAME.EVENT().choiceSelect(e, k);
+ 					
+ 					
+diff -ru -U2 a/game/events/killer/Messenger.java b/game/events/killer/Messenger.java
+--- a/game/events/killer/Messenger.java	2026-04-06 08:55:42.000000000 +0500
++++ b/game/events/killer/Messenger.java	2026-10-23 16:21:40.419301800 +0500
+@@ -178,7 +178,8 @@
+ 			section.addRelBody(16, DIR.S, new GButt.ButtPanel(Dic.¤¤Yes) {
+ 				@Override
+ 				protected void clickA() {
+-					if (murders == GAME.events().killer.murders() && GAME.events().killer.theKiller() != null && GAME.events().killer.theKiller().id() == killer)
++					if (murders == GAME.events().killer.murders() && GAME.events().killer.theKiller() != null && GAME.events().killer.theKiller().id() == killer
++							&& !sosdet.game.cmd.Events.killerSuspect(killer, murders, supsect)) // SOSDET: naming the suspect is a command; EventKiller is not menu-safe, so the hook is here (ADR 0002)
+ 						GAME.events().killer.setSuspect(supsect);
+ 					close();
+ 				}
+diff -ru -U2 a/game/faction/npc/NPCRequest.java b/game/faction/npc/NPCRequest.java
+--- a/game/faction/npc/NPCRequest.java	2026-03-27 09:38:32.000000000 +0500
++++ b/game/faction/npc/NPCRequest.java	2026-10-23 16:21:40.417311100 +0500
+@@ -36,6 +36,8 @@
+ 	}
+ 	
+ 	public void expire() {
++		if (sosdet.game.cmd.Diplomacy.requestExpire(f)) // SOSDET: declining a faction's message is a command (ADR 0002)
++			return;
+ 		
+ 		if (has) {
+ 			has = false;
+diff -ru -U2 a/game/faction/player/emmi/EmiType.java b/game/faction/player/emmi/EmiType.java
+--- a/game/faction/player/emmi/EmiType.java	2026-06-17 10:48:06.000000000 +0500
++++ b/game/faction/player/emmi/EmiType.java	2026-10-23 16:21:40.417311100 +0500
+@@ -80,6 +80,8 @@
+ 	
+ 	@Override
+ 	public void set(T t, int i) {
++		if (sosdet.game.cmd.Diplomacy.emissaries(this, t, i)) // SOSDET: placing emissaries is a command (ADR 0002)
++			return;
+ 		int index = index(t);
+ 		set(index, i);
+ 	}
+diff -ru -U2 a/game/raiding/MessAlly.java b/game/raiding/MessAlly.java
+--- a/game/raiding/MessAlly.java	2026-03-25 10:31:18.000000000 +0500
++++ b/game/raiding/MessAlly.java	2026-10-23 16:21:40.419301800 +0500
+@@ -107,7 +107,8 @@
+ 				protected void clickA() {
+ 					if (!requested && demand.canRespond()) {
+ 						requested = true;
+-						GAME.raiders().current.setAllyFight();
++						if (!sosdet.game.cmd.Events.raiderAllyHelp(GAME.raiders().current.current())) // SOSDET: asking the ally's help is a command (ADR 0002)
++							GAME.raiders().current.setAllyFight();
+ 					}
+ 				};
+ 				
+diff -ru -U2 a/game/raiding/MessDemand.java b/game/raiding/MessDemand.java
+--- a/game/raiding/MessDemand.java	2026-06-24 16:30:46.000000000 +0500
++++ b/game/raiding/MessDemand.java	2026-10-23 16:21:40.418312700 +0500
+@@ -268,6 +268,11 @@
+ 					@Override
+ 					protected void clickA() {
+ 						if (canPay()) {
++							if (sosdet.game.cmd.Events.raiderPay(raider, credits, resources)) { // SOSDET: paying the tribute is a command (ADR 0002)
++								payed = true;
++								VIEW.messages().hide();
++								return;
++							}
+ 							payed = true;
+ 							pay();
+ 							GAME.raiders().current.clear();
+diff -ru -U2 a/view/ui/diplomacy/UIDipMessAction.java b/view/ui/diplomacy/UIDipMessAction.java
+--- a/view/ui/diplomacy/UIDipMessAction.java	2026-03-27 07:00:34.000000000 +0500
++++ b/view/ui/diplomacy/UIDipMessAction.java	2026-10-23 16:21:40.416301200 +0500
+@@ -67,8 +67,10 @@
+ 			@Override
+ 			protected void clickA() {
+ 				accepted = true;
+-				ROPINION.GIFTS().makeDeal(intro.faction(), happiness);
+-				accept(intro.faction(), of.faction());
++				if (!sosdet.game.cmd.Diplomacy.vassalRelease(UIDipMessAction.this, intro.faction(), happiness)) { // SOSDET: granting the request is a command (ADR 0002)
++					ROPINION.GIFTS().makeDeal(intro.faction(), happiness);
++					accept(intro.faction(), of.faction());
++				}
+ 				close();
+ 				aa = 1;
+ 			}
+diff -ru -U2 a/view/ui/diplomacy/UIDipMessDeal.java b/view/ui/diplomacy/UIDipMessDeal.java
+--- a/view/ui/diplomacy/UIDipMessDeal.java	2026-04-04 08:52:02.000000000 +0500
++++ b/view/ui/diplomacy/UIDipMessDeal.java	2026-10-23 16:21:40.416301200 +0500
+@@ -126,6 +126,11 @@
+ 				Deal d = DIP.TMP();
+ 				if (pactive() != null)
+ 					return;
++				if (sosdet.game.cmd.Diplomacy.dealProposal(d, happiness)) { // SOSDET: accepting, with every term as last checked, is a command (ADR 0002)
++					aa = 1;
++					VIEW.messages().hide();
++					return;
++				}
+ 				
+ 				d.execute(false);
+ 				save.f().request.clear();
+diff -ru -U2 a/view/world/ui/army/Army.java b/view/world/ui/army/Army.java
+--- a/view/world/ui/army/Army.java	2026-06-29 10:12:32.000000000 +0500
++++ b/view/world/ui/army/Army.java	2026-10-23 16:21:40.408676700 +0500
+@@ -66,6 +66,8 @@
+ 		@Override
+ 		public void bannerISet(int bi) {
+ 			super.bannerISet(bi);
++			if (army != null && sosdet.game.cmd.World.divsBanner(army, selected, bi)) // SOSDET: the selected divisions' banner is one command (ADR 0002)
++				return;
+ 			for (int i = 0; i < selected.length; i++) {
+ 				if (selected[i]) {
+ 					if (army == null || army.divs() == null || army.divs().get(i) == null)
+@@ -87,6 +89,8 @@
+ 	private final StringInputSprite name = new StringInputSprite(20, UI.FONT().H2) {
+ 		@Override
+ 		protected void change() {
++			if (sosdet.game.cmd.World.armyName(army, text())) // SOSDET: the army's name, whole after each edit, is a command (ADR 0002)
++				return;
+ 			army.name.clear().add(text());
+ 		};
+ 	};
+@@ -455,6 +459,11 @@
+ 					
+ 					@Override
+ 					protected void pick(WArmy a) {
++						if (sosdet.game.cmd.World.divsReassign(army, selected, a)) { // SOSDET: moving the selection is one command (ADR 0002)
++							Arrays.fill(selected, false);
++							VIEW.inters().popup.close();
++							return;
++						}
+ 						int off = 0;
+ 						for (int i = 0; i < selected.length && i < army.divs().size(); i++) {
+ 							if (selected[i]) {
+@@ -501,6 +510,12 @@
+ 					
+ 					@Override
+ 					public void exe() {
++						if (army != null && sosdet.game.cmd.World.divsReassign(army, selected, null)) { // SOSDET: disbanding the selection is one command (ADR 0002)
++							Arrays.fill(selected, false);
++							clicked = null;
++							dragging = false;
++							return;
++						}
+ 						int off = 0;
+ 						for (int i = 0; i < selected.length; i++) {
+ 							if (selected[i]) {
+diff -ru -U2 a/view/world/ui/army/ArmyRecruit.java b/view/world/ui/army/ArmyRecruit.java
+--- a/view/world/ui/army/ArmyRecruit.java	2026-06-18 09:35:18.000000000 +0500
++++ b/view/world/ui/army/ArmyRecruit.java	2026-10-23 16:21:40.409710800 +0500
+@@ -92,6 +92,8 @@
+ 				
+ 				@Override
+ 				protected void clickA() {
++					if (Army.army.divs().canAdd() && sosdet.game.cmd.World.recruit(Army.army, editor.div())) // SOSDET: recruiting a division is a command (ADR 0002)
++						return;
+ 					if (Army.army.divs().canAdd()) {
+ 						WDivRegional d = AD.regional().create(editor.div().race(), (double)editor.div().men()/Config.battle().MEN_PER_DIVISION, Army.army);
+ 						d.bannerSet(editor.div().bannerI());
+diff -ru -U2 a/view/world/ui/army/List.java b/view/world/ui/army/List.java
+--- a/view/world/ui/army/List.java	2025-09-12 16:12:40.000000000 +0500
++++ b/view/world/ui/army/List.java	2026-10-23 16:21:40.411259900 +0500
+@@ -205,6 +205,8 @@
+ 			protected void clickA() {
+ 				last().add(List.this, true);
+ 				if (FACTIONS.player().armies().all().size() == 0) {
++					if (sosdet.game.cmd.World.armyCreate(-1, -1)) // SOSDET: the first army is a command; the step draws its tile (ADR 0002)
++						return;
+ 					COORDINATE c = WORLD.PATH().rnd(FACTIONS.player().capitolRegion());
+ 					int tx = c.x();
+ 					int ty = c.y();
+@@ -353,6 +355,10 @@
+ 
+ 		@Override
+ 		public void place(int tx, int ty) {
++			if (sosdet.game.cmd.World.armyCreate(tx, ty)) { // SOSDET: a new army is a command (ADR 0002)
++				VIEW.world().tools.place(null);
++				return;
++			}
+ 			WArmy e = WORLD.ENTITIES().armies.create(tx, ty, FACTIONS.player());
+ 			VIEW.world().tools.place(null);
+ 			VIEW.world().UI.armies.openList(e);
+diff -ru -U2 a/view/world/ui/army/UIMerenaries.java b/view/world/ui/army/UIMerenaries.java
+--- a/view/world/ui/army/UIMerenaries.java	2025-10-02 07:39:30.000000000 +0500
++++ b/view/world/ui/army/UIMerenaries.java	2026-10-23 16:21:40.409710800 +0500
+@@ -107,7 +107,7 @@
+ 				for (Card c : active) {
+ 					if (c.selectedIs() && Army.army.divs().canAdd()) {
+ 						int cost = AD.mercenaries().signingCost(c.ii);
+-						if (cost < FACTIONS.player().credits().credits()) {
++						if (cost < FACTIONS.player().credits().credits() && !sosdet.game.cmd.World.mercHire(Army.army, c.ii)) { // SOSDET: hiring a band is a command (ADR 0002)
+ 							c.div.reassign(Army.army);
+ 							GAME.player().credits().inc(-AD.mercenaries().signingCost(c.ii), CTYPE.MERCINARIES);
+ 						}
+diff -ru -U2 a/view/world/ui/faction/UIDiplomacy.java b/view/world/ui/faction/UIDiplomacy.java
+--- a/view/world/ui/faction/UIDiplomacy.java	2026-04-04 13:01:16.000000000 +0500
++++ b/view/world/ui/faction/UIDiplomacy.java	2026-10-23 16:21:40.415311600 +0500
+@@ -97,8 +97,12 @@
+ 				
+ 				@Override
+ 				protected void clickA() {
+-					if (deal.canBeAccepted() || S.get().developer)
+-						deal.execute(true);
++					if (deal.canBeAccepted() || S.get().developer) {
++						if (!sosdet.game.cmd.Diplomacy.dealAccept(deal)) // SOSDET: the committed deal, every term, is a command; never its draft (ADR 0002)
++							deal.execute(true);
++						else if (deal.npc.npc().isActive())
++							deal.setFactionAndClear(deal.npc.npc(), deal.clearDeal); // SOSDET: the draft resets, as after execute (ADR 0002)
++					}
+ 					
+ 					super.clickA();
+ 				}
+diff -ru -U2 a/view/world/ui/region/PlayBuildingsPop.java b/view/world/ui/region/PlayBuildingsPop.java
+--- a/view/world/ui/region/PlayBuildingsPop.java	2026-01-09 10:12:06.000000000 +0500
++++ b/view/world/ui/region/PlayBuildingsPop.java	2026-10-23 16:21:40.414267000 +0500
+@@ -635,6 +635,10 @@
+ 			b = new GButt.ButtPanel(Dic.¤¤Accept) {
+ 				@Override
+ 				protected void clickA() {
++					if (sosdet.game.cmd.World.regionBuildings(g.get())) { // SOSDET: the drafted levels are one command; the draft stays local (ADR 0002)
++						VIEW.inters().section.close();
++						return;
++					}
+ 					if (g.get().faction() == FACTIONS.player())
+ 						FACTIONS.player().credits().inc(-RD.BUILDINGS().tmp().cost(), CTYPE.CONSTRUCTION);
+ 					RD.BUILDINGS().tmp().accept();
+diff -ru -U2 a/view/world/ui/region/PlayInfo.java b/view/world/ui/region/PlayInfo.java
+--- a/view/world/ui/region/PlayInfo.java	2026-06-10 10:16:30.000000000 +0500
++++ b/view/world/ui/region/PlayInfo.java	2026-10-23 16:21:40.412297800 +0500
+@@ -243,6 +243,8 @@
+ 				@Override
+ 				public void exe() {
+ 					
++					if (sosdet.game.cmd.World.regionAutonomy(g.get())) // SOSDET: releasing the region is a command (ADR 0002)
++						return;
+ 					RD.setFaction(g.get(), null, true);
+ 					FactionNPC f = FACTIONS.activateNext(g.get(), null, true);
+ 					f.generate(RD.RACES().get(FACTIONS.player().race()), true);
+@@ -274,6 +276,8 @@
+ 				
+ 				@Override
+ 				public void exe() {
++					if (sosdet.game.cmd.World.regionAbandon(g.get())) // SOSDET: abandoning the region is a command (ADR 0002)
++						return;
+ 					RD.setFaction(g.get(), null, true);
+ 				}
+ 			};
+@@ -290,6 +294,8 @@
+ 		StringInputSprite name = new StringInputSprite(RegionInfo.nameSize, UI.FONT().H2) {
+ 			@Override
+ 			protected void change() {
++				if (sosdet.game.cmd.World.regionName(g.get(), text())) // SOSDET: the region's name, whole after each edit, is a command (ADR 0002)
++					return;
+ 				g.get().info.name().clear().add(text());
+ 			};
+ 		};
+diff -ru -U2 a/view/world/ui/region/PlayOutput.java b/view/world/ui/region/PlayOutput.java
+--- a/view/world/ui/region/PlayOutput.java	2026-06-08 10:14:56.000000000 +0500
++++ b/view/world/ui/region/PlayOutput.java	2026-10-23 16:21:40.413301600 +0500
+@@ -49,7 +49,8 @@
+ 				
+ 				@Override
+ 				protected void clickA() {
+-					RD.OUTPUT().squeze(g.get());
++					if (!sosdet.game.cmd.World.regionSqueeze(g.get())) // SOSDET: squeezing the region is a command (ADR 0002)
++						RD.OUTPUT().squeze(g.get());
+ 					super.clickA();
+ 				}
+ 				
+diff -ru -U2 a/view/world/ui/region/PlayPop.java b/view/world/ui/region/PlayPop.java
+--- a/view/world/ui/region/PlayPop.java	2026-05-24 15:25:38.000000000 +0500
++++ b/view/world/ui/region/PlayPop.java	2026-10-23 16:21:40.413301600 +0500
+@@ -307,6 +307,8 @@
+ 						int i = (e.toggled(r).get(g.get())+1)&1;
+ 						if (i == 1)
+ 							massacreAsked = VIEW.renderSecond();
++						if (sosdet.game.cmd.World.regionEdict(g.get(), r, e, i)) // SOSDET: a race edict is a command (ADR 0002)
++							return;
+ 						for (RDRaceEdict ee : RD.RACES().edicts.all)
+ 							ee.toggled(r).set(g.get(), 0);
+ 						e.toggled(r).set(g.get(), i);
+diff -ru -U2 a/view/world/ui/region/PlayToolAttack.java b/view/world/ui/region/PlayToolAttack.java
+--- a/view/world/ui/region/PlayToolAttack.java	2025-09-12 16:10:30.000000000 +0500
++++ b/view/world/ui/region/PlayToolAttack.java	2026-10-23 16:21:40.415311600 +0500
+@@ -39,6 +39,8 @@
+ 
+ 		@Override
+ 		public void exe() {
++			if (sosdet.game.cmd.World.regionAttack(reg, aa, true)) // SOSDET: war and the attack are one command (ADR 0002)
++				return;
+ 			DIP.WAR().set(reg.faction(), aa.faction());
+ 			WORLD.BATTLES().regAttack(reg, aa);
+ 			
+@@ -110,7 +112,8 @@
+ 						VIEW.inters().yesNo.activate(Str.TMP, attack, ACTION.NOP, dismissable);
+ 						return;
+ 					}else {
+-						WORLD.BATTLES().regAttack(reg, a);
++						if (!sosdet.game.cmd.World.regionAttack(reg, a, false)) // SOSDET: the attack is a command (ADR 0002)
++							WORLD.BATTLES().regAttack(reg, a);
+ 						return;
+ 					}
+ 				}
+diff -ru -U2 a/world/army/ADDivs.java b/world/army/ADDivs.java
+--- a/world/army/ADDivs.java	2025-09-12 16:12:40.000000000 +0500
++++ b/world/army/ADDivs.java	2026-10-23 16:21:40.403713600 +0500
+@@ -75,6 +75,8 @@
+ 	}
+ 	
+ 	public void insert(int after, int insert) {
++		if (sosdet.game.cmd.World.divOrder(aa, after, insert)) // SOSDET: a division dragged to another place is a command (ADR 0002)
++			return;
+ 		if (after < 0 || after >= size() || insert < 0 || insert >= size())
+ 			throw new RuntimeException(after + " " + insert);
+ 		if (after == insert)
+diff -ru -U2 a/world/army/ADSupplies.java b/world/army/ADSupplies.java
+--- a/world/army/ADSupplies.java	2025-12-03 10:14:52.000000000 +0500
++++ b/world/army/ADSupplies.java	2026-10-23 16:21:40.406712400 +0500
+@@ -263,6 +263,8 @@
+ 				
+ 				@Override
+ 				public void set(WArmy t, int s) {
++					if (sosdet.game.cmd.World.artillery(ADArtillery.this, t, s)) // SOSDET: the army's artillery target is a command (ADR 0002)
++						return;
+ 					
+ 					artilleryTot.inc(t, -get(t));
+ 					super.set(t, CLAMP.i(s, 0, max(t)));
+diff -ru -U2 a/world/army/WDivRegional.java b/world/army/WDivRegional.java
+--- a/world/army/WDivRegional.java	2026-06-17 18:46:30.000000000 +0500
++++ b/world/army/WDivRegional.java	2026-10-23 16:21:40.405722000 +0500
+@@ -341,11 +341,15 @@
+ 
+ 		@Override
+ 		public void trainingSet(StatTraining tr, double d) {
++			if (sosdet.game.cmd.World.regionalTraining(WDivRegional.this, tr, d)) // SOSDET: the division editor's training target is a command (ADR 0002)
++				return;
+ 			trainingTarget[tr.tIndex] = (byte) Math.round(StatTraining.MAX*CLAMP.d(d, 0, 1));
+ 		}
+ 
+ 		@Override
+ 		public void equipSet(EquipBattle tr, double am) {
++			if (sosdet.game.cmd.World.regionalEquip(WDivRegional.this, tr, am)) // SOSDET: the division editor's equipment target is a command (ADR 0002)
++				return;
+ 			report(-1);
+ 			targets[tr.indexMilitary()] = (byte) Math.round(am*tr.max());
+ 			report(1);
+@@ -354,6 +358,8 @@
+ 
+ 		@Override
+ 		public void menSet(int am) {
++			if (sosdet.game.cmd.World.regionalMen(WDivRegional.this, am)) // SOSDET: the division editor's size is a command (ADR 0002)
++				return;
+ 			report(-1);
+ 			menTarget = (short) CLAMP.i(am, 0, Config.battle().MEN_PER_DIVISION);
+ 			trainingDay = 0;
+@@ -389,6 +395,8 @@
+ 
+ 		@Override
+ 		public void raceSet(Race race) {
++			if (sosdet.game.cmd.World.regionalRace(WDivRegional.this, race)) // SOSDET: the division editor's race is a command (ADR 0002)
++				return;
+ 			report(-1);
+ 			ri = (short) race.index;
+ 			report(1);
+@@ -406,6 +414,8 @@
+ 
+ 		@Override
+ 		public void bannerISet(int bannerI) {
++			if (sosdet.game.cmd.World.regionalBanner(WDivRegional.this, bannerI)) // SOSDET: the division editor's banner is a command (ADR 0002)
++				return;
+ 			WDivRegional.this.bannerI = (short) bannerI;
+ 			
+ 		}
+diff -ru -U2 a/world/army/WDivStoredAll.java b/world/army/WDivStoredAll.java
+--- a/world/army/WDivStoredAll.java	2026-06-24 13:16:44.000000000 +0500
++++ b/world/army/WDivStoredAll.java	2026-10-23 16:21:40.406712400 +0500
+@@ -73,6 +73,8 @@
+ 	}
+ 	
+ 	public void attach(WArmy a, Div div) {
++		if (sosdet.game.cmd.World.cityDivAttach(a, div)) // SOSDET: sending out or recalling a city division is a command (ADR 0002)
++			return;
+ 		if (a != null) {
+ 			for (ResSupply s : RESOURCES.SUP().ALL) {
+ 				int am = s.amount(div.info.race(), div.menNrOf());
+diff -ru -U2 a/world/entity/army/WArmy.java b/world/entity/army/WArmy.java
+--- a/world/entity/army/WArmy.java	2026-06-08 21:02:24.000000000 +0500
++++ b/world/entity/army/WArmy.java	2026-10-23 16:21:40.403713600 +0500
+@@ -253,6 +253,8 @@
+ 
+ 	
+ 	public void setDestination(int tx, int ty) {
++		if (sosdet.game.cmd.World.armyMove(this, tx, ty)) // SOSDET: the player's move order is a command (ADR 0002)
++			return;
+ 		if (AD.men(null).get(this) == 0)
+ 			return;
+ 		stop();
+@@ -261,6 +263,8 @@
+ 	}
+ 	
+ 	public void besiege(Region reg) {
++		if (sosdet.game.cmd.World.armyBesiege(this, reg)) // SOSDET: the player's siege order is a command (ADR 0002)
++			return;
+ 		if (AD.men(null).get(this) == 0)
+ 			return;
+ 		if (besieging(reg)) {
+@@ -324,6 +328,8 @@
+ 	}
+ 	
+ 	public void raid(boolean raid) {
++		if (sosdet.game.cmd.World.armyRaid(this, raid)) // SOSDET: the player's raid toggle is a command (ADR 0002)
++			return;
+ 		if (raid && !canRaid())
+ 			return;
+ 		if (raid == raiding())
+@@ -385,6 +391,8 @@
+ 	}
+ 	
+ 	public void intercept(WArmy other) {
++		if (sosdet.game.cmd.World.armyIntercept(this, other)) // SOSDET: the player's intercept order is a command (ADR 0002)
++			return;
+ 		if (AD.men(null).get(this) == 0)
+ 			return;
+ 		stop();
+@@ -409,6 +417,8 @@
+ 	}
+ 	
+ 	public void stop() {
++		if (sosdet.game.cmd.World.armyStop(this)) // SOSDET: the player's stop order is a command (ADR 0002)
++			return;
+ 		
+ 		path.clear();
+ 		if (state() != WArmyState.fortifying && state() != WArmyState.fortified) {
+@@ -425,6 +435,8 @@
+ 	}
+ 	
+ 	public void disband() {
++		if (sosdet.game.cmd.World.armyDisband(this)) // SOSDET: disbanding the player's army is a command (ADR 0002)
++			return;
+ 		if(added())
+ 			super.remove();
+ 	}
