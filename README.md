@@ -8,10 +8,13 @@ Deterministic simulation engine for Songs of Syx V71 (build 71.44). The same sav
 - **State hash:** taken every 30 steps and compared with the other PCs'; the first difference gives a desync report (SOS-29).
 - **Resync:** a battle can be saved at a step and reloaded there by every PC to recover from a desync (SOS-30).
 - **Players' battle orders and speed changes:** in the host's log, and the step length follows the agreed speed. The owner's 13-minute play session on the Mogus-72 city invasion stayed identical across three copies (SOS-32 M1).
-- **City and world lockstep:** in progress, following [plan 0002](docs/plan/0002-city-and-world-lockstep.md). The city groundwork is done (SOS-32 M2a); city commands are next (SOS-34).
+- **City and world lockstep:** the city's and the world map's player actions are commands, and the world runs in the step (SOS-34, SOS-35, [plan 0002](docs/plan/0002-city-and-world-lockstep.md)). The city↔world link comes after V0.1.
+- **V0.1:** [docs/release/V0.1.md](docs/release/V0.1.md): what works, what is blocked, and how to start the owner's session. `gradlew.bat releaseZip` packs it into `build
+elease\SOSDET-0.1.0.zip`.
 
 Until something starts an engine session, the game plays as vanilla.
 
+- **Start here, especially as an AI agent:** [docs/architecture.md](docs/architecture.md): how a session runs, the code map, every known desync cause and where it is fixed, and the pitfalls
 - What it must do: [docs/requirements.md](docs/requirements.md)
 - Coding rules: [AGENTS.md](AGENTS.md); determinism rules: [.claude/rules/determinism.md](.claude/rules/determinism.md)
 - Changes to the game's code: [docs/hooks.md](docs/hooks.md); the patch set: [patches/](patches/README.md)
@@ -52,6 +55,7 @@ The first build downloads Gradle, ECJ 3.40.0 and JUnit. The result is the mod fo
 | Command | What it does |
 | --- | --- |
 | `gradlew.bat assemble` | Builds the mod folder only |
+| `gradlew.bat releaseZip` | Packs the mod folder and the release notes into `buildelease\SOSDET-<version>.zip` |
 | `gradlew.bat compileJava compileTestJava` | Fast check |
 | `gradlew.bat test` | Tests |
 | `gradlew.bat check` | Tests and the byte-for-byte checks |

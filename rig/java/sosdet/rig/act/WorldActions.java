@@ -5,6 +5,7 @@ import game.battle.div.Div;
 import game.event.engine.EVENT_HANDLER;
 import game.event.engine.Event;
 import game.faction.FACTIONS;
+import game.faction.diplomacy.DIP;
 import game.faction.diplomacy.deal.Deal;
 import game.faction.npc.FactionNPC;
 import game.faction.player.emmi.EmiTypeRoy;
@@ -70,6 +71,32 @@ public final class WorldActions {
             int army = Integer.parseInt(a[1]);
             int reg = Integer.parseInt(a[2]);
             Rig.later(() -> army(army).besiege(WORLD.REGIONS().getByIndex(reg)));
+            return true;
+        }
+        case "wbesiegenear": { // wbesiegenear <army>: wbesiege on the nearest other faction's settlement, one at peace first
+            int army = Integer.parseInt(a[1]);
+            Rig.later(() -> {
+                WArmy w = army(army);
+                Region best = null;
+                long bestD = Long.MAX_VALUE;
+                for (Region r : WORLD.REGIONS().active()) {
+                    if (r.faction() == null || r.faction() == FACTIONS.player()) {
+                        continue;
+                    }
+                    long dx = r.cx() - w.ctx();
+                    long dy = r.cy() - w.cty();
+                    // a faction at peace first: besieging it asks "declare war and besiege?" (cmd.StepPrompts)
+                    long d = dx * dx + dy * dy + (DIP.WAR().is(r.faction(), FACTIONS.player()) ? 1L << 40 : 0);
+                    if (d < bestD) {
+                        bestD = d;
+                        best = r;
+                    }
+                }
+                if (best == null) {
+                    throw new IllegalStateException("no other faction's settlement");
+                }
+                w.besiege(best);
+            });
             return true;
         }
         case "wdisband": { // wdisband <army>: the army panel's disband button

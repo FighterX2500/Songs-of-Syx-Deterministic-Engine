@@ -43,6 +43,7 @@ import snake2d.util.file.FilePutter;
 import snake2d.util.misc.ACTION;
 import snake2d.util.rnd.RND;
 import sosdet.Engine;
+import sosdet.rig.act.CopyActions;
 import sosdet.rig.act.EmploymentActions;
 import sosdet.rig.act.LawActions;
 import sosdet.rig.act.MilitaryActions;
@@ -81,6 +82,7 @@ import view.main.VIEW;
  *   hashpeer &lt;pc&gt; &lt;file&gt;               and read another copy's; on the first desync the engine finds, write
  *                                       &lt;tag&gt;-desync.txt (the engine's report) and a desync event
  *   answerprompts                       the host's player answers every world-battle prompt (auto-resolve, occupy)
+ *   showmessages                        the city's messages stay open (the played copy of --play)
  *   nudge &lt;step&gt;                        forced desync: at that step, inside it, one soldier gets fatal injuries
  *   resyncat &lt;step&gt; &lt;save&gt; &lt;state&gt;     host: hold the run at that step, save the resync there and load it
  *   resyncnow &lt;save&gt; &lt;state&gt;           host: save the resync at the current step and load it
@@ -166,6 +168,8 @@ public final class Rig implements SCRIPT {
         private int invadeMen;
         /** The host's player answering world-battle prompts (answerprompts), or null. */
         private PromptAnswers prompts;
+        /** The city's messages stay open for a human (showmessages): the played copy. */
+        private boolean showMessages;
         private long started;
         // vanilla timing baseline: no session, the game's own sub-steps
         private boolean vanilla;
@@ -263,7 +267,7 @@ public final class Rig implements SCRIPT {
                 if (answered != null) {
                     event("prompt", "\"answer\":\"" + answered + "\",\"step\":" + Engine.step());
                 }
-                if (city) {
+                if (city && !showMessages) {
                     // the city's messages (the invasion's, a noble's death...) would pause the game waiting for a human
                     VIEW.inters().messages.hide();
                 }
@@ -608,6 +612,10 @@ public final class Rig implements SCRIPT {
             case "resyncload":
                 loadResync(Paths.get(c[1]), Files.readAllBytes(Paths.get(c[2])));
                 return;
+            case "showmessages":
+                showMessages = true;
+                event("showmessages", "");
+                return;
             case "answerprompts":
                 prompts = new PromptAnswers();
                 event("answerprompts", "");
@@ -647,7 +655,8 @@ public final class Rig implements SCRIPT {
         /** The UI call behind one player action, queued to run after this frame's update, outside the step. */
         private void playerAction(String[] a) {
             if (!(LawActions.run(a) || RoomActions.run(a) || EmploymentActions.run(a) || MilitaryActions.run(a)
-                    || NameActions.run(a) || ToolActions.run(a) || WorldActions.run(a))) {
+                    || NameActions.run(a) || ToolActions.run(a) || CopyActions.run(a)
+                    || WorldActions.run(a))) {
                 throw new IllegalArgumentException("SOSDET rig: no player action " + a[0]);
             }
         }

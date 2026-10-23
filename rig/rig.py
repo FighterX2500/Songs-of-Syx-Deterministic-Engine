@@ -667,6 +667,8 @@ def main():
             c.send("nudge %d" % args.nudge, "nudge")
         if c.k == 1 and args.scenario == "city" and not args.play:
             c.send("answerprompts", "answerprompts")  # nobody clicks the world-battle prompt in a rig run
+        if c.k == 1 and args.play:
+            c.send("showmessages", "showmessages")  # the owner reads the messages in the played window
         if c.k == 1 and args.resync:
             c.send("resyncat %d %s %s" % (args.resync, resync_save, resync_state), "resyncat")
         c.send("seed %d" % RUN_SEED, "seeded")

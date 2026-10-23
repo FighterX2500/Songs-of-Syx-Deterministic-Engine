@@ -4,7 +4,7 @@ import java.lang.reflect.Field;
 import java.util.Arrays;
 
 /**
- * The world's static state that vanilla never clears between games in one process, reset at every load in a session
+ * The world's and the city's static state that vanilla never clears between games in one process, reset at every load in a session
  * (SOS-35), so a PC that loads in a fresh process and one that played before both start from the same values. One
  * reflected member each (AGENTS.md "Adapter Boundary"); resolved when a load in a session first needs them.
  *
@@ -14,6 +14,9 @@ import java.util.Arrays;
  * <li>{@code RDMilitaryGar.WDivsCapitol.supplies} and {@code upI}: the capital garrison's supply sums, which vanilla
  * adds to at every count and never clears, and the step they were last counted at. Dropped (the next count starts
  * from zeros) and back to -1.</li>
+ * <li>{@code RDRace.RDRacePopulation.upI} and {@code RoomEmploymentIns.employeesI}/{@code employeesO}: the tick a
+ * region's race target and a room's employee list were last cached at (SOS-36). A PC that already ran a tick of its own
+ * timeline (a resync load) could find that tick's old cache valid after the load. Back to -1 (and no room).</li>
  * </ul>
  */
 public final class WorldStatics {
@@ -25,6 +28,10 @@ public final class WorldStatics {
     private static final Class<?> CAPITOL = className("world.region.RDMilitaryGar$WDivsCapitol");
     private static final Field SUPPLIES = field(CAPITOL, "supplies");
     private static final Field SUPPLIES_UP = field(CAPITOL, "upI");
+    private static final Field RACE_TARGET_UP = field(className("world.region.pop.RDRace$RDRacePopulation"), "upI");
+    private static final Class<?> EMPLOYMENT = className("settlement.room.main.employment.RoomEmploymentIns");
+    private static final Field EMPLOYEES_UP = field(EMPLOYMENT, "employeesI");
+    private static final Field EMPLOYEES_ROOM = field(EMPLOYMENT, "employeesO");
 
     private WorldStatics() {
     }
@@ -36,6 +43,9 @@ public final class WorldStatics {
             RI.setInt(null, 0);
             SUPPLIES.set(null, null);
             SUPPLIES_UP.setInt(null, -1);
+            RACE_TARGET_UP.setInt(null, -1);
+            EMPLOYEES_UP.setInt(null, -1);
+            EMPLOYEES_ROOM.set(null, null);
         } catch (IllegalAccessException e) {
             throw new IllegalStateException("SOSDET: cannot reset the world's static state" + VERSION, e);
         }

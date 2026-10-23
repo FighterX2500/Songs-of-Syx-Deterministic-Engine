@@ -1,6 +1,6 @@
 diff -ru -U2 a/settlement/environment/SettEnvMap.java b/settlement/environment/SettEnvMap.java
 --- a/settlement/environment/SettEnvMap.java	2026-06-17 10:48:04.000000000 +0500
-+++ b/settlement/environment/SettEnvMap.java	2026-10-22 21:44:16.668885800 +0500
++++ b/settlement/environment/SettEnvMap.java	2026-10-23 18:03:25.545425900 +0500
 @@ -397,7 +397,7 @@
  		}
  
@@ -21,7 +21,7 @@ diff -ru -U2 a/settlement/environment/SettEnvMap.java b/settlement/environment/S
  			Room r = SETT.ROOMS().map.get(tx, ty);
 diff -ru -U2 a/settlement/overlay/Addable.java b/settlement/overlay/Addable.java
 --- a/settlement/overlay/Addable.java	2026-04-15 07:33:02.000000000 +0500
-+++ b/settlement/overlay/Addable.java	2026-10-22 21:44:16.669885600 +0500
++++ b/settlement/overlay/Addable.java	2026-10-23 18:03:25.545425900 +0500
 @@ -176,7 +176,7 @@
  		if (VIEW.s().getWindow().zoomout() >= 3 && SETT.TERRAIN().get(it.tile()).miniDepth() > 0)
  			return false;
@@ -42,7 +42,7 @@ diff -ru -U2 a/settlement/overlay/Addable.java b/settlement/overlay/Addable.java
  		TerrainTile tt = SETT.TERRAIN().get(it.tile());
 diff -ru -U2 a/settlement/room/food/farm/Constructor.java b/settlement/room/food/farm/Constructor.java
 --- a/settlement/room/food/farm/Constructor.java	2026-05-02 08:16:54.000000000 +0500
-+++ b/settlement/room/food/farm/Constructor.java	2026-10-22 21:44:16.670885300 +0500
++++ b/settlement/room/food/farm/Constructor.java	2026-10-23 18:03:25.546425300 +0500
 @@ -194,7 +194,7 @@
  			d = CLAMP.d(d, 0, 1);
  			d*=d;
@@ -54,7 +54,7 @@ diff -ru -U2 a/settlement/room/food/farm/Constructor.java b/settlement/room/food
  				if (w > 0) {
 diff -ru -U2 a/settlement/room/food/fish/Constructor.java b/settlement/room/food/fish/Constructor.java
 --- a/settlement/room/food/fish/Constructor.java	2026-06-17 10:48:06.000000000 +0500
-+++ b/settlement/room/food/fish/Constructor.java	2026-10-22 21:44:16.671885100 +0500
++++ b/settlement/room/food/fish/Constructor.java	2026-10-23 18:03:25.546425300 +0500
 @@ -384,7 +384,7 @@
  		@Override
  		public boolean render(Renderer r, RenderIterator it) {
@@ -66,7 +66,7 @@ diff -ru -U2 a/settlement/room/food/fish/Constructor.java b/settlement/room/food
  				if (d == 0)
 diff -ru -U2 a/settlement/room/food/orchard/Constructor.java b/settlement/room/food/orchard/Constructor.java
 --- a/settlement/room/food/orchard/Constructor.java	2026-02-13 11:18:54.000000000 +0500
-+++ b/settlement/room/food/orchard/Constructor.java	2026-10-22 21:44:16.673883100 +0500
++++ b/settlement/room/food/orchard/Constructor.java	2026-10-23 18:03:25.547425100 +0500
 @@ -425,7 +425,7 @@
  			double d = fertility(it.tx(), it.ty()); 
  			d*=d;
@@ -78,7 +78,7 @@ diff -ru -U2 a/settlement/room/food/orchard/Constructor.java b/settlement/room/f
  				if (w > 0) {
 diff -ru -U2 a/settlement/room/food/pasture/ConstructorOutdoor.java b/settlement/room/food/pasture/ConstructorOutdoor.java
 --- a/settlement/room/food/pasture/ConstructorOutdoor.java	2026-02-12 14:31:02.000000000 +0500
-+++ b/settlement/room/food/pasture/ConstructorOutdoor.java	2026-10-22 21:44:16.674881900 +0500
++++ b/settlement/room/food/pasture/ConstructorOutdoor.java	2026-10-23 18:03:25.547425100 +0500
 @@ -86,7 +86,7 @@
  			
  			@Override
@@ -99,7 +99,7 @@ diff -ru -U2 a/settlement/room/food/pasture/ConstructorOutdoor.java b/settlement
  				if (w > 0) {
 diff -ru -U2 a/settlement/room/industry/woodcutter/Constructor.java b/settlement/room/industry/woodcutter/Constructor.java
 --- a/settlement/room/industry/woodcutter/Constructor.java	2026-06-14 11:19:02.000000000 +0500
-+++ b/settlement/room/industry/woodcutter/Constructor.java	2026-10-22 21:44:16.675881900 +0500
++++ b/settlement/room/industry/woodcutter/Constructor.java	2026-10-23 18:03:25.548425200 +0500
 @@ -453,7 +453,7 @@
  		@Override
  		public void renderBelow(Renderer r, RenderIterator it) {
@@ -111,7 +111,7 @@ diff -ru -U2 a/settlement/room/industry/woodcutter/Constructor.java b/settlement
  				w*=w;
 diff -ru -U2 a/settlement/room/law/stockade/Constructor.java b/settlement/room/law/stockade/Constructor.java
 --- a/settlement/room/law/stockade/Constructor.java	2026-06-17 10:48:04.000000000 +0500
-+++ b/settlement/room/law/stockade/Constructor.java	2026-10-22 21:44:16.676881700 +0500
++++ b/settlement/room/law/stockade/Constructor.java	2026-10-23 18:03:25.548425200 +0500
 @@ -125,7 +125,7 @@
  			
  			@Override
@@ -123,7 +123,7 @@ diff -ru -U2 a/settlement/room/law/stockade/Constructor.java b/settlement/room/l
  							if (it.get(rx, ry, d) == null && UtilWallPlacability.wallCanBe.is(tx, ty, d) && SETT.ROOMS().placement.placer.placerDoor.isPlacable(tx+d.x(), ty+d.y(), null, null) == null) {
 diff -ru -U2 a/settlement/tilemap/floor/Snow.java b/settlement/tilemap/floor/Snow.java
 --- a/settlement/tilemap/floor/Snow.java	2025-09-12 16:12:40.000000000 +0500
-+++ b/settlement/tilemap/floor/Snow.java	2026-10-22 21:44:16.677882400 +0500
++++ b/settlement/tilemap/floor/Snow.java	2026-10-23 18:03:25.549425100 +0500
 @@ -110,7 +110,7 @@
  			
  		
@@ -135,8 +135,21 @@ diff -ru -U2 a/settlement/tilemap/floor/Snow.java b/settlement/tilemap/floor/Sno
  				if (SETT.ROOMS().map.is(i.tile()) || SETT.FLOOR().getter.get(i.tile()) != null || SETT.MINERALS().amountInt.get(i.tile()) > 0) {
 diff -ru -U2 a/view/main/VIEW.java b/view/main/VIEW.java
 --- a/view/main/VIEW.java	2026-05-21 06:38:16.000000000 +0500
-+++ b/view/main/VIEW.java	2026-10-22 21:44:16.666885200 +0500
-@@ -254,7 +254,9 @@
++++ b/view/main/VIEW.java	2026-10-23 18:03:25.552933100 +0500
+@@ -222,8 +222,10 @@
+ 			current.update(ds, true);
+ 		}else {
+ 			current.update(ds, false);
+-			ds = 0;
+-			slowDown = 1.0;
++			if (!sosdet.game.cmd.StepPrompts.promptsKeepTime()) { // SOSDET: a prompt answered by command keeps game time running (SOS-36)
++				ds = 0;
++				slowDown = 1.0;
++			}
+ 		}
+ 
+ 		if (KEYS.MAIN().SWAP.consumeClick()) {
+@@ -254,7 +256,9 @@
  			return;
  		}
  		
@@ -146,7 +159,7 @@ diff -ru -U2 a/view/main/VIEW.java b/view/main/VIEW.java
  
  	}
  	
-@@ -431,6 +433,8 @@
+@@ -431,6 +435,8 @@
  		}
  		
  		public final boolean isActive(){

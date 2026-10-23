@@ -290,6 +290,23 @@ class EngineTest {
     }
 
     @Test
+    void theDialogShowsTheLastQuestionAskedUntilItIsAnswered() {
+        begin();
+        assertEquals(-1, Hooks.stepPromptShown());
+        Engine.runFreely();
+        Hooks.stepsFor(Engine.STEP_SECONDS + 1e-9);
+        assertTrue(Hooks.stepBegin());
+        long first = Hooks.stepPromptOpened("yes", "no");
+        long second = Hooks.stepPromptOpened("yes", "no");
+        Hooks.stepEnd();
+        assertEquals(second, Hooks.stepPromptShown(), "the game's dialog shows the last question asked");
+        Hooks.stepPromptHidden(first);
+        assertEquals(second, Hooks.stepPromptShown(), "another question's answer leaves it showing");
+        Hooks.stepPromptHidden(second);
+        assertEquals(-1, Hooks.stepPromptShown());
+    }
+
+    @Test
     void oneSessionAtATime() {
         begin();
         assertThrows(IllegalStateException.class, Engine::begin);

@@ -40,6 +40,8 @@ final class Session {
     /** The step the last question opened at, and how many opened in it: the next question's key. */
     long stepPromptStep = -1;
     int stepPromptsInStep;
+    /** The kept question this PC's yes/no dialog shows, or -1: answered here, or by another PC's answer. */
+    long stepPromptShown = -1;
 
     /** Host: the game speed last seen, so a change goes into the log once (B16). */
     double seenSpeed;

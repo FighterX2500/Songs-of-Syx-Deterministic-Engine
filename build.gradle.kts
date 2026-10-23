@@ -339,7 +339,7 @@ val modInfo by tasks.registering {
             """
             VERSION: "$version",
             NAME: "SOSDET",
-            DESC: "Deterministic simulation engine for Songs of Syx V71 (lockstep battles).",
+            DESC: "Deterministic simulation engine for Songs of Syx V71 (lockstep battles, cities and the world map).",
             AUTHOR: "FighterX2500",
             INFO: "https://github.com/FighterX2500/Songs-of-Syx-Deterministic-Engine",
             """.trimIndent() + "\n")
@@ -359,6 +359,16 @@ val assembleMod by tasks.registering(Sync::class) {
 
 tasks.assemble {
     dependsOn(assembleMod)
+}
+
+val releaseZip by tasks.registering(Zip::class) {
+    group = "build"
+    description = "Packs the mod folder and its release notes into build/release/SOSDET-<version>.zip."
+    val notes = "docs/release/V" + project.version.toString().substringBeforeLast(".") + ".md"
+    archiveFileName.set("SOSDET-${project.version}.zip")
+    destinationDirectory.set(layout.buildDirectory.dir("release"))
+    from(assembleMod) { into("SOSDET") }
+    from(notes) { rename { "README.md" } }
 }
 
 tasks.test {
