@@ -134,10 +134,15 @@ public final class Hooks {
         s.streams.leave();
     }
 
-    /** True when the world map must not update in the city view (a session holding the world still). */
+    /**
+     * True when the world map must not update in the city view: a session holding the world still, or a world-battle
+     * prompt open (owner's decision, plan 0002: the world holds for everyone while a player decides). The prompt opens
+     * and closes inside the step on every PC alike, so every PC holds the same steps; the steps go on, so the decision
+     * command applies.
+     */
     public static boolean worldHeld() {
         Session s = Engine.session();
-        return s != null && s.worldHeld;
+        return s != null && (s.worldHeld || s.worldPrompt != null);
     }
 
     /** True with a session: the battle state updates inside the step, not from the battle view's frame. */

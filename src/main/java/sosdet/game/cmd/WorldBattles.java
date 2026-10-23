@@ -20,7 +20,8 @@ import world.battle.spec.WBattleSpec;
  * simulation calls {@code UIWBattlePrompt} from {@code WBattles.poll}); a button press becomes a command, and the
  * command closes the prompt and decides, inside the step on every PC. So the prompt being open, which gates the world's
  * battle polling ({@code WBattles.canPoll}), is the same on every PC at every step. In a session the prompt doesn't
- * pause the game, as a pause would hold the step the decision applies at.
+ * pause the game, as a pause would hold the step the decision applies at; the world holds instead while it is open
+ * ({@code Hooks.worldHeld}), and the city goes on.
  *
  * <p>Fighting the battle on the battle map (Engage) is refused in a session with a notice: a generated battle is not
  * in lockstep yet (after V0.1). Auto-resolve and retreat work.
