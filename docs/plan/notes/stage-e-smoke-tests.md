@@ -24,11 +24,11 @@ If `reportMisses` is above 0, a booster was added after the first report. Find w
 The co-op check again, now with things crossing both ways: an invasion of the capitol (the rig's `invade`) and the player actions in `rig\cmds\m3.txt` (a division sent out and recalled, a recruit, a gift). Every copy runs the same city, so every copy queues the same transactions and sends the same report inputs, and the world part applies them at the same steps.
 
 ```
-python -u rigig.py city --tag M3 --save Mogus-72-19f86f1e048-47002c-0-121c.save --copies 3 --speeds 5,7,7 --steps 6000 --cmds @rig\cmds\m3.txt
+python -u rig\rig.py city --tag M3 --save Mogus-72-19f86f1e048-47002c-0-121c.save --copies 3 --speeds 5,7,7 --steps 6000 --cmds @rig\cmds\m3.txt
 ```
 
 **Passes when:**
-- every copy reaches the main menu and loads, with no exception in `buildig\inst\<k>\songsofsyx\logs`. A `SOSDET:` message from `GameInputs` or `GameTxns` there means an input or a transaction found nothing to apply to;
+- every copy reaches the main menu and loads, with no exception in `build\rig\inst\<k>\songsofsyx\logs`. A `SOSDET:` message from `GameInputs` or `GameTxns` there means an input or a transaction found nothing to apply to;
 - the exit code is 0: every copy matches copy 1 at every step to 6,000;
 - each copy's stats in `summary.txt` show `txnsApplied` > 0, `txnsSkipped` = 0 and `inputsSent` > 0, and the same three numbers on every copy;
 - `reportMisses` is 0.
@@ -39,4 +39,19 @@ If copy 1 differs from the others at a step where a transaction applies, the cit
 
 ## M4: milestone 4, follower mode and the world-only resync
 
-Prepared when milestone 4 is built. This is the 30-minute follower run with `--no-invade`.
+The own-city check. Copy 1 is the host: its city is the one the world reads, and its reports go to the others through a file. Copies 2 and 3 run cities of their own (their city streams are seeded with their PC number, and copy 1's city commands don't reach them), and their worlds read copy 1's reports. The copies are compared on the world only. At step 3,000 copy 1 saves, and every copy reloads only the world from it, keeping its city. 108,000 steps are 30 minutes of game time.
+
+```
+python -u rig\rig.py city --tag M4 --save Mogus-72-19f86f1e048-47002c-0-121c.save --copies 3 --speeds 5,7,7 --steps 108000 --no-invade --follow --world-resync 3000 --cmds @rig\cmds\m3.txt
+```
+
+**Passes when:**
+- every copy reaches the main menu and loads, with no exception in `build\rig\inst\<k>\songsofsyx\logs`;
+- every copy loads the world resync at step 3,000 (`summary.txt` shows the three loads) and runs on;
+- the exit code is 0: every copy's world matches copy 1's at every step to 108,000, and no engine reports a desync;
+- copies 2 and 3 show `reportsReceived` > 0 in `summary.txt`, about one per 30 steps (3,600 for the run);
+- `reportMisses` is 0 on every copy.
+
+**Recorded, not pass or fail:** the world resync's save time and size and each copy's load time; `txnsApplied` and `txnsSkipped` per copy (the followers apply the world's transactions to their own cities, so theirs can differ from copy 1's, and a skipped one is expected there); the step times against M3's; how far the followers' cities drift from copy 1's (men at the end).
+
+If a follower's world differs from copy 1's, the world part read something from the live city that the report doesn't carry. Find the first differing step in `summary.txt`, then run again to a few steps before it with `--trace-draws`; the call that differs names the read. If the copies differ only after step 3,000, the world resync left something behind: compare the sections it loads (`GameWorldLoad.KEYS`) with the read.

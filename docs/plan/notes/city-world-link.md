@@ -177,6 +177,30 @@ A value the report has no slot for is read live and counted in `Stats.reportMiss
 - *Dormant paths.* `WDivCity.generate` and `resolve(Induvidual[])` in the world part are reachable only through Engage, which the engine refuses. The step prompts (the declare-war prompt in `WArmyState`) stay at part −1.
 - *Not checked against the game.* Goods moved by diplomacy deals, `_INVASION`'s raid from an input, and the vanilla bug that registers an invasion's listeners with the next ref (kept as it is).
 
+## Milestone 4 as built
+
+**Own-city mode** (`Engine.ownCity`, set at step 0 on every PC). Co-op stays the default.
+- *Commands.* A city command applies on its issuer's PC only. World commands and the step prompts' answers apply on every PC (`CommandParts.everyPc`).
+- *Streams.* The city part draws from a stream seeded with the step and the PC number (`Session.citySeed`), so two cities differ at once. The world part is reseeded as before and is the same on every PC.
+- *The hash.* It holds the world, the report the world reads, and the world part's draws (`Streams.worldDraws`, counted only inside the world part, so the tail's draws are left out). The city's sections are zeroed, and the player's credits are left out of the world hash, since the city owns them.
+- *Resync.* `resyncSave` and `resyncLoad` refuse: they would reload this PC's city. The world resync replaces them.
+
+**Reports between PCs (ADR 0005 §6).** `reportsOut()` gives this PC's reports taken since the last call. `reportsFrom(pc)` makes the world part read PC `pc`'s city, from the reports fed to `reportsIn(pc, bytes)` in any pieces (`ReportFeed`: each report is a 4-byte length and its bytes). A repeated report changes nothing.
+
+**The follower (SOS-38).** The engine keeps the save's single player faction, so the testable case is a PC whose own city differs and whose world reads the host's reports; it must get the same world. It runs world step N only once the report it reads there has arrived (`Reports.lastReadableStep`: a report taken at T is read until the next report applies, (T / 30 + 1) · 30 + 29). Others' reports don't touch its shadows (`SentSupplies`, `EventMarks`), which follow its own reports. The world's transactions apply to its own city; a two-phase withdrawal's output goes into its own reports, which its world doesn't read.
+
+**The world resync (ADR 0005 §5).** The host saves between steps (`worldResyncSave`) and gets the engine's world state: the step, the next hash epoch, the world part's draw count, and the ledger (`WorldResync`, format version 1). Every PC, the host too, loads with `worldResyncLoad`. `GameWorldLoad` loads WORLD, FACTIONS and RAIDING (the world-load spike), and puts back the player faction's city-owned data around them: credits, goods history, tech, titles, level, race order, bonus settings, trade settings, colours. Reloading the raiders cancels their invasions; the engine keeps those cancels from reaching the city. The city, the reports, the city's last applied transaction and the inputs waiting to go out are kept.
+
+**Known gaps:**
+- *An answer's draws.* A step prompt's answer runs at part −1, with the city stream, before the world reseed. A world prompt's answer that draws would differ between PCs. None found that draws.
+- *Prompt keys.* City and world prompts share the step prompts' keys.
+- *City battles.* The AI general of a battle in the city runs on the host only, so own-city mode with battles in the city isn't supported; the smoke test uses `--no-invade`.
+- *Load listeners.* Whether FACTIONS' and DIP's load listeners leave the city alone isn't checked yet; the M4 smoke test is the first check.
+- *The host's identity.* A world resync brings the player faction's name, banner and emissaries from the host's save.
+- *A world prompt open across a world resync* stays open with the old world's subject.
+- *Reports fed before the load* are dropped: `afterLoad` clears the feed.
+- *Several cities in one world* (one player faction per PC) are the mod's work (plan 0002, decision 4).
+
 ## Estimates
 
 In working time (a day ≈ 6–8 h). The earlier "about 3 days for all of stage E" came before the scan, and was too low.

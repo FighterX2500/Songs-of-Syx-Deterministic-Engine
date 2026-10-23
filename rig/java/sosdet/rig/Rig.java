@@ -46,6 +46,7 @@ import snake2d.util.misc.ACTION;
 import snake2d.util.rnd.RND;
 import snake2d.util.sets.KeyMap;
 import sosdet.Engine;
+import sosdet.game.GameHash;
 import sosdet.game.GameResync;
 import sosdet.rig.act.CopyActions;
 import sosdet.rig.act.EmploymentActions;
@@ -212,6 +213,17 @@ public final class Rig implements SCRIPT {
         private boolean worldSelfLoad;
         private Path worldFile;
         private List<String> worldKeys = new ArrayList<>();
+        // own-city mode (SOS-38 milestone 4): copy 1's reports to the followers through a file, the world hash per step
+        private boolean ownCity;
+        private Path reportsOutFile;
+        private Path reportsInFile;
+        private int reportsPc;
+        private long reportsOffset;
+        // world resync (SOS-38): copy 1 saves at wresyncStep; every copy, copy 1 too, loads only the world from it
+        private long wresyncStep = -1;
+        private boolean wresyncSaver;
+        private Path wresyncSave;
+        private Path wresyncState;
         // stall sampler: the simulation thread's stack for every step over 100 ms
         private volatile Thread simThread;
         private volatile boolean sampling;
@@ -260,7 +272,7 @@ public final class Rig implements SCRIPT {
                 nudge();
             }
             try {
-                log.write(step + "," + Long.toHexString(city ? cityHash() : battleHash()) + "," + men() + ","
+                log.write(step + "," + Long.toHexString(stateHash()) + "," + men() + ","
                         + TIME.currentSecond() + "\n");
             } catch (IOException e) {
                 throw new IllegalStateException("SOSDET rig: cannot write the hash log", e);
@@ -272,6 +284,7 @@ public final class Rig implements SCRIPT {
                 resynced();
             }
             exchangeAiLog();
+            exchangeReports();
             exchangeHashes();
             if (traceFrom >= 0 && Engine.active() && Engine.step() >= traceFrom) {
                 Engine.traceDraws(traceSteps);
@@ -283,6 +296,9 @@ public final class Rig implements SCRIPT {
             }
             if (running && worldStep >= 0 && Engine.step() == worldStep) {
                 worldAtStep();
+            }
+            if (running && wresyncStep >= 0 && Engine.step() == wresyncStep) {
+                worldResyncAtStep();
             }
             if (running) {
                 timing();
@@ -323,6 +339,38 @@ public final class Rig implements SCRIPT {
             } catch (IOException e) {
                 throw new IllegalStateException("SOSDET rig: AI log file " + aiFile, e);
             }
+        }
+
+        /** Own-city mode: copy 1 appends its new reports; a follower takes in what is new. Between frames. */
+        private void exchangeReports() {
+            if (!Engine.active()) {
+                return;
+            }
+            try {
+                if (reportsOutFile != null) {
+                    byte[] out = Engine.reportsOut();
+                    if (out.length > 0) {
+                        Files.write(reportsOutFile, out, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+                    }
+                }
+                if (reportsInFile != null) {
+                    byte[] in = readNew(reportsInFile, reportsOffset);
+                    reportsOffset += in.length;
+                    if (in.length > 0) {
+                        Engine.reportsIn(reportsPc, in);
+                    }
+                }
+            } catch (IOException e) {
+                throw new IllegalStateException("SOSDET rig: report file", e);
+            }
+        }
+
+        /** The per-step log's hash: the city, or in own-city mode the world only (each copy's city is its own). */
+        private long stateHash() {
+            if (!city) {
+                return battleHash();
+            }
+            return ownCity ? GameHash.worldHash() : cityHash();
         }
 
         /** This copy's new hashes go to its file; the other copies' new hashes go to the engine. Between frames. */
@@ -463,6 +511,38 @@ public final class Rig implements SCRIPT {
                         (System.nanoTime() - t0) / 1e6, loaded));
             }
             worldStep = -1;
+            runOn();
+        }
+
+        /**
+         * The world resync (SOS-38): copy 1 saves the game and the engine's world state, then loads only the world
+         * from it; every other copy holds at the step until copy 1 has saved, then does the same load.
+         */
+        private void worldResyncAtStep() {
+            Path done = Paths.get(wresyncState + ".done");
+            long t0 = System.nanoTime();
+            byte[] state;
+            try {
+                if (wresyncSaver) {
+                    state = Engine.worldResyncSave(wresyncSave);
+                    Files.write(wresyncState, state);
+                    Files.write(done, new byte[0]);
+                    event("worldresyncsaved", String.format(Locale.ROOT, "\"step\":%d,\"saveMs\":%.0f,\"saveBytes\":%d",
+                            Engine.step(), (System.nanoTime() - t0) / 1e6, wresyncSave.toFile().length()));
+                    t0 = System.nanoTime();
+                } else {
+                    if (!Files.exists(done)) {
+                        return; // copy 1 hasn't saved yet: stay held
+                    }
+                    state = Files.readAllBytes(wresyncState);
+                }
+            } catch (IOException e) {
+                throw new IllegalStateException("SOSDET rig: world resync files " + wresyncState, e);
+            }
+            Engine.worldResyncLoad(wresyncSave, state);
+            event("worldresynced", String.format(Locale.ROOT, "\"step\":%d,\"loadMs\":%.0f", Engine.step(),
+                    (System.nanoTime() - t0) / 1e6));
+            wresyncStep = -1;
             runOn();
         }
 
@@ -716,6 +796,30 @@ public final class Rig implements SCRIPT {
             case "resyncload":
                 loadResync(Paths.get(c[1]), Files.readAllBytes(Paths.get(c[2])));
                 return;
+            case "owncity":
+                Engine.ownCity();
+                ownCity = true;
+                event("owncity", "");
+                return;
+            case "reportsout":
+                reportsOutFile = Paths.get(rest(c));
+                Files.deleteIfExists(reportsOutFile);
+                event("reportsout", "\"file\":\"" + clean(reportsOutFile.toString()) + "\"");
+                return;
+            case "reportsfrom":
+                reportsPc = Integer.parseInt(c[1]);
+                Engine.reportsFrom(reportsPc);
+                reportsInFile = Paths.get(rest(Arrays.copyOfRange(c, 1, c.length)));
+                reportsOffset = 0;
+                event("reportsfrom", "\"pc\":" + reportsPc);
+                return;
+            case "worldresyncat":
+                wresyncStep = Long.parseLong(c[1]);
+                wresyncSaver = c[2].equals("save");
+                wresyncSave = Paths.get(c[3]);
+                wresyncState = Paths.get(c[4]);
+                event("worldresyncat", "\"step\":" + wresyncStep);
+                return;
             case "worldat":
                 worldStep = Long.parseLong(c[1]);
                 worldSaver = c[2].startsWith("save");
@@ -796,6 +900,8 @@ public final class Rig implements SCRIPT {
                 Engine.runUntil(Math.min(lastStep, resyncStep)); // held there for the resync save
             } else if (worldStep >= 0) {
                 Engine.runUntil(Math.min(lastStep, worldStep)); // held there for the world save or load
+            } else if (wresyncStep >= 0) {
+                Engine.runUntil(Math.min(lastStep, wresyncStep)); // held there for the world resync
             } else {
                 runOn();
             }
@@ -851,7 +957,7 @@ public final class Rig implements SCRIPT {
             running = false;
             sampling = false;
             GAME.SPEED.speedSet(0);
-            String end = Long.toHexString(city ? cityHash() : battleHash());
+            String end = Long.toHexString(stateHash());
             try {
                 timing.close();
                 if (!vanilla) {

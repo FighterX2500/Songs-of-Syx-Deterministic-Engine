@@ -67,6 +67,14 @@ python rig\rig.py field --tag R2 --steps 12000 --nudge 6001 --resync-on-desync
 
 `--resync STEP`: copy 1 holds at that step and saves a resync (`Engine.resyncSave`); then every copy, copy 1 included, loads it (`Engine.resyncLoad`) and runs on. `--resync-on-desync`: the first desync any engine reports makes copy 1 save a resync at its current step, and every copy loads it: the mod's recovery loop. With `--nudge`, copies are compared only after the resync. The rig keeps its run state across the load; `summary.txt` gives the save time and size and each copy's load time.
 
+## Own cities (SOS-38)
+
+```
+python rig\rig.py city --tag F1 --no-invade --follow --world-resync 3000
+```
+
+`--follow`: every copy runs in own-city mode (`Engine.ownCity`). Copy 1's city is the one the world reads: its reports go to a file (`reportsout`), and the other copies feed that file to their engines (`reportsfrom 0`) and run cities of their own, which differ from copy 1's at once. The per-step log holds the world hash (`GameHash.worldHash`) instead of the city's, so the copies are compared on the world only. Needs the AI on the host; refuses `--replay`, `--resync` and `--resync-on-desync`, which would reload the followers' cities. `--world-resync STEP`: copy 1 holds at that step and saves (`Engine.worldResyncSave`); every copy, copy 1 included, then loads only the world from it (`Engine.worldResyncLoad`) and runs on. `summary.txt` gives the save time and size, each copy's load time, and each copy's `reportsReceived`.
+
 ## Playing a copy (SOS-32)
 
 ```

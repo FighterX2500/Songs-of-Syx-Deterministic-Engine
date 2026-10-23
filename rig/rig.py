@@ -577,6 +577,11 @@ def main():
     ap.add_argument("--no-invade", action="store_true", help="city: no invasion, the city as it is")
     ap.add_argument("--hold-world", action="store_true",
                     help="city: hold the world map still, as before SOS-35 (the world runs in the step by default)")
+    ap.add_argument("--follow", action="store_true",
+                    help="city: own-city mode (SOS-38); copy 1's city is the one the world reads, the other copies follow"
+                         " its reports with cities of their own, and the copies are compared on the world only")
+    ap.add_argument("--world-resync", type=int, default=0,
+                    help="with --follow: copy 1 saves at this step, and every copy reloads only the world from it")
     ap.add_argument("--cmds", default="",
                     help="player actions copy 1 takes once every copy runs, ';'-separated or @file (one per line), 3 s apart, through the UI's"
                          " own calls (e.g. 'curfew 1;men 0 40'); the others get them through the host's log (ADR 0002);"
@@ -616,6 +621,12 @@ def main():
     shutil.rmtree(run_dir, ignore_errors=True)
     run_dir.mkdir(parents=True)
 
+    if args.follow and (args.scenario != "city" or args.ai != "host" or args.replay or args.resync
+                        or args.resync_on_desync):
+        fail("--follow needs a city run with the AI on the host, without --replay or --resync (a whole-game resync"
+             " would take the followers' cities; use --world-resync)")
+    if args.world_resync and not args.follow:
+        fail("--world-resync is for --follow runs; co-op runs use --resync")
     saves, autoload = scenario_saves(args)
 
     stop_copies()
@@ -649,6 +660,11 @@ def main():
         host_log = run_dir / "replayed-host.log"
         shutil.copy2(args.replay, host_log)
     resync_save, resync_state = copies[0].rig / "resync.save", copies[0].rig / "resync.state"
+    reports_file = copies[0].rig / "reports.bin"
+    wresync_save, wresync_state = copies[0].rig / "wresync.save", copies[0].rig / "wresync.state"
+    for stale in (wresync_state, pathlib.Path(str(wresync_state) + ".done")):
+        if stale.exists():
+            stale.unlink()
 
     warm = {int(k) for k in args.warm.split(",") if k}
     world_loaders = {int(k) for k in args.world_load.split(",") if k}
@@ -668,6 +684,8 @@ def main():
         if args.ai == "host":
             c.send("ai %s %s" % ("host" if c.k == 1 and not args.replay else "peer", start_id), "ai")
             c.send("pc %d" % (c.k - 1), "pc")  # the host is PC 0
+            if args.follow:
+                c.send("owncity", "owncity")
         else:
             c.send("ai instep", "ai")
         c.send("loadseed %d" % LOAD_SEED, "loadseed")
@@ -680,6 +698,15 @@ def main():
         time.sleep(5)
         if args.ai == "host":
             c.send("ailog %s %s" % ("host" if c.k == 1 and not args.replay else "peer", host_log), "ailog")
+        if args.follow:
+            # copy 1's city reports go to the followers through a file, as the mod will send them over the network
+            if c.k == 1:
+                c.send("reportsout %s" % reports_file, "reportsout")
+            else:
+                c.send("reportsfrom 0 %s" % reports_file, "reportsfrom")
+            if args.world_resync:
+                c.send("worldresyncat %d %s %s %s" % (args.world_resync, "save" if c.k == 1 else "load", wresync_save,
+                                                      wresync_state), "worldresyncat")
         # every copy sends its engine's state hashes to the others through files, as the mod will over the network
         c.send("hashes %s" % (c.rig / "hashes.bin"), "hashes")
         for o in copies:
@@ -797,6 +824,14 @@ def main():
                 w = c.find("worldloaded", 0)
                 lines.insert(1, "world: copy %d loaded %s at step %s in %s ms: %s"
                              % (c.k, args.world_keys, w and w["step"], w and w["loadMs"], w and json.dumps(w["sections"])))
+    if args.world_resync:
+        saved = copies[0].find("worldresyncsaved", 0)
+        lines.insert(0, "world resync: copy 1 saved at step %s in %s ms (%s bytes)"
+                     % (saved and saved["step"], saved and saved["saveMs"], saved and saved["saveBytes"]))
+        for c in reversed(copies):
+            w = c.find("worldresynced", 0)
+            lines.insert(1, "world resync: copy %d loaded the world at step %s in %s ms"
+                         % (c.k, w and w["step"], w and w["loadMs"]))
     for c in copies:
         shutil.copy2(c.events, run_dir / ("events-c%d.jsonl" % c.k))
     summary = ["SOSDET rig: %s, %s test, tag %s, %d copies; copy %d runs %d steps, the others until it stops"

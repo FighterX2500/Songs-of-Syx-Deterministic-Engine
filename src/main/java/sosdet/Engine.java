@@ -272,9 +272,15 @@ public final class Engine {
         if (s.clock.step() != r.step) {
             throw new IllegalStateException("SOSDET: a world resync for step " + r.step + " loaded at step " + s.clock.step());
         }
+        Path scratch;
+        try {
+            scratch = java.nio.file.Files.createTempFile("sosdet-city", ".bin");
+        } catch (java.io.IOException e) {
+            throw new IllegalStateException("SOSDET: no scratch file for the city's part of the player faction", e);
+        }
         s.worldLoading = true;
         try {
-            GameWorldLoad.load(file, file.resolveSibling(file.getFileName() + ".city"));
+            GameWorldLoad.load(file, scratch);
         } finally {
             s.worldLoading = false;
         }
