@@ -671,6 +671,56 @@ public final class Hooks {
         return true;
     }
 
+    /** The targets and kinds of world mark a scripted event sets ({@code EContext}'s selections, B6). */
+    public static final int EVENT_REGION = 0;
+    public static final int EVENT_FACTION = 1;
+    public static final int EVENT_ROYAL = 2;
+    public static final int EVENT_FLAG = 0;
+    public static final int EVENT_MARK = 1;
+
+    /**
+     * {@code EContext}'s selections (B6): outside the world part a scripted event's world mark travels in the city's
+     * next report instead of changing the world; {@code world} is the world's value now. True when handled so.
+     */
+    public static boolean eventMarkSet(int target, int kind, int index, int value, int world) {
+        Session s = Engine.session();
+        if (s == null || s.part == StepParts.WORLD_PART) {
+            return false;
+        }
+        if (s.eventMarks.set(target, kind, index, value, world)) {
+            s.cityInputs.add(s.inputs().eventMark(target, kind, index, value));
+        }
+        return true;
+    }
+
+    /** {@code EContext}'s selections (B6): outside the world part, the world's mark with what the city sent over it. */
+    public static int eventMarkGet(int target, int kind, int index, int world) {
+        Session s = Engine.session();
+        if (s == null || s.part == StepParts.WORLD_PART) {
+            return world;
+        }
+        return s.eventMarks.read(target, kind, index, world);
+    }
+
+    /**
+     * A scripted event's world action ({@code _BOOST_PERM}, {@code _OPINION}, {@code _REGION_POP}, {@code _INVASION}
+     * and their removals, B6): outside the world part it travels in the city's next report, and the world part runs
+     * it. True when sent.
+     */
+    public static boolean eventAction(Object action, Object event, Object context) {
+        Session s = Engine.session();
+        if (s == null || s.part == StepParts.WORLD_PART) {
+            return false;
+        }
+        s.cityInputs.add(s.inputs().eventAction(action, event, context));
+        return true;
+    }
+
+    /** A cache kept per update ({@code GAME.updateI()}) that must not carry the city part's values into the world part. */
+    public static int partKey(int updateI) {
+        return reportRead() ? ~updateI : updateI;
+    }
+
     /** {@code ADSupply.current().get}: outside the world part, what the city sent the army that the world has not applied. */
     public static int supplyPending(int supply, WArmy a) {
         Session s = Engine.session();

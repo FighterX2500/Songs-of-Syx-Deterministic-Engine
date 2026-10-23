@@ -8,17 +8,24 @@ import java.util.function.Consumer;
 
 import game.GAME;
 import game.battle.div.Div;
+import game.event.actions.EventAction;
+import game.event.engine.EContext;
+import game.event.engine.Event;
 import game.faction.FACTIONS;
 import game.faction.Faction;
 import game.faction.diplomacy.DIP;
 import game.faction.npc.FactionNPC;
+import game.faction.royalty.NPCCourt;
+import game.faction.royalty.Royalty;
 import game.faction.royalty.opinion.ROPINION;
 import settlement.battle.invasion.Invador;
 import settlement.stats.Induvidual;
 import snake2d.util.file.FileGetter;
 import snake2d.util.file.FilePutter;
 import sosdet.game.cmd.Args;
+import sosdet.Hooks;
 import sosdet.report.CityReport;
+import sosdet.report.EventMarks;
 import sosdet.report.Input;
 import sosdet.report.InputKind;
 import sosdet.report.SentSupplies;
@@ -26,8 +33,11 @@ import world.army.AD;
 import world.army.ADDiv;
 import world.army.ADDivs;
 import world.army.ADSupply;
+import world.WORLD;
 import world.army.WDivStoredAll;
 import world.entity.army.WArmy;
+import world.map.regions.Region;
+import world.region.RD;
 
 /**
  * The city's inputs to the world (ADR 0005 §2): made in the city part from the game's own save data, and applied in
@@ -38,13 +48,15 @@ public final class GameInputs implements Consumer<CityReport> {
     /** Big enough for a division's people (B4). */
     private final GameCodec codec = new GameCodec(1 << 20);
     private final SentSupplies sent;
+    private final EventMarks marks;
     /** {@code WDivStoredAll.add(Induvidual, Div)}: patch 96-cmd-world adds it, so the game jar compiled against lacks it. */
     private final Method addSoldier;
     /** {@code Invador.tell(int, int, int, int)}: patch 14-report-reads adds it. */
     private final Method tell;
 
-    public GameInputs(SentSupplies sent) {
+    public GameInputs(SentSupplies sent, EventMarks marks) {
         this.sent = sent;
+        this.marks = marks;
         try {
             addSoldier = WDivStoredAll.class.getMethod("add", Induvidual.class, Div.class);
         } catch (NoSuchMethodException e) {
@@ -120,6 +132,47 @@ public final class GameInputs implements Consumer<CityReport> {
         return new Input(InputKind.DIV_RESOLVE, 0, codec.written());
     }
 
+    /** B6: a scripted event sets a world mark ({@code Hooks.EVENT_*}), which the city reads as sent until it applies. */
+    public Input eventMark(int target, int kind, int index, int value) {
+        ByteBuffer b = ByteBuffer.allocate(8).putInt(index).putInt(value);
+        return new Input(InputKind.EVENT_MARK, target * EventMarks.KINDS + kind, b.array());
+    }
+
+    /**
+     * B6: a scripted event's world action, for the world part to run. The action is named by its event and its place
+     * among the event's actions; the context carries what the world actions read of it: the counts of what the event
+     * selected (the world marks name the targets themselves), its random number, amount and action numbers.
+     */
+    public Input eventAction(Object action, Object event, Object context) {
+        EventAction a = (EventAction) action;
+        Event e = (Event) event;
+        EContext c = (EContext) context;
+        int place = -1;
+        for (int k = 0; k < e.actions().size(); k++) {
+            if (e.actions().get(k) == a) {
+                place = k;
+            }
+        }
+        if (place < 0) {
+            throw new IllegalStateException("SOSDET: action " + a.key + " is not one of event " + e.key + "'s");
+        }
+        FilePutter p = codec.hashBegin();
+        p.i(e.allIndex);
+        p.chars(e.key);
+        p.i(place);
+        p.d(c.random);
+        p.d(c.actionAmount);
+        p.i(c.regs.am);
+        p.i(c.faction.am);
+        p.i(c.royalty.am);
+        int[] ints = c.actionContext == null ? new int[0] : c.actionContext;
+        p.i(ints.length);
+        for (int v : ints) {
+            p.i(v);
+        }
+        return new Input(InputKind.EVENT_ACTION, 0, codec.written());
+    }
+
     @Override
     public void accept(CityReport r) {
         for (Input in : r.inputs) {
@@ -175,9 +228,87 @@ public final class GameInputs implements Consumer<CityReport> {
             case DIV_RESOLVE:
                 divResolve(in.data());
                 break;
+            case EVENT_MARK:
+                ByteBuffer m = ByteBuffer.wrap(in.data());
+                applyEventMark(in.arg / EventMarks.KINDS, in.arg % EventMarks.KINDS, m.getInt(), m.getInt());
+                break;
+            case EVENT_ACTION:
+                applyEventAction(in.data());
+                break;
             default:
                 throw new IllegalStateException("SOSDET: no applier for input kind " + in.kind);
             }
+        }
+    }
+
+    private void applyEventMark(int target, int kind, int index, int value) {
+        marks.applied(target, kind, index);
+        boolean flag = kind == Hooks.EVENT_FLAG;
+        if (target == Hooks.EVENT_REGION) {
+            Region reg = WORLD.REGIONS().getByIndex(index);
+            if (flag) {
+                RD.event().ii.set(reg, value);
+            } else {
+                RD.event().mark.set(reg, value);
+            }
+        } else if (target == Hooks.EVENT_FACTION) {
+            Faction f = FACTIONS.all().get(index);
+            if (f == null) {
+                return; // gone since
+            }
+            if (flag) {
+                f.eventSet(value == 1);
+            } else {
+                f.eventMark = (short) value;
+            }
+        } else {
+            Royalty roy = royal(index);
+            if (roy == null) {
+                return; // their court changed since: the mark is lost
+            }
+            if (flag) {
+                roy.eventSet(value == 1);
+            } else {
+                roy.eventMark = (short) value;
+            }
+        }
+    }
+
+    /** A royal by the index the event selection gives them ({@code EContext.SelRoy.get}). */
+    private static Royalty royal(int index) {
+        Faction ff = FACTIONS.all().get(index / NPCCourt.MAX);
+        if (!(ff instanceof FactionNPC) || !ff.isActive()) {
+            return null;
+        }
+        FactionNPC f = (FactionNPC) ff;
+        int ri = index % NPCCourt.MAX;
+        return ri < f.court().all().size() ? f.court().all().get(ri) : null;
+    }
+
+    private void applyEventAction(byte[] data) {
+        FileGetter g = codec.reader(data);
+        try {
+            int index = g.i();
+            String key = g.chars();
+            int place = g.i();
+            EContext c = new EContext();
+            c.random = g.d();
+            c.actionAmount = g.d();
+            c.regs.am = g.i();
+            c.faction.am = g.i();
+            c.royalty.am = g.i();
+            int[] ints = new int[g.i()];
+            for (int k = 0; k < ints.length; k++) {
+                ints[k] = g.i();
+            }
+            c.actionContext = ints;
+            Event e = GAME.EVENT().read(index, key);
+            if (e == null || place >= e.actions().size()) {
+                throw new IllegalStateException("SOSDET: no event " + key + " (" + index + ") with action " + place);
+            }
+            e.actions().get(place).exe(e, c);
+        } catch (IOException e) {
+            throw new IllegalStateException("SOSDET: cannot read a scripted event's world action", e);
         }
     }
 

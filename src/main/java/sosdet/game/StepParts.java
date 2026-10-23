@@ -1,7 +1,6 @@
 package sosdet.game;
 
 import game.GAME.GameResource;
-import game.event.engine.EVENT_HANDLER;
 import game.events.EVENTS;
 import game.faction.FACTIONS;
 import game.raiding.RAIDING;
@@ -12,10 +11,11 @@ import world.WORLD;
  * the world part. The world part is lockstep; the city part is this PC's own city.
  *
  * <ul>
- * <li>World: {@code WORLD}, {@code RAIDING}, {@code EVENT_HANDLER}.</li>
+ * <li>World: {@code WORLD}, {@code RAIDING}.</li>
  * <li>Both, each doing its own half: {@code EVENTS} (city events, then world events) and {@code FACTIONS} (the player's
  * own update, then the other factions, trade, emissaries and diplomacy).</li>
- * <li>City: every other resource, a mod's included.</li>
+ * <li>City: every other resource, a mod's included. Scripted events ({@code EVENT_HANDLER}) are the city's: their
+ * world marks and world actions travel in the city's report (B6).</li>
  * </ul>
  */
 public final class StepParts {
@@ -41,7 +41,7 @@ public final class StepParts {
     }
 
     private static boolean world(GameResource r) {
-        return r instanceof WORLD || r instanceof RAIDING || r instanceof EVENT_HANDLER;
+        return r instanceof WORLD || r instanceof RAIDING;
     }
 
     /** True for the events of the world part, by save key (scan: city-world-link.md); any other event is the city's. */

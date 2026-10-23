@@ -100,6 +100,8 @@ final class Session {
     final java.util.ArrayList<Input> cityInputs = new java.util.ArrayList<>();
     /** The supplies among them, which the city reads as sent until the world applies them. */
     final SentSupplies sentSupplies = new SentSupplies();
+    /** World marks the city's scripted events set that its reports have yet to apply (B6). */
+    final sosdet.report.EventMarks eventMarks = new sosdet.report.EventMarks();
     /** The world part's changes to the city, applied in the step's city tail (ADR 0005 §3). */
     final TxnQueue txns = new TxnQueue();
     /** What applies them: the game, made at first use; tests put in their own. */
@@ -127,6 +129,7 @@ final class Session {
         txns.dropQueued();
         cityInputs.clear(); // the loaded world has the city's state as saved
         sentSupplies.clear();
+        eventMarks.clear();
         if (resync != null) {
             Resync r = resync;
             resync = null;
@@ -218,7 +221,7 @@ final class Session {
     /** Makes the city's inputs and applies them in the world part: the game, made at first use. */
     GameInputs inputs() {
         if (inputs == null) {
-            inputs = new GameInputs(sentSupplies);
+            inputs = new GameInputs(sentSupplies, eventMarks);
         }
         return inputs;
     }

@@ -1,6 +1,6 @@
 diff -ru -U2 a/game/boosting/BValue.java b/game/boosting/BValue.java
 --- a/game/boosting/BValue.java	2026-03-23 09:37:16.000000000 +0500
-+++ b/game/boosting/BValue.java	2026-10-23 23:09:50.611102700 +0500
++++ b/game/boosting/BValue.java	2026-10-23 23:21:47.323604800 +0500
 @@ -35,7 +35,7 @@
  		if (f instanceof FactionNPC) {
  			return vGet((FactionNPC) f);
@@ -10,9 +10,210 @@ diff -ru -U2 a/game/boosting/BValue.java b/game/boosting/BValue.java
  	}
  	
  	public class BValueNone implements BValue {
+diff -ru -U2 a/game/event/actions/_BOOST.java b/game/event/actions/_BOOST.java
+--- a/game/event/actions/_BOOST.java	2026-03-20 08:41:54.000000000 +0500
++++ b/game/event/actions/_BOOST.java	2026-10-23 23:21:47.438103300 +0500
+@@ -290,9 +290,9 @@
+ 		}
+ 		
+ 		private void cache() {
+-			if (upI == GAME.updateI())
++			if (upI == sosdet.Hooks.partKey(GAME.updateI())) // SOSDET: the world part's values are its own (B6)
+ 				return;
+-			upI = GAME.updateI();
++			upI = sosdet.Hooks.partKey(GAME.updateI());
+ 			player = def;
+ 			indu = def;
+ 			reg = def;
+@@ -339,7 +339,7 @@
+ 		
+ 		private boolean isActive(ClusterEntry e) {
+ 			if (e.imp.choice == null)
+-				return GAME.EVENT().current() == e.imp.parent;
++				return sosdet.Hooks.reportRead() ? sosdet.Hooks.reportI(sosdet.report.Field.EVENT_CURRENT, 0) == e.imp.parent.allIndex + 1 : GAME.EVENT().current() == e.imp.parent; // SOSDET: the world part reads the city's report (B6, ADR 0005)
+ 			return false;
+ 		}
+ 		
+@@ -376,7 +376,7 @@
+ 		public double vGet(Div div) {
+ 			if (div.army().faction() == FACTIONS.player()) {
+ 				cache();
+-				return player + STATS.EVENT().stat().div().getD(div)*this.indu;
++				return player + (sosdet.Hooks.reportRead() ? sosdet.Hooks.reportD(sosdet.report.Field.EVENT_DIV, div.indexArmy()) : STATS.EVENT().stat().div().getD(div))*this.indu; // SOSDET: the world part reads the city's report (B6, ADR 0005)
+ 			}
+ 			return def;
+ 		}
+@@ -384,7 +384,7 @@
+ 		@Override
+ 		public double vGet(HCLASS_RACE popTime) {
+ 			cache();
+-			return player + STATS.EVENT().stat().data(popTime.cl).getD(popTime.race)*this.indu;
++			return player + (sosdet.Hooks.reportRead() ? sosdet.Hooks.reportD(sosdet.report.Field.EVENT_CLASS_RACE, popTime.cl.index() + 1, popTime.race == null ? 0 : popTime.race.index() + 1) : STATS.EVENT().stat().data(popTime.cl).getD(popTime.race))*this.indu; // SOSDET: the world part reads the city's report (B6, ADR 0005)
+ 		}
+ 
+ 		@Override
+diff -ru -U2 a/game/event/actions/_BOOST_PERM.java b/game/event/actions/_BOOST_PERM.java
+--- a/game/event/actions/_BOOST_PERM.java	2026-01-31 09:04:10.000000000 +0500
++++ b/game/event/actions/_BOOST_PERM.java	2026-10-23 23:21:47.411605000 +0500
+@@ -75,7 +75,7 @@
+ 		}
+ 
+ 		@Override
+-		public void exe(Event e, EContext data) {
++		public void exe(Event e, EContext data) { if (sosdet.Hooks.eventAction(this, e, data)) return; // SOSDET: a scripted event's world action runs in the world part when the city's report arrives (B6, ADR 0005)
+ 			
+ 			if (player) {
+ 				GAME.BOOST().factions.set(FACTIONS.player(), spec, true);
+diff -ru -U2 a/game/event/actions/_BOOST_PERM_REMOVE.java b/game/event/actions/_BOOST_PERM_REMOVE.java
+--- a/game/event/actions/_BOOST_PERM_REMOVE.java	2026-01-31 09:04:10.000000000 +0500
++++ b/game/event/actions/_BOOST_PERM_REMOVE.java	2026-10-23 23:21:47.413102600 +0500
+@@ -56,7 +56,7 @@
+ 		}
+ 
+ 		@Override
+-		public void exe(Event e, EContext data) {
++		public void exe(Event e, EContext data) { if (sosdet.Hooks.eventAction(this, e, data)) return; // SOSDET: a scripted event's world action runs in the world part when the city's report arrives (B6, ADR 0005)
+ 		
+ 			if (keys != null) {
+ 				KeyMap<ArrayListGrower<TmpBoostSpec>> map = new KeyMap<ArrayListGrower<TmpBoostSpec>>();
+diff -ru -U2 a/game/event/actions/_INVASION.java b/game/event/actions/_INVASION.java
+--- a/game/event/actions/_INVASION.java	2025-09-12 16:09:04.000000000 +0500
++++ b/game/event/actions/_INVASION.java	2026-10-23 23:21:47.419103800 +0500
+@@ -50,7 +50,7 @@
+ 		}
+ 
+ 		@Override
+-		public void exe(Event event, EContext data) {
++		public void exe(Event event, EContext data) { if (sosdet.Hooks.eventAction(this, event, data)) return; // SOSDET: a scripted event's world action runs in the world part when the city's report arrives (B6, ADR 0005)
+ 			if (race == null)
+ 				return;
+ 			
+diff -ru -U2 a/game/event/actions/_OPINION.java b/game/event/actions/_OPINION.java
+--- a/game/event/actions/_OPINION.java	2026-03-25 10:31:18.000000000 +0500
++++ b/game/event/actions/_OPINION.java	2026-10-23 23:21:47.414103900 +0500
+@@ -69,7 +69,7 @@
+ 		}
+ 
+ 		@Override
+-		public void exe(Event e, EContext data) {
++		public void exe(Event e, EContext data) { if (sosdet.Hooks.eventAction(this, e, data)) return; // SOSDET: a scripted event's world action runs in the world part when the city's report arrives (B6, ADR 0005)
+ 		
+ 			for (FactionNPC f : FACTIONS.NPCs()) {
+ 				for (Royalty r : f.court().all()) {
+diff -ru -U2 a/game/event/actions/_OPINION_CLEAR.java b/game/event/actions/_OPINION_CLEAR.java
+--- a/game/event/actions/_OPINION_CLEAR.java	2026-03-25 10:31:18.000000000 +0500
++++ b/game/event/actions/_OPINION_CLEAR.java	2026-10-23 23:21:47.415103700 +0500
+@@ -40,7 +40,7 @@
+ 		}
+ 
+ 		@Override
+-		public void exe(Event e, EContext data) {
++		public void exe(Event e, EContext data) { if (sosdet.Hooks.eventAction(this, e, data)) return; // SOSDET: a scripted event's world action runs in the world part when the city's report arrives (B6, ADR 0005)
+ 		
+ 			KeyMap<ArrayListGrower<SuperSpecImp<Royalty>>> map = new KeyMap<ArrayListGrower<SuperSpecImp<Royalty>>>();
+ 			
+diff -ru -U2 a/game/event/actions/_REGION_POP.java b/game/event/actions/_REGION_POP.java
+--- a/game/event/actions/_REGION_POP.java	2025-05-16 07:52:10.000000000 +0500
++++ b/game/event/actions/_REGION_POP.java	2026-10-23 23:21:47.417103100 +0500
+@@ -67,7 +67,7 @@
+ 		
+ 
+ 		@Override
+-		public void exe(Event event, EContext data) {
++		public void exe(Event event, EContext data) { if (sosdet.Hooks.eventAction(this, event, data)) return; // SOSDET: a scripted event's world action runs in the world part when the city's report arrives (B6, ADR 0005)
+ 
+ 			
+ 			for (Region reg : WORLD.REGIONS().active()) {
+diff -ru -U2 a/game/event/engine/EContext.java b/game/event/engine/EContext.java
+--- a/game/event/engine/EContext.java	2026-06-17 10:48:04.000000000 +0500
++++ b/game/event/engine/EContext.java	2026-10-23 23:21:47.409603300 +0500
+@@ -566,22 +566,22 @@
+ 
+ 		@Override
+ 		void markSet(Region t, int id) {
+-			RD.event().mark.set(t, id);
++			if (!sosdet.Hooks.eventMarkSet(sosdet.Hooks.EVENT_REGION, sosdet.Hooks.EVENT_MARK, t.index(), id, RD.event().mark.get(t))) RD.event().mark.set(t, id); // SOSDET: a scripted event's world mark travels in the city's next report (B6, ADR 0005)
+ 		}
+ 
+ 		@Override
+ 		int markGet(Region t) {
+-			return RD.event().mark.get(t);
++			return sosdet.Hooks.eventMarkGet(sosdet.Hooks.EVENT_REGION, sosdet.Hooks.EVENT_MARK, t.index(), RD.event().mark.get(t)); // SOSDET: a scripted event's world mark travels in the city's next report (B6, ADR 0005)
+ 		}
+ 		
+ 		@Override
+ 		boolean eventGet(Region t) {
+-			return RD.event().ii.get(t) == 1;
++			return sosdet.Hooks.eventMarkGet(sosdet.Hooks.EVENT_REGION, sosdet.Hooks.EVENT_FLAG, t.index(), RD.event().ii.get(t)) == 1; // SOSDET: a scripted event's world mark travels in the city's next report (B6, ADR 0005)
+ 		}
+ 
+ 		@Override
+ 		void eventSet(Region t, int b) {
+-			RD.event().ii.set(t, b);
++			if (!sosdet.Hooks.eventMarkSet(sosdet.Hooks.EVENT_REGION, sosdet.Hooks.EVENT_FLAG, t.index(), b, RD.event().ii.get(t))) RD.event().ii.set(t, b); // SOSDET: a scripted event's world mark travels in the city's next report (B6, ADR 0005)
+ 		}
+ 
+ 		@Override
+@@ -648,23 +648,23 @@
+ 
+ 		@Override
+ 		void markSet(Faction t, int id) {
+-			t.eventMark = (short) id;
++			if (!sosdet.Hooks.eventMarkSet(sosdet.Hooks.EVENT_FACTION, sosdet.Hooks.EVENT_MARK, t.index(), id, t.eventMark)) t.eventMark = (short) id; // SOSDET: a scripted event's world mark travels in the city's next report (B6, ADR 0005)
+ 		}
+ 
+ 		@Override
+ 		int markGet(Faction t) {
+-			return t.eventMark;
++			return sosdet.Hooks.eventMarkGet(sosdet.Hooks.EVENT_FACTION, sosdet.Hooks.EVENT_MARK, t.index(), t.eventMark); // SOSDET: a scripted event's world mark travels in the city's next report (B6, ADR 0005)
+ 		}
+ 
+ 		@Override
+ 		void eventSet(Faction t, int b) {
+-			t.eventSet(b == 1);
++			if (!sosdet.Hooks.eventMarkSet(sosdet.Hooks.EVENT_FACTION, sosdet.Hooks.EVENT_FLAG, t.index(), b, t.event() ? 1 : 0)) t.eventSet(b == 1); // SOSDET: a scripted event's world mark travels in the city's next report (B6, ADR 0005)
+ 			
+ 		}
+ 		
+ 		@Override
+ 		boolean eventGet(Faction t) {
+-			return t.event();
++			return sosdet.Hooks.eventMarkGet(sosdet.Hooks.EVENT_FACTION, sosdet.Hooks.EVENT_FLAG, t.index(), t.event() ? 1 : 0) == 1; // SOSDET: a scripted event's world mark travels in the city's next report (B6, ADR 0005)
+ 		}
+ 
+ 		@Override
+@@ -788,24 +788,24 @@
+ 
+ 		@Override
+ 		void markSet(Royalty t, int id) {
+-			t.eventMark = (short) id;
++			if (!sosdet.Hooks.eventMarkSet(sosdet.Hooks.EVENT_ROYAL, sosdet.Hooks.EVENT_MARK, t.court.faction.index() * NPCCourt.MAX + t.successionI(), id, t.eventMark)) t.eventMark = (short) id; // SOSDET: a scripted event's world mark travels in the city's next report (B6, ADR 0005)
+ 			
+ 		}
+ 
+ 		@Override
+ 		int markGet(Royalty t) {
+-			return t.eventMark;
++			return sosdet.Hooks.eventMarkGet(sosdet.Hooks.EVENT_ROYAL, sosdet.Hooks.EVENT_MARK, t.court.faction.index() * NPCCourt.MAX + t.successionI(), t.eventMark); // SOSDET: a scripted event's world mark travels in the city's next report (B6, ADR 0005)
+ 		}
+ 
+ 		@Override
+ 		void eventSet(Royalty t, int b) {
+-			t.eventSet(b==1);
++			if (!sosdet.Hooks.eventMarkSet(sosdet.Hooks.EVENT_ROYAL, sosdet.Hooks.EVENT_FLAG, t.court.faction.index() * NPCCourt.MAX + t.successionI(), b, t.event() ? 1 : 0)) t.eventSet(b==1); // SOSDET: a scripted event's world mark travels in the city's next report (B6, ADR 0005)
+ 			
+ 		}
+ 		
+ 		@Override
+ 		boolean eventGet(Royalty t) {
+-			return t.event();
++			return sosdet.Hooks.eventMarkGet(sosdet.Hooks.EVENT_ROYAL, sosdet.Hooks.EVENT_FLAG, t.court.faction.index() * NPCCourt.MAX + t.successionI(), t.event() ? 1 : 0) == 1; // SOSDET: a scripted event's world mark travels in the city's next report (B6, ADR 0005)
+ 		}
+ 
+ 		@Override
 diff -ru -U2 a/game/faction/player/PCredits.java b/game/faction/player/PCredits.java
 --- a/game/faction/player/PCredits.java	2026-06-03 12:16:02.000000000 +0500
-+++ b/game/faction/player/PCredits.java	2026-10-23 23:09:50.613102700 +0500
++++ b/game/faction/player/PCredits.java	2026-10-23 23:21:47.328104300 +0500
 @@ -115,7 +115,7 @@
  //	}
  
@@ -54,7 +255,7 @@ diff -ru -U2 a/game/faction/player/PCredits.java b/game/faction/player/PCredits.
  	}
 diff -ru -U2 a/game/faction/royalty/opinion/OpsOther.java b/game/faction/royalty/opinion/OpsOther.java
 --- a/game/faction/royalty/opinion/OpsOther.java	2026-05-13 08:36:34.000000000 +0500
-+++ b/game/faction/royalty/opinion/OpsOther.java	2026-10-23 23:09:50.615604900 +0500
++++ b/game/faction/royalty/opinion/OpsOther.java	2026-10-23 23:21:47.329603900 +0500
 @@ -138,7 +138,7 @@
  			public double pget(Royalty roy) {
  				double c = 0;
@@ -75,7 +276,7 @@ diff -ru -U2 a/game/faction/royalty/opinion/OpsOther.java b/game/faction/royalty
  				
 diff -ru -U2 a/game/faction/royalty/opinion/OpsStance.java b/game/faction/royalty/opinion/OpsStance.java
 --- a/game/faction/royalty/opinion/OpsStance.java	2026-06-24 16:26:36.000000000 +0500
-+++ b/game/faction/royalty/opinion/OpsStance.java	2026-10-23 23:09:50.617103700 +0500
++++ b/game/faction/royalty/opinion/OpsStance.java	2026-10-23 23:21:47.333102900 +0500
 @@ -153,7 +153,7 @@
  			}
  			@Override
@@ -96,7 +297,7 @@ diff -ru -U2 a/game/faction/royalty/opinion/OpsStance.java b/game/faction/royalt
  				return 0;
 diff -ru -U2 a/game/faction/trade/TradeManager.java b/game/faction/trade/TradeManager.java
 --- a/game/faction/trade/TradeManager.java	2026-06-04 09:04:14.000000000 +0500
-+++ b/game/faction/trade/TradeManager.java	2026-10-23 23:09:50.620104500 +0500
++++ b/game/faction/trade/TradeManager.java	2026-10-23 23:21:47.337604900 +0500
 @@ -86,7 +86,7 @@
  
  		
@@ -108,7 +309,7 @@ diff -ru -U2 a/game/faction/trade/TradeManager.java b/game/faction/trade/TradeMa
  		}
 diff -ru -U2 a/game/raiding/Raider.java b/game/raiding/Raider.java
 --- a/game/raiding/Raider.java	2026-04-09 19:01:40.000000000 +0500
-+++ b/game/raiding/Raider.java	2026-10-23 23:09:50.625105500 +0500
++++ b/game/raiding/Raider.java	2026-10-23 23:21:47.341102500 +0500
 @@ -97,7 +97,7 @@
  	public boolean hasInterrest() {
  		if (!SETT.ROOMS().BARRACKS.get(0).reqs.passes(FACTIONS.player()))
@@ -120,7 +321,7 @@ diff -ru -U2 a/game/raiding/Raider.java b/game/raiding/Raider.java
  	}
 diff -ru -U2 a/init/value/GValuesInit.java b/init/value/GValuesInit.java
 --- a/init/value/GValuesInit.java	2026-03-25 14:53:10.000000000 +0500
-+++ b/init/value/GValuesInit.java	2026-10-23 23:09:50.628666300 +0500
++++ b/init/value/GValuesInit.java	2026-10-23 23:21:47.342605400 +0500
 @@ -92,7 +92,7 @@
  
  				@Override
@@ -132,7 +333,7 @@ diff -ru -U2 a/init/value/GValuesInit.java b/init/value/GValuesInit.java
  			};
 diff -ru -U2 a/init/value/Locker.java b/init/value/Locker.java
 --- a/init/value/Locker.java	2025-09-12 10:46:16.000000000 +0500
-+++ b/init/value/Locker.java	2026-10-23 23:09:50.631103600 +0500
++++ b/init/value/Locker.java	2026-10-23 23:21:47.343103700 +0500
 @@ -55,7 +55,7 @@
  		
  		@Override
@@ -153,7 +354,7 @@ diff -ru -U2 a/init/value/Locker.java b/init/value/Locker.java
  	}
 diff -ru -U2 a/settlement/battle/invasion/Invador.java b/settlement/battle/invasion/Invador.java
 --- a/settlement/battle/invasion/Invador.java	2026-05-29 20:35:38.000000000 +0500
-+++ b/settlement/battle/invasion/Invador.java	2026-10-23 23:09:50.687103400 +0500
++++ b/settlement/battle/invasion/Invador.java	2026-10-23 23:21:47.344603900 +0500
 @@ -88,7 +88,7 @@
  			
  			@Override
@@ -213,7 +414,7 @@ diff -ru -U2 a/settlement/battle/invasion/Invador.java b/settlement/battle/invas
  				active.removeOrdered(i);
 diff -ru -U2 a/settlement/entry/EntryPoints.java b/settlement/entry/EntryPoints.java
 --- a/settlement/entry/EntryPoints.java	2026-02-03 11:48:06.000000000 +0500
-+++ b/settlement/entry/EntryPoints.java	2026-10-23 23:09:50.634602900 +0500
++++ b/settlement/entry/EntryPoints.java	2026-10-23 23:21:47.345604000 +0500
 @@ -344,6 +344,8 @@
  	
  	
@@ -225,7 +426,7 @@ diff -ru -U2 a/settlement/entry/EntryPoints.java b/settlement/entry/EntryPoints.
  	
 diff -ru -U2 a/settlement/entry/SENTRY.java b/settlement/entry/SENTRY.java
 --- a/settlement/entry/SENTRY.java	2026-05-24 09:27:36.000000000 +0500
-+++ b/settlement/entry/SENTRY.java	2026-10-23 23:09:50.636606300 +0500
++++ b/settlement/entry/SENTRY.java	2026-10-23 23:21:47.347104800 +0500
 @@ -99,6 +99,8 @@
  	}
  	
@@ -237,7 +438,7 @@ diff -ru -U2 a/settlement/entry/SENTRY.java b/settlement/entry/SENTRY.java
  	
 diff -ru -U2 a/settlement/stats/POP.java b/settlement/stats/POP.java
 --- a/settlement/stats/POP.java	2026-06-18 08:35:38.000000000 +0500
-+++ b/settlement/stats/POP.java	2026-10-23 23:09:50.638604200 +0500
++++ b/settlement/stats/POP.java	2026-10-23 23:21:47.349603800 +0500
 @@ -23,6 +23,8 @@
  	}
  	
@@ -258,7 +459,7 @@ diff -ru -U2 a/settlement/stats/POP.java b/settlement/stats/POP.java
  			pop += SETT.ENTRY().onTheirWay(r, HTYPES.SUBJECT());
 diff -ru -U2 a/settlement/stats/colls/StatsWork.java b/settlement/stats/colls/StatsWork.java
 --- a/settlement/stats/colls/StatsWork.java	2026-06-17 10:48:04.000000000 +0500
-+++ b/settlement/stats/colls/StatsWork.java	2026-10-23 23:09:50.640103000 +0500
++++ b/settlement/stats/colls/StatsWork.java	2026-10-23 23:21:47.355105000 +0500
 @@ -875,7 +875,7 @@
  		
  		public boolean shoudRetire(Induvidual i) {
@@ -270,7 +471,7 @@ diff -ru -U2 a/settlement/stats/colls/StatsWork.java b/settlement/stats/colls/St
  		
 diff -ru -U2 a/settlement/stats/relation/StatsRelations.java b/settlement/stats/relation/StatsRelations.java
 --- a/settlement/stats/relation/StatsRelations.java	2026-06-17 10:48:04.000000000 +0500
-+++ b/settlement/stats/relation/StatsRelations.java	2026-10-23 23:09:50.641603300 +0500
++++ b/settlement/stats/relation/StatsRelations.java	2026-10-23 23:21:47.357106000 +0500
 @@ -413,7 +413,7 @@
  		}
  	}
@@ -300,7 +501,7 @@ diff -ru -U2 a/settlement/stats/relation/StatsRelations.java b/settlement/stats/
  		if (ref == 0)
 diff -ru -U2 a/world/army/ADStats.java b/world/army/ADStats.java
 --- a/world/army/ADStats.java	2026-06-25 10:46:44.000000000 +0500
-+++ b/world/army/ADStats.java	2026-10-23 23:09:50.690603300 +0500
++++ b/world/army/ADStats.java	2026-10-23 23:21:47.358604100 +0500
 @@ -206,12 +206,12 @@
  		};
  	}
@@ -318,7 +519,7 @@ diff -ru -U2 a/world/army/ADStats.java b/world/army/ADStats.java
  			double d = 0.25*(double)kills/men;
 diff -ru -U2 a/world/army/ADSupply.java b/world/army/ADSupply.java
 --- a/world/army/ADSupply.java	2026-01-13 10:16:26.000000000 +0500
-+++ b/world/army/ADSupply.java	2026-10-23 23:09:50.650605200 +0500
++++ b/world/army/ADSupply.java	2026-10-23 23:21:47.362104000 +0500
 @@ -49,7 +49,7 @@
  		current = new ADIntImp(init, "SUPPLY_" + KPrefix + "_" +res.key, name, res.names) {
  			
@@ -339,7 +540,7 @@ diff -ru -U2 a/world/army/ADSupply.java b/world/army/ADSupply.java
  		consumers = new ADIntImp(init, "SUPPLY_NEEDED_" + KPrefix + "_" + res.key, name, res.names);
 diff -ru -U2 a/world/army/WDivStored.java b/world/army/WDivStored.java
 --- a/world/army/WDivStored.java	2026-06-24 13:04:24.000000000 +0500
-+++ b/world/army/WDivStored.java	2026-10-23 23:09:50.652102900 +0500
++++ b/world/army/WDivStored.java	2026-10-23 23:21:47.364106200 +0500
 @@ -76,7 +76,7 @@
  	
  	@Override
@@ -389,7 +590,7 @@ diff -ru -U2 a/world/army/WDivStored.java b/world/army/WDivStored.java
  					if (h != null) {
 diff -ru -U2 a/world/entity/haven/WHavenType.java b/world/entity/haven/WHavenType.java
 --- a/world/entity/haven/WHavenType.java	2026-04-06 09:00:42.000000000 +0500
-+++ b/world/entity/haven/WHavenType.java	2026-10-23 23:09:50.655603200 +0500
++++ b/world/entity/haven/WHavenType.java	2026-10-23 23:21:47.367102900 +0500
 @@ -186,7 +186,7 @@
  			if (de.to == Double.NaN)
  				continue;
@@ -401,7 +602,7 @@ diff -ru -U2 a/world/entity/haven/WHavenType.java b/world/entity/haven/WHavenTyp
  				//d += CLAMP.d(de.comp.progress(v, de.to), 0, 1);
 diff -ru -U2 a/world/region/pop/RDEdicts.java b/world/region/pop/RDEdicts.java
 --- a/world/region/pop/RDEdicts.java	2025-09-22 07:59:34.000000000 +0500
-+++ b/world/region/pop/RDEdicts.java	2026-10-23 23:09:50.657103000 +0500
++++ b/world/region/pop/RDEdicts.java	2026-10-23 23:21:47.370103800 +0500
 @@ -75,7 +75,7 @@
  
  				@Override
@@ -413,7 +614,7 @@ diff -ru -U2 a/world/region/pop/RDEdicts.java b/world/region/pop/RDEdicts.java
  			}.add(r.loyalty.target);
 diff -ru -U2 a/world/region/pop/RDRace.java b/world/region/pop/RDRace.java
 --- a/world/region/pop/RDRace.java	2026-06-08 10:31:04.000000000 +0500
-+++ b/world/region/pop/RDRace.java	2026-10-23 23:09:50.658603600 +0500
++++ b/world/region/pop/RDRace.java	2026-10-23 23:21:47.372605100 +0500
 @@ -191,7 +191,7 @@
  						
  						@Override

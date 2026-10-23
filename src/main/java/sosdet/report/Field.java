@@ -62,12 +62,18 @@ public enum Field {
     TOURISM_PERMIT(Shape.RACE),
     /** The retirement age law, as a share ({@code RETIREMENT_AGE.decree().getD}); 0 in the null rows. */
     RETIREMENT(Shape.CLASS_RACE),
+    /** The share of a class and race a scripted event selected ({@code STATS.EVENT()}), for its boosts (B6). */
+    EVENT_CLASS_RACE(Shape.CLASS_RACE),
     // B5
     MERCY(Shape.ONE),
+    /** The scripted event running ({@code GAME.EVENT().current()}), its index plus one; 0 for none (B6). */
+    EVENT_CURRENT(Shape.ONE),
     // A6: the city divisions that world divisions are made of
     DIV_RACE(Shape.DIVISION),
     /** The men a division is set to have ({@code info.men()}). */
     DIV_MEN(Shape.DIVISION),
+    /** The share of a division a scripted event selected, for its boosts (B6). */
+    EVENT_DIV(Shape.DIVISION),
     /** The equipment a division is set to carry ({@code EquipBattle.target}). */
     DIV_EQUIP(Shape.DIVISION_EQUIP),
     // A5: the capital's garrison and invasions

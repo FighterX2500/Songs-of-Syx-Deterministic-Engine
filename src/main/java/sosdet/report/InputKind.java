@@ -16,5 +16,9 @@ public enum InputKind {
     /** B4: the invader of a lost invasion takes the player as vassal; the number is the faction. */
     VASSAL,
     /** B4: the survivors of a world division that fought in the city; the bytes name it and hold the people. */
-    DIV_RESOLVE
+    DIV_RESOLVE,
+    /** B6: a scripted event set a world mark; the number is the target and mark kind, the bytes the index and value. */
+    EVENT_MARK,
+    /** B6: a scripted event's world action; the bytes name the event and the action, and hold its context. */
+    EVENT_ACTION
 }

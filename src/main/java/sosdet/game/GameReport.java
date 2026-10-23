@@ -171,11 +171,13 @@ public final class GameReport implements CitySource {
                 v[l.slot(Field.NEXT_EXTRA, ci, ri)] = POP.next(c, r) - POP.tot(c, r);
                 v[l.slot(Field.RETIREMENT, ci, ri)] = c == null || r == null ? 0
                         : STATS.WORK().RET.RETIREMENT_AGE.decree().getD(c, r);
+                v[l.slot(Field.EVENT_CLASS_RACE, ci, ri)] = c == null ? 0 : STATS.EVENT().stat().data(c).getD(r);
             }
         }
         v[l.slot(Field.POP_TOTAL, 0)] = STATS.POP().POP.data(null).get(null);
         v[l.slot(Field.CITY_SOLDIERS, 0)] = STATS.BATTLE().DIV.stat().data().get(null);
         v[l.slot(Field.MERCY, 0)] = AD.stats().mercy().getD(FACTIONS.player());
+        v[l.slot(Field.EVENT_CURRENT, 0)] = GAME.EVENT().current() == null ? 0 : GAME.EVENT().current().allIndex + 1;
 
         LIST<Div> divs = GAME.ARMIES().player().divisions();
         LIST<EquipBattle> equips = STATS.EQUIP().BATTLE_ALL();
@@ -183,6 +185,7 @@ public final class GameReport implements CitySource {
             Div div = divs.get(d);
             v[l.slot(Field.DIV_RACE, d)] = div.info.race() == null ? -1 : div.info.race().index();
             v[l.slot(Field.DIV_MEN, d)] = div.info.men();
+            v[l.slot(Field.EVENT_DIV, d)] = STATS.EVENT().stat().div().getD(div);
             for (int e = 0; e < equips.size(); e++) {
                 v[l.slot(Field.DIV_EQUIP, d, equips.get(e).indexMilitary())] = equips.get(e).target(div);
             }
