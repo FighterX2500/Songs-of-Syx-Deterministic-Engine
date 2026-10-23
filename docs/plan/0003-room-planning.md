@@ -28,9 +28,11 @@ Status: in progress (2026-10-23). Design: [ADR 0003](../decisions/0003-room-plan
     - the doorway landed on the furniture's side, so it now scans from the bottom.
   - **Seen, not caused by planning:** one foreign draw on the host copy in P34B. It's a draw by another thread during a step, on the local stream; run X32B (SOS-32) had one too.
 
+- **Owner play test (2026-10-23, run P34P, `--play --no-invade`, about 7.5 minutes):** 3 copies identical to step 38,801, no engine desync (2,587 hashes compared). The host's log held 2 `roomBuild` (one of 521 bytes, furnished), one `planMode`, one `multiPlace` and 12 speed changes, all applied on every copy.
+
 ## Next steps, in order
 
-1. **Owner play test:** `--play` on Mogus-72 (or a field-less city save). The owner plans and builds rooms of several kinds, pauses mid-plan, and plans while time runs. Watch for desyncs and for anything the stash misses: a hash split right after planning means a planning write we haven't found.
+1. **Done, see above.** Owner play test: `--play` on Mogus-72 (or a field-less city save). The owner plans and builds rooms of several kinds, pauses mid-plan, and plans while time runs. Watch for desyncs and for anything the stash misses: a hash split right after planning means a planning write we haven't found.
 2. **Milestone 2, refurnish (owner: the room stays until Build; cancel does nothing):**
    - starting a refurnish only plans, without `RoomInstance.remove`;
    - the stash keeps a second layer per tile (the live room's values) and swaps it in around each step;
