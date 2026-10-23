@@ -559,6 +559,11 @@ def main():
     ap.add_argument("--resync", type=int, default=0, help="copy 1 saves a resync at this step; every copy loads it")
     ap.add_argument("--resync-on-desync", action="store_true",
                     help="at the first desync an engine reports, copy 1 saves a resync at its step; the others load it")
+    ap.add_argument("--world-at", type=int, default=0,
+                    help="spike (SOS-38): copy 1 saves at this step and runs on; the --world-load copies load only the"
+                         " --world-keys sections from that save into their running game, then run on")
+    ap.add_argument("--world-keys", default="WORLD,FACTIONS,RAIDING", help="the save sections a world load reads")
+    ap.add_argument("--world-load", default="2,3", help="the copies that load the world (1: copy 1 too, after its save)")
     ap.add_argument("--trace-draws", type=int, default=0,
                     help="debugging: every copy records the call site of each simulation draw for this many steps;"
                          " a desync writes the draws around it, and the summary names the first draw that differs")
@@ -646,6 +651,11 @@ def main():
     resync_save, resync_state = copies[0].rig / "resync.save", copies[0].rig / "resync.state"
 
     warm = {int(k) for k in args.warm.split(",") if k}
+    world_loaders = {int(k) for k in args.world_load.split(",") if k}
+    world_save = copies[0].rig / "world.save"
+    for stale in (world_save, pathlib.Path(str(world_save) + ".done")):
+        if stale.exists():
+            stale.unlink()
 
     def start_copy(c, speed):
         if c.k in warm:
@@ -683,6 +693,10 @@ def main():
             c.send("showmessages", "showmessages")  # the owner reads the messages in the played window
         if c.k == 1 and args.resync:
             c.send("resyncat %d %s %s" % (args.resync, resync_save, resync_state), "resyncat")
+        if args.world_at and (c.k == 1 or c.k in world_loaders):
+            mode = ("saveload" if c.k in world_loaders else "save") if c.k == 1 else "load"
+            c.send("worldat %d %s %s %s" % (args.world_at, mode, world_save, args.world_keys),
+                   "worldat")
         c.send("seed %d" % RUN_SEED, "seeded")
         # the agreed starting speed (it sets the step length): copy 1's; each copy's own speed only sets its pace
         c.send("speed %s" % (args.agreed_speed or speeds[0]), "speed")
@@ -774,6 +788,15 @@ def main():
             loading, done_ = c.find("resyncloading", 0), c.find("resynced", 0)
             lines.insert(1, "resync: copy %d loaded it from its step %s, at step %s, in %s s"
                          % (c.k, loading and loading["fromStep"], done_ and done_["step"], done_ and done_["loadSeconds"]))
+    if args.world_at:
+        saved = copies[0].find("worldsaved", 0)
+        lines.insert(0, "world: copy 1 saved at step %s in %s ms (%s bytes)"
+                     % (saved and saved["step"], saved and saved["saveMs"], saved and saved["saveBytes"]))
+        for c in copies:
+            if c.k in world_loaders:
+                w = c.find("worldloaded", 0)
+                lines.insert(1, "world: copy %d loaded %s at step %s in %s ms: %s"
+                             % (c.k, args.world_keys, w and w["step"], w and w["loadMs"], w and json.dumps(w["sections"])))
     for c in copies:
         shutil.copy2(c.events, run_dir / ("events-c%d.jsonl" % c.k))
     summary = ["SOSDET rig: %s, %s test, tag %s, %d copies; copy %d runs %d steps, the others until it stops"

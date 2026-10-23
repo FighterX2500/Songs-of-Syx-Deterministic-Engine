@@ -25,6 +25,8 @@ import game.battle.util.DivGeneration;
 import game.faction.FACTIONS;
 import game.faction.Faction;
 import game.save.GameLoader;
+import game.save.GameSaver;
+import game.save.Savable;
 import game.time.TIME;
 import init.constant.Config;
 import init.paths.PATHS;
@@ -42,7 +44,9 @@ import snake2d.util.file.FileGetter;
 import snake2d.util.file.FilePutter;
 import snake2d.util.misc.ACTION;
 import snake2d.util.rnd.RND;
+import snake2d.util.sets.KeyMap;
 import sosdet.Engine;
+import sosdet.game.GameResync;
 import sosdet.rig.act.CopyActions;
 import sosdet.rig.act.EmploymentActions;
 import sosdet.rig.act.LawActions;
@@ -202,6 +206,12 @@ public final class Rig implements SCRIPT {
         private Path resyncSave;
         private Path resyncState;
         private long resyncLoadStarted;
+        // world-only load (SOS-38 spike): copy 1 saves at worldStep, the loading copies load only worldKeys from it
+        private long worldStep = -1;
+        private boolean worldSaver;
+        private boolean worldSelfLoad;
+        private Path worldFile;
+        private List<String> worldKeys = new ArrayList<>();
         // stall sampler: the simulation thread's stack for every step over 100 ms
         private volatile Thread simThread;
         private volatile boolean sampling;
@@ -270,6 +280,9 @@ public final class Rig implements SCRIPT {
             }
             if (running && resyncStep >= 0 && Engine.step() == resyncStep) {
                 saveResync();
+            }
+            if (running && worldStep >= 0 && Engine.step() == worldStep) {
+                worldAtStep();
             }
             if (running) {
                 timing();
@@ -417,6 +430,83 @@ public final class Rig implements SCRIPT {
                     BattleState.setLoaded(exiter(), save, false);
                 }
             });
+        }
+
+        /**
+         * Held at the world step: copy 1 saves the whole game and runs on; a loading copy waits for that save, loads
+         * only the world's sections from it into the running game (SOS-38 spike), and runs on.
+         */
+        private void worldAtStep() {
+            Path done = Paths.get(worldFile + ".done");
+            long t0 = System.nanoTime();
+            if (worldSaver) {
+                GameResync.save(worldFile);
+                try {
+                    Files.write(done, new byte[0]);
+                } catch (IOException e) {
+                    throw new IllegalStateException("SOSDET rig: cannot write " + done, e);
+                }
+                event("worldsaved", String.format(Locale.ROOT, "\"step\":%d,\"saveMs\":%.0f,\"saveBytes\":%d", Engine.step(),
+                        (System.nanoTime() - t0) / 1e6, worldFile.toFile().length()));
+                if (worldSelfLoad) {
+                    long t1 = System.nanoTime();
+                    String loaded = loadWorld();
+                    event("worldloaded", String.format(Locale.ROOT, "\"step\":%d,\"loadMs\":%.0f,\"sections\":%s",
+                            Engine.step(), (System.nanoTime() - t1) / 1e6, loaded));
+                }
+            } else {
+                if (!Files.exists(done)) {
+                    return; // copy 1 hasn't saved yet: stay held
+                }
+                String loaded = loadWorld();
+                event("worldloaded", String.format(Locale.ROOT, "\"step\":%d,\"loadMs\":%.0f,\"sections\":%s", Engine.step(),
+                        (System.nanoTime() - t0) / 1e6, loaded));
+            }
+            worldStep = -1;
+            runOn();
+        }
+
+        /** Loads the sections named in worldKeys from worldFile into the running game, as GameSaver.load reads them. */
+        private String loadWorld() {
+            StringBuilder loaded = new StringBuilder("{");
+            try {
+                Field smapField = GameSaver.class.getDeclaredField("smap");
+                smapField.setAccessible(true);
+                @SuppressWarnings("unchecked") // GameSaver.smap is a KeyMap<Savable>
+                KeyMap<Savable> smap = (KeyMap<Savable>) smapField.get(GAME.saver());
+                Method load = Savable.class.getDeclaredMethod("load", FileGetter.class);
+                load.setAccessible(true);
+                FileGetter f = new FileGetter(worldFile, true);
+                int spec = f.i();
+                f.setPosition(f.getPosition() + spec); // GameSpec
+                for (int list = 0; list < 2; list++) { // GameSaver's "before" list, then "all"
+                    int am = f.i();
+                    for (int i = 0; i < am; i++) {
+                        String k = f.chars();
+                        int le = f.i();
+                        int end = f.getPosition() + le;
+                        if (worldKeys.contains(k)) {
+                            Savable s = smap.get(k);
+                            if (s == null) {
+                                throw new IllegalStateException("SOSDET rig: no section " + k + " in this game");
+                            }
+                            long t = System.nanoTime();
+                            load.invoke(s, f);
+                            if (f.getPosition() != end) {
+                                throw new IllegalStateException("SOSDET rig: section " + k + " read " + (f.getPosition() - end + le)
+                                        + " of " + le + " bytes");
+                            }
+                            loaded.append(loaded.length() == 1 ? "" : ",").append(String.format(Locale.ROOT,
+                                    "\"%s\":{\"bytes\":%d,\"ms\":%.0f}", k, le, (System.nanoTime() - t) / 1e6));
+                        } else {
+                            f.setPosition(end);
+                        }
+                    }
+                }
+            } catch (IOException | ReflectiveOperationException e) {
+                throw new IllegalStateException("SOSDET rig: world load from " + worldFile + " failed", e);
+            }
+            return loaded.append('}').toString();
         }
 
         /** Peer: the first frame of the game loaded for a resync. */
@@ -626,6 +716,14 @@ public final class Rig implements SCRIPT {
             case "resyncload":
                 loadResync(Paths.get(c[1]), Files.readAllBytes(Paths.get(c[2])));
                 return;
+            case "worldat":
+                worldStep = Long.parseLong(c[1]);
+                worldSaver = c[2].startsWith("save");
+                worldSelfLoad = c[2].equals("saveload");
+                worldFile = Paths.get(c[3]);
+                worldKeys = Arrays.asList(c[4].split(","));
+                event("worldat", "\"step\":" + worldStep);
+                return;
             case "showmessages":
                 showMessages = true;
                 event("showmessages", "");
@@ -696,6 +794,8 @@ public final class Rig implements SCRIPT {
             lastStep = steps > 0 ? from + steps : Long.MAX_VALUE; // 0: until hold
             if (resyncStep >= 0) {
                 Engine.runUntil(Math.min(lastStep, resyncStep)); // held there for the resync save
+            } else if (worldStep >= 0) {
+                Engine.runUntil(Math.min(lastStep, worldStep)); // held there for the world save or load
             } else {
                 runOn();
             }
