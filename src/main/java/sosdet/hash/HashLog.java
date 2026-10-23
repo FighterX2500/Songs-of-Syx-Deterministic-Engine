@@ -31,10 +31,13 @@ public final class HashLog {
     public static final int ENTITIES = 4;
     /** The world map: armies, region owners, faction credits and wars (SOS-35). */
     public static final int WORLD = 5;
-    public static final int SECTIONS = 6;
-    static final String[] SECTION_NAMES = {"clock", "soldiers", "divisions", "projectiles", "entities", "world"};
+    /** The city report the world part reads (ADR 0005 §2, SOS-38). */
+    public static final int REPORT = 6;
+    public static final int SECTIONS = 7;
+    static final String[] SECTION_NAMES = {"clock", "soldiers", "divisions", "projectiles", "entities", "world",
+            "report"};
 
-    static final int FORMAT_VERSION = 3;
+    static final int FORMAT_VERSION = 4;
     static final int MAGIC = 0x53444853; // "SDHS"
     static final int HEADER_BYTES = 4 * 5;
     static final long FNV_OFFSET = 0xcbf29ce484222325L;
@@ -103,8 +106,11 @@ public final class HashLog {
         return step > 0 && step % interval == 0;
     }
 
-    /** Hashes the state at the end of {@code step}; {@code clock} is the engine's own counters, already mixed. */
-    public void take(long step, long clock, StateSource source) {
+    /**
+     * Hashes the state at the end of {@code step}; {@code clock} is the engine's own counters, already mixed, and
+     * {@code report} the city report in force.
+     */
+    public void take(long step, long clock, long report, StateSource source) {
         long t0 = System.nanoTime();
         if (steps == null) {
             allocate(source.divisions());
@@ -114,6 +120,7 @@ public final class HashLog {
         long[] div = divisionHashes[slot];
         Arrays.fill(div, FNV_OFFSET);
         sec[CLOCK] = clock;
+        sec[REPORT] = report;
         source.hash(sec, div);
         long soldiers = FNV_OFFSET;
         for (long d : div) {

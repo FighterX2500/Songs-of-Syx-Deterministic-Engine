@@ -5,6 +5,8 @@ import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 
+import sosdet.hash.HashLog;
+
 /**
  * One city's report to the world (ADR 0005 §2): the city values the world part reads, taken in the city part at one
  * step and read by the world part from a later one. Its bytes carry a protocol version; a whole value is written in a
@@ -155,6 +157,15 @@ public final class CityReport {
             }
         }
         return true;
+    }
+
+    /** The report's step and every value's bits, for the state hash. */
+    public long hash() {
+        long h = HashLog.mix(HashLog.mix(HashLog.mix(HashLog.start(), faction), takenAt), appliesAt);
+        for (double v : values) {
+            h = HashLog.mix(h, Double.doubleToRawLongBits(v));
+        }
+        return h;
     }
 
     @Override

@@ -14,6 +14,7 @@ import sosdet.game.StepParts;
 import sosdet.game.WorldStatics;
 import sosdet.game.cmd.PlanStash;
 import sosdet.hash.HashLog;
+import sosdet.report.CityReport;
 import sosdet.report.Field;
 import sosdet.report.Reports;
 
@@ -141,7 +142,8 @@ public final class Hooks {
         if (s.hashes.due(step)) {
             long clock = HashLog.mix(HashLog.mix(HashLog.mix(HashLog.start(), step), s.streams.drawsSinceLoad()),
                     s.ai().applied());
-            s.hashes.take(step, clock, s.source());
+            CityReport r = s.reports.current();
+            s.hashes.take(step, clock, r == null ? 0 : r.hash(), s.source());
         }
         s.times.record(System.nanoTime() - s.stepStartNanos);
         s.stepStartNanos = 0;

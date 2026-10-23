@@ -18,6 +18,7 @@ import sosdet.Hooks;
 import sosdet.hash.HashLog;
 import sosdet.hash.StateSource;
 import world.WORLD;
+import world.entity.WEntity;
 import world.army.AD;
 import world.entity.army.WArmy;
 import world.map.regions.Region;
@@ -107,7 +108,10 @@ public final class GameHash implements StateSource {
         sections[HashLog.WORLD] = worldHash();
     }
 
-    /** The world map: every army's slot, faction, tile, state and men; every region's owner; every faction's credits and wars. */
+    /**
+     * The world map: every army's slot, faction, tile, state and men; every world entity; every region's owner; every
+     * faction's credits and wars.
+     */
     private static long worldHash() {
         long h = HashLog.start();
         for (int i = 0; i < WORLD.ENTITIES().armies.max(); i++) {
@@ -123,6 +127,8 @@ public final class GameHash implements StateSource {
             h = HashLog.mix(h, a.state().index());
             h = HashLog.mix(h, AD.men(null).get(a));
         }
+        h = entitiesHash(h, WORLD.ENTITIES().allFast());
+        h = entitiesHash(h, WORLD.ENTITIES().allSlow());
         LIST<Region> regions = WORLD.REGIONS().all();
         for (int i = 0; i < regions.size(); i++) {
             Faction f = regions.get(i).faction();
@@ -136,6 +142,19 @@ public final class GameHash implements StateSource {
             for (int k = i + 1; k < factions.size(); k++) {
                 h = HashLog.mix(h, DIP.WAR().is(f, factions.get(k)) ? 1 : 0);
             }
+        }
+        return h;
+    }
+
+    /** Every world entity, caravans and camps too: its slot, kind, tile and faction (SOS-38). */
+    private static long entitiesHash(long h, LIST<WEntity> ents) {
+        h = HashLog.mix(h, ents.size());
+        for (int i = 0; i < ents.size(); i++) {
+            WEntity e = ents.get(i);
+            h = HashLog.mix(h, e.getClass().getName().hashCode());
+            h = HashLog.mix(h, e.body().x1());
+            h = HashLog.mix(h, e.body().y1());
+            h = HashLog.mix(h, e.faction() == null ? -1 : e.faction().index());
         }
         return h;
     }
