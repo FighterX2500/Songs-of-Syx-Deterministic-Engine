@@ -21,7 +21,8 @@ A short map for an AI agent (or a person) about to change SOSDET. Read it first,
    - enters the simulation random stream, reseeded from the seed and the step number;
    - applies the log entries due at this step: orders, commands, speed changes and the AI general's settings.
 4. **The step itself:** the game's resources update by the step length (city; world unless held; battle).
-   - Battle jobs and path finding run inside the step, not on their threads (patches `30`, `35`).
+   - Battle jobs run inside the step, not on their threads (patch `30`).
+   - Path jobs queued in the step run at its end, before the hash: share 0 on the simulation thread, shares 1 and 2 on path threads, job i always on share i % 3 (patch `35`, `PathWorkers`).
    - The host's AI general keeps its own thread, but writes only to the log (patch `90`).
 5. **`Hooks.stepEnd`:** every 30 steps the state hash ([`GameHash`](../src/main/java/sosdet/game/GameHash.java), [`HashLog`](../src/main/java/sosdet/hash/HashLog.java)). It has six sections: clock, soldiers, divisions, projectiles, entities and world. Rooms, stock and stats are not hashed, so a split there shows up in the entities a few steps later.
 6. **Between steps** come the UI and rendering. They draw from the cosmetic stream and must never write simulation state (patches `65`, `67`, `98`).
@@ -79,10 +80,11 @@ Each line is a class of cause found in practice. The patch named holds the fix; 
 | --- | --- | --- |
 | **Frame time drives the simulation** | Sub-steps cut from the frame; the battle view updated once per frame | `10` |
 | **Threads** | Battle jobs and path finding on wall-clock threads | `30`, `35` |
+| | Path threads sharing a static heuristic target and a list's single iterator | `35` |
 | | Graphics-thread jobs drawing random numbers | `80` |
 | | The AI general sharing a lazy count and a scratch vector with the step | `90` |
 | **Random draws** | One shared `RND` | `20` |
-| | Visual draws inside the step: tree sway, sound picks skipped at zero volume, light flicker only with the light cycle on, the earthquake's camera shake | `40` |
+| | Visual draws inside the step: tree sway, sound picks skipped at zero volume, light flicker only with the light cycle on, the earthquake's camera shake, the world minimap's colour grit when this PC's render hadn't redrawn the chunk first | `40` |
 | | Static initializers drawing whenever their class happens to load | `40`, `50` |
 | | Start-up tables from an unseeded stream | `50` |
 | | Draws while loading a save | `70` |

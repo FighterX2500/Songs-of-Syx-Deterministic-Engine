@@ -65,6 +65,10 @@ final class Session {
     volatile long stepStartNanos;
     long pathJobs;
     long pathNanos;
+    /** Runs the path jobs a step queued, at its end (SOS-37). */
+    final PathWorkers paths = new PathWorkers();
+    /** The game's queue of path jobs, set by the first job a step queues; null when none is waiting. */
+    PathQueue pathQueue;
 
     /** The seed of the random stream at a step: the same on every PC, whatever happened before. */
     int stepSeed(long step) {
@@ -148,5 +152,6 @@ final class Session {
         streams.resetCounts();
         pathJobs = 0;
         pathNanos = 0;
+        java.util.Arrays.fill(jobs.nanos, 0);
     }
 }

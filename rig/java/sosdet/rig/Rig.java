@@ -71,6 +71,8 @@ import view.main.VIEW;
  *                                       artillery pieces per side, spread over the artillery types
  *   loadbattle &lt;save&gt;                   load a battle save and enter its deployment
  *   seed &lt;n&gt;                            seed the simulation stream
+ *   tracedraws &lt;steps&gt; [from]          debugging: record each simulation draw's call site for the last steps,
+ *                                       from that step on (default: now)
  *   invade &lt;men&gt;                        the next city run starts an invasion of that many men at steps 1 and 2
  *   ai &lt;instep | host ID | peer ID&gt;    where the AI general runs; before the save loads (ID names the start)
  *   ailog &lt;host|peer&gt; &lt;file&gt;           after the load: the host appends its AI log to the file every frame,
@@ -170,6 +172,9 @@ public final class Rig implements SCRIPT {
         private PromptAnswers prompts;
         /** The city's messages stay open for a human (showmessages): the played copy. */
         private boolean showMessages;
+        /** The draw trace starts at this step (-1: not waiting); tracing from the start would slow a long replay. */
+        private long traceFrom = -1;
+        private int traceSteps;
         private long started;
         // vanilla timing baseline: no session, the game's own sub-steps
         private boolean vanilla;
@@ -258,6 +263,11 @@ public final class Rig implements SCRIPT {
             }
             exchangeAiLog();
             exchangeHashes();
+            if (traceFrom >= 0 && Engine.active() && Engine.step() >= traceFrom) {
+                Engine.traceDraws(traceSteps);
+                event("tracing", "\"step\":" + Engine.step());
+                traceFrom = -1;
+            }
             if (running && resyncStep >= 0 && Engine.step() == resyncStep) {
                 saveResync();
             }
@@ -544,8 +554,12 @@ public final class Rig implements SCRIPT {
                 loadBattle(rest(c));
                 return;
             case "tracedraws":
-                Engine.traceDraws(Integer.parseInt(c[1]));
-                event("tracedraws", "\"steps\":" + c[1]);
+                traceSteps = Integer.parseInt(c[1]);
+                traceFrom = c.length > 2 ? Long.parseLong(c[2]) : -1;
+                if (traceFrom < 0) {
+                    Engine.traceDraws(traceSteps);
+                }
+                event("tracedraws", "\"steps\":" + c[1] + ",\"from\":" + traceFrom);
                 return;
             case "speed":
                 Engine.speed(Double.parseDouble(c[1]));

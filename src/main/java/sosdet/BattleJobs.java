@@ -15,24 +15,38 @@ final class BattleJobs {
     static final int STATUS_EVERY_STEPS = 30;
 
     private boolean running;
+    /** Time in each job since the stats were reset: orders, centres, trajectories, general, status. */
+    final long[] nanos = new long[5];
 
     /** {@code generalInStep}: false when the general runs on the host's own thread, or not at all (peer). */
     void run(long step, Runnable orders, Runnable centres, Runnable trajectories, Runnable general, Runnable status,
             boolean generalInStep) {
         running = true;
         try {
+            long t = System.nanoTime();
             orders.run();
+            t = lap(0, t);
             centres.run();
+            t = lap(1, t);
             trajectories.run();
+            t = lap(2, t);
             for (int i = 0; generalInStep && i < GENERAL_RUNS_PER_STEP; i++) {
                 general.run();
             }
+            t = lap(3, t);
             if (step % STATUS_EVERY_STEPS == 0) {
                 status.run();
             }
+            lap(4, t);
         } finally {
             running = false;
         }
+    }
+
+    private long lap(int job, long since) {
+        long now = System.nanoTime();
+        nanos[job] += now - since;
+        return now;
     }
 
     /**

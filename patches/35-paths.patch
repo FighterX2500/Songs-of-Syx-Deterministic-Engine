@@ -1,31 +1,143 @@
 diff -ru -U2 a/settlement/path/thread/FinderThread.java b/settlement/path/thread/FinderThread.java
---- a/settlement/path/thread/FinderThread.java	2026-10-22 16:10:15.189787500 +0500
-+++ b/settlement/path/thread/FinderThread.java	2026-10-22 16:10:15.219297700 +0500
-@@ -19,7 +19,11 @@
+--- a/settlement/path/thread/FinderThread.java	2026-06-17 17:02:24.000000000 +0500
++++ b/settlement/path/thread/FinderThread.java	2026-10-23 19:41:35.747251200 +0500
+@@ -19,7 +19,36 @@
  	private final static Worker[] works = new Worker[1];
  	private final Thread[] threads = new Thread[works.length];
  	
 +	private final SCOMPONENTS comps;
-+	private Worker stepWorker;
++	// SOSDET: in a session, the jobs a step queues and the scratch of each share that runs them (B9, SOS-37)
++	private Worker[] stepWorkers;
++	private final ArrayList<ThreadPathJob> stepJobs = new ArrayList<>(1024);
++	private final ArrayList<ThreadPath> stepPaths = new ArrayList<>(1024);
++	private final sosdet.PathQueue stepQueue = new sosdet.PathQueue() {
++
++		@Override
++		public int queued() {
++			return stepJobs.size();
++		}
++
++		@Override
++		public void run(int share, int shares) {
++			Worker w = stepWorkers[share];
++			for (int i = share; i < stepJobs.size(); i += shares) {
++				ThreadPath t = stepPaths.get(i);
++				t.status = (byte) (stepJobs.get(i).doJob(w.pather, w.fin, t) ? 3 : 2);
++			}
++		}
++
++		@Override
++		public void clear() {
++			stepJobs.clear();
++			stepPaths.clear();
++		}
++	};
 +
  	public FinderThread(SCOMPONENTS comps) {
 +		this.comps = comps;
  
  		
  		for (Worker w : works) {
-@@ -88,6 +92,15 @@
+@@ -88,6 +117,27 @@
  		t.dx = (short) dx;
  		t.dy = (short) dy;
  		t.full = full;
 +		if (sosdet.Hooks.pathsNow()) {
-+			// SOSDET: compute the path now, on the simulation thread, so the answer comes at a fixed step (B9)
-+			if (stepWorker == null)
-+				stepWorker = new Worker(this, comps);
++			if (stepWorkers == null) {
++				stepWorkers = new Worker[sosdet.Hooks.PATH_SHARES];
++				for (int i = 0; i < stepWorkers.length; i++)
++					stepWorkers[i] = new Worker(this, comps);
++			}
++			if (sosdet.Hooks.queuePath(stepQueue)) {
++				// SOSDET: in the step, queued for its end, where the path threads find it (B9, SOS-37)
++				if (stepJobs.hasRoom()) {
++					stepJobs.add(job);
++					stepPaths.add(t);
++				}else
++					t.status = 0;
++				return;
++			}
++			// SOSDET: outside the step, compute the path now, as before (B9)
 +			long start = System.nanoTime();
-+			t.status = (byte) (job.doJob(stepWorker.pather, stepWorker.fin, t) ? 3 : 2);
++			t.status = (byte) (job.doJob(stepWorkers[0].pather, stepWorkers[0].fin, t) ? 3 : 2);
 +			sosdet.Hooks.pathDone(System.nanoTime() - start);
 +			return;
 +		}
  		lock();
  		if (queueJob.hasRoom()) {
  			queueJob.add(job);
+diff -ru -U2 a/settlement/path/thread/SFinderRequest.java b/settlement/path/thread/SFinderRequest.java
+--- a/settlement/path/thread/SFinderRequest.java	2025-03-25 09:52:14.000000000 +0500
++++ b/settlement/path/thread/SFinderRequest.java	2026-10-23 19:41:35.747251200 +0500
+@@ -85,7 +85,8 @@
+ 					return t;
+ 				}
+ 				
+-				for (DIR d : dirs) {
++				for (int di = 0; di < dirs.size(); di++) { // SOSDET: no shared iterator, for the path threads (SOS-37)
++					DIR d = dirs.get(di);
+ 					
+ 					int dx = d.x()+t.x();
+ 					int dy = d.y()+t.y();
+diff -ru -U2 a/settlement/path/thread/SPathFinderThread.java b/settlement/path/thread/SPathFinderThread.java
+--- a/settlement/path/thread/SPathFinderThread.java	2025-09-12 16:12:40.000000000 +0500
++++ b/settlement/path/thread/SPathFinderThread.java	2026-10-23 19:41:35.749247300 +0500
+@@ -56,7 +56,7 @@
+ 		
+ 		f.pushSloppy(startX, startY, 0);
+ 		f.setValue2(startX, startY, 0);
+-		OpDist.init(destX, destY);
++		opDist.init(destX, destY);
+ 
+ 		while (f.hasMore()) {
+ 			PathTile t = f.pollSmallest();
+@@ -90,7 +90,7 @@
+ 					cost*= d.tileDistance();
+ 					
+ 					cost += t.getValue2();
+-					PathTile t2 = f.pushSmaller(tx, ty, cost+OpDist.get(tx, ty), t);
++					PathTile t2 = f.pushSmaller(tx, ty, cost+opDist.get(tx, ty), t);
+ 					if (t2 != null)
+ 						t2.setValue2(cost);
+ 					
+@@ -129,7 +129,7 @@
+ 		}
+ 		
+ 		
+-		OpDist.init(dest.centreX(), dest.centreY());
++		opDist.init(dest.centreX(), dest.centreY());
+ 		f.pushSloppy(startX, startY, 0);
+ 		f.setValue2(startX, startY, 0);
+ 		while (f.hasMore()) {
+@@ -152,7 +152,7 @@
+ 				if (cost > 0) {
+ 					cost*= d.tileDistance();
+ 					cost += t.getValue2();
+-					PathTile t2 = f.pushSmaller(tx, ty, cost+OpDist.get(tx, ty), t);
++					PathTile t2 = f.pushSmaller(tx, ty, cost+opDist.get(tx, ty), t);
+ 					if (t2 != null)
+ 						t2.setValue2(cost);
+ 					
+@@ -173,17 +173,19 @@
+ 	}
+ 	
+ 
++	private final OpDist opDist = new OpDist(); // SOSDET: one per finder, not static: each path thread has its own (SOS-37)
++
+ 	private static class OpDist {
+ 		
+-		private static int destX,destY;
++		private int destX,destY;
+ 		private static double weight = 0.7;
+ 		
+-		static void init(int dx, int dy) {
++		void init(int dx, int dy) {
+ 			destX = dx;
+ 			destY = dy;
+ 		}
+ 		
+-		private static double get(int x, int y) {
++		private double get(int x, int y) {
+ 			x = Math.abs(x-destX);
+ 			y = Math.abs(y-destY);
+ 			

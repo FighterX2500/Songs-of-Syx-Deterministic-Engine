@@ -13,6 +13,8 @@ public final class Stats {
     public final long foreignDraws;
     public final long pathJobs;
     public final long pathNanos;
+    /** Time in each battle job over every timed step: orders, centres, trajectories, in-step general, status. */
+    private final long[] battleJobNanos;
     public final long timedSteps;
     public final double meanMs;
     public final double p50Ms;
@@ -42,7 +44,7 @@ public final class Stats {
     public final long hashesCompared;
     public final long hashesMissed;
 
-    Stats(long step, long simulationDraws, long foreignDraws, long pathJobs, long pathNanos, long timedSteps,
+    Stats(long step, long simulationDraws, long foreignDraws, long pathJobs, long pathNanos, long[] battleJobNanos, long timedSteps,
             double meanMs, double p50Ms, double p95Ms, double p99Ms, double p999Ms, double maxMs,
             long stepsOver100Ms, long stepsOver1S, AiMode aiMode, long aiApplied, long aiArtillery, int aiPending,
             long ordersApplied, long commandsApplied, long commandsSkipped, double agreedSpeed, long hashes, double hashMeanMs, double hashMaxMs, long hashesCompared, long hashesMissed) {
@@ -51,6 +53,7 @@ public final class Stats {
         this.foreignDraws = foreignDraws;
         this.pathJobs = pathJobs;
         this.pathNanos = pathNanos;
+        this.battleJobNanos = battleJobNanos;
         this.timedSteps = timedSteps;
         this.meanMs = meanMs;
         this.p50Ms = p50Ms;
@@ -75,14 +78,32 @@ public final class Stats {
         this.hashesMissed = hashesMissed;
     }
 
+    /** Time in a battle job, in ms per timed step: 0 orders, 1 centres, 2 trajectories, 3 general, 4 status. */
+    public double battleJobMsPerStep(int job) {
+        return msPerStep(battleJobNanos[job]);
+    }
+
+    private double msPerStep(long nanos) {
+        return timedSteps == 0 ? 0 : nanos / 1e6 / timedSteps;
+    }
+
+    private String eachMsPerStep() {
+        StringBuilder b = new StringBuilder("[");
+        for (int i = 0; i < battleJobNanos.length; i++) {
+            b.append(i == 0 ? "" : ",").append(String.format(Locale.ROOT, "%.4f", battleJobMsPerStep(i)));
+        }
+        return b.append(']').toString();
+    }
+
     /** One JSON object, for logs. */
     public String toJson() {
         return String.format(Locale.ROOT,
-                "{\"step\":%d,\"simulationDraws\":%d,\"foreignDraws\":%d,\"pathJobs\":%d,\"pathMsPerStep\":%.4f,"
+                "{\"step\":%d,\"simulationDraws\":%d,\"foreignDraws\":%d,\"pathJobs\":%d,\"pathMsPerStep\":%.4f,\"battleJobsMsPerStep\":%.4f,\"battleJobsMsEach\":%s,"
                         + "\"timedSteps\":%d,\"meanMs\":%.3f,\"p50Ms\":%.1f,\"p95Ms\":%.1f,\"p99Ms\":%.1f,\"p999Ms\":%.1f,"
                         + "\"maxMs\":%.1f,\"over100Ms\":%d,\"over1S\":%d,\"ai\":\"%s\",\"aiApplied\":%d,\"aiArtillery\":%d,\"aiPending\":%d,"
                         + "\"ordersApplied\":%d,\"commandsApplied\":%d,\"commandsSkipped\":%d,\"agreedSpeed\":%.2f,\"hashes\":%d,\"hashMeanMs\":%.3f,\"hashMaxMs\":%.1f,\"hashesCompared\":%d,\"hashesMissed\":%d}",
                 step, simulationDraws, foreignDraws, pathJobs, timedSteps == 0 ? 0 : pathNanos / 1e6 / timedSteps,
+                msPerStep(java.util.Arrays.stream(battleJobNanos).sum()), eachMsPerStep(),
                 timedSteps, meanMs, p50Ms, p95Ms, p99Ms, p999Ms, maxMs, stepsOver100Ms, stepsOver1S, aiMode, aiApplied, aiArtillery,
                 aiPending, ordersApplied, commandsApplied, commandsSkipped, agreedSpeed, hashes, hashMeanMs, hashMaxMs, hashesCompared, hashesMissed);
     }
