@@ -1,0 +1,249 @@
+diff -ru -U2 a/settlement/battle/invasion/Invasion.java b/settlement/battle/invasion/Invasion.java
+--- a/settlement/battle/invasion/Invasion.java	2026-03-25 10:31:18.000000000 +0500
++++ b/settlement/battle/invasion/Invasion.java	2026-10-23 16:21:50.184212600 +0500
+@@ -349,7 +349,7 @@
+ 					state = STATE.DONE;
+ 				}
+ 			};
+-			VIEW.inters().yesNo.activate(m, yes, no, false);
++			sosdet.game.cmd.StepPrompts.yesNo(m, yes, no, false); // SOSDET: answered by command in a session (SOS-35)
+ 			resolve(true);
+ 			return false;
+ 		}else if (GAME.ARMIES().enemy().men() > 0){
+diff -ru -U2 a/view/world/ui/battle/BattleAssist.java b/view/world/ui/battle/BattleAssist.java
+--- a/view/world/ui/battle/BattleAssist.java	2025-09-12 16:10:28.000000000 +0500
++++ b/view/world/ui/battle/BattleAssist.java	2026-10-23 16:21:50.177212200 +0500
+@@ -44,6 +44,8 @@
+ 		bb = new Butt(UI.icons().s.sword, ¤¤Command) {
+ 			@Override
+ 			protected void clickA() {
++				if (sosdet.game.cmd.WorldBattles.engageRefused()) // SOSDET: not in lockstep yet; refused with a notice (SOS-35)
++					return;
+ 				close.exe();
+ 				g.engage();
+ 			}
+@@ -86,6 +88,8 @@
+ 			
+ 			@Override
+ 			protected void clickA() {
++				if (sosdet.game.cmd.WorldBattles.decide(sosdet.game.cmd.WorldBattles.AUTO)) // SOSDET: a command; it closes the prompt on every PC (SOS-35)
++					return;
+ 				close.exe();
+ 				g.auto();
+ 			}
+@@ -109,6 +113,8 @@
+ 				if (g.player.lossesRetreat() >= g.player.men()) {
+ 					return;
+ 				}
++				if (sosdet.game.cmd.WorldBattles.decide(sosdet.game.cmd.WorldBattles.RETREAT)) // SOSDET: a command; it closes the prompt on every PC (SOS-35)
++					return;
+ 				close.exe();
+ 				g.retreat();
+ 			}
+diff -ru -U2 a/view/world/ui/battle/BattleBattle.java b/view/world/ui/battle/BattleBattle.java
+--- a/view/world/ui/battle/BattleBattle.java	2026-01-08 07:48:44.000000000 +0500
++++ b/view/world/ui/battle/BattleBattle.java	2026-10-23 16:21:50.177212200 +0500
+@@ -44,6 +44,8 @@
+ 		bb = new Butt(UI.icons().s.sword, ¤¤Command) {
+ 			@Override
+ 			protected void clickA() {
++				if (sosdet.game.cmd.WorldBattles.engageRefused()) // SOSDET: not in lockstep yet; refused with a notice (SOS-35)
++					return;
+ 				close.exe();
+ 				g.engage();
+ 			}
+@@ -86,6 +88,8 @@
+ 			
+ 			@Override
+ 			protected void clickA() {
++				if (sosdet.game.cmd.WorldBattles.decide(sosdet.game.cmd.WorldBattles.AUTO)) // SOSDET: a command; it closes the prompt on every PC (SOS-35)
++					return;
+ 				close.exe();
+ 				g.auto();
+ 			}
+@@ -123,6 +127,8 @@
+ 				if (g.player.lossesRetreat() >= g.player.men()) {
+ 					return;
+ 				}
++				if (sosdet.game.cmd.WorldBattles.decide(sosdet.game.cmd.WorldBattles.RETREAT)) // SOSDET: a command; it closes the prompt on every PC (SOS-35)
++					return;
+ 				close.exe();
+ 				g.retreat();
+ 			}
+diff -ru -U2 a/view/world/ui/battle/BattleLastStand.java b/view/world/ui/battle/BattleLastStand.java
+--- a/view/world/ui/battle/BattleLastStand.java	2025-09-12 16:09:02.000000000 +0500
++++ b/view/world/ui/battle/BattleLastStand.java	2026-10-23 16:21:50.178212500 +0500
+@@ -54,6 +54,8 @@
+ 		bb = new Butt(UI.icons().s.sword, ¤¤Command) {
+ 			@Override
+ 			protected void clickA() {
++				if (sosdet.game.cmd.WorldBattles.engageRefused()) // SOSDET: not in lockstep yet; refused with a notice (SOS-35)
++					return;
+ 				close.exe();
+ 				g.engage();
+ 			}
+@@ -92,6 +94,8 @@
+ 			
+ 			@Override
+ 			protected void clickA() {
++				if (sosdet.game.cmd.WorldBattles.decide(sosdet.game.cmd.WorldBattles.AUTO)) // SOSDET: a command; it closes the prompt on every PC (SOS-35)
++					return;
+ 				close.exe();
+ 				g.auto();
+ 			}
+diff -ru -U2 a/view/world/ui/battle/BattleSally.java b/view/world/ui/battle/BattleSally.java
+--- a/view/world/ui/battle/BattleSally.java	2026-01-12 14:19:00.000000000 +0500
++++ b/view/world/ui/battle/BattleSally.java	2026-10-23 16:21:50.178212500 +0500
+@@ -54,6 +54,8 @@
+ 		bb = new Butt(UI.icons().s.sword, ¤¤Command) {
+ 			@Override
+ 			protected void clickA() {
++				if (sosdet.game.cmd.WorldBattles.engageRefused()) // SOSDET: not in lockstep yet; refused with a notice (SOS-35)
++					return;
+ 				close.exe();
+ 				g.engage();
+ 			}
+@@ -96,6 +98,8 @@
+ 			
+ 			@Override
+ 			protected void clickA() {
++				if (sosdet.game.cmd.WorldBattles.decide(sosdet.game.cmd.WorldBattles.AUTO)) // SOSDET: a command; it closes the prompt on every PC (SOS-35)
++					return;
+ 				close.exe();
+ 				g.auto();
+ 			}
+@@ -119,6 +123,8 @@
+ 				if (g.player.lossesRetreat() >= g.player.men()) {
+ 					return;
+ 				}
++				if (sosdet.game.cmd.WorldBattles.decide(sosdet.game.cmd.WorldBattles.RETREAT)) // SOSDET: a command; it closes the prompt on every PC (SOS-35)
++					return;
+ 				close.exe();
+ 				g.retreat();
+ 			}
+diff -ru -U2 a/view/world/ui/battle/BattleSiege.java b/view/world/ui/battle/BattleSiege.java
+--- a/view/world/ui/battle/BattleSiege.java	2025-09-22 07:59:26.000000000 +0500
++++ b/view/world/ui/battle/BattleSiege.java	2026-10-23 16:21:50.178212500 +0500
+@@ -110,6 +110,8 @@
+ 			
+ 			@Override
+ 			protected void clickA() {
++				if (sosdet.game.cmd.WorldBattles.decide(sosdet.game.cmd.WorldBattles.AUTO)) // SOSDET: a command; it closes the prompt on every PC (SOS-35)
++					return;
+ 				close.exe();
+ 				g.auto();
+ 			}
+@@ -121,6 +123,8 @@
+ 			
+ 			@Override
+ 			protected void clickA() {
++				if (sosdet.game.cmd.WorldBattles.decide(sosdet.game.cmd.WorldBattles.WAIT)) // SOSDET: a command; it closes the prompt on every PC (SOS-35)
++					return;
+ 				close.exe();
+ 			}
+ 
+@@ -133,6 +137,8 @@
+ 			
+ 			@Override
+ 			protected void clickA() {
++				if (sosdet.game.cmd.WorldBattles.decide(sosdet.game.cmd.WorldBattles.RETREAT)) // SOSDET: a command; it closes the prompt on every PC (SOS-35)
++					return;
+ 				close.exe();
+ 				spec.retreat();
+ 			}
+diff -ru -U2 a/view/world/ui/battle/Conquer.java b/view/world/ui/battle/Conquer.java
+--- a/view/world/ui/battle/Conquer.java	2026-06-17 10:48:04.000000000 +0500
++++ b/view/world/ui/battle/Conquer.java	2026-10-23 16:21:50.179213100 +0500
+@@ -168,6 +168,8 @@
+ 				
+ 				@Override
+ 				protected void clickA() {
++					if (sosdet.game.cmd.WorldBattles.siegeResult(sosdet.game.cmd.WorldBattles.OCCUPY, deva(), death(), slaves.accepted(), spoils.accepted(), mercy())) // SOSDET: a command; it closes the prompt on every PC (SOS-35)
++						return;
+ 					close.exe();
+ 					AD.stats().mercy().incD(FACTIONS.player(), mercy());
+ 					result.occupy(deva(), death(), slaves.accepted(), spoils.accepted());
+@@ -179,6 +181,8 @@
+ 				
+ 				@Override
+ 				protected void clickA() {
++					if (sosdet.game.cmd.WorldBattles.siegeResult(sosdet.game.cmd.WorldBattles.ABANDON, deva(), death(), slaves.accepted(), spoils.accepted(), mercy())) // SOSDET: a command; it closes the prompt on every PC (SOS-35)
++						return;
+ 					close.exe();
+ 					AD.stats().mercy().incD(FACTIONS.player(), mercy());
+ 					result.abandon(deva(), death(), slaves.accepted(), spoils.accepted());
+@@ -190,6 +194,8 @@
+ 				
+ 				@Override
+ 				protected void clickA() {
++					if (sosdet.game.cmd.WorldBattles.siegeResult(sosdet.game.cmd.WorldBattles.PUPPET, deva(), deva(), slaves.accepted(), spoils.accepted(), mercy())) // SOSDET: a command; it closes the prompt on every PC (SOS-35)
++						return;
+ 					close.exe();
+ 					
+ 					AD.stats().mercy().incD(FACTIONS.player(), mercy());
+diff -ru -U2 a/view/world/ui/battle/Res.java b/view/world/ui/battle/Res.java
+--- a/view/world/ui/battle/Res.java	2026-06-25 10:22:22.000000000 +0500
++++ b/view/world/ui/battle/Res.java	2026-10-23 16:21:50.179213100 +0500
+@@ -115,6 +115,10 @@
+ 			
+ 			@Override
+ 			protected void clickA() {
++				if (sosdet.game.cmd.WorldBattles.accept(result.result == BATTLE_RESULT.VICTORY ? slaves.accepted() : null,
++						result.result == BATTLE_RESULT.VICTORY ? spoils.accepted() : null,
++						result.result == BATTLE_RESULT.VICTORY ? slaves.mercy() : 0)) // SOSDET: a command; it closes the prompt on every PC (SOS-35)
++					return;
+ 				close.exe();
+ 				if (result.result == BATTLE_RESULT.VICTORY) {
+ 					AD.stats().mercy().incD(FACTIONS.player(), slaves.mercy());
+diff -ru -U2 a/view/world/ui/battle/UIWBattlePrompt.java b/view/world/ui/battle/UIWBattlePrompt.java
+--- a/view/world/ui/battle/UIWBattlePrompt.java	2026-01-12 14:21:48.000000000 +0500
++++ b/view/world/ui/battle/UIWBattlePrompt.java	2026-10-23 16:21:50.180245900 +0500
+@@ -58,6 +58,7 @@
+ 		b.get(battle);
+ 		
+ 		
++		sosdet.game.cmd.WorldBattles.opened(battle, inter); // SOSDET: what the decision command decides, and its close (SOS-35)
+ 		inter.set(b.get(battle), true, battle.player.coo().x(), battle.player.coo().y());
+ 	}
+ 	
+@@ -66,15 +67,18 @@
+ 			LOG.err("Oh no!");
+ 			return;
+ 		}
++		sosdet.game.cmd.WorldBattles.opened(siege, inter); // SOSDET: what the decision command decides, and its close (SOS-35)
+ 		inter.set(this.siege.getS(siege), true, siege.besiged.cx(), siege.besiged.cy());
+ 		
+ 	}
+ 	
+ 	public void result(WBattleSiege.Result siege) {
++		sosdet.game.cmd.WorldBattles.opened(siege, inter); // SOSDET: what the decision command decides, and its close (SOS-35)
+ 		inter.set(new Conquer(inter, siege), false, siege.besiged.cx(), siege.besiged.cy());
+ 	}
+ 	
+ 	public void result(WBattleResult battle, boolean retreat) {
++		sosdet.game.cmd.WorldBattles.opened(battle, inter); // SOSDET: what the decision command decides, and its close (SOS-35)
+ 		inter.set(new Res(inter, battle, retreat), false,  battle.player.coo().x(), battle.player.coo().y());
+ 	}
+ 	
+@@ -137,7 +141,8 @@
+ 
+ 		@Override
+ 		protected boolean update(float ds) {
+-			GAME.SPEED.tmpPause();
++			if (sosdet.game.cmd.WorldBattles.promptPauses()) // SOSDET: a pause would hold the step its decision applies at (SOS-35)
++				GAME.SPEED.tmpPause();
+ 			return false;
+ 		}
+ 
+diff -ru -U2 a/world/entity/army/WArmyState.java b/world/entity/army/WArmyState.java
+--- a/world/entity/army/WArmyState.java	2026-06-08 21:03:50.000000000 +0500
++++ b/world/entity/army/WArmyState.java	2026-10-23 16:21:50.183213000 +0500
+@@ -364,7 +364,7 @@
+ 				if (a.faction() == FACTIONS.player() && reg.faction() != a.faction() && !DIP.WAR().is(reg.faction(), a.faction()) && reg.faction() != null) {
+ 					aReg = reg;
+ 					aa = a;
+-					VIEW.inters().yesNo.activate(Str.TMP.clear().add(¤¤siege).insert(0, reg.info.name()).insert(0, reg.faction().name), besiege, ACTION.NOP, true);
++					sosdet.game.cmd.StepPrompts.yesNo(Str.TMP.clear().add(¤¤siege).insert(0, reg.info.name()).insert(0, reg.faction().name), besiege, ACTION.NOP, true); // SOSDET: answered by command in a session (SOS-35)
+ 					return this;
+ 				}else {
+ 					WORLD.BATTLES().besige(a, reg);

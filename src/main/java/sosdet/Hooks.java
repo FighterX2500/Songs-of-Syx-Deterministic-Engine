@@ -6,6 +6,7 @@ import game.GAME;
 import snake2d.util.rnd.RND;
 import sosdet.ai.AiApplier;
 import sosdet.ai.AiMode;
+import sosdet.game.WorldStatics;
 import sosdet.game.cmd.PlanStash;
 import sosdet.hash.HashLog;
 
@@ -134,10 +135,15 @@ public final class Hooks {
         s.streams.leave();
     }
 
-    /** True when the world map must not update in the city view (a session holding the world still). */
+    /**
+     * True when the world map must not update in the city view: a session holding the world still, or a world-battle
+     * prompt open (owner's decision, plan 0002: the world holds for everyone while a player decides). The prompt opens
+     * and closes inside the step on every PC alike, so every PC holds the same steps; the steps go on, so the decision
+     * command applies.
+     */
     public static boolean worldHeld() {
         Session s = Engine.session();
-        return s != null && s.worldHeld;
+        return s != null && (s.worldHeld || s.worldPrompt != null);
     }
 
     /** True with a session: the battle state updates inside the step, not from the battle view's frame. */
@@ -262,6 +268,12 @@ public final class Hooks {
             return;
         }
         s.plans().discard();
+        s.worldPrompt = null; // a load builds a new view: no prompt is open
+        s.worldPromptClose = null;
+        s.stepPrompts.clear(); // the load's questions are not asked again
+        if (s.plans().inGame()) { // unit tests have no game to reset
+            WorldStatics.reset();
+        }
         s.afterLoad();
         s.loading = true;
         if (s.loadSeed != 0) {
@@ -380,6 +392,75 @@ public final class Hooks {
         return Engine.session().plans();
     }
 
+    /**
+     * The world step opened the world-battle prompt: {@code decides} is the battle, siege or result it decides, and
+     * {@code close} hides it. Kept for the decision command (SOS-35, {@code cmd.WorldBattles}).
+     */
+    public static void worldPromptOpened(Object decides, Runnable close) {
+        Session s = Engine.session();
+        if (s != null) {
+            s.worldPrompt = decides;
+            s.worldPromptClose = close;
+        }
+    }
+
+    /** True in a session's step: a yes/no the simulation asks is kept, and answered by command (cmd.StepPrompts). */
+    public static boolean stepPromptsKept() {
+        return Engine.session() != null && !outsideStep();
+    }
+
+    /** The step asks a yes/no: keeps its actions; returns its key (the step and its order in the step), the same on every PC. */
+    public static long stepPromptOpened(Object yes, Object no) {
+        Session s = Engine.session();
+        long step = Engine.step();
+        if (s.stepPromptStep != step) {
+            s.stepPromptStep = step;
+            s.stepPromptsInStep = 0;
+        }
+        long key = step * 64 + s.stepPromptsInStep++;
+        s.stepPrompts.put(key, new Object[] {yes, no});
+        return key;
+    }
+
+    /** The oldest kept question's key, or -1 (the rig answers it). */
+    public static long stepPromptOldest() {
+        Session s = Engine.session();
+        long oldest = -1;
+        if (s != null) {
+            for (long key : s.stepPrompts.keySet()) {
+                if (oldest < 0 || key < oldest) {
+                    oldest = key;
+                }
+            }
+        }
+        return oldest;
+    }
+
+    /** The answer command takes the kept question: the chosen action, or null when it is gone or has none. */
+    public static Object stepPromptTake(long key, boolean yes) {
+        Session s = Engine.session();
+        Object[] actions = s == null ? null : s.stepPrompts.remove(key);
+        return actions == null ? null : actions[yes ? 0 : 1];
+    }
+
+    /** What the open world-battle prompt decides, or null. */
+    public static Object worldPrompt() {
+        Session s = Engine.session();
+        return s == null ? null : s.worldPrompt;
+    }
+
+    /** A decision command closes the world-battle prompt, inside the step on every PC. */
+    public static void worldPromptClose() {
+        Session s = Engine.session();
+        if (s == null || s.worldPrompt == null) {
+            return;
+        }
+        Runnable close = s.worldPromptClose;
+        s.worldPrompt = null;
+        s.worldPromptClose = null;
+        close.run();
+    }
+
     /** While a command or order is being applied: whether this PC's player gave it (ADR 0002, issuer feedback). */
     public static boolean issuedHere() {
         Session s = Engine.session();
@@ -402,6 +483,43 @@ public final class Hooks {
      */
     public static boolean placementPreview(boolean localPreview) {
         return Engine.session() == null && localPreview;
+    }
+
+    // ------------------------------------------------------------ world state between steps (SOS-35)
+
+    /**
+     * Whether a region's building levels read from this PC's upgrade draft ({@code RDLevelsTmp}): as vanilla, except
+     * that the simulation inside its step reads the region's real levels.
+     */
+    public static boolean localDraft(boolean draftOpen) {
+        Session s = Engine.session();
+        return draftOpen && (s == null || !s.streams.isSimulationThread());
+    }
+
+    /**
+     * The key of a cache the simulation reads that vanilla keys on the render frame: that frame without a session,
+     * the step ({@code GAME.updateI()}) with one, so the step recomputes it however often this PC drew.
+     */
+    public static int cacheKey(int renderFrame) {
+        return Engine.session() == null ? renderFrame : GAME.updateI();
+    }
+
+    /** This PC's developer launcher flag, as the simulation reads it: never set with a session. */
+    public static boolean developerFlag(boolean local) {
+        return Engine.session() == null && local;
+    }
+
+    /** A value that changes the simulation: this PC's without a session, the shared one with one. */
+    public static double simulationValue(double local, double shared) {
+        return Engine.session() == null ? local : shared;
+    }
+
+    /**
+     * True with a session: where vanilla's result depends on what this PC did before (a sum never cleared, a deal read
+     * from the UI's scratch copy), the game takes the route that depends on the shared state alone.
+     */
+    public static boolean sharedStateOnly() {
+        return Engine.session() != null;
     }
 
     /**

@@ -32,6 +32,14 @@ final class Session {
     PlanStash plans;
     /** The game's saver that lifts the plan around its saves ({@link Hooks#frameUpdated}), registered once per game. */
     Object planSaver;
+    /** The world-battle prompt open on this PC (and, opened by the step, on every PC): what it decides, and its close. */
+    Object worldPrompt;
+    Runnable worldPromptClose;
+    /** The simulation's yes/no questions not yet answered ({@code cmd.StepPrompts}): key, then the yes and no actions. */
+    final java.util.Map<Long, Object[]> stepPrompts = new java.util.HashMap<>();
+    /** The step the last question opened at, and how many opened in it: the next question's key. */
+    long stepPromptStep = -1;
+    int stepPromptsInStep;
 
     /** Host: the game speed last seen, so a change goes into the log once (B16). */
     double seenSpeed;

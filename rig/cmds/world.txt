@@ -1,0 +1,16 @@
+wmove 0 3 0
+wstop 0
+wraid 0 1
+wraid 0 0
+warmyname 0 Rigarmy
+wbanner 0 0 1
+wbanner 0 0 0
+wdivorder 0 0 1
+wdivorder 0 0 1
+wartillery 0 0 1
+wartillery 0 0 0
+wregionname Rigregion
+wemissary 0 1
+wemissary 0 0
+wgift 1
+wdecline

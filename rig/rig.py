@@ -428,7 +428,7 @@ def run_evals(args):
         if field:
             c.send("loadbattle sosdet-battle", "loaded", 600)
         else:
-            if session:
+            if session and args.hold_world:
                 c.send("holdworld 1", "holdworld")
             c.send("load sosdet-city", "loaded", 600)
         time.sleep(5)
@@ -561,6 +561,8 @@ def main():
                     help="the speed every copy agrees on at the start, which sets the step length (1/60 s at 1x or"
                          " slower, 1/16 s above); default: copy 1's speed")
     ap.add_argument("--no-invade", action="store_true", help="city: no invasion, the city as it is")
+    ap.add_argument("--hold-world", action="store_true",
+                    help="city: hold the world map still, as before SOS-35 (the world runs in the step by default)")
     ap.add_argument("--cmds", default="",
                     help="player actions copy 1 takes once every copy runs, ';'-separated or @file (one per line), 3 s apart, through the UI's"
                          " own calls (e.g. 'curfew 1;men 0 40'); the others get them through the host's log (ADR 0002);"
@@ -650,7 +652,8 @@ def main():
         if args.scenario == "field":
             c.send("loadbattle sosdet-battle", "loaded", 600)
         else:
-            c.send("holdworld 1", "holdworld")
+            if args.hold_world:
+                c.send("holdworld 1", "holdworld")
             c.send("load sosdet-city", "loaded", 600)
         time.sleep(5)
         if args.ai == "host":
@@ -662,6 +665,8 @@ def main():
                 c.send("hashpeer %d %s" % (o.k, o.rig / "hashes.bin"), "hashpeer")
         if c.k == nudged:
             c.send("nudge %d" % args.nudge, "nudge")
+        if c.k == 1 and args.scenario == "city" and not args.play:
+            c.send("answerprompts", "answerprompts")  # nobody clicks the world-battle prompt in a rig run
         if c.k == 1 and args.resync:
             c.send("resyncat %d %s %s" % (args.resync, resync_save, resync_state), "resyncat")
         c.send("seed %d" % RUN_SEED, "seeded")

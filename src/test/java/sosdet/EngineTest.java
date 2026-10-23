@@ -80,6 +80,11 @@ class EngineTest {
         assertFalse(Hooks.pathsNow());
         assertEquals(3, Hooks.simulationValue(3, 1));
         assertTrue(Hooks.cameraMatters());
+        assertTrue(Hooks.localDraft(true));
+        assertEquals(7, Hooks.cacheKey(7));
+        assertTrue(Hooks.developerFlag(true));
+        assertEquals(0.75, Hooks.simulationValue(0.75, 0.0));
+        assertFalse(Hooks.sharedStateOnly());
         Hooks.cosmeticBegin(); // no-ops, no failure
         Hooks.cosmeticEnd();
         Hooks.loadBegin();
@@ -242,6 +247,46 @@ class EngineTest {
         assertTrue(Hooks.threadRunsInStep(false));
         assertTrue(Hooks.threadRunsInStep(true), "in-step mode: the general's job runs in the step too");
         assertFalse(Hooks.slaveWorking(true), "a battle thread is only working while its job runs in the step");
+    }
+
+    @Test
+    void theWorldStepReadsNoLocalDraftDeveloperFlagOrProfileValue() {
+        begin();
+        assertTrue(Hooks.localDraft(true), "between steps the UI still shows this PC's upgrade draft");
+        assertFalse(Hooks.localDraft(false));
+        assertFalse(Hooks.developerFlag(true));
+        assertEquals(0.0, Hooks.simulationValue(0.75, 0.0));
+        assertTrue(Hooks.sharedStateOnly());
+        Engine.runFreely();
+        Hooks.stepsFor(Engine.STEP_SECONDS + 1e-9);
+        assertTrue(Hooks.stepBegin());
+        assertFalse(Hooks.localDraft(true), "inside the step the real levels count");
+        assertFalse(Hooks.outsideStep());
+        Hooks.stepEnd();
+        assertTrue(Hooks.outsideStep());
+    }
+
+    @Test
+    void theStepsQuestionsAreKeptByStepAndOrderAndTakenOnce() {
+        begin();
+        assertFalse(Hooks.stepPromptsKept(), "between steps a question is the game's own");
+        Engine.runFreely();
+        Hooks.stepsFor(Engine.STEP_SECONDS + 1e-9);
+        assertTrue(Hooks.stepBegin());
+        assertTrue(Hooks.stepPromptsKept());
+        String yes = "yes";
+        String no = "no";
+        long asked = Engine.step();
+        long first = Hooks.stepPromptOpened(yes, no);
+        long second = Hooks.stepPromptOpened(yes, null);
+        Hooks.stepEnd();
+        assertEquals(asked * 64, first, "the key is the step that asked and the order in it");
+        assertEquals(first + 1, second);
+        assertEquals(first, Hooks.stepPromptOldest());
+        assertSame(no, Hooks.stepPromptTake(first, false));
+        assertEquals(null, Hooks.stepPromptTake(first, true), "a second answer finds it gone");
+        assertEquals(null, Hooks.stepPromptTake(second, false), "no action for that answer");
+        assertEquals(-1, Hooks.stepPromptOldest());
     }
 
     @Test
