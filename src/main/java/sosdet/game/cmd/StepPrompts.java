@@ -1,0 +1,63 @@
+package sosdet.game.cmd;
+
+import java.util.List;
+
+import snake2d.util.misc.ACTION;
+import sosdet.Hooks;
+import sosdet.ai.CmdWriter;
+import view.main.VIEW;
+
+/**
+ * Yes/no questions the simulation asks (id 7950): the step opens them on every PC alike, with the game's own yes and
+ * no actions, and in vanilla a click runs the chosen action at once. In a session the engine keeps the actions, keyed
+ * by the step that opened the question and its order in that step, and a click becomes a command that runs the chosen
+ * action inside the step on every PC. Asked by {@code WArmyState} (declare war and besiege?) and {@code Invasion}
+ * (take the routed invaders prisoner?).
+ *
+ * <p>V0.1 is co-op: every PC shows the question and the first answer applies; a later one finds it gone and is skipped
+ * everywhere.
+ */
+public final class StepPrompts {
+
+    static final int ANSWER = 7950;
+
+    static final List<Command> ALL = List.of(
+            new Command(ANSWER, "stepPromptAnswer", r -> {
+                long key = ((long) r.i() << 32) | (r.i() & 0xFFFFFFFFL);
+                boolean yes = r.b();
+                Object action = Hooks.stepPromptTake(key, yes);
+                if (action == null) {
+                    return false;
+                }
+                ((ACTION) action).exe();
+                return true;
+            }));
+
+    private StepPrompts() {
+    }
+
+    /**
+     * Hook replacing {@code VIEW.inters().yesNo.activate} where the simulation asks. Without a session, or outside the
+     * step, the game's own call; in a session's step the question is kept and its buttons capture the answer.
+     */
+    public static void yesNo(CharSequence message, ACTION yes, ACTION no, boolean dismissable) {
+        if (!Hooks.stepPromptsKept()) {
+            VIEW.inters().yesNo.activate(message, yes, no, dismissable);
+            return;
+        }
+        long key = Hooks.stepPromptOpened(yes, no);
+        VIEW.inters().yesNo.activate(message, button(key, true), button(key, false), dismissable);
+    }
+
+    /** A button of a kept question. */
+    private static ACTION button(long key, boolean yes) {
+        return () -> answer(key, yes);
+    }
+
+    /** This PC's player answers a kept question, outside the step: the answer is a command. */
+    public static void answer(long key, boolean yes) {
+        if (Commands.capturing()) {
+            Commands.capture(new CmdWriter(ANSWER).i((int) (key >>> 32)).i((int) key).b(yes));
+        }
+    }
+}

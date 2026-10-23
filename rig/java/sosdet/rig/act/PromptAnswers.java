@@ -4,6 +4,7 @@ import init.race.RACES;
 import init.resources.RESOURCES;
 import init.trade.TR;
 import sosdet.Hooks;
+import sosdet.game.cmd.StepPrompts;
 import sosdet.game.cmd.WorldBattles;
 import world.battle.spec.BATTLE_RESULT;
 import world.battle.spec.WBattleResult;
@@ -12,16 +13,24 @@ import world.battle.spec.WBattleSpec;
 
 /**
  * The host's player answering the world-battle prompt in a rig run, where nobody clicks: auto-resolve every battle,
- * take no captives or spoils, occupy a captured settlement. Each answer goes through the button's own hook, so it
+ * take no captives or spoils, occupy a captured settlement, and say yes to the simulation's yes/no questions. Each answer goes through the button's own hook, so it
  * becomes the same command a click makes. One per rig script instance; it answers each prompt once.
  */
 public final class PromptAnswers {
 
     /** The prompt last answered: its decision applies some steps later, until then it stays open. */
     private Object answered;
+    /** The simulation's yes/no question last answered (Yes), by its key. */
+    private long answeredQuestion = -1;
 
     /** After a frame, outside the step: answers the open prompt if it is new. Returns its name, or null. */
     public String answer() {
+        long question = Hooks.stepPromptOldest();
+        if (question >= 0 && question != answeredQuestion) {
+            answeredQuestion = question;
+            StepPrompts.answer(question, true);
+            return "question yes";
+        }
         Object open = Hooks.worldPrompt();
         if (open == null || open == answered) {
             return null;

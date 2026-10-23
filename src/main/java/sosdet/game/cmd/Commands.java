@@ -18,7 +18,7 @@ import sosdet.ai.CmdWriter;
 public final class Commands {
 
     private static final Map<Integer, Command> BY_ID = index(Laws.ALL, Rooms.ALL, Employment.ALL, Military.ALL,
-            Names.ALL, Tools.ALL, WorldBattles.ALL);
+            Names.ALL, Tools.ALL, WorldBattles.ALL, StepPrompts.ALL);
 
     private Commands() {
     }

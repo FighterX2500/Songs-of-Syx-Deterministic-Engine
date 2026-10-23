@@ -267,6 +267,29 @@ class EngineTest {
     }
 
     @Test
+    void theStepsQuestionsAreKeptByStepAndOrderAndTakenOnce() {
+        begin();
+        assertFalse(Hooks.stepPromptsKept(), "between steps a question is the game's own");
+        Engine.runFreely();
+        Hooks.stepsFor(Engine.STEP_SECONDS + 1e-9);
+        assertTrue(Hooks.stepBegin());
+        assertTrue(Hooks.stepPromptsKept());
+        String yes = "yes";
+        String no = "no";
+        long asked = Engine.step();
+        long first = Hooks.stepPromptOpened(yes, no);
+        long second = Hooks.stepPromptOpened(yes, null);
+        Hooks.stepEnd();
+        assertEquals(asked * 64, first, "the key is the step that asked and the order in it");
+        assertEquals(first + 1, second);
+        assertEquals(first, Hooks.stepPromptOldest());
+        assertSame(no, Hooks.stepPromptTake(first, false));
+        assertEquals(null, Hooks.stepPromptTake(first, true), "a second answer finds it gone");
+        assertEquals(null, Hooks.stepPromptTake(second, false), "no action for that answer");
+        assertEquals(-1, Hooks.stepPromptOldest());
+    }
+
+    @Test
     void oneSessionAtATime() {
         begin();
         assertThrows(IllegalStateException.class, Engine::begin);

@@ -270,6 +270,7 @@ public final class Hooks {
         s.plans().discard();
         s.worldPrompt = null; // a load builds a new view: no prompt is open
         s.worldPromptClose = null;
+        s.stepPrompts.clear(); // the load's questions are not asked again
         if (s.plans().inGame()) { // unit tests have no game to reset
             WorldStatics.reset();
         }
@@ -401,6 +402,45 @@ public final class Hooks {
             s.worldPrompt = decides;
             s.worldPromptClose = close;
         }
+    }
+
+    /** True in a session's step: a yes/no the simulation asks is kept, and answered by command (cmd.StepPrompts). */
+    public static boolean stepPromptsKept() {
+        return Engine.session() != null && !outsideStep();
+    }
+
+    /** The step asks a yes/no: keeps its actions; returns its key (the step and its order in the step), the same on every PC. */
+    public static long stepPromptOpened(Object yes, Object no) {
+        Session s = Engine.session();
+        long step = Engine.step();
+        if (s.stepPromptStep != step) {
+            s.stepPromptStep = step;
+            s.stepPromptsInStep = 0;
+        }
+        long key = step * 64 + s.stepPromptsInStep++;
+        s.stepPrompts.put(key, new Object[] {yes, no});
+        return key;
+    }
+
+    /** The oldest kept question's key, or -1 (the rig answers it). */
+    public static long stepPromptOldest() {
+        Session s = Engine.session();
+        long oldest = -1;
+        if (s != null) {
+            for (long key : s.stepPrompts.keySet()) {
+                if (oldest < 0 || key < oldest) {
+                    oldest = key;
+                }
+            }
+        }
+        return oldest;
+    }
+
+    /** The answer command takes the kept question: the chosen action, or null when it is gone or has none. */
+    public static Object stepPromptTake(long key, boolean yes) {
+        Session s = Engine.session();
+        Object[] actions = s == null ? null : s.stepPrompts.remove(key);
+        return actions == null ? null : actions[yes ? 0 : 1];
     }
 
     /** What the open world-battle prompt decides, or null. */
