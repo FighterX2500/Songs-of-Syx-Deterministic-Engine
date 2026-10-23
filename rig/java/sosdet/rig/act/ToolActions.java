@@ -114,9 +114,11 @@ public final class ToolActions {
             int up = a.length > 4 ? Integer.parseInt(a[4]) : 0;
             Rig.later(() -> plan(pkey, pw, ph, up, null, false));
             return true;
-        case "plan-items": // plan-items <n>: n items of the plan's first furniture group, each at the first spot it fits
+        case "plan-items": // plan-items <n> [group]: n items of the plan's furniture group (default 0), each at the
+            // first spot it fits
             int items = Integer.parseInt(a[1]);
-            Rig.later(() -> planItems(items));
+            int igroup = a.length > 2 ? Integer.parseInt(a[2]) : 0;
+            Rig.later(() -> planItems(items, igroup));
             return true;
         case "plan-door": // plan-door: the doorway tool on the first wall tile next to the plan where a doorway fits
             Rig.later(ToolActions::planDoor);
@@ -213,13 +215,13 @@ public final class ToolActions {
         tool.finishPlacing(box);
     }
 
-    /** PlacableFixedTool.click with the plan's first furniture group, n times, each at the first spot row by row. */
-    private static void planItems(int n) {
+    /** PlacableFixedTool.click with the plan's furniture group, n times, each at the first spot row by row. */
+    private static void planItems(int n, int group) {
         RoomPlacer placer = SETT.ROOMS().placement.placer;
         if (placer.blueprint() == null) {
             throw new IllegalStateException("SOSDET rig: plan-items without a plan");
         }
-        PlacableFixed p = placer.item(0);
+        PlacableFixed p = placer.item(group);
         RECTANGLE b = new Rec(instance().body());
         for (int k = 0; k < n; k++) {
             if (!placeFirst(p, b)) {
@@ -245,12 +247,15 @@ public final class ToolActions {
         return false;
     }
 
-    /** The doorway tool on the first tile, row by row, beside a side of the plan (not only its corner) where it fits. */
+    /**
+     * The doorway tool on the first tile, row by row from the bottom (away from the furniture plan-items puts in the
+     * top rows), beside a side of the plan (not only its corner) where it fits.
+     */
     private static void planDoor() {
         RoomPlacer placer = SETT.ROOMS().placement.placer;
         Room.RoomInstanceImp ins = instance();
         RECTANGLE b = new Rec(ins.body());
-        for (int y = b.y1() - 1; y <= b.y2(); y++) {
+        for (int y = b.y2(); y >= b.y1() - 1; y--) {
             for (int x = b.x1() - 1; x <= b.x2(); x++) {
                 Box tile = new Box(new Rec(x, x + 1, y, y + 1));
                 if (ins.is(x, y) || !besideSide(ins, x, y)

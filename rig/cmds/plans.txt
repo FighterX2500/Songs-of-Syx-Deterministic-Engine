@@ -3,14 +3,11 @@
 # A farm without furniture
 plan FARM_GRAIN 6 6
 build
-# A workshop with furniture, indoors: auto walls and a doorway
+# A workshop with furniture, indoors: auto walls and a doorway. Smithy groups: 0 storage (exactly one), 1 work bench
+# (at least one), 2 auxiliary station. (Houses are single items, not area rooms: the tools' roomItem command.)
 plan WORKSHOP_SMITHY 5 5
-plan-items 2
-plan-door
-build
-# A house, indoors
-plan _HOME 4 4
-plan-items 1
+plan-items 1 0
+plan-items 2 1
 plan-door
 build
 # A plan given up: nothing reaches the other copies
@@ -24,6 +21,7 @@ build
 # The meeting apart: the local plan is rebuilt whole after the command, then furnished and built
 plan FARM_GRAIN 4 4
 build-plan WORKSHOP_SMITHY 5 5 apart
-plan-items 1
+plan-items 1 0
+plan-items 1 1
 plan-door
 build

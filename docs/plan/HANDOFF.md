@@ -28,7 +28,7 @@
 - patch `97-room-plans`;
 - the rig actions and `rig/cmds/plans.txt`.
 
-`gradlew.bat build` passes (77 tests, static draws 0). **Milestone 1 has not been run in the rig yet.** That's the first job: see plan 0003, step 1.
+`gradlew.bat build` passes (77 tests, static draws 0). **Milestone 1 passed the rig on 2026-10-23** (run P34C: 3 copies identical, 6 of 6 Builds applied). Next: the owner's play test, plan 0003, step 1.
 
 **Jira:** SOS-32 is open (M2b and M3 left) and SOS-34 is in progress (part 1 merged; room planning next). Stage D (world lockstep) needs a new card when it starts. Cards close only after the owner says the PR is merged.
 
