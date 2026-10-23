@@ -1,6 +1,6 @@
 diff -ru -U2 a/game/faction/FWorth.java b/game/faction/FWorth.java
 --- a/game/faction/FWorth.java	2026-06-25 10:49:36.000000000 +0500
-+++ b/game/faction/FWorth.java	2026-10-23 22:06:47.690248600 +0500
++++ b/game/faction/FWorth.java	2026-10-23 23:09:52.975103800 +0500
 @@ -58,8 +58,8 @@
  			}
  			for (int ei = 0; ei < STATS.EQUIP().BATTLE_ALL().size(); ei++) {
@@ -23,7 +23,7 @@ diff -ru -U2 a/game/faction/FWorth.java b/game/faction/FWorth.java
  	}
 diff -ru -U2 a/game/faction/diplomacy/DipWarPlayer.java b/game/faction/diplomacy/DipWarPlayer.java
 --- a/game/faction/diplomacy/DipWarPlayer.java	2026-04-04 17:39:24.000000000 +0500
-+++ b/game/faction/diplomacy/DipWarPlayer.java	2026-10-23 22:06:47.692249200 +0500
++++ b/game/faction/diplomacy/DipWarPlayer.java	2026-10-23 23:09:52.976603300 +0500
 @@ -71,7 +71,7 @@
  	
  	
@@ -44,7 +44,7 @@ diff -ru -U2 a/game/faction/diplomacy/DipWarPlayer.java b/game/faction/diplomacy
  		d.upI = GAME.updateI();
 diff -ru -U2 a/game/faction/diplomacy/deal/DealBools.java b/game/faction/diplomacy/deal/DealBools.java
 --- a/game/faction/diplomacy/deal/DealBools.java	2026-05-18 09:29:22.000000000 +0500
-+++ b/game/faction/diplomacy/deal/DealBools.java	2026-10-23 22:06:47.694749300 +0500
++++ b/game/faction/diplomacy/deal/DealBools.java	2026-10-23 23:09:52.979103100 +0500
 @@ -286,7 +286,7 @@
  //			if (DIP.get(a.f(), b.f()).minLoyalty > 0 && DIP.get(a.f(), b.f()).minLoyalty > ss.minLoyalty)
  //				return ¤¤pDowngrade;
@@ -56,7 +56,7 @@ diff -ru -U2 a/game/faction/diplomacy/deal/DealBools.java b/game/faction/diploma
  			}
 diff -ru -U2 a/game/faction/player/PTitles.java b/game/faction/player/PTitles.java
 --- a/game/faction/player/PTitles.java	2026-06-12 10:34:58.000000000 +0500
-+++ b/game/faction/player/PTitles.java	2026-10-23 22:06:47.696249500 +0500
++++ b/game/faction/player/PTitles.java	2026-10-23 23:09:52.990104200 +0500
 @@ -147,7 +147,7 @@
  
  			@Override
@@ -77,7 +77,7 @@ diff -ru -U2 a/game/faction/player/PTitles.java b/game/faction/player/PTitles.ja
  		
 diff -ru -U2 a/game/faction/player/emmi/Emissaries.java b/game/faction/player/emmi/Emissaries.java
 --- a/game/faction/player/emmi/Emissaries.java	2026-03-25 20:23:06.000000000 +0500
-+++ b/game/faction/player/emmi/Emissaries.java	2026-10-23 22:06:47.697749000 +0500
++++ b/game/faction/player/emmi/Emissaries.java	2026-10-23 23:09:52.993103800 +0500
 @@ -233,8 +233,8 @@
  	private int viewI = -1;
  	
@@ -91,7 +91,7 @@ diff -ru -U2 a/game/faction/player/emmi/Emissaries.java b/game/faction/player/em
  				am = Math.floor(am);
 diff -ru -U2 a/game/raiding/RaidingUtil.java b/game/raiding/RaidingUtil.java
 --- a/game/raiding/RaidingUtil.java	2026-02-06 15:19:52.000000000 +0500
-+++ b/game/raiding/RaidingUtil.java	2026-10-23 22:06:47.719249400 +0500
++++ b/game/raiding/RaidingUtil.java	2026-10-23 23:09:52.995105800 +0500
 @@ -57,7 +57,7 @@
  	}
  	
@@ -112,7 +112,7 @@ diff -ru -U2 a/game/raiding/RaidingUtil.java b/game/raiding/RaidingUtil.java
  		if (cp == GAME.updateI())
 diff -ru -U2 a/util/data/DOUBLE_O.java b/util/data/DOUBLE_O.java
 --- a/util/data/DOUBLE_O.java	2024-05-08 10:24:34.000000000 +0500
-+++ b/util/data/DOUBLE_O.java	2026-10-23 22:06:47.699749800 +0500
++++ b/util/data/DOUBLE_O.java	2026-10-23 23:09:52.998103300 +0500
 @@ -28,8 +28,8 @@
  		
  		@Override
@@ -126,7 +126,7 @@ diff -ru -U2 a/util/data/DOUBLE_O.java b/util/data/DOUBLE_O.java
  			}
 diff -ru -U2 a/world/region/RDBoostCache.java b/world/region/RDBoostCache.java
 --- a/world/region/RDBoostCache.java	2024-11-22 17:46:48.000000000 +0500
-+++ b/world/region/RDBoostCache.java	2026-10-23 22:06:47.701249400 +0500
++++ b/world/region/RDBoostCache.java	2026-10-23 23:09:53.000105100 +0500
 @@ -29,6 +29,8 @@
  	public double get(Region reg) {
  		if (reg == null)
@@ -138,7 +138,7 @@ diff -ru -U2 a/world/region/RDBoostCache.java b/world/region/RDBoostCache.java
  			cache.set(reg, upI);
 diff -ru -U2 a/world/region/RDMilitaryGar.java b/world/region/RDMilitaryGar.java
 --- a/world/region/RDMilitaryGar.java	2026-07-01 08:35:36.000000000 +0500
-+++ b/world/region/RDMilitaryGar.java	2026-10-23 22:06:47.703249200 +0500
++++ b/world/region/RDMilitaryGar.java	2026-10-23 23:09:53.016605000 +0500
 @@ -348,6 +348,7 @@
  	final static class WDivsCapitol implements LIST<WDIV>, SAVABLE {
  
@@ -220,9 +220,27 @@ diff -ru -U2 a/world/region/RDMilitaryGar.java b/world/region/RDMilitaryGar.java
  			}
  
  			@Override
+@@ -562,7 +575,7 @@
+ 			}
+ 			
+ 			@Override
+-			public void resolve(Induvidual[] hs) {
++			public void resolve(Induvidual[] hs) { if (sosdet.Hooks.garrisonResolve(this, hs)) return; // SOSDET: a world battle's result reaches the city in the step's city tail (C5, ADR 0005)
+ 				
+ 				KeyMap<Induvidual> map = new KeyMap<>();
+ 				for (Induvidual ii : hs) {
+@@ -589,7 +602,7 @@
+ 			}
+ 
+ 			@Override
+-			public void resolve(int surviviors, double experiencePerMan) {
++			public void resolve(int surviviors, double experiencePerMan) { if (sosdet.Hooks.garrisonResolve(this, surviviors, experiencePerMan)) return; // SOSDET: a world battle's result reaches the city in the step's city tail (C5, ADR 0005)
+ 
+ 				
+ 				
 diff -ru -U2 a/world/region/building/RDLevelsTmp.java b/world/region/building/RDLevelsTmp.java
 --- a/world/region/building/RDLevelsTmp.java	2026-06-17 10:48:06.000000000 +0500
-+++ b/world/region/building/RDLevelsTmp.java	2026-10-23 22:06:47.704247700 +0500
++++ b/world/region/building/RDLevelsTmp.java	2026-10-23 23:09:53.004105600 +0500
 @@ -29,7 +29,7 @@
  	}
  	
@@ -234,7 +252,7 @@ diff -ru -U2 a/world/region/building/RDLevelsTmp.java b/world/region/building/RD
  	}
 diff -ru -U2 a/world/region/pop/RDRaces.java b/world/region/pop/RDRaces.java
 --- a/world/region/pop/RDRaces.java	2026-06-08 10:30:50.000000000 +0500
-+++ b/world/region/pop/RDRaces.java	2026-10-23 22:06:47.711252400 +0500
++++ b/world/region/pop/RDRaces.java	2026-10-23 23:09:53.006103500 +0500
 @@ -341,11 +341,15 @@
  		}
  		

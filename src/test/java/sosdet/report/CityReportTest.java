@@ -76,7 +76,8 @@ class CityReportTest {
         assertEquals(V71.slot(Field.DIV_EQUIP, 0, 7) + 1, V71.slot(Field.DIV_EQUIP, 1, 0));
         assertEquals(V71.slot(Field.GARRISON, 0), V71.slot(Field.DIV_EQUIP, 119, 7) + 1);
         assertEquals(V71.slot(Field.GAR_TRAINING, 0, 5) + 1, V71.slot(Field.GAR_TRAINING, 1, 0));
-        assertEquals(V71.slot(Field.BOOST, 0), V71.slot(Field.INVADING_POWER, 0) + 1);
+        assertEquals(V71.slot(Field.BOOST, 0), V71.slot(Field.INVASION_REF, 0) + 1);
+        assertEquals(V71.slot(Field.INVASION_REF, 0), V71.slot(Field.INVADING_POWER, 0) + 1);
         assertEquals(V71.size() - 1, V71.slot(Field.VALUE, 199));
         assertThrows(IllegalArgumentException.class, () -> V71.slot(Field.HELD, 50));
         assertThrows(IllegalArgumentException.class, () -> V71.slot(Field.PHYSICAL, 3));

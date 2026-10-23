@@ -513,6 +513,83 @@ public final class Hooks {
         return true;
     }
 
+    /** {@code WDivCity.resolve} (C5): a world battle's result for a capitol garrison division; true when queued. */
+    public static boolean garrisonResolve(Object div, int survivors, double experiencePerMan) {
+        Txn x = toCity(TxnKind.GARRISON_RESOLVE);
+        if (x == null) {
+            return false;
+        }
+        x.a = div;
+        x.i = survivors;
+        x.d = experiencePerMan;
+        return true;
+    }
+
+    /** {@code WDivCity.resolve(Induvidual[])} (C5): true when queued. */
+    public static boolean garrisonResolve(Object div, Induvidual[] survivors) {
+        Txn x = toCity(TxnKind.GARRISON_RESOLVE_PEOPLE);
+        if (x == null) {
+            return false;
+        }
+        x.a = div;
+        x.b = survivors;
+        return true;
+    }
+
+    /**
+     * {@code Invador.invade} (C6): in the world part the world gives the invasion its ref, the report's next one plus the
+     * world's own invasions since, so every PC knows it at once and the city tail starts the invasion with it.
+     */
+    public static int invasionRef() {
+        return (int) Engine.session().reports.value(Field.INVASION_REF, 0);
+    }
+
+    /** {@code Invador.invade} (C6): true when queued for the city tail. */
+    public static boolean invade(Object spec) {
+        Txn x = toCity(TxnKind.INVADE);
+        if (x == null) {
+            return false;
+        }
+        x.a = spec;
+        Session s = Engine.session();
+        s.reports.change(s.clock.step(), Field.INVASION_REF, 0, 1);
+        return true;
+    }
+
+    /** {@code Invador.invade} in the city tail: true while it starts the invasion the world part made. */
+    public static boolean invasionArrives(Object spec) {
+        Session s = Engine.session();
+        if (s == null) {
+            return false;
+        }
+        Txn t = s.txns.applying();
+        return t != null && t.kind == TxnKind.INVADE && t.a == spec;
+    }
+
+    /** {@code Invador.cancel} (C6): true when queued. */
+    public static boolean invasionCancel(int ref) {
+        Txn x = toCity(TxnKind.INVASION_CANCEL);
+        if (x == null) {
+            return false;
+        }
+        x.i = ref;
+        return true;
+    }
+
+    /**
+     * {@code Invador}'s diplomacy listener (C6): a war with the player ended in the world part; the city tail runs the
+     * listener, which calls off that faction's invasions. True when queued.
+     */
+    public static boolean warEnded(Object listener, Object faction, Object other, Object old, Object stance) {
+        Txn x = toCity(TxnKind.WAR_ENDED);
+        if (x == null) {
+            return false;
+        }
+        x.a = listener;
+        x.b = new Object[] {faction, other, old, stance};
+        return true;
+    }
+
     // ------------------------------------------------------------ city inputs to the world (ADR 0005 §2)
 
     /** In the city part, an input for the next report; outside it, null. */
@@ -543,6 +620,54 @@ public final class Hooks {
         if (delta != 0) {
             s.cityInputs.add(s.inputs().supply(supply, a, delta));
         }
+        return true;
+    }
+
+    /** The outcomes {@code Invador.tell} passes to the invasion listeners (B4). */
+    public static final int TELL_VICTORY = 0;
+    public static final int TELL_DEFEAT = 1;
+    public static final int TELL_WEIRDNESS = 2;
+
+    /** {@code Invador.tell} (B4): in the city part, an invasion's outcome reaches the world's listeners in the next report. */
+    public static boolean invasionTell(int kind, int lossed, int kills, int ref) {
+        Session s = inCityPart();
+        if (s == null) {
+            return false;
+        }
+        s.cityInputs.add(s.inputs().invasionTell(kind, lossed, kills, ref));
+        return true;
+    }
+
+    /** {@code ADStats.report} (B4): in the city part, the battle reaches the army stats in the next report. */
+    public static boolean battleStats(Faction f, boolean victory, int losses, int kills) {
+        Session s = inCityPart();
+        if (s == null) {
+            return false;
+        }
+        s.cityInputs.add(s.inputs().battleStats(f, victory, losses, kills));
+        return true;
+    }
+
+    /** {@code Invasion.loose} (B4): in the city part, the invader takes the player as vassal in the world part. */
+    public static boolean vassal(Faction f) {
+        Session s = inCityPart();
+        if (s == null) {
+            return false;
+        }
+        s.cityInputs.add(s.inputs().vassal(f));
+        return true;
+    }
+
+    /**
+     * {@code Attack.afterExit} (B4): in the city part, the survivors of a world division that fought the invaders in the
+     * city reach it in the next report.
+     */
+    public static boolean divResolve(Object div, Induvidual[] survivors) {
+        Session s = inCityPart();
+        if (s == null) {
+            return false;
+        }
+        s.cityInputs.add(s.inputs().divResolve(div, survivors));
         return true;
     }
 

@@ -32,6 +32,16 @@ class TxnQueueTest {
     }
 
     @Test
+    void theTransactionBeingAppliedIsKnownOnlyWhileItApplies() {
+        TxnQueue q = new TxnQueue();
+        q.add(1).i = 7;
+        List<Integer> seen = new ArrayList<>();
+        q.apply(t -> seen.add(q.applying() == t ? t.i : -1));
+        assertEquals(List.of(7), seen);
+        assertEquals(null, q.applying());
+    }
+
+    @Test
     void pooledTransactionsComeBackCleared() {
         TxnQueue q = new TxnQueue();
         Txn t = q.add(1);

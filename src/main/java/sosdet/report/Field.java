@@ -83,6 +83,8 @@ public enum Field {
     EQUIP_IN_DIVS(Shape.EQUIP),
     INVADING(Shape.ONE),
     INVADING_POWER(Shape.ONE),
+    /** The ref the city's next invasion gets ({@code Invador.ref}); the world part allocates from it (C6). */
+    INVASION_REF(Shape.ONE),
     // A7: boosts
     /** The player's value of each boost value: what every booster reads on the player, a player region or division. */
     BOOST(Shape.BOOST),

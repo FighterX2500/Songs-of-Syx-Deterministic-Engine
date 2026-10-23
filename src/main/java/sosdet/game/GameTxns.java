@@ -7,6 +7,8 @@ import game.GAME;
 import game.battle.div.Div;
 import game.faction.FCredits.CTYPE;
 import game.faction.Faction;
+import game.faction.diplomacy.DIP;
+import game.faction.diplomacy.DipStance;
 import game.faction.player.PCredits;
 import init.trade.TRADABLE;
 import game.faction.FResources.RTYPE;
@@ -18,6 +20,7 @@ import init.trade.TRADE_TYPE;
 import init.type.CAUSE_ARRIVES;
 import init.type.CAUSE_LEAVE;
 import init.type.HTYPES;
+import settlement.battle.invasion.InvasionSpec;
 import settlement.entity.humanoid.Humanoid;
 import settlement.main.SETT;
 import settlement.stats.Induvidual;
@@ -31,6 +34,7 @@ import snake2d.util.misc.CLAMP;
 import sosdet.report.Input;
 import sosdet.txn.Txn;
 import world.army.AD;
+import world.army.WDIV;
 import world.entity.army.WArmy;
 
 /**
@@ -87,6 +91,22 @@ public final class GameTxns implements Consumer<Txn> {
             break;
         case ARMY_SUPPLY_RECRUIT:
             armySupplies((WArmy) t.a, (Race) t.b, t.i, true);
+            break;
+        case GARRISON_RESOLVE:
+            ((WDIV) t.a).resolve(t.i, t.d);
+            break;
+        case GARRISON_RESOLVE_PEOPLE:
+            ((WDIV) t.a).resolve((Induvidual[]) t.b);
+            break;
+        case INVADE:
+            SETT.INVADOR().invade((InvasionSpec) t.a, null); // the world part told the listeners; this starts it
+            break;
+        case INVASION_CANCEL:
+            SETT.INVADOR().cancel(t.i);
+            break;
+        case WAR_ENDED:
+            Object[] w = (Object[]) t.b;
+            ((DIP.DipActivityListener) t.a).change((Faction) w[0], (Faction) w[1], (DipStance) w[2], (DipStance) w[3]);
             break;
         default:
             throw new IllegalStateException("SOSDET: no applier for transaction kind " + t.kind);

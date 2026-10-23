@@ -29,6 +29,7 @@ import init.type.HCLASSES;
 import init.type.HTYPES;
 import init.value.GVALUES;
 import init.value.Value;
+import settlement.battle.invasion.Invador;
 import settlement.main.SETT;
 import settlement.stats.POP;
 import settlement.stats.STATS;
@@ -54,8 +55,17 @@ public final class GameReport implements CitySource {
     private final LIST<Value<Faction>> values = GVALUES.FACTION.all();
     private final IdentityHashMap<Value<Faction>, Integer> valueIndex = new IdentityHashMap<>();
     private final ReportLayout layout;
+    /** {@code Invador.ref}, private: the ref the city's next invasion gets (C6). */
+    private final java.lang.reflect.Field invasionRef;
 
     public GameReport() {
+        try {
+            invasionRef = Invador.class.getDeclaredField("ref");
+            invasionRef.setAccessible(true);
+        } catch (NoSuchFieldException e) {
+            throw new IllegalStateException("SOSDET: no Invador.ref in this game (SOSDET supports Songs of Syx V71,"
+                    + " build 71.44)", e);
+        }
         // A booster hands its boost value to what it boosts; this one only notes it. Every booster in the game
         // reads its value this way (RDBuilding's one exception reads nothing)
         BOOSTABLE_O seen = v -> {
@@ -187,6 +197,11 @@ public final class GameReport implements CitySource {
         fillGarrison(v, divs, equips);
         v[l.slot(Field.INVADING, 0)] = bool(SETT.INVADOR().invading());
         v[l.slot(Field.INVADING_POWER, 0)] = SETT.INVADOR().invadingPower();
+        try {
+            v[l.slot(Field.INVASION_REF, 0)] = invasionRef.getInt(SETT.INVADOR());
+        } catch (IllegalAccessException e) {
+            throw new IllegalStateException("SOSDET: cannot read Invador.ref", e);
+        }
 
         Player player = FACTIONS.player();
         for (int i = 0; i < boosts.size(); i++) {

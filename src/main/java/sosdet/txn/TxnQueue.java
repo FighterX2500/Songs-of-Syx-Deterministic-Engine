@@ -21,6 +21,7 @@ public final class TxnQueue {
     private long applied;
     private long skipped;
     private int maxInStep;
+    private Txn current;
 
     /** A new transaction made at this world step, to fill in. */
     public Txn add(long atStep) {
@@ -44,6 +45,11 @@ public final class TxnQueue {
     }
 
     /** Applies every queued transaction in order, each once, and empties the queue. */
+    /** The transaction being applied, while the game code it calls runs; null otherwise. */
+    public Txn applying() {
+        return current;
+    }
+
     public void apply(Consumer<Txn> applier) {
         maxInStep = Math.max(maxInStep, size);
         for (int k = 0; k < size; k++) {
@@ -51,7 +57,12 @@ public final class TxnQueue {
             if (t.id <= lastApplied) {
                 skipped++;
             } else {
-                applier.accept(t);
+                current = t;
+                try {
+                    applier.accept(t);
+                } finally {
+                    current = null;
+                }
                 lastApplied = t.id;
                 applied++;
             }

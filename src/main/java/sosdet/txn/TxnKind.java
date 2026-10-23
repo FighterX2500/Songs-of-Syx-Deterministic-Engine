@@ -26,5 +26,15 @@ public enum TxnKind {
      */
     ARMY_SUPPLY_DIV,
     /** As {@link #ARMY_SUPPLY_DIV}, for a division recruited in the realm (the recruit command). */
-    ARMY_SUPPLY_RECRUIT
+    ARMY_SUPPLY_RECRUIT,
+    /** C5: a world battle's survivors and experience for a capitol garrison division ({@code WDivCity.resolve}). */
+    GARRISON_RESOLVE,
+    /** C5: as {@link #GARRISON_RESOLVE}, with the survivors' people ({@code WDivCity.resolve(Induvidual[])}). */
+    GARRISON_RESOLVE_PEOPLE,
+    /** C6: an invasion of the city, with the ref the world gave it ({@code Invador.invade}). */
+    INVADE,
+    /** C6: an invasion called off ({@code Invador.cancel}). */
+    INVASION_CANCEL,
+    /** C6: a war with the player ended; the city calls off that faction's invasions ({@code Invador}'s listener). */
+    WAR_ENDED
 }
