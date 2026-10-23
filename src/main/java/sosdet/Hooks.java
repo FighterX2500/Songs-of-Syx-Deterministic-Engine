@@ -3,9 +3,11 @@ package sosdet;
 import java.util.Random;
 
 import game.GAME;
+import game.GAME.GameResource;
 import snake2d.util.rnd.RND;
 import sosdet.ai.AiApplier;
 import sosdet.ai.AiMode;
+import sosdet.game.StepParts;
 import sosdet.game.WorldStatics;
 import sosdet.game.cmd.PlanStash;
 import sosdet.hash.HashLog;
@@ -138,6 +140,7 @@ public final class Hooks {
         }
         s.times.record(System.nanoTime() - s.stepStartNanos);
         s.stepStartNanos = 0;
+        s.part = -1;
         s.streams.leave();
     }
 
@@ -155,6 +158,73 @@ public final class Hooks {
     /** True with a session: the battle state updates inside the step, not from the battle view's frame. */
     public static boolean battleStateInStep() {
         return Engine.session() != null;
+    }
+
+    // ------------------------------------------------------------ the step's two parts (ADR 0005, SOS-38)
+
+    /**
+     * The step enters a part: 0 the city part, 1 the world part. The world part takes a random stream of its own,
+     * seeded from the seed and the step, so the city's draws on this PC never shift the world's.
+     */
+    public static void stepPart(int part) {
+        Session s = Engine.session();
+        s.part = part;
+        if (part == StepParts.WORLD_PART) {
+            s.streams.reseed(s.worldSeed(s.clock.step()));
+        }
+    }
+
+    /** True when the resource updates in this part of the step. */
+    public static boolean updatesIn(GameResource r, int part) {
+        return StepParts.updatesIn(r, part);
+    }
+
+    /** True when the resource's once-per-step work runs at the start of this part. */
+    public static boolean afterTickIn(GameResource r, int part) {
+        return StepParts.afterTickIn(r, part);
+    }
+
+    /** True in a session's city part: a resource that runs in both parts does its city half. */
+    public static boolean cityPart() {
+        Session s = Engine.session();
+        return s != null && s.part == StepParts.CITY;
+    }
+
+    /** True for a resource's city half: in the city part, or always without a session. */
+    public static boolean cityHalf() {
+        Session s = Engine.session();
+        return s == null || s.part == StepParts.CITY;
+    }
+
+    /** True for a resource's world half: in the world part, or always without a session. */
+    public static boolean worldHalf() {
+        Session s = Engine.session();
+        return s == null || s.part == StepParts.WORLD_PART;
+    }
+
+    /** True when the event with this save key runs in the current part (always without a session). */
+    public static boolean eventRuns(String key) {
+        Session s = Engine.session();
+        return s == null || (s.part == StepParts.WORLD_PART) == StepParts.worldEvent(key);
+    }
+
+    /** True when the world part's faction updater runs this faction: not the player's own in a session. */
+    public static boolean worldUpdatesFaction(Object faction) {
+        return Engine.session() == null || StepParts.worldUpdatesFaction(faction);
+    }
+
+    /**
+     * The city part runs the player's own faction update on a clock of its own: the time to pass when one is due
+     * this step ({@code period} of game time since the last), else 0.
+     */
+    public static double playerUpdateDue(double ds, double period) {
+        Session s = Engine.session();
+        s.playerUpdateAcc += ds;
+        if (s.playerUpdateAcc < period) {
+            return 0;
+        }
+        s.playerUpdateAcc -= period;
+        return period;
     }
 
     // ------------------------------------------------------------ RND: the two streams (B10)

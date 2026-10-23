@@ -1,0 +1,79 @@
+diff -ru -U2 a/game/events/EVENTS.java b/game/events/EVENTS.java
+--- a/game/events/EVENTS.java	2026-02-17 17:15:30.000000000 +0500
++++ b/game/events/EVENTS.java	2026-10-23 21:10:27.170222600 +0500
+@@ -131,7 +131,7 @@
+ 			return;
+ 		prof.logStart(EVENTS.class);
+ 		for (EventResource e : all)
+-			if (!e.supress)
++			if (!e.supress && sosdet.Hooks.eventRuns(e.key)) // SOSDET: city events in the city part, world events in the world part (ADR 0005)
+ 				e.update(ds);
+ 		prof.logEnd(EVENTS.class);
+ 	}
+diff -ru -U2 a/game/faction/FACTIONS.java b/game/faction/FACTIONS.java
+--- a/game/faction/FACTIONS.java	2026-03-25 10:31:18.000000000 +0500
++++ b/game/faction/FACTIONS.java	2026-10-23 21:10:27.175221200 +0500
+@@ -41,7 +41,7 @@
+ 
+ 		@Override
+ 		protected void update(int i, double timeSinceLast) {
+-			if (all.get(i).isActive()) {
++			if (all.get(i).isActive() && sosdet.Hooks.worldUpdatesFaction(all.get(i))) { // SOSDET: the player's own runs in the city part (ADR 0005)
+ 				all.get(i).update(timeSinceLast);
+ 			}
+ 			
+@@ -161,6 +161,14 @@
+ 
+ 	@Override
+ 	protected void update(double ds, Profiler prof) {
++		if (sosdet.Hooks.cityPart()) {
++			// SOSDET: the player's own update is city work: the city part runs it, on a clock of its own (ADR 0005)
++			double due = sosdet.Hooks.playerUpdateDue(ds, TIME.days().bitSeconds()/4);
++			if (due > 0 && player.isActive())
++				((Faction) player).update(due); // Player's own override, called from this package
++			player.updateSpecial(ds, prof);
++			return;
++		}
+ 		
+ 		prof.logStart(updater.getClass());
+ 		updater.update(ds);
+diff -ru -U2 a/game/faction/player/Player.java b/game/faction/player/Player.java
+--- a/game/faction/player/Player.java	2026-06-17 10:48:04.000000000 +0500
++++ b/game/faction/player/Player.java	2026-10-23 21:10:27.171221300 +0500
+@@ -158,7 +158,7 @@
+ 	}
+ 	
+ 	public void updateSpecial(double ds, Profiler prof) {
+-		if (capitolRegion() != null) {
++		if (capitolRegion() != null && sosdet.Hooks.worldHalf()) { // SOSDET: the world part sets the capitol's population (ADR 0005)
+ 			int ex = 0;
+ 			for (Race r : RACES.all()) {
+ 				if (RD.RACES().get(r) == null)
+@@ -173,6 +173,7 @@
+ 		}
+ 		
+ 		
++		if (sosdet.Hooks.cityHalf()) { // SOSDET: progress and price history are the city's (ADR 0005)
+ 		prof.logStart(tech.getClass());
+ 		tech.update(ds);
+ 		prof.logEnd(tech.getClass());
+@@ -184,14 +185,19 @@
+ 		prof.logStart(level.getClass());
+ 		level.update(ds);
+ 		prof.logEnd(level.getClass());
++		}
+ 		
++		if (sosdet.Hooks.worldHalf()) { // SOSDET: emissaries are world decisions (ADR 0005)
+ 		prof.logStart(emissaries.getClass());
+ 		emissaries.update(ds);
+ 		prof.logEnd(emissaries.getClass());
++		}
+ 		
++		if (sosdet.Hooks.cityHalf()) {
+ 		prof.logStart(trade.getClass());
+ 		trade.update(ds);
+ 		prof.logEnd(trade.getClass());
++		}
+ 		
+ 		
+ 		

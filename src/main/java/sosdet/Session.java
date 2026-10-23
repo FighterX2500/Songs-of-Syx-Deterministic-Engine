@@ -12,6 +12,9 @@ import sosdet.hash.StateSource;
 /** The state of one deterministic run: from {@link Engine#begin()} to {@link Engine#end()}. */
 final class Session {
 
+    /** Mixed into the world part's seed ("WORL"). */
+    private static final long WORLD_STREAM = 0x574F524CL;
+
     final StepClock clock = new StepClock();
     final Streams streams = new Streams();
     final BattleJobs jobs = new BattleJobs();
@@ -69,10 +72,20 @@ final class Session {
     final PathWorkers paths = new PathWorkers();
     /** The game's queue of path jobs, set by the first job a step queues; null when none is waiting. */
     PathQueue pathQueue;
+    /** The part of the step running: 0 the city part, 1 the world part, -1 outside them (ADR 0005). */
+    int part = -1;
+    /** Game time since the player's own faction update last ran in the city part; 0 after every load. */
+    double playerUpdateAcc;
 
     /** The seed of the random stream at a step: the same on every PC, whatever happened before. */
     int stepSeed(long step) {
         long h = HashLog.mix(HashLog.mix(HashLog.start(), seed), step);
+        return (int) (h ^ (h >>> 32));
+    }
+
+    /** The seed of the world part's random stream at a step: never the city part's, whatever the city drew. */
+    int worldSeed(long step) {
+        long h = HashLog.mix(HashLog.mix(HashLog.mix(HashLog.start(), seed), step), WORLD_STREAM);
         return (int) (h ^ (h >>> 32));
     }
 
@@ -81,6 +94,7 @@ final class Session {
      * state the save leaves out (B14).
      */
     void afterLoad() {
+        playerUpdateAcc = 0;
         if (resync != null) {
             Resync r = resync;
             resync = null;
