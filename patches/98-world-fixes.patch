@@ -1,6 +1,6 @@
 diff -ru -U2 a/game/faction/FWorth.java b/game/faction/FWorth.java
 --- a/game/faction/FWorth.java	2026-06-25 10:49:36.000000000 +0500
-+++ b/game/faction/FWorth.java	2026-10-23 16:13:51.601305500 +0500
++++ b/game/faction/FWorth.java	2026-10-23 16:14:41.603738000 +0500
 @@ -151,7 +151,7 @@
  		if (fa instanceof FactionNPC) {
  			FactionNPC f = (FactionNPC) fa;
@@ -12,7 +12,7 @@ diff -ru -U2 a/game/faction/FWorth.java b/game/faction/FWorth.java
  	}
 diff -ru -U2 a/game/faction/diplomacy/DipWarPlayer.java b/game/faction/diplomacy/DipWarPlayer.java
 --- a/game/faction/diplomacy/DipWarPlayer.java	2026-04-04 17:39:24.000000000 +0500
-+++ b/game/faction/diplomacy/DipWarPlayer.java	2026-10-23 16:13:51.607304900 +0500
++++ b/game/faction/diplomacy/DipWarPlayer.java	2026-10-23 16:14:41.603738000 +0500
 @@ -71,7 +71,7 @@
  	
  	
@@ -33,7 +33,7 @@ diff -ru -U2 a/game/faction/diplomacy/DipWarPlayer.java b/game/faction/diplomacy
  		d.upI = GAME.updateI();
 diff -ru -U2 a/game/faction/diplomacy/deal/DealBools.java b/game/faction/diplomacy/deal/DealBools.java
 --- a/game/faction/diplomacy/deal/DealBools.java	2026-05-18 09:29:22.000000000 +0500
-+++ b/game/faction/diplomacy/deal/DealBools.java	2026-10-23 16:13:51.601305500 +0500
++++ b/game/faction/diplomacy/deal/DealBools.java	2026-10-23 16:14:41.604734400 +0500
 @@ -286,7 +286,7 @@
  //			if (DIP.get(a.f(), b.f()).minLoyalty > 0 && DIP.get(a.f(), b.f()).minLoyalty > ss.minLoyalty)
  //				return ¤¤pDowngrade;
@@ -45,7 +45,7 @@ diff -ru -U2 a/game/faction/diplomacy/deal/DealBools.java b/game/faction/diploma
  			}
 diff -ru -U2 a/game/faction/player/PTitles.java b/game/faction/player/PTitles.java
 --- a/game/faction/player/PTitles.java	2026-06-12 10:34:58.000000000 +0500
-+++ b/game/faction/player/PTitles.java	2026-10-23 16:13:51.602309900 +0500
++++ b/game/faction/player/PTitles.java	2026-10-23 16:14:41.604734400 +0500
 @@ -147,7 +147,7 @@
  
  			@Override
@@ -66,7 +66,7 @@ diff -ru -U2 a/game/faction/player/PTitles.java b/game/faction/player/PTitles.ja
  		
 diff -ru -U2 a/game/faction/player/emmi/Emissaries.java b/game/faction/player/emmi/Emissaries.java
 --- a/game/faction/player/emmi/Emissaries.java	2026-03-25 20:23:06.000000000 +0500
-+++ b/game/faction/player/emmi/Emissaries.java	2026-10-23 16:13:51.602309900 +0500
++++ b/game/faction/player/emmi/Emissaries.java	2026-10-23 16:14:41.604734400 +0500
 @@ -233,8 +233,8 @@
  	private int viewI = -1;
  	
@@ -80,7 +80,7 @@ diff -ru -U2 a/game/faction/player/emmi/Emissaries.java b/game/faction/player/em
  				am = Math.floor(am);
 diff -ru -U2 a/game/raiding/RaidingUtil.java b/game/raiding/RaidingUtil.java
 --- a/game/raiding/RaidingUtil.java	2026-02-06 15:19:52.000000000 +0500
-+++ b/game/raiding/RaidingUtil.java	2026-10-23 16:13:51.607304900 +0500
++++ b/game/raiding/RaidingUtil.java	2026-10-23 16:14:41.605760200 +0500
 @@ -125,7 +125,7 @@
  	
  	private void cache() {
@@ -92,7 +92,7 @@ diff -ru -U2 a/game/raiding/RaidingUtil.java b/game/raiding/RaidingUtil.java
  		if (cp == GAME.updateI())
 diff -ru -U2 a/world/region/RDBoostCache.java b/world/region/RDBoostCache.java
 --- a/world/region/RDBoostCache.java	2024-11-22 17:46:48.000000000 +0500
-+++ b/world/region/RDBoostCache.java	2026-10-23 16:13:51.605310700 +0500
++++ b/world/region/RDBoostCache.java	2026-10-23 16:14:41.605760200 +0500
 @@ -29,6 +29,8 @@
  	public double get(Region reg) {
  		if (reg == null)
@@ -102,9 +102,21 @@ diff -ru -U2 a/world/region/RDBoostCache.java b/world/region/RDBoostCache.java
  		int upI = ((GAME.updateI()>>5) & 1);
  		if (cache.get(reg) != upI) {
  			cache.set(reg, upI);
+diff -ru -U2 a/world/region/RDMilitaryGar.java b/world/region/RDMilitaryGar.java
+--- a/world/region/RDMilitaryGar.java	2026-07-01 08:35:36.000000000 +0500
++++ b/world/region/RDMilitaryGar.java	2026-10-23 16:14:41.609730300 +0500
+@@ -428,7 +428,7 @@
+ 				suppliesNeeded = Alloc.ii(RESOURCES.ALL().size());
+ 			}
+ 			
+-			if (supplies == null || upI != GAME.updateI()) {
++			if (!sosdet.Hooks.outsideStep() && (supplies == null || upI != GAME.updateI())) { // SOSDET: counted inside the step only; the sums are never cleared, so the UI's counts would change the step's (SOS-35)
+ 				upI = GAME.updateI();
+ 				
+ 				
 diff -ru -U2 a/world/region/building/RDLevelsTmp.java b/world/region/building/RDLevelsTmp.java
 --- a/world/region/building/RDLevelsTmp.java	2026-06-17 10:48:06.000000000 +0500
-+++ b/world/region/building/RDLevelsTmp.java	2026-10-23 16:13:51.602309900 +0500
++++ b/world/region/building/RDLevelsTmp.java	2026-10-23 16:14:41.606729800 +0500
 @@ -29,7 +29,7 @@
  	}
  	
@@ -116,7 +128,7 @@ diff -ru -U2 a/world/region/building/RDLevelsTmp.java b/world/region/building/RD
  	}
 diff -ru -U2 a/world/region/pop/RDRaces.java b/world/region/pop/RDRaces.java
 --- a/world/region/pop/RDRaces.java	2026-06-08 10:30:50.000000000 +0500
-+++ b/world/region/pop/RDRaces.java	2026-10-23 16:13:51.606305700 +0500
++++ b/world/region/pop/RDRaces.java	2026-10-23 16:14:41.606729800 +0500
 @@ -341,11 +341,15 @@
  		}
  		

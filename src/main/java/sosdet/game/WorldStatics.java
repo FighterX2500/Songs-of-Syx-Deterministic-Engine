@@ -11,8 +11,9 @@ import java.util.Arrays;
  * <ul>
  * <li>{@code world.battle.Rnd}: the random table the world's battle results draw from (conquests). Its {@code clear}
  * never runs, so a fresh process starts from zeros and a warm one from its last game's draws. Back to zeros.</li>
- * <li>{@code RDMilitaryGar.WDivsCapitol.upI}: the step the capital garrison's supplies were last counted at. Back to
- * -1, so the first count after the load always runs.</li>
+ * <li>{@code RDMilitaryGar.WDivsCapitol.supplies} and {@code upI}: the capital garrison's supply sums, which vanilla
+ * adds to at every count and never clears, and the step they were last counted at. Dropped (the next count starts
+ * from zeros) and back to -1.</li>
  * </ul>
  */
 public final class WorldStatics {
@@ -21,7 +22,9 @@ public final class WorldStatics {
     private static final Class<?> RND = className("world.battle.Rnd");
     private static final Field RNDS = field(RND, "rnds");
     private static final Field RI = field(RND, "ri");
-    private static final Field SUPPLIES_UP = field(className("world.region.RDMilitaryGar$WDivsCapitol"), "upI");
+    private static final Class<?> CAPITOL = className("world.region.RDMilitaryGar$WDivsCapitol");
+    private static final Field SUPPLIES = field(CAPITOL, "supplies");
+    private static final Field SUPPLIES_UP = field(CAPITOL, "upI");
 
     private WorldStatics() {
     }
@@ -31,6 +34,7 @@ public final class WorldStatics {
         try {
             Arrays.fill((int[]) RNDS.get(null), 0);
             RI.setInt(null, 0);
+            SUPPLIES.set(null, null);
             SUPPLIES_UP.setInt(null, -1);
         } catch (IllegalAccessException e) {
             throw new IllegalStateException("SOSDET: cannot reset the world's static state" + VERSION, e);
