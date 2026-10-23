@@ -36,6 +36,7 @@ import world.entity.army.WArmy;
 import world.map.regions.Region;
 import world.region.RD;
 import world.region.building.RDBuilding;
+import world.region.building.RDBuildPoints.RDBuildPoint;
 import world.region.pop.RDEdicts.RDRaceEdict;
 import world.region.pop.RDRace;
 
@@ -711,8 +712,8 @@ public final class World {
 
     /**
      * {@code PlayBuildingsPop}'s accept: the drafted levels' cost, charged when the region is the player's, then the
-     * levels. Only the treasury is checked again here; the build points the popup also checks follow the draft
-     * levels, which only this PC's UI holds.
+     * levels. The step checks again what the popup checked: the treasury, and that no build point goes below zero
+     * with the new levels; if one does, the old levels come back and nothing is charged (SOS-36).
      */
     private static boolean buildings(Region reg, int[] levels) {
         int cost = 0;
@@ -731,11 +732,21 @@ public final class World {
         if (player && cost > FACTIONS.player().credits().getD()) {
             return false;
         }
+        int[] old = new int[levels.length];
+        for (int i = 0; i < levels.length; i++) {
+            old[i] = RD.BUILDINGS().all.get(i).level.get(reg);
+            RD.BUILDINGS().all.get(i).level.set(reg, levels[i]);
+        }
+        for (RDBuildPoint p : RD.BUILDINGS().costs.ALL) {
+            if (p.bo.get(reg) < 0) {
+                for (int i = 0; i < old.length; i++) {
+                    RD.BUILDINGS().all.get(i).level.set(reg, old[i]);
+                }
+                return false;
+            }
+        }
         if (player) {
             FACTIONS.player().credits().inc(-cost, CTYPE.CONSTRUCTION);
-        }
-        for (int i = 0; i < levels.length; i++) {
-            RD.BUILDINGS().all.get(i).level.set(reg, levels[i]);
         }
         return true;
     }

@@ -271,6 +271,7 @@ public final class Hooks {
         s.worldPrompt = null; // a load builds a new view: no prompt is open
         s.worldPromptClose = null;
         s.stepPrompts.clear(); // the load's questions are not asked again
+        s.stepPromptShown = -1;
         if (s.plans().inGame()) { // unit tests have no game to reset
             WorldStatics.reset();
         }
@@ -419,7 +420,22 @@ public final class Hooks {
         }
         long key = step * 64 + s.stepPromptsInStep++;
         s.stepPrompts.put(key, new Object[] {yes, no});
+        s.stepPromptShown = key; // the game's dialog shows one question: the last one asked
         return key;
+    }
+
+    /** The kept question this PC's dialog shows, or -1. */
+    public static long stepPromptShown() {
+        Session s = Engine.session();
+        return s == null ? -1 : s.stepPromptShown;
+    }
+
+    /** This PC's dialog no longer shows that question: its player answered it, or another PC's answer applied. */
+    public static void stepPromptHidden(long key) {
+        Session s = Engine.session();
+        if (s != null && s.stepPromptShown == key) {
+            s.stepPromptShown = -1;
+        }
     }
 
     /** The oldest kept question's key, or -1 (the rig answers it). */
