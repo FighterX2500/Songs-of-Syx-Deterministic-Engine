@@ -146,42 +146,42 @@ Status: **done** (hooked, with its command id), **to do**, or why it needs no co
 | city military | `game.battle.div.DivInfo` `bannerISet(I)V` | B | done: command 4004 divisionBanner, patch 96-cmd-military |
 | city military | `settlement.stats.equip.EquipBattle` `targetSet(Lgame/battle/div/Div;I)V` | B | done: command 4003 divisionEquipment, patch 96-cmd-military |
 | city military | `game.battle.Army` `setDivAtOrderedIndex(Lgame/battle/div/Div;Lgame/battle/div/Div;)V` | B | done: command 4005 divisionOrder, patch 96-cmd-military |
-| city military | `world.army.WDivStoredAll` `attach(Lworld/entity/army/WArmy;Lgame/battle/div/Div;)V` | B | left: attaches city divisions to a world army (stage D) |
+| city military | `world.army.WDivStoredAll` `attach(Lworld/entity/army/WArmy;Lgame/battle/div/Div;)V` | B | done: 7019 cityDivAttach, patch 96-cmd-world (SOS-35) |
 | city military | `settlement.battle.ArmyTrainingInfo` `sendOutWithoutTraining(Z)V` | B | done: command 4006 sendOutUntrained, patch 96-cmd-military |
 | city military | `game.battle.setting.DivSettings` `musteringSet(Z)V` | B | battle screen done (SOS-32, patch 95); no city screen calls it (only a developer tool) |
 | city military | `game.battle.setting.DivSettings` `moppingSet(Z)V` | B | battle screen done (SOS-32, patch 95); no city screen calls it (only a developer tool) |
-| world | `world.entity.army.WArmy` `setDestination(II)V` | D | to do |
-| world | `world.entity.army.WArmy` `intercept(Lworld/entity/army/WArmy;)V` | D | to do |
-| world | `world.entity.army.WArmy` `besiege(Lworld/map/regions/Region;)V` | D | to do |
-| world | `world.entity.army.WArmy` `stop()V` | D | to do |
-| world | `world.entity.army.WArmy` `raid(Z)V` | D | to do |
-| world | `world.entity.army.WArmy` `disband()V` | D | to do |
-| world | `world.army.ADDiv` `disband()V` | D | to do |
-| world | `world.army.ADDiv` `reassign(Lworld/entity/army/WArmy;)V` | D | to do |
-| world | `world.army.ADDivs` `insert(II)V` | D | to do |
-| world | `world.army.WDivRegional` `bannerSet(I)V` | D | to do |
-| world | `world.army.WDivStored` `bannerSet(I)V` | D | to do |
-| world | `world.army.WDivMercenary` `bannerSet(I)V` | D | to do |
-| world | `world.army.WDivRegional$1` `trainingSet(Lsettlement/stats/colls/StatsBattle$StatTraining;D)V` | D | to do |
-| world | `world.army.WDivRegional$1` `equipSet(Lsettlement/stats/equip/EquipBattle;D)V` | D | to do |
-| world | `world.army.WDivRegional$1` `menSet(I)V` | D | to do |
-| world | `world.army.WDivRegional$1` `raceSet(Linit/race/Race;)V` | D | to do |
-| world | `world.army.WDivRegional$1` `bannerISet(I)V` | D | to do |
-| world | `world.army.ADSupplies$ADArtillery$1` `set(Lworld/entity/army/WArmy;I)V` | D | to do |
-| world | `world.region.RDOutputs` `squeze(Lworld/map/regions/Region;)V` | D | to do |
-| world | `world.region.RD` `setFaction(Lworld/map/regions/Region;Lgame/faction/Faction;Z)V` | D | to do |
-| world | `world.battle.WBattles` `regAttack(Lworld/map/regions/Region;Lworld/entity/army/WArmy;)V` | D | to do |
-| diplomacy | `game.faction.diplomacy.DipStance` `set(Lgame/faction/Faction;Lgame/faction/Faction;)V` | D | to do |
-| diplomacy | `game.faction.diplomacy.DipStance` `set(Lgame/faction/npc/FactionNPC;)V` | D | to do |
-| diplomacy | `game.faction.player.emmi.EmiType` `set(Ljava/lang/Object;I)V` | D | to do |
-| diplomacy | `game.faction.npc.NPCRequest` `expire()V` | D | to do |
-| diplomacy | `game.faction.npc.NPCRequest` `clear()V` | D | to do |
-| diplomacy | `game.faction.royalty.opinion.OpsGifts` `makeDeal(Lgame/faction/npc/FactionNPC;D)V` | D | to do |
-| diplomacy | `game.faction.FCredits` `inc(DLgame/faction/FCredits$CTYPE;)V` | D | to do |
-| events | `game.raiding.RaidingCurrent` `clear()V` | D | to do |
+| world | `world.entity.army.WArmy` `setDestination(II)V` | D | done: 7000 armyMove, patch 96-cmd-world (SOS-35) |
+| world | `world.entity.army.WArmy` `intercept(Lworld/entity/army/WArmy;)V` | D | done: 7001 armyIntercept, patch 96-cmd-world (SOS-35) |
+| world | `world.entity.army.WArmy` `besiege(Lworld/map/regions/Region;)V` | D | done: 7002 armyBesiege, patch 96-cmd-world (SOS-35); the step's "declare war and besiege?" question is 7950 stepPromptAnswer (patch 99-world-battles) |
+| world | `world.entity.army.WArmy` `stop()V` | D | done: 7003 armyStop, patch 96-cmd-world (SOS-35) |
+| world | `world.entity.army.WArmy` `raid(Z)V` | D | done: 7004 armyRaid, patch 96-cmd-world (SOS-35) |
+| world | `world.entity.army.WArmy` `disband()V` | D | done: 7005 armyDisband, patch 96-cmd-world (SOS-35) |
+| world | `world.army.ADDiv` `disband()V` | D | not needed: the Army screen's disband loop is one command at the call site, 7007 divsReassign; other callers run in the step (SOS-35) |
+| world | `world.army.ADDiv` `reassign(Lworld/entity/army/WArmy;)V` | D | not needed: the Army screen's reassign loop is one command at the call site, 7007 divsReassign; other callers run in the step (SOS-35) |
+| world | `world.army.ADDivs` `insert(II)V` | D | done: 7009 divOrder, patch 96-cmd-world (SOS-35) |
+| world | `world.army.WDivRegional` `bannerSet(I)V` | D | not needed: the Army banner editor is one command at the call site, 7008 divsBanner (SOS-35) |
+| world | `world.army.WDivStored` `bannerSet(I)V` | D | not needed: the Army banner editor is one command at the call site, 7008 divsBanner (SOS-35) |
+| world | `world.army.WDivMercenary` `bannerSet(I)V` | D | not needed: the Army banner editor is one command at the call site, 7008 divsBanner (SOS-35) |
+| world | `world.army.WDivRegional$1` `trainingSet(Lsettlement/stats/colls/StatsBattle$StatTraining;D)V` | D | done: 7010 regionalTraining, patch 96-cmd-world (SOS-35) |
+| world | `world.army.WDivRegional$1` `equipSet(Lsettlement/stats/equip/EquipBattle;D)V` | D | done: 7011 regionalEquip, patch 96-cmd-world (SOS-35) |
+| world | `world.army.WDivRegional$1` `menSet(I)V` | D | done: 7012 regionalMen, patch 96-cmd-world (SOS-35) |
+| world | `world.army.WDivRegional$1` `raceSet(Linit/race/Race;)V` | D | done: 7013 regionalRace, patch 96-cmd-world (SOS-35) |
+| world | `world.army.WDivRegional$1` `bannerISet(I)V` | D | done: 7014 regionalBanner, patch 96-cmd-world (SOS-35) |
+| world | `world.army.ADSupplies$ADArtillery$1` `set(Lworld/entity/army/WArmy;I)V` | D | done: 7015 artillery, patch 96-cmd-world (SOS-35) |
+| world | `world.region.RDOutputs` `squeze(Lworld/map/regions/Region;)V` | D | done: 7024 regionSqueeze, at the call site in PlayOutput, patch 96-cmd-world (SOS-35) |
+| world | `world.region.RD` `setFaction(Lworld/map/regions/Region;Lgame/faction/Faction;Z)V` | D | not needed: hooked at its UI call sites, 7020 regionAutonomy and 7021 regionAbandon; other callers are the step, deals or debug (SOS-35) |
+| world | `world.battle.WBattles` `regAttack(Lworld/map/regions/Region;Lworld/entity/army/WArmy;)V` | D | not needed: hooked at its UI call sites, 7026 regionAttack (war, then the attack) (SOS-35) |
+| diplomacy | `game.faction.diplomacy.DipStance` `set(Lgame/faction/Faction;Lgame/faction/Faction;)V` | D | not needed: every UI caller now runs inside a command; the rest is the step or debug (SOS-35) |
+| diplomacy | `game.faction.diplomacy.DipStance` `set(Lgame/faction/npc/FactionNPC;)V` | D | not needed: every UI caller now runs inside a command; the rest is the step or debug (SOS-35) |
+| diplomacy | `game.faction.player.emmi.EmiType` `set(Ljava/lang/Object;I)V` | D | done: 8004 emissaries, patch 96-cmd-world (SOS-35) |
+| diplomacy | `game.faction.npc.NPCRequest` `expire()V` | D | done: 8002 requestExpire, patch 96-cmd-world (SOS-35) |
+| diplomacy | `game.faction.npc.NPCRequest` `clear()V` | D | not needed: every UI caller now runs inside a command (SOS-35) |
+| diplomacy | `game.faction.royalty.opinion.OpsGifts` `makeDeal(Lgame/faction/npc/FactionNPC;D)V` | D | not needed: every UI caller now runs inside a command (SOS-35) |
+| diplomacy | `game.faction.FCredits` `inc(DLgame/faction/FCredits$CTYPE;)V` | D | not needed: every UI caller now runs inside a command (SOS-35) |
+| events | `game.raiding.RaidingCurrent` `clear()V` | D | not needed: every UI caller now runs inside a command (SOS-35) |
 | laws/stats | `game.faction.player.PTech` `levelSet(Linit/tech/TECH;I)V` | B | done: command 1015 techLevel, patch 96-cmd-laws |
-| events | `game.events.killer.EventKiller` `setSuspect(I)V` | D | to do |
-| events | `game.raiding.RaidingCurrent` `setAllyFight()V` | D | to do |
+| events | `game.events.killer.EventKiller` `setSuspect(I)V` | D | done: 9003 killerSuspect, at the call site in Messenger (EventKiller is not menu-safe), patch 96-cmd-world (SOS-35) |
+| events | `game.raiding.RaidingCurrent` `setAllyFight()V` | D | done: 9002 raiderAllyHelp, at the call site in MessAlly, patch 96-cmd-world (SOS-35) |
 | names/colours | `game.faction.FBanner` `bannerTypeSet(I)V` | B | done: command 5009 bannerType, patch 96-cmd-names |
 
 ## Field writes from the UI
@@ -212,9 +212,9 @@ Status: **done** (hooked, with its command id), **to do**, or why it needs no co
 | city military | `BattleOrder$Locked.set(Copyable)V` | B | done: battle orders (SOS-32, patch 90) |
 | city military (generated battle deploy) | `game.battle.Armies.initAndTeleport(LIST)V` | - | done: deployment (SOS-32, patch 95) |
 | world | `UIWBattlePrompt.battle/assist/lastStand/battleSally(WBattleSpec)`, `siege(WBattleSiege)`, `result(WBattleSiege$Result)`, `result(WBattleResult,Z)` | D | done: not a command; the world step opens it on every PC alike, the engine keeps what it decides, and in a session it doesn't pause the game (SOS-35, patch 99-world-battles) |
-| world | `view.world.ui.army.ArmyRecruit$3.clickA()V` | D | to do |
-| world | `view.world.ui.army.UIMerenaries$4.clickA()V` | D | to do |
-| world | `view.world.ui.region.PlayInfo$9$1.exe()V` | D | to do |
+| world | `view.world.ui.army.ArmyRecruit$3.clickA()V` | D | done: 7016 recruit; the step re-checks conscripts and room in the army, patch 96-cmd-world (SOS-35) |
+| world | `view.world.ui.army.UIMerenaries$4.clickA()V` | D | done: 7017 mercHire, patch 96-cmd-world (SOS-35) |
+| world | `view.world.ui.region.PlayInfo$9$1.exe()V` | D | done: 7020 regionAutonomy, 7021 regionAbandon, patch 96-cmd-world (SOS-35) |
 | names/colours | `view.sett.ui.right.UIMiniHotSpots$1.placeFirst(II)V` | B | done: command 5004 markAdd, patch 96-cmd-names |
 | tools | `view.sett.ui.home.UIHomeAssign.place(II AREA PLACER_TYPE)V` | B | done: command 6004 homeAssign, patch 96-cmd-tools |
 | tools | `view.sett.ui.room.priority.UIRoomRaceAssign.place(...)V` | B | done: command 6005 workGroups, patch 96-cmd-tools |
@@ -222,7 +222,7 @@ Status: **done** (hooked, with its command id), **to do**, or why it needs no co
 | rooms | `settlement.room.health.hospital.Gui$1.clickA()V` | B | done: command 2036 hospitalFetch, patch 96-cmd-rooms |
 | rooms | `MoveOrderPullUI$1.clickA`, `$Placer.placeFirst(II)`, `$Detail$8.clickA`, `$Paster.place(...)` | B | done: commands 2041-2043, 2046, patch 96-cmd-rooms |
 | tools | `view.sett.ui.room.construction.UIRoomPlacer.init(Room$RoomInstanceImp)V` | B | done: in a session the room keeps working under the plan; Build is 6008 roomRefurnish, the trash button 2001 roomRemove (patch 97-room-plans, `Refurnish`) |
-| diplomacy | `view.ui.diplomacy.UIDipMessDeal$3.clickA`, `$4.clickA` | D | to do |
+| diplomacy | `view.ui.diplomacy.UIDipMessDeal$3.clickA`, `$4.clickA` | D | done: 8001 dealProposal; the vassal release action is 8003 vassalRelease, patch 96-cmd-world (SOS-35) |
 | battle infra | `game.save.GameLoader.set()V` | - | -: engine load path (SOS-30) |
 | world (generated battle) | `view.battle.IDeploy.update(F)Z`, `BattleState$ILiveConclude.update(F)Z`, `BattleState$ILiveConclude$1.close()V` | D | after V0.1: Engage is refused in a session (SOS-35) |
 | laws/stats | `settlement.entry.Immigration.admit(Race,I)V` | B | done: command 1016 admit, patch 96-cmd-laws (call sites; Immigration holds the menu-unsafe Immigrator) |
@@ -235,16 +235,16 @@ Status: **done** (hooked, with its command id), **to do**, or why it needs no co
 | tools | `PlacableSimpleTile.place(II)V` at `view.tool.PlacableSimpleTileTool` | B | not needed: only the debug panel and the battle editor use it |
 | tools | `PlacableFixed.place(IIII)V` at `view.tool.PlacableFixedTool`, `UIRoomPlacer$PlacerItemSingleArea` | B | done: commands 6002 roomItem and 6003 throneMove, patch 96-cmd-tools; the copier and print placers come with their ADR 0003 milestone |
 | tools | `PlacableSingle.placeFirst/placeExpanded(II)V` at `view.tool.PlacableSingleTool` | B | not needed: copier source pick is local setup; move orders and marks are in their areas |
-| events | `EVENT_HANDLER.choiceSelect`, `EventAction.exe`, `EVENT_HANDLER.set` at `game.event.engine.EventMessage$2` | D | to do |
-| diplomacy | `Deal.execute(Z)D` at `view.world.ui.faction.UIDiplomacy$4`, `view.ui.diplomacy.UIDipMessDeal$3` | D | to do |
-| events | `MessDemand$Demand.pay()`, `RaidingCurrent.clear()`, `Messages.hide()` at `game.raiding.MessDemand$Demand$3` (pay), `$4` (decline hide) | D | to do |
-| world | `RDLevelsTmp.accept()V` at `view.world.ui.region.PlayBuildingsPop$Info$1` | D | to do |
+| events | `EVENT_HANDLER.choiceSelect`, `EventAction.exe`, `EVENT_HANDLER.set` at `game.event.engine.EventMessage$2` | D | done: 9000 eventChoice, patch 96-cmd-world (SOS-35) |
+| diplomacy | `Deal.execute(Z)D` at `view.world.ui.faction.UIDiplomacy$4`, `view.ui.diplomacy.UIDipMessDeal$3` | D | done: 8000 dealAccept and 8001 dealProposal: the commit carries every term in DealSave's order, and the step rebuilds the deal and skips it if a term no longer holds, patch 96-cmd-world (SOS-35) |
+| events | `MessDemand$Demand.pay()`, `RaidingCurrent.clear()`, `Messages.hide()` at `game.raiding.MessDemand$Demand$3` (pay), `$4` (decline hide) | D | done: 9001 raiderPay; decline only hides the message (not needed), patch 96-cmd-world (SOS-35) |
+| world | `RDLevelsTmp.accept()V` at `view.world.ui.region.PlayBuildingsPop$Info$1` | D | done: 7025 regionBuildings; the draft stays local, the step re-checks cost and credits, patch 96-cmd-world (SOS-35) |
 | world | `WBattleSpec.engage/auto/retreat`, `WBattleSiege.retreat`, `WBattleResult.accept([I[I)`, `WBattleSiege$Result.occupy/abandon/puppet(DD[I[I)`, `DOUBLE_OE.incD` (mercy), `ACTION.exe` (close) at `view.world.ui.battle.BattleAssist$1-3, BattleBattle$1-3, BattleLastStand$1-2, BattleSally$1-3, BattleSiege$1-3, Conquer$7-9, Res$1` | D | done: 7900 worldBattleDecide (auto, retreat, the siege's Wait), 7901 worldBattleAccept, 7902 worldSiegeResult (SOS-35, patch 99-world-battles); Engage is refused in a session with a notice until generated battles are ported (after V0.1) |
-| world | `WArmyConstructor.create(IILFaction;)WArmy`, `UIArmies.openList(WArmy)` at `view.world.ui.army.List$9`, `List$Placer` | D | to do |
-| names/colours | `Str.clear()`, `Str.add(CharSequence)` at `Army$2` (army name), `PlayInfo$11` (region), `UIProfile$3` (capital), `UIRoom$Detail$1` (room), `UIMiniHotSpots$Panel$1` (mark) | B | room 5001 and mark 5006 done, capital through 5002 factionName, patch 96-cmd-names; army and region names stage D |
+| world | `WArmyConstructor.create(IILFaction;)WArmy`, `UIArmies.openList(WArmy)` at `view.world.ui.army.List$9`, `List$Placer` | D | done: 7018 armyCreate; the first army's random tile is drawn in the step, patch 96-cmd-world (SOS-35) |
+| names/colours | `Str.clear()`, `Str.add(CharSequence)` at `Army$2` (army name), `PlayInfo$11` (region), `UIProfile$3` (capital), `UIRoom$Detail$1` (room), `UIMiniHotSpots$Panel$1` (mark) | B | room 5001 and mark 5006 done, capital through 5002 factionName, patch 96-cmd-names; army 7006 armyName and region 7022 regionName, patch 96-cmd-world (SOS-35) |
 | names/colours | `Str.add(C)`, `Str.add(CharSequence)`, `Str.clear()` at `snake2d.util.sprite.text.StringInputSprite` (faction name), `view.ui.div.UIDivEditor$3` (division name) | B | done: 5002 factionName (+5003 rulerName) and 5000 divisionName, patch 96-cmd-names |
 | names/colours | `ColorImp.setRed/Green/Blue(I)` at `util.gui.misc.GColorPicker$1/$2/$3` | B | done: command 5008 colour, patch 96-cmd-names |
 | names/colours | `SettMarks$SettMark.remove()V` at `view.sett.ui.right.UIMiniHotSpots$Panel$2` | B | done: command 5005 markRemove, patch 96-cmd-names |
 | rooms | `RBIT$RBITImp.or(RBIT)` at `MoveOrderPullUI$Detail$3` | B | done: command 2044 moveOrderRes, patch 96-cmd-rooms |
-| laws/stats, world | `RMapInt.set`, `ArrayInt.set`, `INT_OE.set` at `CatPopulationGrowth$8`, `CatPopulationGrowth$9`, `UISubjectType$2`, `PlayPop$15`, `Army$10` | B/D | city side done: 1018 birthLimit, 1019 breeding, 1020 favourite, patch 96-cmd-laws; world side (PlayPop$15, Army$10) stage D |
+| laws/stats, world | `RMapInt.set`, `ArrayInt.set`, `INT_OE.set` at `CatPopulationGrowth$8`, `CatPopulationGrowth$9`, `UISubjectType$2`, `PlayPop$15`, `Army$10` | B/D | city side done: 1018 birthLimit, 1019 breeding, 1020 favourite, patch 96-cmd-laws; world side done: 7023 regionEdict (PlayPop$15), 7015 artillery (Army$10), patch 96-cmd-world (SOS-35) |
 | world (generated battle) | `BattleState.deploy()`, `liveRetreat()`, `reloadBattle()` at `view.battle.IDeploy$1`, `BattlePanel$12$1`, `BattlePanel$11$1`, `UIBattleResult$3` | D | after V0.1: Engage is refused in a session (SOS-35) |
