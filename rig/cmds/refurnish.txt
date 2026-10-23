@@ -1,0 +1,39 @@
+# Refurnishing (ADR 0003, SOS-34 milestone 2): copy 1 plans over a working room on its own map only; the room keeps
+# its own tile values in the simulation around every step. Build is one command (6008 roomRefurnish) every copy
+# applies; leaving changes nothing; the trash button removes the room (2001 roomRemove, scatter).
+# 1. A workshop: one work bench dropped (group 1), one added, a row more (or a column), Build
+refurnish WORKSHOP
+plan-drop-item 1 1
+plan-items 1 1
+plan-grow 1
+build
+# 2. A refurnish left without Build: no command
+refurnish REFINER
+plan-drop-item 1
+plan-cancel
+# 3. A refurnish held open while time runs (the room works under the plan), then Build
+refurnish REFINER
+plan-drop-item 1
+wait 10
+build
+# 4. The meeting: a refurnish open while the delete of the same room lands; the local plan ends with the room
+refurnish-removed REFINER 1
+wait 3
+# 5. A farm grown onto new tiles
+refurnish FARM
+plan-grow 1
+build
+# 6. A construction site: a new smithy built (6007), then refurnished at once (6008 on a site)
+plan WORKSHOP_SMITHY 5 5
+plan-items 1 0
+plan-items 2 1
+plan-door
+build
+refurnish site
+plan-drop-item 1 1
+build
+# 7. The trash button: on a site (6008 with an empty plan), then on a room (2001)
+refurnish site
+plan-trash
+refurnish REFINER 2
+plan-trash

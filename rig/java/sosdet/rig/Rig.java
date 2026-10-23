@@ -129,6 +129,11 @@ public final class Rig implements SCRIPT {
         });
     }
 
+    /** A scripted action's observation, logged as a "note" event (not a failure). */
+    public static void note(String text) {
+        current.event("note", "\"text\":\"" + Instance.clean(text) + "\"");
+    }
+
     @Override
     public SCRIPT_INSTANCE createInstance() {
         if (current == null) {

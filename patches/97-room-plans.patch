@@ -1,6 +1,6 @@
 diff -ru -U2 a/settlement/room/main/MapDataF.java b/settlement/room/main/MapDataF.java
 --- a/settlement/room/main/MapDataF.java	2026-06-17 18:46:30.000000000 +0500
-+++ b/settlement/room/main/MapDataF.java	2026-10-23 04:06:27.098703800 +0500
++++ b/settlement/room/main/MapDataF.java	2026-10-23 14:41:20.531460600 +0500
 @@ -214,7 +214,8 @@
  					tileIndex.set(index, NOTHING);
  					masterTileI.set(index, false);
@@ -11,10 +11,29 @@ diff -ru -U2 a/settlement/room/main/MapDataF.java b/settlement/room/main/MapData
  				}
  			}
  		}
+diff -ru -U2 a/settlement/room/main/placement/Instance.java b/settlement/room/main/placement/Instance.java
+--- a/settlement/room/main/placement/Instance.java	2025-12-18 09:21:00.000000000 +0500
++++ b/settlement/room/main/placement/Instance.java	2026-10-23 14:41:20.536460200 +0500
+@@ -68,7 +68,8 @@
+ 				continue;
+ 			
+ 			
+-			SETT.LIGHTS().remove(c.x(), c.y());
++			if (!sosdet.Hooks.outsideStep()) // SOSDET: a refurnish plan leaves the room's lights; its Build removes them in the step (ADR 0003)
++				SETT.LIGHTS().remove(c.x(), c.y());
+ 			
+ 		}
+ 		
 diff -ru -U2 a/settlement/room/main/placement/PlacerArea.java b/settlement/room/main/placement/PlacerArea.java
 --- a/settlement/room/main/placement/PlacerArea.java	2025-12-18 09:54:26.000000000 +0500
-+++ b/settlement/room/main/placement/PlacerArea.java	2026-10-23 04:06:27.097707700 +0500
-@@ -76,7 +76,8 @@
++++ b/settlement/room/main/placement/PlacerArea.java	2026-10-23 14:41:20.536460200 +0500
+@@ -72,11 +72,13 @@
+ 	void clear(int tx, int ty) {
+ 		if (ConstructionData.dFloored.is(tx, ty, 1)) {
+ 			embrio.resources.removeTile(tx, ty);
+-			SETT.FLOOR().clearer.clear(tx, ty);
++			if (!sosdet.Hooks.outsideStep()) // SOSDET: a refurnish plan keeps the room's floor; its Build clears it in the step (ADR 0003)
++				SETT.FLOOR().clearer.clear(tx, ty);
  			
  		}
  		
@@ -24,7 +43,7 @@ diff -ru -U2 a/settlement/room/main/placement/PlacerArea.java b/settlement/room/
  		
  		FurnisherItem it = SETT.ROOMS().fData.item.get(tx, ty);
  		if (it != null) {
-@@ -241,7 +242,8 @@
+@@ -241,7 +243,8 @@
  		
  		am--;
  		if (!embrio.instance.is(tx, ty)) {
@@ -36,15 +55,83 @@ diff -ru -U2 a/settlement/room/main/placement/PlacerArea.java b/settlement/room/
  				DIR d = DIR.ORTHO.get(i);
 diff -ru -U2 a/settlement/room/main/placement/RoomPlacer.java b/settlement/room/main/placement/RoomPlacer.java
 --- a/settlement/room/main/placement/RoomPlacer.java	2025-11-19 14:21:30.000000000 +0500
-+++ b/settlement/room/main/placement/RoomPlacer.java	2026-10-23 04:06:27.096708800 +0500
-@@ -328,6 +328,10 @@
++++ b/settlement/room/main/placement/RoomPlacer.java	2026-10-23 14:41:20.536460200 +0500
+@@ -206,6 +206,7 @@
+ 	}
+ 	
+ 	public void init(RoomBlueprintImp b, int upgrade) {
++		sosdet.game.cmd.Refurnish.placerInit(); // SOSDET: another plan or a cleared placer ends a refurnish plan first, so this never clears the room's tiles (ADR 0003)
+ 		
+ 		if (b == null && instance.blueprint() == null)
+ 			return;
+@@ -265,7 +266,8 @@
+ 			}
+ 
+ 			blueprint().constructor().doBeforePlanning(c.x(), c.y());
+-			SETT.LIGHTS().remove(c.x(), c.y());
++			if (!sosdet.Hooks.outsideStep()) // SOSDET: a refurnish plan leaves the room's lights; its Build removes them in the step (ADR 0003)
++				SETT.LIGHTS().remove(c.x(), c.y());
+ 			
+ 		}
+ 		if (ret.constructor().mustBeIndoors() && b != null)
+@@ -328,6 +330,10 @@
  		if (createProblem() != null) {
  			throw new RuntimeException(""+createProblem());
  		}
-+		if (sosdet.game.cmd.Tools.roomBuild(this, state != null)) { // SOSDET: Build is one command with the whole plan; the UI then clears the plan (ADR 0003)
++		if (sosdet.game.cmd.Tools.roomBuild(this)) { // SOSDET: Build is one command with the whole plan; the UI then clears the plan (ADR 0003)
 +			Coo.TMP.set(instance.mX(), instance.mY());
 +			return Coo.TMP;
 +		}
  		TBuilding structure = null;
  		if (blueprint().constructor().mustBeIndoors()) {
  			structure = this.structure.get();
+diff -ru -U2 a/settlement/room/main/placement/UtilStats.java b/settlement/room/main/placement/UtilStats.java
+--- a/settlement/room/main/placement/UtilStats.java	2026-06-17 10:48:04.000000000 +0500
++++ b/settlement/room/main/placement/UtilStats.java	2026-10-23 14:41:20.537460400 +0500
+@@ -50,6 +50,8 @@
+ 	}
+ 	
+ 	void removeTile(int tx, int ty) {
++		if (sosdet.Hooks.outsideStep()) // SOSDET: a refurnish plan clears no floor and pays no refund; its Build does, in the step (ADR 0003)
++			return;
+ 		SETT.FLOOR().clearer.clear(tx, ty);
+ 		for (int i = 0; i < p.blueprint().constructor().resources(); i++) {
+ 			resRemoved[i] += p.blueprint().constructor().areaCost(i, p.instance.upgrade())*0.75;
+@@ -63,6 +65,8 @@
+ 	}
+ 	
+ 	void removeItem(int tx, int ty, FurnisherItem it) {
++		if (sosdet.Hooks.outsideStep()) // SOSDET: a refurnish plan pays no refund; its Build does, in the step (ADR 0003)
++			return;
+ 		for (int i = 0; i < p.blueprint().constructor().resources(); i++) {
+ 			resRemoved[i] += it.cost2(i, p.instance.upgrade())*0.75;
+ 			if (resRemoved[i] >= 1) {
+diff -ru -U2 a/view/sett/ui/room/construction/Config.java b/view/sett/ui/room/construction/Config.java
+--- a/view/sett/ui/room/construction/Config.java	2025-09-12 16:12:40.000000000 +0500
++++ b/view/sett/ui/room/construction/Config.java	2026-10-23 14:41:20.538457600 +0500
+@@ -137,6 +137,10 @@
+ 	
+ 	@Override
+ 	public void deactivateAction() {
++		if (sosdet.game.cmd.Refurnish.leave(build)) { // SOSDET: in a session leaving a refurnish changes nothing; the trash button removes the room (ADR 0003)
++			build = true;
++			return;
++		}
+ 		if (s.refurnishing && build && SETT.ROOMS().placement.placer.createProblem() == null)
+ 			SETT.ROOMS().placement.placer.create();
+ 		SETT.ROOMS().placement.placer.init(null, 0);
+diff -ru -U2 a/view/sett/ui/room/construction/UIRoomPlacer.java b/view/sett/ui/room/construction/UIRoomPlacer.java
+--- a/view/sett/ui/room/construction/UIRoomPlacer.java	2026-03-01 09:29:30.000000000 +0500
++++ b/view/sett/ui/room/construction/UIRoomPlacer.java	2026-10-23 14:41:20.538457600 +0500
+@@ -94,6 +94,11 @@
+ 	
+ 	public void init(RoomInstanceImp ins) {
+ 		state.init(ins.constructor().blue(), true);
++		if (sosdet.game.cmd.Refurnish.start(ins)) { // SOSDET: in a session the room keeps working while it is planned over; Build is one command (ADR 0003)
++			if (sosdet.game.cmd.Refurnish.planning())
++				VIEW.s().tools.place(state.placement.placer.area(), state.config);
++			return;
++		}
+ 		
+ 		RoomBlueprintImp b = ins.constructor().blue();
+ 		RoomState stat = ins.makeState(ins.mX(), ins.mY(), false);

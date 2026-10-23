@@ -64,7 +64,7 @@ final class Plans {
     }
 
     /** {@code PlacableMultiTool.place}, V71.44, with the room placer's area tool over the record's tiles. */
-    private static boolean area(RoomPlacer p, PlanRecord r, boolean strict) {
+    static boolean area(RoomPlacer p, PlanRecord r, boolean strict) {
         if (r.area.count == 0) {
             return true;
         }
@@ -93,7 +93,7 @@ final class Plans {
     }
 
     /** Each item where it was, in the record's order: its sprite data depends on the order (and draws at random). */
-    private static boolean furniture(RoomBlueprintImp blue, PlanRecord r, boolean strict) {
+    static boolean furniture(RoomBlueprintImp blue, PlanRecord r, boolean strict) {
         Room.RoomInstanceImp ins = PlanStores.instance();
         for (int k = 0; k < r.items(); k++) {
             FurnisherItem it = blue.constructor().item(r.item(k));
@@ -130,7 +130,7 @@ final class Plans {
     }
 
     /** The planned doorways: set last, as placing area tiles clears doorways next to them. */
-    private static boolean walls(PlanRecord r, boolean strict) {
+    static boolean walls(PlanRecord r, boolean strict) {
         Room.RoomInstanceImp ins = PlanStores.instance();
         for (int k = 0; k < r.wallTiles(); k++) {
             if (!ins.is(r.wallX(k), r.wallY(k))) {
@@ -158,7 +158,7 @@ final class Plans {
      * {@code PlacerDoor}): the UI or an earlier command in this step may have filled them for another plan, so
      * {@code createProblem()} and the UI read fresh values after a rebuild.
      */
-    private static void resetCaches(RoomPlacer p) {
+    static void resetCaches(RoomPlacer p) {
         Object stats = PlanStores.get(Tools.field(RoomPlacer.class, "resources"), p);
         Tools.setInt(Tools.field(stats.getClass(), "tick"), stats, NO_TICK);
         Tools.setInt(Tools.field(p.cost().getClass(), "tick"), p.cost(), NO_TICK);
@@ -167,7 +167,7 @@ final class Plans {
     }
 
     /** {@code UtilHistory.clear()}, V71.44: a rebuilt plan's undo steps would undo the rebuild, not the player's. */
-    private static void clearHistory(RoomPlacer p) {
+    static void clearHistory(RoomPlacer p) {
         Object history = PlanStores.get(Tools.field(RoomPlacer.class, "history"), p);
         try {
             Method clear = history.getClass().getDeclaredMethod("clear");

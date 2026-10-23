@@ -47,8 +47,8 @@ import view.tool.PlacableMulti;
  * sets those inputs, runs the same loop the tool runs, and puts this PC's own values back.
  *
  * <p>An area room is planned on this PC only and lifted out of the simulation around its steps ({@link PlanStash}, ADR
- * 0003); its Build is one command with the whole plan ({@link #roomBuild}). Not here yet: refurnishing a room, the room
- * copier, saved prints and the mass copier (ADR 0003, later milestones).
+ * 0003); its Build is one command with the whole plan ({@link #roomBuild}), and so is a refurnish's ({@link Refurnish}).
+ * Not here yet: the room copier, saved prints and the mass copier (ADR 0003, a later milestone).
  */
 public final class Tools {
 
@@ -60,6 +60,7 @@ public final class Tools {
     static final int WORK_GROUPS = 6005;
     static final int HOME_ODD = 6006;
     static final int ROOM_BUILD = 6007;
+    static final int ROOM_REFURNISH = 6008;
 
     /** Tool keys of {@link #MULTI} outside {@link #multiTools()}: tools the view owns. */
     private static final int UPGRADER = -1;
@@ -83,7 +84,8 @@ public final class Tools {
             new Command(HOME_ASSIGN, "homeAssign", Tools::applyHomeAssign),
             new Command(WORK_GROUPS, "workGroups", Tools::applyWorkGroups),
             new Command(HOME_ODD, "homeOddjobbers", Tools::applyHomeOdd),
-            new Command(ROOM_BUILD, "roomBuild", Tools::applyRoomBuild));
+            new Command(ROOM_BUILD, "roomBuild", Tools::applyRoomBuild),
+            new Command(ROOM_REFURNISH, "roomRefurnish", Refurnish::apply));
 
     private Tools() {
     }
@@ -197,13 +199,19 @@ public final class Tools {
     }
 
     /**
-     * Hook in {@code RoomPlacer.create}, after its own check that the plan has no problem: Build on a new area room. The
-     * whole plan becomes one command (ADR 0003) and nothing is created now; the UI then clears the plan as after a
-     * vanilla build. A refurnished room ({@code refurnish}: the placer holds the old room's state) still builds at once,
-     * until its own milestone.
+     * Hook in {@code RoomPlacer.create}, after its own check that the plan has no problem: Build on a new area room or
+     * a refurnish. The whole plan becomes one command (ADR 0003) and nothing is created now; the UI then clears the plan
+     * as after a vanilla build.
      */
-    public static boolean roomBuild(RoomPlacer placer, boolean refurnish) {
-        if (refurnish || !Commands.capturing() || !placer.blueprint().constructor().usesArea()) {
+    public static boolean roomBuild(RoomPlacer placer) {
+        if (!Commands.capturing()) {
+            return false;
+        }
+        if (Hooks.planStash().refurnished() != null) {
+            Refurnish.build(Hooks.planStash());
+            return true;
+        }
+        if (!placer.blueprint().constructor().usesArea()) {
             return false;
         }
         CmdWriter w = new CmdWriter(ROOM_BUILD);

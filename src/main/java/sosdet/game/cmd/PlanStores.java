@@ -55,8 +55,12 @@ final class PlanStores {
         if (!planning()) {
             return;
         }
+        read(t, instance(), lift);
+    }
+
+    /** As {@link #read(PlanTiles, boolean)}, for the tiles of any room (a refurnished room's own layer). */
+    void read(PlanTiles t, Room.RoomInstanceImp ins, boolean lift) {
         arrays();
-        Room.RoomInstanceImp ins = instance();
         int ri = ins.index();
         RECTANGLE b = ins.body();
         int y2 = Math.min(b.y2(), SETT.THEIGHT);
@@ -126,6 +130,11 @@ final class PlanStores {
                         return f.item(i).firstY();
                     }
                 });
+    }
+
+    /** Whether the room still stands: the room store still maps its index to it. */
+    static boolean exists(Room.RoomInstanceImp room) {
+        return SETT.ROOMS().map.getByIndex(room.index()) == room;
     }
 
     static RoomPlacer placer() {
