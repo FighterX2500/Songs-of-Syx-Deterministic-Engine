@@ -1,6 +1,6 @@
 diff -ru -U2 a/settlement/room/main/MapDataF.java b/settlement/room/main/MapDataF.java
 --- a/settlement/room/main/MapDataF.java	2026-06-17 18:46:30.000000000 +0500
-+++ b/settlement/room/main/MapDataF.java	2026-10-23 15:39:06.427870600 +0500
++++ b/settlement/room/main/MapDataF.java	2026-10-23 18:15:26.259277600 +0500
 @@ -214,7 +214,8 @@
  					tileIndex.set(index, NOTHING);
  					masterTileI.set(index, false);
@@ -13,53 +13,31 @@ diff -ru -U2 a/settlement/room/main/MapDataF.java b/settlement/room/main/MapData
  		}
 diff -ru -U2 a/settlement/room/main/copy/Copier.java b/settlement/room/main/copy/Copier.java
 --- a/settlement/room/main/copy/Copier.java	2026-01-13 11:53:10.000000000 +0500
-+++ b/settlement/room/main/copy/Copier.java	2026-10-23 15:39:06.435393700 +0500
-@@ -186,6 +186,9 @@
- 	
- 	@Override
- 	public CharSequence isPlacable(int tx, int ty) {
-+		CharSequence sosdetNo = sosdet.game.cmd.CopyTools.copyRefusal(); // SOSDET: not a command yet (ADR 0003)
-+		if (sosdetNo != null)
-+			return sosdetNo;
- 		
- 		Room r = SETT.ROOMS().map.get(tx, ty);
- 		if (r != null && r.constructor() != null && r.constructor().canBeCopied()) {
-diff -ru -U2 a/settlement/room/main/copy/ROOM_COPY.java b/settlement/room/main/copy/ROOM_COPY.java
---- a/settlement/room/main/copy/ROOM_COPY.java	2026-05-15 13:52:30.000000000 +0500
-+++ b/settlement/room/main/copy/ROOM_COPY.java	2026-10-23 15:39:06.435393700 +0500
-@@ -19,6 +19,8 @@
- 	}
- 	
- 	public void copy(int rx, int ry) {
-+		if (sosdet.game.cmd.CopyTools.blocked()) // SOSDET: not a command yet (ADR 0003)
-+			return;
- 		if (copy.isPlacable(rx, ry) == null)
- 			copy.placeFirst(rx, ry);
- 	}
++++ b/settlement/room/main/copy/Copier.java	2026-10-23 18:15:26.268278000 +0500
+@@ -284,6 +284,8 @@
+ 			}
+ 			
+ 			update();
++			if (sosdet.game.cmd.CopyTools.roomCopy(SETT.ROOMS().map.get(room.mX(), room.mY()), swap.current(), structure, Copier.this.w, rot(), tx, ty)) // SOSDET: the copy is one command with the copier's state (ADR 0003)
++				return;
+ 			
+ 			Furnisher furnisher = swap.current().constructor();
+ 			
 diff -ru -U2 a/settlement/room/main/copy/SavedPrintsPlacer.java b/settlement/room/main/copy/SavedPrintsPlacer.java
 --- a/settlement/room/main/copy/SavedPrintsPlacer.java	2025-09-12 16:10:30.000000000 +0500
-+++ b/settlement/room/main/copy/SavedPrintsPlacer.java	2026-10-23 15:39:06.436393500 +0500
-@@ -145,6 +145,8 @@
- 	}
- 	
- 	public void place(SavedPrint print) {
-+		if (sosdet.game.cmd.CopyTools.blocked()) // SOSDET: not a command yet (ADR 0003)
-+			return;
- 		this.print = print;
- 		swap.init(print.blue);
- //		structure = print.structure;
-@@ -156,6 +158,8 @@
- 	}
- 	
- 	public void place(SavedPrint print, RoomBlueprint blue) {
-+		if (sosdet.game.cmd.CopyTools.blocked()) // SOSDET: not a command yet (ADR 0003)
-+			return;
- 		if (blue.getClass() != print.blue.getClass())
- 			throw new RuntimeException();
- 		this.print = print;
++++ b/settlement/room/main/copy/SavedPrintsPlacer.java	2026-10-23 18:15:26.269277800 +0500
+@@ -177,6 +177,8 @@
+ 		
+ 		@Override
+ 		public void place(final int tx, final int ty, int rrx, int rry) {
++			if (sosdet.game.cmd.CopyTools.printPlace(print, swap.current(), SavedPrintsPlacer.this.w, rot(), tx, ty, rrx, rry)) // SOSDET: the placement is one command with the print's contents (ADR 0003)
++				return;
+ 			
+ 			TmpArea tmp = SETT.ROOMS().tmpArea(this);
+ 			
 diff -ru -U2 a/settlement/room/main/placement/Instance.java b/settlement/room/main/placement/Instance.java
 --- a/settlement/room/main/placement/Instance.java	2025-12-18 09:21:00.000000000 +0500
-+++ b/settlement/room/main/placement/Instance.java	2026-10-23 15:39:06.428872300 +0500
++++ b/settlement/room/main/placement/Instance.java	2026-10-23 18:15:26.261277600 +0500
 @@ -68,7 +68,8 @@
  				continue;
  			
@@ -72,7 +50,7 @@ diff -ru -U2 a/settlement/room/main/placement/Instance.java b/settlement/room/ma
  		
 diff -ru -U2 a/settlement/room/main/placement/PlacerArea.java b/settlement/room/main/placement/PlacerArea.java
 --- a/settlement/room/main/placement/PlacerArea.java	2025-12-18 09:54:26.000000000 +0500
-+++ b/settlement/room/main/placement/PlacerArea.java	2026-10-23 15:39:06.428872300 +0500
++++ b/settlement/room/main/placement/PlacerArea.java	2026-10-23 18:15:26.261277600 +0500
 @@ -72,11 +72,13 @@
  	void clear(int tx, int ty) {
  		if (ConstructionData.dFloored.is(tx, ty, 1)) {
@@ -101,7 +79,7 @@ diff -ru -U2 a/settlement/room/main/placement/PlacerArea.java b/settlement/room/
  				DIR d = DIR.ORTHO.get(i);
 diff -ru -U2 a/settlement/room/main/placement/RoomPlacer.java b/settlement/room/main/placement/RoomPlacer.java
 --- a/settlement/room/main/placement/RoomPlacer.java	2025-11-19 14:21:30.000000000 +0500
-+++ b/settlement/room/main/placement/RoomPlacer.java	2026-10-23 15:39:06.429871300 +0500
++++ b/settlement/room/main/placement/RoomPlacer.java	2026-10-23 18:15:26.262277700 +0500
 @@ -206,6 +206,7 @@
  	}
  	
@@ -133,7 +111,7 @@ diff -ru -U2 a/settlement/room/main/placement/RoomPlacer.java b/settlement/room/
  			structure = this.structure.get();
 diff -ru -U2 a/settlement/room/main/placement/UtilStats.java b/settlement/room/main/placement/UtilStats.java
 --- a/settlement/room/main/placement/UtilStats.java	2026-06-17 10:48:04.000000000 +0500
-+++ b/settlement/room/main/placement/UtilStats.java	2026-10-23 15:39:06.429871300 +0500
++++ b/settlement/room/main/placement/UtilStats.java	2026-10-23 18:15:26.262277700 +0500
 @@ -50,6 +50,8 @@
  	}
  	
@@ -154,7 +132,7 @@ diff -ru -U2 a/settlement/room/main/placement/UtilStats.java b/settlement/room/m
  			if (resRemoved[i] >= 1) {
 diff -ru -U2 a/util/gui/misc/GInputInt.java b/util/gui/misc/GInputInt.java
 --- a/util/gui/misc/GInputInt.java	2026-02-10 12:46:58.000000000 +0500
-+++ b/util/gui/misc/GInputInt.java	2026-10-23 15:39:06.434394700 +0500
++++ b/util/gui/misc/GInputInt.java	2026-10-23 18:15:26.263277800 +0500
 @@ -42,7 +42,8 @@
  				text().clear().add('-');
  			}else {
@@ -177,7 +155,7 @@ diff -ru -U2 a/util/gui/misc/GInputInt.java b/util/gui/misc/GInputInt.java
  	
 diff -ru -U2 a/view/sett/ui/room/construction/Config.java b/view/sett/ui/room/construction/Config.java
 --- a/view/sett/ui/room/construction/Config.java	2025-09-12 16:12:40.000000000 +0500
-+++ b/view/sett/ui/room/construction/Config.java	2026-10-23 15:39:06.430869700 +0500
++++ b/view/sett/ui/room/construction/Config.java	2026-10-23 18:15:26.263277800 +0500
 @@ -137,6 +137,10 @@
  	
  	@Override
@@ -191,7 +169,7 @@ diff -ru -U2 a/view/sett/ui/room/construction/Config.java b/view/sett/ui/room/co
  		SETT.ROOMS().placement.placer.init(null, 0);
 diff -ru -U2 a/view/sett/ui/room/construction/UIRoomPlacer.java b/view/sett/ui/room/construction/UIRoomPlacer.java
 --- a/view/sett/ui/room/construction/UIRoomPlacer.java	2026-03-01 09:29:30.000000000 +0500
-+++ b/view/sett/ui/room/construction/UIRoomPlacer.java	2026-10-23 15:39:06.430869700 +0500
++++ b/view/sett/ui/room/construction/UIRoomPlacer.java	2026-10-23 18:15:26.264278300 +0500
 @@ -94,6 +94,11 @@
  	
  	public void init(RoomInstanceImp ins) {
@@ -204,15 +182,15 @@ diff -ru -U2 a/view/sett/ui/room/construction/UIRoomPlacer.java b/view/sett/ui/r
  		
  		RoomBlueprintImp b = ins.constructor().blue();
  		RoomState stat = ins.makeState(ins.mX(), ins.mY(), false);
-diff -ru -U2 a/view/sett/ui/room/copy/UICopier.java b/view/sett/ui/room/copy/UICopier.java
---- a/view/sett/ui/room/copy/UICopier.java	2025-04-30 09:18:50.000000000 +0500
-+++ b/view/sett/ui/room/copy/UICopier.java	2026-10-23 15:39:06.437393300 +0500
-@@ -15,6 +15,8 @@
- 	}
- 	
- 	public void activate() {
-+		if (sosdet.game.cmd.CopyTools.blocked()) // SOSDET: not a command yet (ADR 0003)
+diff -ru -U2 a/view/sett/ui/room/copy/Second.java b/view/sett/ui/room/copy/Second.java
+--- a/view/sett/ui/room/copy/Second.java	2026-01-13 11:58:40.000000000 +0500
++++ b/view/sett/ui/room/copy/Second.java	2026-10-23 18:15:26.270277600 +0500
+@@ -46,6 +46,8 @@
+ 
+ 	@Override
+ 	public void place(int tx, int ty, int rx, int ry) {
++		if (sosdet.game.cmd.CopyTools.massCopy(this, tx, ty, rx, ry)) // SOSDET: the copy is one command with the selection (ADR 0003)
 +			return;
- 		source.init();
- 		second.rotSet(0);
- 		VIEW.s().tools.place(first, config);
+ 		
+ 		if (!dest.is(tx, ty))
+ 			return;

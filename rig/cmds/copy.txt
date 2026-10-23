@@ -1,0 +1,13 @@
+# The copier tools (ADR 0003, SOS-36 milestone 3): each click is one command carrying what it copies, applied by every
+# copy at the step; picking the source and the tool options stay on the issuer's PC.
+# 1. The room copier (6100): a farm and a workshop copied to the first free spot, the workshop turned once
+copyroom FARM
+copyroom WORKSHOP 0 1
+wait 3
+# 2. A saved blueprint (6101): its contents travel in the command; a refiner's print, turned twice
+printplace REFINER 0 2
+wait 3
+# 3. The mass copier (6102): a farm selected and copied where all its tiles fit, then a workshop turned three times
+masscopy FARM
+masscopy WORKSHOP 0 3
+wait 10

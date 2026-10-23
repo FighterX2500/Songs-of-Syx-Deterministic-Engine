@@ -48,7 +48,7 @@ import view.tool.PlacableMulti;
  *
  * <p>An area room is planned on this PC only and lifted out of the simulation around its steps ({@link PlanStash}, ADR
  * 0003); its Build is one command with the whole plan ({@link #roomBuild}), and so is a refurnish's ({@link Refurnish}).
- * Not here yet: the room copier, saved prints and the mass copier (ADR 0003, a later milestone).
+ * The room copier, saved prints and the mass copier are {@link CopyTools}.
  */
 public final class Tools {
 
@@ -446,9 +446,9 @@ public final class Tools {
     /**
      * {@code PlacableFixedTool.click}, V71.44, from the footprint's first tile: every tile checked, then every tile
      * placed. False when the footprint no longer fits (a held button's repeat, or the map changed), on every PC alike.
-     * {@code PlacableFixed.init} is left out: neither placer run here overrides it.
+     * {@code PlacableFixed.init} is left out: a placer that overrides it (the mass copier's) is set up by its caller.
      */
-    private static boolean placeFixed(PlacableFixed p, int x1, int y1) {
+    static boolean placeFixed(PlacableFixed p, int x1, int y1) {
         if (p.placableWhole(x1, y1) != null) {
             return false;
         }
@@ -649,7 +649,7 @@ public final class Tools {
     // ------------------------------------------------------------------ the issuer's tool options (reflection)
 
     /** {@code JobBuildRoads.convert}, V71.44: the road tool's "convert existing roads" button. */
-    private static Field roadConvert() {
+    static Field roadConvert() {
         return field(JobBuildRoad.JobBuildRoads.class, "convert");
     }
 
@@ -672,7 +672,7 @@ public final class Tools {
         }
     }
 
-    private static boolean get(Field f, Object o) {
+    static boolean get(Field f, Object o) {
         try {
             return f.getBoolean(o);
         } catch (IllegalAccessException e) {
@@ -688,7 +688,7 @@ public final class Tools {
         }
     }
 
-    private static void set(Field f, Object o, boolean v) {
+    static void set(Field f, Object o, boolean v) {
         try {
             f.setBoolean(o, v);
         } catch (IllegalAccessException e) {
