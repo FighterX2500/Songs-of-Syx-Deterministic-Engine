@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+import java.util.NoSuchElementException;
 
 import game.GAME;
 import game.battle.state.BattleState;
@@ -88,6 +89,10 @@ import view.main.VIEW;
  *   hashes &lt;file&gt;                      after the load: append this copy's state hashes to the file every frame
  *   hashpeer &lt;pc&gt; &lt;file&gt;               and read another copy's; on the first desync the engine finds, write
  *                                       &lt;tag&gt;-desync.txt (the engine's report) and a desync event
+ *   ordersout &lt;file&gt;                    peer: append its player's orders to the file every frame
+ *   ordersfrom &lt;pc&gt; &lt;file&gt;             host: take in peer pc's orders from its file every frame
+ *   state                               what a player sees: step, people, soldiers, credits, invasion, raider
+ *   play &lt;action...&gt;                   as cmd, but a failed action is a "refused" event, not an error (LLM players)
  *   answerprompts                       the host's player answers every world-battle prompt (auto-resolve, occupy)
  *   showmessages                        the city's messages stay open (the played copy of --play)
  *   nudge &lt;step&gt;                        forced desync: at that step, inside it, one soldier gets fatal injuries
@@ -135,7 +140,7 @@ public final class Rig implements SCRIPT {
         Engine.betweenSteps(() -> {
             try {
                 action.run();
-            } catch (IllegalStateException | IllegalArgumentException | IndexOutOfBoundsException e) {
+            } catch (IllegalStateException | IllegalArgumentException | IndexOutOfBoundsException | NoSuchElementException e) {
                 current.event("cmdskipped", "\"reason\":\"" + Instance.clean(String.valueOf(e.getMessage())) + "\"");
             }
         });
@@ -201,6 +206,11 @@ public final class Rig implements SCRIPT {
         private long[] hashOffsets = new long[0];
         private boolean desyncReported;
         private long nudgeStep = -1;
+        // the players' orders between peers and the host, through files (a peer's player acts too)
+        private Path ordersOutFile;
+        private final List<Path> ordersPeers = new ArrayList<>();
+        private final List<Integer> ordersPeerPcs = new ArrayList<>();
+        private long[] ordersOffsets = new long[0];
         // resync (SOS-30)
         private double speed;
         private long resyncStep = -1;
@@ -284,6 +294,7 @@ public final class Rig implements SCRIPT {
                 resynced();
             }
             exchangeAiLog();
+            exchangeOrders();
             exchangeReports();
             exchangeHashes();
             if (traceFrom >= 0 && Engine.active() && Engine.step() >= traceFrom) {
@@ -338,6 +349,30 @@ public final class Rig implements SCRIPT {
                 }
             } catch (IOException e) {
                 throw new IllegalStateException("SOSDET rig: AI log file " + aiFile, e);
+            }
+        }
+
+        /** A peer appends its player's new orders; the host takes in what is new from each peer. Between frames. */
+        private void exchangeOrders() {
+            if (!Engine.active()) {
+                return;
+            }
+            try {
+                if (ordersOutFile != null) {
+                    byte[] out = Engine.ordersOut();
+                    if (out.length > 0) {
+                        Files.write(ordersOutFile, out, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+                    }
+                }
+                for (int i = 0; i < ordersPeers.size(); i++) {
+                    byte[] in = readNew(ordersPeers.get(i), ordersOffsets[i]);
+                    ordersOffsets[i] += in.length;
+                    if (in.length > 0) {
+                        Engine.ordersIn(ordersPeerPcs.get(i), in);
+                    }
+                }
+            } catch (IOException e) {
+                throw new IllegalStateException("SOSDET rig: orders file", e);
             }
         }
 
@@ -764,6 +799,16 @@ public final class Rig implements SCRIPT {
                 playerAction(Arrays.copyOfRange(c, 1, c.length));
                 event("cmd", "\"action\":\"" + clean(rest(c)) + "\"");
                 return;
+            case "play":
+                // a player who may be wrong (an LLM agent): an action that fails is refused, not a failed run
+                try {
+                    playerAction(Arrays.copyOfRange(c, 1, c.length));
+                } catch (RuntimeException e) {
+                    event("refused", "\"action\":\"" + clean(rest(c)) + "\",\"message\":\"" + clean(e.toString()) + "\"");
+                    return;
+                }
+                event("played", "\"action\":\"" + clean(rest(c)) + "\",\"step\":" + Engine.step());
+                return;
             case "ailog":
                 aiHost = c[1].equals("host");
                 aiFile = Paths.get(rest(Arrays.copyOfRange(c, 1, c.length)));
@@ -775,6 +820,20 @@ public final class Rig implements SCRIPT {
                 Files.deleteIfExists(hashFile);
                 desyncReported = false;
                 event("hashes", "\"file\":\"" + clean(hashFile.toString()) + "\"");
+                return;
+            case "ordersout":
+                ordersOutFile = Paths.get(rest(c));
+                Files.deleteIfExists(ordersOutFile);
+                event("ordersout", "\"file\":\"" + clean(ordersOutFile.toString()) + "\"");
+                return;
+            case "ordersfrom":
+                ordersPeerPcs.add(Integer.parseInt(c[1]));
+                ordersPeers.add(Paths.get(rest(Arrays.copyOfRange(c, 1, c.length))));
+                ordersOffsets = Arrays.copyOf(ordersOffsets, ordersPeers.size());
+                event("ordersfrom", "\"pc\":" + c[1]);
+                return;
+            case "state":
+                event("state", state());
                 return;
             case "hashpeer":
                 hashPeerPcs.add(Integer.parseInt(c[1]));
@@ -860,6 +919,17 @@ public final class Rig implements SCRIPT {
             default:
                 event("error", "\"message\":\"unknown command: " + clean(String.join(" ", c)) + "\"");
             }
+        }
+
+        /** What a player sees, read between frames as the UI reads it: never changes the game. */
+        private String state() {
+            Faction p = FACTIONS.player();
+            String raider = GAME.raiders().current.current() == null ? "" : clean(GAME.raiders().current.current().name);
+            return String.format(Locale.ROOT, "\"step\":%d,\"day\":%.2f,\"people\":%d,\"soldiers\":%d,\"credits\":%.0f,"
+                    + "\"invasion\":%b,\"raider\":\"%s\",\"armies\":%d,\"running\":%b",
+                    Engine.active() ? Engine.step() : -1, TIME.currentSecond() / TIME.secondsPerDay(),
+                    STATS.POP().POP.data(null).get(null), GAME.ARMIES().player().men(), p.credits().getD(),
+                    SETT.INVADOR().invading(), raider, p.armies().all().size(), running);
         }
 
         private static String rest(String[] c) {
