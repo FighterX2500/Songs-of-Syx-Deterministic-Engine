@@ -48,6 +48,8 @@ public final class GameInputs implements Consumer<CityReport> {
 
     /** Big enough for a division's people (B4). */
     private final GameCodec codec = new GameCodec(1 << 20);
+    /** Made at first use: the game's stats and maps are set up by then. */
+    private GameSoldiers soldiers;
     private final SentSupplies sent;
     private final EventMarks marks;
     /** True while the reports applied are this PC's own: only those settle what its city has sent (SOS-38). */
@@ -77,7 +79,7 @@ public final class GameInputs implements Consumer<CityReport> {
 
     /** B1: the soldier, as their save data, for their division in the world. */
     public Input soldierJoins(Induvidual i, int div) {
-        i.save(codec.hashBegin());
+        soldiers().write(i, codec.hashBegin());
         return new Input(InputKind.SOLDIER_JOINS, div, codec.written());
     }
 
@@ -131,7 +133,7 @@ public final class GameInputs implements Consumer<CityReport> {
         p.i(div.index);
         p.i(survivors.length);
         for (Induvidual i : survivors) {
-            i.save(p);
+            soldiers().write(i, p);
         }
         return new Input(InputKind.DIV_RESOLVE, 0, codec.written());
     }
@@ -184,7 +186,7 @@ public final class GameInputs implements Consumer<CityReport> {
             case SOLDIER_JOINS:
                 Induvidual i;
                 try {
-                    i = new Induvidual(codec.reader(in.data()));
+                    i = soldiers().read(codec.reader(in.data()));
                 } catch (IOException e) {
                     throw new IllegalStateException("SOSDET: cannot read a soldier joining division " + in.arg, e);
                 }
@@ -320,6 +322,13 @@ public final class GameInputs implements Consumer<CityReport> {
         }
     }
 
+    private GameSoldiers soldiers() {
+        if (soldiers == null) {
+            soldiers = new GameSoldiers();
+        }
+        return soldiers;
+    }
+
     private void divResolve(byte[] data) {
         FileGetter g = codec.reader(data);
         try {
@@ -328,7 +337,7 @@ public final class GameInputs implements Consumer<CityReport> {
             int index = g.i();
             Induvidual[] survivors = new Induvidual[g.i()];
             for (int k = 0; k < survivors.length; k++) {
-                survivors[k] = new Induvidual(g);
+                survivors[k] = soldiers().read(g);
             }
             if (a == null || place < 0 || place >= a.divs().size() || a.divs().get(place).index != index) {
                 return; // the army or the division is gone, or the division moved: the survivors are lost with it

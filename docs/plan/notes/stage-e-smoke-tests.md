@@ -19,23 +19,30 @@ python -u rig\rig.py city --tag M2B --save Mogus-72-19f86f1e048-47002c-0-121c.sa
 
 If `reportMisses` is above 0, a booster was added after the first report. Find which one before milestone 4, since a follower's live read would differ from the host's.
 
+**Result (2026-10-24): passed** on the second run. The first crashed in every copy about 27 s in: `_BOOST$Cluster.vGet(HCLASS_RACE)` read a null class, reached from the world part's diplomacy (`DipWarPlayer`, `RTrust`); fixed in `14-report-reads.patch` and `GameReport` (a null class means every class). The rerun: three copies identical to step 3,000, 200 hashes compared with none missed, 101–102 reports per copy, `reportMisses` 0, `reportMaxBytes` 13,668, mean step 6.0 ms, p99 about 25 ms.
+
 ## M3: milestone 3, transactions
 
 The co-op check again, now with things crossing both ways: an invasion of the capitol (the rig's `invade`) and the player actions in `rig\cmds\m3.txt` (a division sent out and recalled, a recruit, a gift). Every copy runs the same city, so every copy queues the same transactions and sends the same report inputs, and the world part applies them at the same steps.
 
 ```
-python -u rig\rig.py city --tag M3 --save Mogus-72-19f86f1e048-47002c-0-121c.save --copies 3 --speeds 5,7,7 --steps 6000 --cmds @rig\cmds\m3.txt
+python -u rig\rig.py city --tag M3 --save Mogus-72-19f86f1e048-47002c-0-121c.save --copies 3 --speeds 5,7,7 --steps 24000 --cmds @rig\cmds\m3.txt
 ```
 
 **Passes when:**
 - every copy reaches the main menu and loads, with no exception in `build\rig\inst\<k>\songsofsyx\logs`. A `SOSDET:` message from `GameInputs` or `GameTxns` there means an input or a transaction found nothing to apply to;
-- the exit code is 0: every copy matches copy 1 at every step to 6,000;
+- the exit code is 0: every copy matches copy 1 at every step to 24,000 (about 5 minutes at speed 5; the actions take about 3, and the rig sends them by the clock, so a shorter run ends before they apply);
 - each copy's stats in `summary.txt` show `txnsApplied` > 0, `txnsSkipped` = 0 and `inputsSent` > 0, and the same three numbers on every copy;
 - `reportMisses` is 0.
 
 **Recorded, not pass or fail:** `txnsMaxInStep`, `inputsSent`, `reportMaxBytes` against M2B's (inputs make reports bigger: a soldier is a few hundred bytes), the step times, and whether a scripted event fired during the run (the game's own message log). The run can't force an event; if none fired, B6 is still unchecked in the rig, and the M4 run is the next chance.
 
 If copy 1 differs from the others at a step where a transaction applies, the city tail used something one copy had and another didn't. Run again with `--trace-draws` from a few steps before.
+
+**Result (2026-10-24): passed** on the fourth run.
+- *Run 1* crashed in every copy when the first soldier left for the army: `Induvidual.save` found no stats saver. The game makes its layout savers (`DataO`, `RMAPS`) only while it saves a game, so outside a save they are null. Fixed with `GameSoldiers`, which makes one saver and loader set for the running game's layout and lends it for each soldier.
+- *Runs 2 and 3* (6,000 and 18,000 steps) stayed identical but sent no inputs: the recall came 30 s after the send-out, before any soldier reached the map's edge. `m3.txt` now waits 90 s, and the run is 24,000 steps.
+- *Run 4*: three copies identical to step 24,000, 1,600 hashes compared with none missed; `txnsApplied` 74, `txnsSkipped` 0, `inputsSent` 1 on every copy (one soldier joined); `reportMisses` 0; `reportMaxBytes` 13,857; mean step 5.2 ms, p99 19 ms. `wrecruit` was skipped: the save's army 0 has no regional division. Not seen: a scripted event (B6) and a division's return through the city tail; the run is too short for the soldier's return date.
 
 ## M4: milestone 4, follower mode and the world-only resync
 

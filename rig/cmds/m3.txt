@@ -3,7 +3,9 @@
 # 1. C1 two-phase, B2: city division 0 sent out to army 0; the city tail takes its supplies from the stockpiles
 #    (ARMY_SUPPLY_DIV), and its soldiers leave for the army as report inputs (B1)
 wattach 0 0
-wait 30
+# the soldiers walk to the map's edge first; a recall before they reach it sends none (the first M3 runs: 30 s was
+# too short in one, enough for a few in another)
+wait 90
 # 2. C4: the division recalled; its soldiers come home through the entry in the city tail (SOLDIER_RETURNS)
 wrecall 0
 wait 30

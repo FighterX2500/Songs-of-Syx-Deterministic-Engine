@@ -24,6 +24,9 @@ import snake2d.util.file.FileGetter;
 import snake2d.util.file.FilePutter;
 import snake2d.util.file.SAVABLE;
 import snake2d.util.sets.KeyMap;
+import snake2d.util.sets.LIST;
+import util.data.DataO;
+import util.keymap.RMAPS;
 
 /**
  * Loads the world's sections of a save into the running game and keeps this PC's city (ADR 0005 §5, SOS-38): the
@@ -39,6 +42,9 @@ public final class GameWorldLoad {
     private static final String VERSION = " (SOSDET supports Songs of Syx V71, build 71.44)";
     private static final Field SMAP = field(GameSaver.class, "smap");
     private static final Method SECTION_LOAD = method(Savable.class, "load", FileGetter.class);
+    private static final Method SECTION_SAVE = method(Savable.class, "save", FilePutter.class);
+    /** {@code GameSaver}'s first list: the layout headers ({@code DataO}, {@code RMAPS}) and a few other sections. */
+    private static final Field BEFORE = field(GameSaver.class, "before");
     private static final Method RESOURCE_SAVE = method(FactionResource.class, "save", FilePutter.class);
     private static final Method RESOURCE_LOAD = method(FactionResource.class, "load", FileGetter.class);
     private static final Field TECH = field(PTech.class, "saver");
@@ -57,6 +63,7 @@ public final class GameWorldLoad {
      * own part of the player faction meanwhile, and is deleted after.
      */
     public static void load(Path save, Path scratch) {
+        layoutSavers();
         Player p = FACTIONS.player();
         FilePutter keep = new FilePutter(scratch, KEEP_BYTES);
         save(p.credits(), keep);
@@ -85,6 +92,28 @@ public final class GameWorldLoad {
         } catch (IOException e) {
             throw new IllegalStateException("SOSDET: the city's part of the player faction could not be put back from "
                     + scratch, e);
+        }
+    }
+
+    /**
+     * Makes the game's layout savers, as the start of a save does: the player's city-owned data saves through them
+     * (goods and trade through {@code TR.MAP()}, for one), and a PC that hasn't saved since it loaded has none
+     * (SOS-38, found by the M3 smoke test). Only the header savers run; the list's other sections hold state.
+     */
+    private static void layoutSavers() {
+        try {
+            @SuppressWarnings("unchecked") // GameSaver.before is an ArrayListGrower<Savable>
+            LIST<Savable> before = (LIST<Savable>) BEFORE.get(GAME.saver());
+            FilePutter headers = new GameCodec(1 << 22).hashBegin();
+            for (int i = 0; i < before.size(); i++) {
+                Savable s = before.get(i);
+                Class<?> owner = s.getClass().getEnclosingClass();
+                if (owner == DataO.class || owner == RMAPS.class) {
+                    SECTION_SAVE.invoke(s, headers);
+                }
+            }
+        } catch (IllegalAccessException | InvocationTargetException e) {
+            throw new IllegalStateException("SOSDET: the game's layout savers could not be made" + VERSION, e);
         }
     }
 
