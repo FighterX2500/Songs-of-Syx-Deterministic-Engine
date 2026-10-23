@@ -25,15 +25,15 @@ Status: **done** (hooked, with its command id), **to do**, or why it needs no co
 | employment | `settlement.room.main.employment.RoomEmployments` `setTargets()V` | B | done: command 3002 workTargets, patch 96-cmd-employment |
 | employment | `settlement.room.main.employment.RoomEmploymentIns` `neededSet(I)V` | B | done: command 3005 roomWorkers, patch 96-cmd-employment (the trainer panel's gauge with the rooms patch; room rebuild and move-order paste run inside their own commands) |
 | employment | `settlement.room.main.employment.RoomEquip$Target` `set(I)V` | B | done: command 3007 equipTarget, patch 96-cmd-employment |
-| tools/placement | `settlement.room.main.placement.RoomPlacer` `init(Lsettlement/room/main/RoomBlueprintImp;I)V` | B | left: area-room planning, local and hidden from the step (owner's decision, follow-up) |
-| tools/placement | `settlement.room.main.placement.RoomPlacer` `create()Lsnake2d/util/datatypes/COORDINATE;` | B | left: area-room planning (follow-up); Build becomes one command with the whole plan |
-| tools/placement | `settlement.room.main.placement.RoomPlacer` `popHistory()Z` | B | left: area-room planning (follow-up) |
-| tools/placement | `settlement.room.main.placement.RoomPlacer` `removeAllItems()Z` | B | left: area-room planning (follow-up) |
-| tools/placement | `settlement.room.main.placement.RoomPlacer` `removeArea()Z` | B | left: area-room planning (follow-up) |
-| tools/placement | `settlement.room.main.placement.RoomPlacer$AutoWalls` `set(Z)Lutil/data/BOOLEAN$BOOLEAN_MUTABLE;` | B | left: area-room planning (follow-up) |
-| tools/placement | `settlement.room.main.placement.UtilStructure` `set(Lsettlement/tilemap/terrain/TBuilding;)V` | B | left: area-room planning (follow-up) |
-| tools/placement | `settlement.room.main.placement.UtilStructure` `set(II)V` | B | left: area-room planning (follow-up) |
-| tools/placement | `settlement.room.main.copy.CopierMass` `copy(IIIII)V` | B | left: copier and saved blueprints, with area-room planning (follow-up) |
+| tools/placement | `settlement.room.main.placement.RoomPlacer` `init(Lsettlement/room/main/RoomBlueprintImp;I)V` | B | not needed: area-room planning is local, lifted out of the simulation around its steps (ADR 0003, `PlanStash`); the plan travels whole in 6007 roomBuild (a refurnish start: the `UIRoomPlacer.init` row) |
+| tools/placement | `settlement.room.main.placement.RoomPlacer` `create()Lsnake2d/util/datatypes/COORDINATE;` | B | done: command 6007 roomBuild for a new area room, 6008 roomRefurnish for a refurnish, patch 97-room-plans (the whole plan; every PC rebuilds it in the step and creates it, or skips it alike) |
+| tools/placement | `settlement.room.main.placement.RoomPlacer` `popHistory()Z` | B | not needed: area-room planning is local, lifted out of the simulation around its steps (ADR 0003, `PlanStash`); the plan travels whole in 6007 roomBuild |
+| tools/placement | `settlement.room.main.placement.RoomPlacer` `removeAllItems()Z` | B | not needed: area-room planning is local, lifted out of the simulation around its steps (ADR 0003, `PlanStash`); the plan travels whole in 6007 roomBuild |
+| tools/placement | `settlement.room.main.placement.RoomPlacer` `removeArea()Z` | B | not needed: area-room planning is local, lifted out of the simulation around its steps (ADR 0003, `PlanStash`); the plan travels whole in 6007 roomBuild |
+| tools/placement | `settlement.room.main.placement.RoomPlacer$AutoWalls` `set(Z)Lutil/data/BOOLEAN$BOOLEAN_MUTABLE;` | B | not needed: area-room planning is local, lifted out of the simulation around its steps (ADR 0003, `PlanStash`); the plan travels whole in 6007 roomBuild (auto walls is in it) |
+| tools/placement | `settlement.room.main.placement.UtilStructure` `set(Lsettlement/tilemap/terrain/TBuilding;)V` | B | not needed: area-room planning is local, lifted out of the simulation around its steps (ADR 0003, `PlanStash`); the plan travels whole in 6007 roomBuild (the wall material is in it; its write of the save's `ROOM_CONSTRUCTION` property stays local: left) |
+| tools/placement | `settlement.room.main.placement.UtilStructure` `set(II)V` | B | not needed: area-room planning is local, lifted out of the simulation around its steps (ADR 0003, `PlanStash`); the plan travels whole in 6007 roomBuild |
+| tools/placement | `settlement.room.main.copy.CopierMass` `copy(IIIII)V` | B | blocked in a session with a notice (patch 97-room-plans, `CopyTools`), with the copier and saved blueprints; ported after V0.1 (ADR 0003) |
 | laws/stats | `settlement.entry.Immigration` `setWanted(Linit/race/Race;I)V` | B | not needed: nothing calls it in V71.44 |
 | laws/stats | `settlement.entry.Immigration` `setHigher(Linit/race/Race;I)V` | B | not needed: only the simulation calls it, inside the step |
 | rooms | `settlement.room.main.RoomInstance` `activate(Z)V` | B | done: command 2000 roomActivate, patch 96-cmd-rooms |
@@ -221,7 +221,7 @@ Status: **done** (hooked, with its command id), **to do**, or why it needs no co
 | tools | `view.sett.ui.home.UIHomeOdd.place(...)V` | B | done: command 6006 homeOddjobbers, patch 96-cmd-tools |
 | rooms | `settlement.room.health.hospital.Gui$1.clickA()V` | B | done: command 2036 hospitalFetch, patch 96-cmd-rooms |
 | rooms | `MoveOrderPullUI$1.clickA`, `$Placer.placeFirst(II)`, `$Detail$8.clickA`, `$Paster.place(...)` | B | done: commands 2041-2043, 2046, patch 96-cmd-rooms |
-| tools | `view.sett.ui.room.construction.UIRoomPlacer.init(Room$RoomInstanceImp)V` | B | left: refurnish, with area-room planning (follow-up) |
+| tools | `view.sett.ui.room.construction.UIRoomPlacer.init(Room$RoomInstanceImp)V` | B | done: in a session the room keeps working under the plan; Build is 6008 roomRefurnish, the trash button 2001 roomRemove (patch 97-room-plans, `Refurnish`) |
 | diplomacy | `view.ui.diplomacy.UIDipMessDeal$3.clickA`, `$4.clickA` | D | to do |
 | battle infra | `game.save.GameLoader.set()V` | - | -: engine load path (SOS-30) |
 | world (generated battle) | `view.battle.IDeploy.update(F)Z`, `BattleState$ILiveConclude.update(F)Z`, `BattleState$ILiveConclude$1.close()V` | D | to do |
@@ -233,7 +233,7 @@ Status: **done** (hooked, with its command id), **to do**, or why it needs no co
 | --- | --- | --- | --- |
 | tools | `PlacableSimple.place(II)V` at `view.tool.PlacableSimpleTool` | B | not needed: only the debug panel and the battle editor use it |
 | tools | `PlacableSimpleTile.place(II)V` at `view.tool.PlacableSimpleTileTool` | B | not needed: only the debug panel and the battle editor use it |
-| tools | `PlacableFixed.place(IIII)V` at `view.tool.PlacableFixedTool`, `UIRoomPlacer$PlacerItemSingleArea` | B | done: commands 6002 roomItem and 6003 throneMove, patch 96-cmd-tools; the copier and print placers come with area-room planning (follow-up) |
+| tools | `PlacableFixed.place(IIII)V` at `view.tool.PlacableFixedTool`, `UIRoomPlacer$PlacerItemSingleArea` | B | done: commands 6002 roomItem and 6003 throneMove, patch 96-cmd-tools; the copier and print placers come with their ADR 0003 milestone |
 | tools | `PlacableSingle.placeFirst/placeExpanded(II)V` at `view.tool.PlacableSingleTool` | B | not needed: copier source pick is local setup; move orders and marks are in their areas |
 | events | `EVENT_HANDLER.choiceSelect`, `EventAction.exe`, `EVENT_HANDLER.set` at `game.event.engine.EventMessage$2` | D | to do |
 | diplomacy | `Deal.execute(Z)D` at `view.world.ui.faction.UIDiplomacy$4`, `view.ui.diplomacy.UIDipMessDeal$3` | D | to do |

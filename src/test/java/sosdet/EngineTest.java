@@ -12,6 +12,7 @@ import java.util.Random;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import sosdet.game.cmd.PlanStash;
 import sosdet.hash.HashLog;
 import sosdet.hash.StateSource;
 
@@ -49,11 +50,12 @@ class EngineTest {
 
     /**
      * A session as these tests need it: the AI general in-step, since the default (on the host's thread) needs a
-     * running game for its adapter.
+     * running game for its adapter, and no room plan stash, which needs one too.
      */
     private static void begin() {
         Engine.begin();
         Engine.aiInStep();
+        Engine.session().plans = PlanStash.off();
     }
 
     @AfterEach

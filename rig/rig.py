@@ -563,7 +563,8 @@ def main():
     ap.add_argument("--no-invade", action="store_true", help="city: no invasion, the city as it is")
     ap.add_argument("--cmds", default="",
                     help="player actions copy 1 takes once every copy runs, ';'-separated or @file (one per line), 3 s apart, through the UI's"
-                         " own calls (e.g. 'curfew 1;men 0 40'); the others get them through the host's log (ADR 0002)")
+                         " own calls (e.g. 'curfew 1;men 0 40'); the others get them through the host's log (ADR 0002);"
+                         " 'wait <s>' pauses the actions")
     ap.add_argument("--warm", default="",
                     help="copies (e.g. 3 or 2,3) that play the autoloaded game normally for 30 game seconds before the"
                          " session, so their session game is not the first one their process has run")
@@ -690,6 +691,9 @@ def main():
         actions = [a.strip() for a in args.cmds.split(";")]
     actions = [a for a in actions if a] if args.cmds else []
     for action in actions:
+        if action.startswith("wait "):  # wait <s>: the player does nothing for that long
+            time.sleep(float(action.split()[1]))
+            continue
         time.sleep(3)
         copies[0].send("cmd " + action, "cmd")
         log("copy 1 (the host's player): " + action)

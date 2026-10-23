@@ -129,3 +129,8 @@ Each stage is one card (or a card's milestone) with its own PR, in this order.
 3. **Hook placement:** command hooks go in the declaring method where that's safe. When the class crashes the menu or the method is on a hot path, the hook goes at the UI call site instead.
 4. **Several human factions:** that stays the mod's work. The engine keeps the save's single player faction identical on every PC.
 5. **Room placement (SOS-34):** the player plans an area room (drag, items, rotation, refurnish, copier, saved blueprints) on their own PC, hidden from the simulation, which also works while paused. Build sends the whole plan as one command, applied at its step on every PC. The owner chose this over sending every planning step as a command.
+6. **SOSDET V0.1 (owner, 2026-10-23, during SOS-34 milestone 2):** fewer tests, then a full product the owner tests for 30 minutes.
+   - **Order now:** finish B (SOS-34) with the essentials only, then D (world lockstep), then package V0.1. Stage C's 30-minute session is the V0.1 acceptance test, played with city and world in lockstep so trade works. E (the city↔world link) comes after V0.1.
+   - **SOS-34 essentials:** the construction-site doorway on refurnish, plans lifted out of menu saves, multi-digit number inputs. The copier, mass copier and saved prints are blocked in a session with a notice and ported after V0.1.
+   - **Testing:** build and unit tests always; one rig smoke run at the end of SOS-34 and one at the end of D.
+

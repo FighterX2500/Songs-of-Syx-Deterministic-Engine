@@ -5,6 +5,7 @@ import sosdet.ai.AiLog;
 import sosdet.ai.AiMode;
 import sosdet.game.GameAi;
 import sosdet.game.GameHash;
+import sosdet.game.cmd.PlanStash;
 import sosdet.hash.HashLog;
 import sosdet.hash.StateSource;
 
@@ -24,6 +25,13 @@ final class Session {
     HashLog hashes = new HashLog();
     /** What the hash reads: the game, made at the first hash; tests put in their own. */
     StateSource source;
+    /**
+     * This PC's room plan, lifted out of the simulation around its steps (ADR 0003). Made at first use, as it needs a
+     * running game; tests without one put in {@link PlanStash#off()}.
+     */
+    PlanStash plans;
+    /** The game's saver that lifts the plan around its saves ({@link Hooks#frameUpdated}), registered once per game. */
+    Object planSaver;
 
     /** Host: the game speed last seen, so a change goes into the log once (B16). */
     double seenSpeed;
@@ -109,6 +117,13 @@ final class Session {
 
     void ai(AiLog log) {
         ai = log;
+    }
+
+    PlanStash plans() {
+        if (plans == null) {
+            plans = new PlanStash();
+        }
+        return plans;
     }
 
     StateSource source() {

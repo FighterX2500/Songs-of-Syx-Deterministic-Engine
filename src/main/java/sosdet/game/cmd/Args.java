@@ -32,6 +32,17 @@ public final class Args {
         return w.i(r.index()).i(r.blueprint().index());
     }
 
+    /** A room of any kind, construction sites too, as {@link #room(CmdWriter, Room)} wrote it. */
+    public static Room.RoomInstanceImp anyRoom(CmdReader r) {
+        int index = r.i();
+        int blueprint = r.i();
+        Room room = index >= 0 && index < SETT.ROOMS().map.max() ? SETT.ROOMS().map.getByIndex(index) : null;
+        if (!(room instanceof Room.RoomInstanceImp) || room.blueprint().index() != blueprint) {
+            return null;
+        }
+        return (Room.RoomInstanceImp) room;
+    }
+
     public static RoomInstance room(CmdReader r) {
         int index = r.i();
         int blueprint = r.i();

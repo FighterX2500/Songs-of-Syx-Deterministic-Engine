@@ -1,0 +1,27 @@
+# Area-room planning (ADR 0003, SOS-34): copy 1 plans on its own map only, lifted out of the simulation around its
+# steps, so the copies stay identical while it plans; Build is one command (6007 roomBuild) every copy applies.
+# A farm without furniture
+plan FARM_GRAIN 6 6
+build
+# A workshop with furniture, indoors: auto walls and a doorway. Smithy groups: 0 storage (exactly one), 1 work bench
+# (at least one), 2 auxiliary station. (Houses are single items, not area rooms: the tools' roomItem command.)
+plan WORKSHOP_SMITHY 5 5
+plan-items 1 0
+plan-items 2 1
+plan-door
+build
+# A plan given up: nothing reaches the other copies
+plan FARM_VEG 5 5
+plan-cancel
+# The meeting: a new plan over the built one's corner, made in the same frame as Build, so the built plan's command
+# lands while it is local; its overlapping tiles are dropped, the rest builds
+plan FARM_GRAIN 4 4
+build-plan FARM_VEG 6 6 over
+build
+# The meeting apart: the local plan is rebuilt whole after the command, then furnished and built
+plan FARM_GRAIN 4 4
+build-plan WORKSHOP_SMITHY 5 5 apart
+plan-items 1 0
+plan-items 1 1
+plan-door
+build
