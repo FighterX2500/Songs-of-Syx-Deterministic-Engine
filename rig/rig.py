@@ -238,6 +238,12 @@ class Watcher:
         return self.diverged
 
 
+def loop_frames_cut(line):
+    """A draw's call site without the frames below GAME.update: the game loop's own lines differ per PC's pacing."""
+    i = line.find(" < view.main.VIEW.update")
+    return line if i < 0 else line[:i]
+
+
 def first_draw_difference(run_dir):
     """The first simulation draw that differs between two copies' draw traces (both dumped around a desync)."""
     dumps = sorted(run_dir.glob("draws-c*.txt"))
@@ -248,7 +254,7 @@ def first_draw_difference(run_dir):
     for x, y in zip(a, b):
         if x.startswith("## step"):
             step = x
-        if x != y:
+        if loop_frames_cut(x) != loop_frames_cut(y):
             return "draw trace: %s and %s differ first in %s:\n  %s\n  %s" % (dumps[0].name, dumps[1].name, step, x, y)
     return "draw trace: %s and %s agree over the steps both kept" % (dumps[0].name, dumps[1].name)
 
@@ -446,9 +452,8 @@ def run_evals(args):
     if args.vanilla:
         log("vanilla: %d steps of game time at speed 1" % args.steps)
         fresh()
-        load_start(False)
-        c.send("seed %d" % RUN_SEED, "seeded")
-        if not field:
+        load_start(False)  # no seed: vanilla has no session, and its own RND runs on
+        if not field and not args.no_invade:
             c.send("invade %d" % INVADE_MEN, "invade")
         mark = c.events_count()
         c.send("vanilla %s %s 1 %s-vanilla" % (kind, args.steps / 60, args.tag), "running")
@@ -465,7 +470,7 @@ def run_evals(args):
         load_start(True)
         c.send("ailog %s %s" % (role, run_dir / "ai-host.log" if role == "peer" else c.rig / "ai-host.log"), "ailog")
         c.send("seed %d" % RUN_SEED, "seeded")
-        if not field:
+        if not field and not args.no_invade:
             c.send("invade %d" % INVADE_MEN, "invade")
         mark = c.events_count()
         c.send("run %s %d 1 %s-%s" % (kind, args.steps, args.tag, role), "running")
@@ -557,6 +562,10 @@ def main():
     ap.add_argument("--trace-draws", type=int, default=0,
                     help="debugging: every copy records the call site of each simulation draw for this many steps;"
                          " a desync writes the draws around it, and the summary names the first draw that differs")
+    ap.add_argument("--trace-from", type=int, default=0,
+                    help="with --trace-draws: start the trace at this step (a long replay runs at full pace until then)")
+    ap.add_argument("--replay", help="a host's AI log (ai-host.log of a played run): every copy is a peer replaying it"
+                                     " from the same --save, to reproduce that run's desync without the player")
     ap.add_argument("--agreed-speed", type=float, default=0,
                     help="the speed every copy agrees on at the start, which sets the step length (1/60 s at 1x or"
                          " slower, 1/16 s above); default: copy 1's speed")
@@ -631,6 +640,9 @@ def main():
     start_save = run_dir / "battle.save" if args.scenario == "field" else saves["sosdet-city.save"]
     start_id = "%x" % zlib.crc32(start_save.read_bytes())  # names the start; a peer refuses another host's log
     host_log = copies[0].rig / "ai-host.log"
+    if args.replay:
+        host_log = run_dir / "replayed-host.log"
+        shutil.copy2(args.replay, host_log)
     resync_save, resync_state = copies[0].rig / "resync.save", copies[0].rig / "resync.state"
 
     warm = {int(k) for k in args.warm.split(",") if k}
@@ -644,7 +656,7 @@ def main():
             log("copy %d played 30 game seconds before the session" % c.k)
         c.send("begin", "begin")
         if args.ai == "host":
-            c.send("ai %s %s" % ("host" if c.k == 1 else "peer", start_id), "ai")
+            c.send("ai %s %s" % ("host" if c.k == 1 and not args.replay else "peer", start_id), "ai")
             c.send("pc %d" % (c.k - 1), "pc")  # the host is PC 0
         else:
             c.send("ai instep", "ai")
@@ -657,7 +669,7 @@ def main():
             c.send("load sosdet-city", "loaded", 600)
         time.sleep(5)
         if args.ai == "host":
-            c.send("ailog %s %s" % ("host" if c.k == 1 else "peer", host_log), "ailog")
+            c.send("ailog %s %s" % ("host" if c.k == 1 and not args.replay else "peer", host_log), "ailog")
         # every copy sends its engine's state hashes to the others through files, as the mod will over the network
         c.send("hashes %s" % (c.rig / "hashes.bin"), "hashes")
         for o in copies:
@@ -665,7 +677,7 @@ def main():
                 c.send("hashpeer %d %s" % (o.k, o.rig / "hashes.bin"), "hashpeer")
         if c.k == nudged:
             c.send("nudge %d" % args.nudge, "nudge")
-        if c.k == 1 and args.scenario == "city" and not args.play:
+        if c.k == 1 and args.scenario == "city" and not args.play and not args.replay:
             c.send("answerprompts", "answerprompts")  # nobody clicks the world-battle prompt in a rig run
         if c.k == 1 and args.play:
             c.send("showmessages", "showmessages")  # the owner reads the messages in the played window
@@ -675,7 +687,7 @@ def main():
         # the agreed starting speed (it sets the step length): copy 1's; each copy's own speed only sets its pace
         c.send("speed %s" % (args.agreed_speed or speeds[0]), "speed")
         if args.trace_draws:
-            c.send("tracedraws %d" % args.trace_draws, "tracedraws")
+            c.send("tracedraws %d %d" % (args.trace_draws, args.trace_from or -1), "tracedraws")
         starts[c.k] = c.send("hash", "hash")
         if args.scenario == "city" and not args.no_invade:
             c.send("invade %d" % INVADE_MEN, "invade")

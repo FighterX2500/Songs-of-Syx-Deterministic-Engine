@@ -26,6 +26,11 @@ public final class Engine {
      * on every load ({@link Hooks#loadBegin()}) and at {@link #end()}.
      */
     private static volatile Session session;
+    /**
+     * The last frame's game update time without a session (-1 before the first), so the timing evals can measure
+     * vanilla the same way. Measurement only; the simulation never reads it. Approved by the owner (2026-10-23, SOS-37).
+     */
+    private static volatile long vanillaFrameUpdateNanos = -1;
 
     private Engine() {
     }
@@ -40,6 +45,10 @@ public final class Engine {
 
     /** Ends the session; the game is vanilla again. */
     public static void end() {
+        Session s = session;
+        if (s != null) {
+            s.paths.shutdown();
+        }
         session = null;
     }
 
@@ -297,12 +306,16 @@ public final class Engine {
     }
 
     /**
-     * How long the last frame's game update took, in nanoseconds (-1 before the first frame of the session, or with no
-     * session). The current frame's update is still running when the caller asks.
+     * How long the last frame's game update took, in nanoseconds (-1 before the first frame of the session; without a
+     * session, vanilla's last frame). The current frame's update is still running when the caller asks.
      */
     public static long lastFrameUpdateNanos() {
         Session s = session;
-        return s == null ? -1 : s.lastFrameUpdateNanos;
+        return s == null ? vanillaFrameUpdateNanos : s.lastFrameUpdateNanos;
+    }
+
+    static void vanillaFrameUpdated(long nanos) {
+        vanillaFrameUpdateNanos = nanos;
     }
 
     /** When the running step started (System.nanoTime), or 0 between steps: for a stall sampler on another thread. */
@@ -316,7 +329,7 @@ public final class Engine {
         Session s = required();
         StepTimes t = s.times;
         return new Stats(s.clock.step(), s.streams.simulationDraws(), s.streams.foreignDraws(), s.pathJobs,
-                s.pathNanos, t.steps(), t.meanMs(), t.percentileMs(0.5), t.percentileMs(0.95), t.percentileMs(0.99),
+                s.pathNanos, s.jobs.nanos.clone(), t.steps(), t.meanMs(), t.percentileMs(0.5), t.percentileMs(0.95), t.percentileMs(0.99),
                 t.percentileMs(0.999), t.maxMs(), t.over100Ms(), t.over1S(), s.ai().mode(), s.ai().applied(),
                 s.ai().applied(AiEntry.ARTILLERY), s.ai().pending(), s.ai().appliedOrders(), s.ai().applied(AiEntry.COMMAND),
                 s.ai().commandsSkipped(), s.clock.agreedSpeed(),

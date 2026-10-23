@@ -125,6 +125,12 @@ public final class Hooks {
     public static void stepEnd() {
         Session s = Engine.session();
         long step = s.clock.step();
+        if (s.pathQueue != null) {
+            long start = System.nanoTime();
+            s.pathJobs += s.paths.run(s.pathQueue);
+            s.pathNanos += System.nanoTime() - start;
+            s.pathQueue = null;
+        }
         if (s.hashes.due(step)) {
             long clock = HashLog.mix(HashLog.mix(HashLog.mix(HashLog.start(), step), s.streams.drawsSinceLoad()),
                     s.ai().applied());
@@ -246,11 +252,31 @@ public final class Hooks {
         return Engine.session().ai().applier();
     }
 
-    /** True with a session: a path is computed at once on the calling thread, not on the path worker. */
+    /** The path finder keeps one scratch per share; job i of a step always runs on share i % PATH_SHARES. */
+    public static final int PATH_SHARES = PathWorkers.SHARES;
+
+    /** True with a session: a path is never handed to the game's own path thread, which answers at no fixed step. */
     public static boolean pathsNow() {
         return Engine.session() != null;
     }
 
+    /**
+     * True in the step on the simulation thread: the job waits in {@code q} for the step's end, where the path threads
+     * run it before the hash (SOS-37). Outside the step the caller computes the path at once.
+     */
+    public static boolean queuePath(PathQueue q) {
+        Session s = Engine.session();
+        if (s == null || !s.streams.isSimulationThread()) {
+            return false;
+        }
+        if (s.pathQueue != null && s.pathQueue != q) {
+            throw new IllegalStateException("SOSDET: a second path queue in step " + s.clock.step());
+        }
+        s.pathQueue = q;
+        return true;
+    }
+
+    /** A path computed at once, outside the step. */
     public static void pathDone(long nanos) {
         Session s = Engine.session();
         if (s != null) {
@@ -373,6 +399,9 @@ public final class Hooks {
      */
     public static void frameUpdated(long nanos) {
         Session s = Engine.session();
+        if (s == null) {
+            Engine.vanillaFrameUpdated(nanos);
+        }
         if (s != null) {
             s.lastFrameUpdateNanos = nanos;
             s.plans().restore();
