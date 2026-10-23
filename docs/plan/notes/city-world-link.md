@@ -125,6 +125,8 @@ In working time (a day ≈ 6–8 h). The earlier "about 3 days for all of stage 
 
 In the own-city mode, the engine would refuse those for now, as V0.1 refuses Engage. The 30-minute follower smoke run uses `--no-invade` and doesn't need them. That leaves about 10–12 days.
 
+**Decision (owner, 2026-10-23): take the cut.** SOS-38 builds milestones 2–4 without C5, C6, B4 and B6; a follow-up card takes them. In the own-city mode the engine refuses an invasion of the own capitol, a world battle on its region, and scripted events; co-op mode runs them as before.
+
 ## Not verified
 
 - The byte size of a soldier's data (`Induvidual`) and of an `InvasionSpec`.
