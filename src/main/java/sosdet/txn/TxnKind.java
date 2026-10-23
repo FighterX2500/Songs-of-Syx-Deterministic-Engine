@@ -19,5 +19,12 @@ public enum TxnKind {
     /** C5: the city's relation table, written by world code ({@code StatsRelations}). */
     REL_SOLDIER,
     REL_DEATH,
-    REL_HUMANOID
+    REL_HUMANOID,
+    /**
+     * C1 two-phase: supplies for an army from the city's stockpiles, as much as the city has; what it took goes back to
+     * the world as a supply input (B2). For a city division sent out ({@code WDivStoredAll.attach}).
+     */
+    ARMY_SUPPLY_DIV,
+    /** As {@link #ARMY_SUPPLY_DIV}, for a division recruited in the realm (the recruit command). */
+    ARMY_SUPPLY_RECRUIT
 }

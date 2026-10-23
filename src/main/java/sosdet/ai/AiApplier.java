@@ -9,4 +9,8 @@ public interface AiApplier {
     default long commandsSkipped() {
         return 0;
     }
+
+    /** The step's world part begins: the world commands held back from its start apply now (ADR 0005). */
+    default void worldPart() {
+    }
 }

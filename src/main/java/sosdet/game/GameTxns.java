@@ -9,7 +9,11 @@ import game.faction.FCredits.CTYPE;
 import game.faction.Faction;
 import game.faction.player.PCredits;
 import init.trade.TRADABLE;
+import game.faction.FResources.RTYPE;
 import init.constant.Config;
+import init.race.Race;
+import init.resources.RESOURCES;
+import init.resources.ResSupply;
 import init.trade.TRADE_TYPE;
 import init.type.CAUSE_ARRIVES;
 import init.type.CAUSE_LEAVE;
@@ -23,8 +27,11 @@ import settlement.trade.PBuyer;
 import settlement.trade.PSeller;
 import snake2d.util.datatypes.COORDINATE;
 import snake2d.util.datatypes.Coo;
+import snake2d.util.misc.CLAMP;
 import sosdet.report.Input;
 import sosdet.txn.Txn;
+import world.army.AD;
+import world.entity.army.WArmy;
 
 /**
  * Applies the world part's transactions to the city, in the step's city tail (ADR 0005 §3). Each one makes the game
@@ -74,6 +81,13 @@ public final class GameTxns implements Consumer<Txn> {
         case REL_HUMANOID:
             STATS.REL().setHumanoid((Humanoid) t.a);
             break;
+        case ARMY_SUPPLY_DIV:
+            Div div = GAME.ARMIES().player().divisions().get(t.i);
+            armySupplies((WArmy) t.a, div.info.race(), div.menNrOf(), false);
+            break;
+        case ARMY_SUPPLY_RECRUIT:
+            armySupplies((WArmy) t.a, (Race) t.b, t.i, true);
+            break;
         default:
             throw new IllegalStateException("SOSDET: no applier for transaction kind " + t.kind);
         }
@@ -109,6 +123,30 @@ public final class GameTxns implements Consumer<Txn> {
         Div dd = GAME.ARMIES().player().divisions().get(div);
         if (dd.menNrOf() < Config.battle().MEN_PER_DIVISION) {
             h.setDivision(dd);
+        }
+    }
+
+    /**
+     * As {@code WDivStoredAll.attach} and the recruit command do in vanilla: each supply the men need, as much as the
+     * stockpiles can give. The supply counter sends what it gets to the world in the next report.
+     */
+    private static void armySupplies(WArmy a, Race race, int men, boolean healthOnly) {
+        if (!a.added()) {
+            return; // the army is gone since the world part asked
+        }
+        for (ResSupply s : RESOURCES.SUP().ALL) {
+            if (healthOnly && s.health <= 0) {
+                continue;
+            }
+            int am = s.amount(race, men);
+            if (am <= 0) {
+                continue;
+            }
+            am = CLAMP.i(am, 0, SETT.ROOMS().STOCKPILE.tally().amountReservable.get(s.resource));
+            if (am > 0) {
+                s.resource.remove(am, RTYPE.ARMY_SUPPLY);
+                AD.supplies().get(s).current().inc(a, am);
+            }
         }
     }
 

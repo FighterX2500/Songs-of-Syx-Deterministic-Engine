@@ -1,5 +1,7 @@
 package sosdet.game;
 
+import java.util.ArrayDeque;
+
 import game.GAME;
 import game.battle.div.Div;
 import game.battle.formation.DIV_FORMATION;
@@ -15,6 +17,7 @@ import snake2d.util.sets.ArrayList;
 import sosdet.Hooks;
 import sosdet.ai.AiApplier;
 import sosdet.ai.AiEntry;
+import sosdet.game.cmd.CommandParts;
 import sosdet.game.cmd.Commands;
 
 /**
@@ -32,6 +35,8 @@ public final class GameAi implements AiApplier {
     private final DivFormationImp dest = new DivFormationImp();
     private final BattleOrderTask task = new BattleOrderTask();
     private long artilleryMissed;
+    /** World commands of this step, held for its world part; empty between steps. */
+    private final ArrayDeque<byte[]> worldCommands = new ArrayDeque<>();
 
     /** The general's thread only. */
     byte[] encode(SAVABLE order) {
@@ -51,11 +56,30 @@ public final class GameAi implements AiApplier {
         return commandsSkipped;
     }
 
+    /**
+     * A world command applies at the start of its step's world part, in order: it reads the city through the report
+     * and changes it through transactions, as the world part does (ADR 0005).
+     */
+    @Override
+    public void worldPart() {
+        byte[] payload;
+        while ((payload = worldCommands.poll()) != null) {
+            if (!Commands.apply(payload)) {
+                commandsSkipped++;
+            }
+        }
+    }
+
     @Override
     public void apply(AiEntry e) {
         switch (e.kind) {
         case AiEntry.COMMAND:
-            if (!Commands.apply(e.payload())) {
+            byte[] payload = e.payload();
+            if (CommandParts.world(payload)) {
+                worldCommands.add(payload);
+                return;
+            }
+            if (!Commands.apply(payload)) {
                 commandsSkipped++; // its target was gone at its step, on every PC alike
             }
             return;

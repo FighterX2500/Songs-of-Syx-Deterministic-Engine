@@ -206,6 +206,7 @@ public final class Hooks {
             s.part = part;
             s.streams.reseed(s.worldSeed(step));
             s.reports.applyDue(step, s.inputApplier());
+            s.ai().worldPart();
             return;
         }
         s.part = part;
@@ -483,6 +484,32 @@ public final class Hooks {
             return false;
         }
         x.a = h;
+        return true;
+    }
+
+    /**
+     * {@code WDivStoredAll.attach} (C1): true when queued. The city tail takes the division's supplies from its
+     * stockpiles, as much as it has, and its next report gives them to the army (B2): the world asks, the city answers.
+     */
+    public static boolean armySupplies(WArmy a, int div) {
+        Txn x = toCity(TxnKind.ARMY_SUPPLY_DIV);
+        if (x == null) {
+            return false;
+        }
+        x.a = a;
+        x.i = div;
+        return true;
+    }
+
+    /** As {@link #armySupplies(WArmy, int)}, for {@code men} recruited of a race (the recruit command). */
+    public static boolean armySupplies(WArmy a, Object race, int men) {
+        Txn x = toCity(TxnKind.ARMY_SUPPLY_RECRUIT);
+        if (x == null) {
+            return false;
+        }
+        x.a = a;
+        x.b = race;
+        x.i = men;
         return true;
     }
 

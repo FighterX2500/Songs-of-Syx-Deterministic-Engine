@@ -247,6 +247,11 @@ public final class AiLog {
         }
     }
 
+    /** Start of the step's world part: the commands that act on the world apply there (ADR 0005). */
+    public void worldPart() {
+        applier.worldPart();
+    }
+
     // ------------------------------------------------------------ the log as bytes
 
     /** Host: the log written since the last call (the header first), ending with the last confirmed step. */
