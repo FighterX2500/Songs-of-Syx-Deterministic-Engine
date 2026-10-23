@@ -380,7 +380,7 @@ public final class ToolActions {
     }
 
     /** The n-th instance, blueprint by blueprint, of an area room whose key starts with {@code prefix}. */
-    private static RoomInstance areaRoom(String prefix, int n) {
+    static RoomInstance areaRoom(String prefix, int n) {
         int seen = 0;
         for (RoomBlueprint b : SETT.ROOMS().all()) {
             if (!b.key.startsWith(prefix) || !(b instanceof RoomBlueprintIns<?>)) {
@@ -551,7 +551,7 @@ public final class ToolActions {
     }
 
     /** PlacableFixedTool.click at the first spot the placer fits, ring by ring around the throne. */
-    private static void click(PlacableFixed p) {
+    static void click(PlacableFixed p) {
         COORDINATE c = THRONE.coo();
         for (int d = 1; d < 150; d++) {
             for (int y = c.y() - d; y <= c.y() + d; y++) {

@@ -43,6 +43,7 @@ import snake2d.util.file.FilePutter;
 import snake2d.util.misc.ACTION;
 import snake2d.util.rnd.RND;
 import sosdet.Engine;
+import sosdet.rig.act.CopyActions;
 import sosdet.rig.act.EmploymentActions;
 import sosdet.rig.act.LawActions;
 import sosdet.rig.act.MilitaryActions;
@@ -647,7 +648,8 @@ public final class Rig implements SCRIPT {
         /** The UI call behind one player action, queued to run after this frame's update, outside the step. */
         private void playerAction(String[] a) {
             if (!(LawActions.run(a) || RoomActions.run(a) || EmploymentActions.run(a) || MilitaryActions.run(a)
-                    || NameActions.run(a) || ToolActions.run(a) || WorldActions.run(a))) {
+                    || NameActions.run(a) || ToolActions.run(a) || CopyActions.run(a)
+                    || WorldActions.run(a))) {
                 throw new IllegalArgumentException("SOSDET rig: no player action " + a[0]);
             }
         }
