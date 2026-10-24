@@ -182,7 +182,7 @@ Status: **done** (hooked, with its command id), **to do**, or why it needs no co
 | laws/stats | `game.faction.player.PTech` `levelSet(Linit/tech/TECH;I)V` | B | done: command 1015 techLevel, patch 96-cmd-laws |
 | events | `game.events.killer.EventKiller` `setSuspect(I)V` | D | done: 9003 killerSuspect, at the call site in Messenger (EventKiller is not menu-safe), patch 96-cmd-world (SOS-35) |
 | events | `game.raiding.RaidingCurrent` `setAllyFight()V` | D | done: 9002 raiderAllyHelp, at the call site in MessAlly, patch 96-cmd-world (SOS-35) |
-| names/colours | `game.faction.FBanner` `bannerTypeSet(I)V` | B | done: the player's banner, whole, is command 5015 banner from the profile's draft (SOS-32); 5009 bannerType still applies from older logs. Patch 96-cmd-names |
+| names/colours | `game.faction.FBanner` `bannerTypeSet(I)V` | B | done: the player's banner, whole with its pixels, is command 5016 playerBanner from the profile's draft (SOS-40); 5015 banner (without pixels, SOS-32) and 5009 bannerType still apply from older logs. Patch 96-cmd-names |
 
 ## Field writes from the UI
 
@@ -243,7 +243,7 @@ Status: **done** (hooked, with its command id), **to do**, or why it needs no co
 | world | `WArmyConstructor.create(IILFaction;)WArmy`, `UIArmies.openList(WArmy)` at `view.world.ui.army.List$9`, `List$Placer` | D | done: 7018 armyCreate; the first army's random tile is drawn in the step, patch 96-cmd-world (SOS-35) |
 | names/colours | `Str.clear()`, `Str.add(CharSequence)` at `Army$2` (army name), `PlayInfo$11` (region), `UIProfile$3` (capital), `UIRoom$Detail$1` (room), `UIMiniHotSpots$Panel$1` (mark) | B | room 5001 and mark 5006 done, capital through 5002 factionName, patch 96-cmd-names; army 7006 armyName and region 7022 regionName, patch 96-cmd-world (SOS-35) |
 | names/colours | `Str.add(C)`, `Str.add(CharSequence)`, `Str.clear()` at `snake2d.util.sprite.text.StringInputSprite` (faction name), `view.ui.div.UIDivEditor$3` (division name) | B | done: 5002 factionName (+5003 rulerName) and 5000 divisionName, patch 96-cmd-names |
-| names/colours | `ColorImp.setRed/Green/Blue(I)` at `util.gui.misc.GColorPicker$1/$2/$3` | B | done: command 5008 colour for division banners and marks; the player's banner goes into the profile's draft (5015 banner, SOS-32). Patch 96-cmd-names |
+| names/colours | `ColorImp.setRed/Green/Blue(I)` at `util.gui.misc.GColorPicker$1/$2/$3` | B | done: command 5008 colour for marks. The banners go into drafts: the player's (5016 playerBanner) and the division banners (5017 divisionBanner, SOS-40); 5008 for banners still applies from older logs. Patch 96-cmd-names |
 | names/colours | `SettMarks$SettMark.remove()V` at `view.sett.ui.right.UIMiniHotSpots$Panel$2` | B | done: command 5005 markRemove, patch 96-cmd-names |
 | rooms | `RBIT$RBITImp.or(RBIT)` at `MoveOrderPullUI$Detail$3` | B | done: command 2044 moveOrderRes, patch 96-cmd-rooms |
 | laws/stats, world | `RMapInt.set`, `ArrayInt.set`, `INT_OE.set` at `CatPopulationGrowth$8`, `CatPopulationGrowth$9`, `UISubjectType$2`, `PlayPop$15`, `Army$10` | B/D | city side done: 1018 birthLimit, 1019 breeding, 1020 favourite, patch 96-cmd-laws; world side done: 7023 regionEdict (PlayPop$15), 7015 artillery (Army$10), patch 96-cmd-world (SOS-35) |
