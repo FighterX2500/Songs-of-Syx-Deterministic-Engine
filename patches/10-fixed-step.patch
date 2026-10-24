@@ -1,6 +1,6 @@
 diff -ru -U2 a/game/GAME.java b/game/GAME.java
 --- a/game/GAME.java	2026-06-17 19:41:18.000000000 +0500
-+++ b/game/GAME.java	2026-10-23 21:10:05.037823700 +0500
++++ b/game/GAME.java	2026-10-24 18:16:39.281708200 +0500
 @@ -255,7 +255,9 @@
  		double speed = SPEED.update(slowDown);
  		
@@ -12,7 +12,7 @@ diff -ru -U2 a/game/GAME.java b/game/GAME.java
  			for (GameResource s : GameResource.all) {
  				if (s.isBattle || !VIEW.b().isActive())
  					s.update(0, game.profiler);
-@@ -263,16 +265,53 @@
+@@ -263,16 +265,54 @@
  			game.updateI++;
  		}else {
  			ds *= speed;
@@ -45,14 +45,15 @@ diff -ru -U2 a/game/GAME.java b/game/GAME.java
 +				boolean battleView = VIEW.b().isActive(); // SOSDET: inside the step the same on every PC (VIEW patch, SOS-32)
 +				if (sosdet.Hooks.fixedSteps()) {
 +					max = (float) sosdet.Hooks.stepSeconds(); // SOSDET: a speed change from the log takes effect at its step (B16)
++					boolean deploying = sosdet.game.cmd.MapBattles.deploying(); // SOSDET: nothing in a battle moves until Start, as vanilla's pause holds it (SOS-32)
 +					for (int part = 0; part < 2; part++) {
 +						sosdet.Hooks.stepPart(part); // SOSDET: the city part, then the world part on a stream of its own (ADR 0005)
 +						for (GameResource s : GameResource.all) {
-+							if (sosdet.Hooks.afterTickIn(s, part) && (s.isBattle|| (!battleView && !sosdet.Hooks.worldHeld())))
++							if (sosdet.Hooks.afterTickIn(s, part) && ((s.isBattle && !deploying)|| (!battleView && !sosdet.Hooks.worldHeld())))
 +								s.afterTick(); // SOSDET: once per step, not per rendered frame: it does simulation work (B7)
 +						}
 +						for (GameResource s : GameResource.all) {
-+							if (sosdet.Hooks.updatesIn(s, part) && (s.isBattle|| (!battleView && !sosdet.Hooks.worldHeld())))
++							if (sosdet.Hooks.updatesIn(s, part) && ((s.isBattle && !deploying)|| (!battleView && !sosdet.Hooks.worldHeld())))
 +								s.update(max, game.profiler);
 +						}
 +					}
@@ -71,7 +72,7 @@ diff -ru -U2 a/game/GAME.java b/game/GAME.java
  			}
  			
  			if (last > 0) {
-@@ -289,11 +328,14 @@
+@@ -289,11 +329,14 @@
  		
  		game.profiler.logEnd(game);
  		game.profiler.log();
@@ -87,7 +88,7 @@ diff -ru -U2 a/game/GAME.java b/game/GAME.java
  		for (GameResource s : GameResource.all) {
  			s.afterTick();
  		}
-@@ -410,6 +452,10 @@
+@@ -410,6 +453,10 @@
  	}
  	
  	public static void Error(String s) {
@@ -98,7 +99,7 @@ diff -ru -U2 a/game/GAME.java b/game/GAME.java
  	    if (S.get().developer || S.get().debug) {
  	    	Warn(s);
  	    }else {
-@@ -419,6 +465,10 @@
+@@ -419,6 +466,10 @@
  	}
  	
  	public static void Warn(String s) {
@@ -109,7 +110,7 @@ diff -ru -U2 a/game/GAME.java b/game/GAME.java
  	    if (S.get().developer || S.get().debug) {
  	    	SPEED.speedSet(0);
  	    	LOG.err("SYX WARNING: " + s);
-@@ -504,7 +554,7 @@
+@@ -504,7 +555,7 @@
  		}
  		
  		public boolean shouldAndReset() {
@@ -120,7 +121,7 @@ diff -ru -U2 a/game/GAME.java b/game/GAME.java
  			}
 diff -ru -U2 a/view/battle/BattleView.java b/view/battle/BattleView.java
 --- a/view/battle/BattleView.java	2025-11-19 14:24:46.000000000 +0500
-+++ b/view/battle/BattleView.java	2026-10-23 21:10:05.035303000 +0500
++++ b/view/battle/BattleView.java	2026-10-24 18:16:39.277708800 +0500
 @@ -109,7 +109,7 @@
  	@Override
  	protected boolean update(float ds, boolean should){

@@ -130,14 +130,14 @@ public final class Hooks {
 
     /**
      * Starts a step; false when the session may not run further (the frame's other steps are dropped): at its last
-     * step, as a peer that is already 30 steps past the host's last confirmed step, or as a follower whose source's
+     * step, while a map battle's end loads the game saved before it, as a peer that is already 30 steps past the host's last confirmed step, or as a follower whose source's
      * report for the step has not come in (ADR 0005 §4). This PC's room plan is lifted out
      * of the simulation before the frame's first step (ADR 0003). The AI log entries due at this step are applied
      * first, before anything else runs.
      */
     public static boolean stepBegin() {
         Session s = Engine.session();
-        if (!s.ai().mayRun(s.clock.step() + 1) || !s.worldMayRun(s.clock.step() + 1)) {
+        if (s.battleLeaving || !s.ai().mayRun(s.clock.step() + 1) || !s.worldMayRun(s.clock.step() + 1)) {
             s.clock.hold();
             return false;
         }
@@ -1157,6 +1157,69 @@ public final class Hooks {
         Session s = Engine.session();
         Object[] actions = s == null ? null : s.stepPrompts.remove(key);
         return actions == null ? null : actions[yes ? 0 : 1];
+    }
+
+    // ------------------------------------------------------------ map battles (SOS-32)
+
+    /**
+     * A map battle ends inside the step, and the game saved before it loads next (the loader runs between frames): the
+     * steps hold until then, and the load continues at this step, on every PC alike.
+     */
+    public static void battleLeaving() {
+        Session s = Engine.session();
+        if (s != null) {
+            s.battleLeaving = true;
+            GAME.BATTLE_THREADS().pause(); // the battle being replaced keeps no job running (the host's general)
+        }
+    }
+
+    /**
+     * After the load that ends a map battle: the result prompt opens, and the survivors and captives are counted, on a
+     * stream seeded from the seed and the step, so every PC draws the same.
+     */
+    public static void battleReturned(Runnable afterExit) {
+        Session s = Engine.session();
+        if (s == null) {
+            afterExit.run();
+            return;
+        }
+        s.streams.enter();
+        s.streams.reseed(s.battleSeed(s.clock.step()));
+        try {
+            afterExit.run();
+        } finally {
+            s.streams.leave();
+        }
+    }
+
+    /** True once a map battle has ended in this step: no other end, retreat or close, applies after it. */
+    public static boolean battleOver() {
+        Session s = Engine.session();
+        return s != null && s.battleLeaving;
+    }
+
+    /** The step opened the battle's victory or defeat panel: its close, kept for the conclude command. */
+    public static void battleConcludeOpened(Runnable close) {
+        Session s = Engine.session();
+        if (s != null) {
+            s.battleConclude = close;
+        }
+    }
+
+    /** True while the battle's victory or defeat panel is open and its Close not yet applied (the rig answers it). */
+    public static boolean battleConcludeOpen() {
+        Session s = Engine.session();
+        return s != null && s.battleConclude != null;
+    }
+
+    /** The conclude command takes the open panel's close, or null when none is open. */
+    public static Runnable battleConcludeTake() {
+        Session s = Engine.session();
+        Runnable close = s == null ? null : s.battleConclude;
+        if (s != null) {
+            s.battleConclude = null;
+        }
+        return close;
     }
 
     /** What the open world-battle prompt decides, or null. */

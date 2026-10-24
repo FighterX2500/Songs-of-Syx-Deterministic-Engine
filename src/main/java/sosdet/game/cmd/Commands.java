@@ -19,7 +19,7 @@ public final class Commands {
 
     private static final Map<Integer, Command> BY_ID = index(Laws.ALL, Rooms.ALL, Employment.ALL, Military.ALL,
             Names.ALL, Tools.ALL, CopyTools.ALL, World.ALL, Diplomacy.ALL, Events.ALL, WorldBattles.ALL,
-            StepPrompts.ALL);
+            MapBattles.ALL, StepPrompts.ALL);
 
     private Commands() {
     }

@@ -26,6 +26,8 @@ final class Session {
     private static final long WORLD_STREAM = 0x574F524CL;
     /** Mixed into an own city's seed ("CITY"), with the PC's number. */
     private static final long CITY_STREAM = 0x43495459L;
+    /** Mixed into the seed of a map battle's result, drawn after the load that ends the battle (SOS-32). */
+    private static final long BATTLE_STREAM = 0x4241544CL;
 
     final StepClock clock = new StepClock();
     final Streams streams = new Streams();
@@ -68,6 +70,13 @@ final class Session {
     long resyncDraws = -1;
 
     boolean worldHeld;
+    /**
+     * A map battle has ended and the game saved before it loads next (SOS-32): the steps hold until then, and the load
+     * continues at the step the battle ended at.
+     */
+    boolean battleLeaving;
+    /** The open battle's victory or defeat panel's close, kept for the conclude command, or null (SOS-32). */
+    Runnable battleConclude;
     /** 0 = loads run as in vanilla; otherwise loads run on the simulation stream seeded with this. */
     int loadSeed;
     /** The last frame's game update time (-1 before the first); read for the timing measurements. */
@@ -147,6 +156,12 @@ final class Session {
         return (int) (h ^ (h >>> 32));
     }
 
+    /** The seed of a map battle's result at a step, drawn outside the step after the load (SOS-32). */
+    int battleSeed(long step) {
+        long h = HashLog.mix(HashLog.mix(HashLog.mix(HashLog.start(), seed), step), BATTLE_STREAM);
+        return (int) (h ^ (h >>> 32));
+    }
+
     /** The seed of the world part's random stream at a step: never the city part's, whatever the city drew. */
     int worldSeed(long step) {
         long h = HashLog.mix(HashLog.mix(HashLog.mix(HashLog.start(), seed), step), WORLD_STREAM);
@@ -166,6 +181,13 @@ final class Session {
         cityInputs.clear(); // the loaded world has the city's state as saved
         sentSupplies.clear();
         eventMarks.clear();
+        battleConclude = null;
+        if (battleLeaving) {
+            // every PC left the battle at this step: the step, the hashes and the AI log go on (SOS-32)
+            battleLeaving = false;
+            resyncDraws = streams.drawsSinceLoad(); // the load's own draws don't count, as in a resync
+            return;
+        }
         if (resync != null) {
             Resync r = resync;
             resync = null;

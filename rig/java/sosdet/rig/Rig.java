@@ -96,6 +96,8 @@ import view.main.VIEW;
  *   state                               what a player sees: step, people, soldiers, credits, invasion, raider
  *   play &lt;action...&gt;                   as cmd, but a failed action is a "refused" event, not an error (LLM players)
  *   answerprompts                       the host's player answers every world-battle prompt (auto-resolve, occupy)
+ *   answerprompts engage &lt;steps&gt;        the same, but a field battle is fought on the battle map: Start, and Retreat
+ *                                       that many steps after it (0: fight on), Close at its end (SOS-32)
  *   showmessages                        the city's messages stay open (the played copy of --play)
  *   nudge &lt;step&gt;                        forced desync: at that step, inside it, one soldier gets fatal injuries
  *   resyncat &lt;step&gt; &lt;save&gt; &lt;state&gt;     host: hold the run at that step, save the resync there and load it
@@ -217,6 +219,10 @@ public final class Rig implements SCRIPT {
         private long frameNanos;
         /** The limit the engine was last given, after pacing. */
         private long pacedLast = -1;
+        /** The slowest peer's measured pace (steps per second, -1 unknown), and its step and time when last measured. */
+        private double peerRate = -1;
+        private long peerRateStep = -1;
+        private long peerRateNanos;
         // the players' orders between peers and the host, through files (a peer's player acts too)
         private Path ordersOutFile;
         private final List<Path> ordersPeers = new ArrayList<>();
@@ -228,6 +234,9 @@ public final class Rig implements SCRIPT {
         private Path resyncSave;
         private Path resyncState;
         private long resyncLoadStarted;
+        /** A game is attached (the first one), and one was loaded since the last frame (a map battle's end, SOS-32). */
+        private boolean attached;
+        private boolean reloaded;
         // world-only load (SOS-38 spike): copy 1 saves at worldStep, the loading copies load only worldKeys from it
         private long worldStep = -1;
         private boolean worldSaver;
@@ -260,6 +269,8 @@ public final class Rig implements SCRIPT {
 
         /** Every game, the first and each one loaded after it, calls back after each update. */
         void attach() {
+            reloaded = attached;
+            attached = true;
             GAME.addAfterUpdate(new ACTION() {
                 @Override
                 public void exe() {
@@ -303,7 +314,10 @@ public final class Rig implements SCRIPT {
         private void afterFrame() {
             if (resyncLoadStarted != 0) {
                 resynced();
+            } else if (reloaded && running) {
+                battleReturned();
             }
+            reloaded = false;
             exchangeAiLog();
             exchangeOrders();
             exchangeReports();
@@ -636,6 +650,13 @@ public final class Rig implements SCRIPT {
             return loaded.append('}').toString();
         }
 
+        /** The first frame of the game loaded at a map battle's end (SOS-32): the run goes on at the same step. */
+        private void battleReturned() {
+            VIEW.inters().load.deactivate();
+            GAME.SPEED.speedSet(speed);
+            event("battlereturned", "\"step\":" + Engine.step());
+        }
+
         /** Peer: the first frame of the game loaded for a resync. */
         private void resynced() {
             double seconds = (System.nanoTime() - resyncLoadStarted) / 1e9;
@@ -670,7 +691,12 @@ public final class Rig implements SCRIPT {
             applyLimit();
         }
 
-        /** The run's limit; on a paced host, no more than paceLead steps past the slowest peer's last hash. */
+        /**
+         * The run's limit; on a paced host, no more than paceLead steps past where the slowest peer is by now: its last
+         * hash's step plus what its measured pace has run since that hash came in, at most paceLead more (a peer that
+         * stopped holds the host within two leads of its last hash). The limit moves on every frame, so the host slows
+         * down evenly to the slowest peer's pace instead of running to the cap and standing still until the next hash.
+         */
         private void applyLimit() {
             long last = limit;
             if (paceLead > 0) {
@@ -679,7 +705,13 @@ public final class Rig implements SCRIPT {
                     slowest = Math.min(slowest, Engine.peerStep(hashPeerPcs.get(i)));
                 }
                 if (slowest != Long.MAX_VALUE) {
-                    last = Math.min(last, Math.max(Engine.step(), slowest + paceLead));
+                    long cap = slowest + paceLead;
+                    long now = System.nanoTime();
+                    trackPeerRate(slowest, now);
+                    if (peerRate > 0) {
+                        cap += Math.min(paceLead, (long) (peerRate * (now - peerRateNanos) / 1e9));
+                    }
+                    last = Math.min(last, Math.max(Engine.step(), cap));
                 }
             }
             pacedLast = last;
@@ -688,6 +720,28 @@ public final class Rig implements SCRIPT {
             } else {
                 Engine.runUntil(last);
             }
+        }
+
+        /**
+         * The slowest peer's steps per second, from the hashes it sends (one every hash interval): a moving average, so
+         * one late hash moves it a little. Reset when that peer's step goes back.
+         */
+        private void trackPeerRate(long slowest, long now) {
+            if (slowest < 0 || slowest < peerRateStep) {
+                peerRate = -1;
+                peerRateStep = slowest;
+                peerRateNanos = now;
+                return;
+            }
+            if (slowest == peerRateStep) {
+                return;
+            }
+            if (peerRateStep >= 0) {
+                double sample = (slowest - peerRateStep) / ((now - peerRateNanos) / 1e9);
+                peerRate = peerRate > 0 ? peerRate * 0.75 + sample * 0.25 : sample;
+            }
+            peerRateStep = slowest;
+            peerRateNanos = now;
         }
 
         /** Between frames of a paced run: the limit follows the peers, and a frame the peers held is counted. */
@@ -942,8 +996,8 @@ public final class Rig implements SCRIPT {
                 showMessages = true;
                 event("showmessages", "");
                 return;
-            case "answerprompts":
-                prompts = new PromptAnswers();
+            case "answerprompts": // answerprompts [engage <retreat after steps>]
+                prompts = new PromptAnswers(c.length > 2 && c[1].equals("engage"), c.length > 2 ? Long.parseLong(c[2]) : 0);
                 event("answerprompts", "");
                 return;
             case "nudge":

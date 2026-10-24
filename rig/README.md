@@ -77,7 +77,7 @@ python rig\rig.py city --tag F1 --no-invade --follow --world-resync 3000
 
 `--follower-saves A,B` (with `--follow`): each follower, copies 2 to N, loads its own save instead of `--save`, as a player who joins with a city of their own. A follower's world is its save's until the world resync, so `--world-resync` must come before the first state hash (1 to 29): the resync then gives every copy the host's world, calendar, temporary boosts and world events before anything is compared or the host's first AI log entry applies (step 30). The runner compares the copies' logs from the step after the world resync. Example, the SOS-32 session's setup: `--copies 3 --save Mogus-72-19f86f1e048-47002c-0-121c.save --follow --world-resync 15 --follower-saves Mogus-40-19f4c29b177-47002c-0-c19.save,Mogus-20-19f32767f80-47002c-0-76d.save`.
 
-`--pace-lead N` (default 60; 0 turns it off): copy 1, the host, runs at most N steps past the slowest copy, as the mod will (mod spec §4: the slowest PC caps the speed). It learns each copy's step from that copy's state hashes (`Engine.peerStep`), which come every 30 steps, so N is at least 30. A follower runs at most one report window (under 60 steps) past the host, so every copy stays within about N + 60 steps of the slowest. `summary.txt` gives how many frames and seconds the host was held by the others. Any run with more than one copy is paced.
+`--pace-lead N` (default 60; 0 turns it off): copy 1, the host, runs at most N steps past the slowest copy, as the mod will (mod spec §4: the slowest PC caps the speed). It learns each copy's step from that copy's state hashes (`Engine.peerStep`), which come every 30 steps, so N is at least 30. Between hashes the host counts the slowest copy on at its measured pace (at most N more steps), so it slows down evenly instead of reaching the cap and standing still until the next hash; on the laptop rig this cut copy 1's standstills of 30+ frames from 109 to 26 (runs LT1, LT2). A follower runs at most one report window (under 60 steps) past the host, so every copy stays within about N + 60 steps of the slowest. `summary.txt` gives how many frames and seconds the host was held by the others. Any run with more than one copy is paced.
 
 ## Playing a copy (SOS-32)
 
@@ -90,6 +90,16 @@ python rig\rig.py field --tag P1 --play --copies 3
 `--warm K[,K]`: those copies play the autoloaded game normally for 30 game seconds before the session, so their session game is not the first one their process ran (the competing mod's first-game desync; SOS-32 found none).
 
 `--trace-draws N` adds the call site of every simulation draw for the last N steps, dumped around a desync; it slows the copies by roughly half.
+
+## Map battles (SOS-32)
+
+```
+python rig\rig.py city --tag MB10 --save Mogus-72-19f86f1e048-47002c-0-121c.save --no-invade --engage 900 --cmds "wbesiegenear 0 stronger"
+```
+
+`--engage N` (default -1: off): copy 1 answers a field battle's prompt with Engage instead of auto-resolve, so the battle is fought on the battle map on every copy. It clicks Start as soon as the battle deploys, Retreat N steps later (0: fights on to the end), and Close on the victory or defeat panel; every copy then loads the game saved before the battle and goes on at the same step. A siege waits instead of being resolved, so the region's defenders come out and fight in the field.
+
+A field battle needs an enemy that stands: a weaker NPC army withdraws without a prompt, and a chase after a marching army stalls (the game's intercept re-paths only once the target has moved a tenth of the path away). `wbesiegenear 0 stronger` besieges the nearest settlement of a faction with at least twice the army's power, whose defenders then attack it. `wwarnear`, `winterceptnear` (with `stronger` and `still`) and the `warmystate` probe are there for other setups.
 
 ## The timing rule
 

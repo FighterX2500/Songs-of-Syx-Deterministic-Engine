@@ -1,0 +1,94 @@
+diff -ru -U2 a/game/battle/state/BattleState.java b/game/battle/state/BattleState.java
+--- a/game/battle/state/BattleState.java	2026-01-31 08:38:56.000000000 +0500
++++ b/game/battle/state/BattleState.java	2026-10-24 18:17:23.839603200 +0500
+@@ -94,7 +94,8 @@
+ 	
+ 	private void view() {
+ 		VIEW.messages().hideAll();
+-		GAME.SPEED.speedSet(0);
++		if (sosdet.game.cmd.MapBattles.setsSpeed()) // SOSDET: in a session the speed is the players' own (SOS-32)
++			GAME.SPEED.speedSet(0);
+ 		VIEW.b().activate(this);
+ 	}
+ 	
+@@ -109,6 +110,8 @@
+ 	
+ 	
+ 	public void reloadBattle() {
++		if (sosdet.game.cmd.MapBattles.restartRefused()) // SOSDET: refused in a session, with a notice (SOS-32)
++			return;
+ 		new GameLoader(saveFile){
+ 			
+ 			@Override
+@@ -230,11 +233,18 @@
+ 		ILiveConclude(CharSequence title, boolean retreat, boolean win){
+ 			pin();
+ 			persistantSet();
++			// SOSDET: opened inside the step on every PC; its Close is a command, which runs this (SOS-32)
++			sosdet.Hooks.battleConcludeOpened(() -> {
++				hide();
++				liveResolve(retreat, win);
++			});
+ 			
+ 			section = new UIBattleResult(title) {
+ 
+ 				@Override
+ 				protected void close() {
++					if (sosdet.game.cmd.MapBattles.conclude()) // SOSDET: a command in a session; the panel stays until it applies (SOS-32)
++						return;
+ 					hide();
+ 					liveResolve(retreat, win);
+ 				}
+@@ -273,7 +283,8 @@
+ 
+ 		@Override
+ 		protected boolean update(float ds) {
+-			GAME.SPEED.speedSet(1);
++			if (sosdet.game.cmd.MapBattles.setsSpeed()) // SOSDET: in a session the speed is the players' own (SOS-32)
++				GAME.SPEED.speedSet(1);
+ //			timer += ds;
+ //			
+ //			if (timer >= 10) {
+diff -ru -U2 a/game/battle/state/BattleStateExiter.java b/game/battle/state/BattleStateExiter.java
+--- a/game/battle/state/BattleStateExiter.java	2025-08-29 11:08:26.000000000 +0500
++++ b/game/battle/state/BattleStateExiter.java	2026-10-24 18:17:23.840604300 +0500
+@@ -10,12 +10,13 @@
+ 	
+ 	public void exit(BATTLE_RESULT res, int plosses, int elosses) {
+ 		final BattleStateResult r = new BattleStateResult(res, elosses, plosses);
++		sosdet.Hooks.battleLeaving(); // SOSDET: the steps hold until the load, which goes on at this step (SOS-32)
+ 		new GameLoader(PATHS.local().save().get("__beforeBattle")){
+ 			
+ 			@Override
+ 			public void doAfterSet() {
+ 				
+-				afterExit(r);
++				sosdet.Hooks.battleReturned(() -> afterExit(r)); // SOSDET: on a stream seeded from the step, alike on every PC (SOS-32)
+ 
+ 			}
+ 			
+diff -ru -U2 a/view/battle/IDeploy.java b/view/battle/IDeploy.java
+--- a/view/battle/IDeploy.java	2025-09-12 16:12:40.000000000 +0500
++++ b/view/battle/IDeploy.java	2026-10-24 18:17:23.841605400 +0500
+@@ -17,7 +17,8 @@
+ 	private final GButt.ButtPanel butt = new GButt.ButtPanel(Dic.¤¤Start) {
+ 		@Override
+ 		protected void clickA() {
+-			VIEW.b().state().deploy();
++			if (!sosdet.game.cmd.MapBattles.deploy()) // SOSDET: a command in a session; the panel goes on every PC once it applies (SOS-32)
++				VIEW.b().state().deploy();
+ 			hide();
+ 		};
+ 	};
+@@ -55,6 +56,11 @@
+ 
+ 	@Override
+ 	protected boolean update(float ds) {
++		if (!sosdet.game.cmd.MapBattles.setsSpeed()) { // SOSDET: no pause in a session; the battle holds still until Start (SOS-32)
++			if (!VIEW.b().state().deploying())
++				hide();
++			return true;
++		}
+ 		GAME.SPEED.tmpPause();
+ 		return true;
+ 	}
