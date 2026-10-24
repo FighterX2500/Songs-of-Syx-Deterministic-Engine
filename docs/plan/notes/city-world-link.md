@@ -220,6 +220,31 @@ In the own-city mode, the engine would refuse those for now, as V0.1 refuses Eng
 
 **Decision (owner, 2026-10-23): the full scope.** SOS-38 builds milestones 2–4 with every item above, C5, C6, B4 and B6 included: 13–15 days.
 
+## Live-city reads found after milestone 4 (2026-10-24)
+
+The M4 smoke test and its trace (M4T, `stage-e-smoke-tests.md`) found that the world part still reads the live city in places, outside the report. An audit of the world part followed (WORLD, RAIDING, and the world halves of FACTIONS and EVENTS). It was read-only, and its main rows were spot-checked in the source. The owner decides on the fixes; none is built.
+
+| Where (game source) | What it reads | Effect | Proposed fix |
+|---|---|---|---|
+| `game/raiding/Raider.java` `hasInterrest`, `isScared`; `RaidingUtil.ransomCurrent`, `defences` | population, the player's credits, RAID_SECURITY, the barracks' requirements, the capital's defences | only the host's world starts a raid (M4T, step 99,216) | carry these values in the report and read them from it in own-city mode (report format version bump) |
+| `init/value/Lockers.java:46-62` and the tech, level and title lockers reached through `Lockable.passes/progress`; e.g. `game/events/faction/player/Stance.java:85` returns before its `RND.oneIn(4)` | the player's live tech level, level and title | the world part's draw count; havens (`WHavenType:178`), region efficiency (`RDBuilding:330`) | a report field per locker the world part reads, as `LockerValue` already has (patch 14) |
+| `game/faction/FWorth.java:213-219` (`WINT.get`) | a cache keyed on `GAME.updateI()` only, filled in the city part (`PCredits.java:103`) | trust and diplomacy (`RTrust:54`), raider demand (`MessDemand:113`) read the live city's worth | key it with `Hooks.partKey`, as `_BOOST` is |
+| `game/faction/diplomacy/UpVassal.java:97` | `credits().worth` history, which only the city keeps | the tribute amount | a report field |
+| `game/raiding/RaidingCurrent.java:380` | `SETT.INVADOR().invading()` through the report's `INVADING`, which is stale for up to 60 steps after `RaiderArmy.invade` | a new invasion can be cancelled at once (not a desync) | change `INVADING` in the ledger when the invasion is sent |
+| `world/entity/haven/Player.java:111` | WRITES `SETT.ENTRY().immi()` from the world part | a write to the city with no hook | a city input |
+
+The audit also lists caches with the same pattern as `FWorth`, keyed on the update or a step window: `RaidRegion.spoils`, `RaidingUtil.cache`, `DipWarPlayer.init/distress`, `Emissaries.penaltyMul` and `RDMilitaryGar.divisions`. Each needs `partKey` if its owning code is ever called from the city part.
+
+It is unsure about four places:
+- the recipe boosts that each settlement randomises (`Recipes.fboosts`, read by `NPCRes.update`);
+- `BValue.vGet(HCLASS_RACE)`, which takes the `vGet(Player)` overload around the patched `vGet(Faction)`;
+- `DivGeneration.set:214`;
+- mercy (`OpsStance.java:156,176`).
+
+W1, the own-city test with the laptop as follower, split on the clock at step 41,520 with no raider active, so at least one of these other reads is live in a normal run.
+
+**The rig's gap:** `GameHash.worldHash` doesn't hash the RAIDING state, so the per-step world hash missed the raider split; only the engine's draw count caught it.
+
 ## Not verified
 
 - The byte size of a soldier's data (`Induvidual`) and of an `InvasionSpec`.
