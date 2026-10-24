@@ -698,6 +698,9 @@ def main():
     ap.add_argument("--trace-draws", type=int, default=0,
                     help="debugging: every copy records the call site of each simulation draw for this many steps;"
                          " a desync writes the draws around it, and the summary names the first draw that differs")
+    ap.add_argument("--stall-profile", action="store_true",
+                    help="debugging: during a step over 100 ms every copy records its stack every 50 ms, not once"
+                         " (<tag>-stalls.txt), so the samples show where a long step's time goes")
     ap.add_argument("--trace-from", type=int, default=0,
                     help="with --trace-draws: start the trace at this step (a long replay runs at full pace until then)")
     ap.add_argument("--replay", help="a host's AI log (ai-host.log of a played run): every copy is a peer replaying it"
@@ -708,6 +711,11 @@ def main():
     ap.add_argument("--engage", type=int, default=-1,
                     help="city: copy 1 fights field battles on the battle map, retreating this many steps after Start "
                          "(0: fights on to the end); default: auto-resolve (SOS-32)")
+    ap.add_argument("--restart", type=int, default=0,
+                    help="with --engage: copy 1 restarts the battle once, this many steps after Start (SOS-41)")
+    ap.add_argument("--in-battle", default="",
+                    help="with --engage: 'STEPS ACTION...': copy 1 does the player action once, STEPS steps after the"
+                         " battle's Start (SOS-41: a world command in a battle is skipped, with a notice)")
     ap.add_argument("--no-invade", action="store_true", help="city: no invasion, the city as it is")
     ap.add_argument("--hold-world", action="store_true",
                     help="city: hold the world map still, as before SOS-35 (the world runs in the step by default)")
@@ -892,7 +900,10 @@ def main():
             c.send("pace %d" % args.pace_lead, "pace")
         if c.k == 1 and args.scenario == "city" and not args.play and not args.replay:
             if args.engage >= 0:  # field battles on the battle map (SOS-32)
-                c.send("answerprompts engage %d" % args.engage, "answerprompts")
+                c.send("answerprompts engage %d%s" % (args.engage, " restart %d" % args.restart if args.restart else ""),
+                       "answerprompts")
+                if args.in_battle:
+                    c.send("inbattle " + args.in_battle, "inbattlearmed")
             else:
                 c.send("answerprompts", "answerprompts")  # nobody clicks the world-battle prompt in a rig run
         if c.k == 1 and args.play:
@@ -908,6 +919,8 @@ def main():
         c.send("speed %s" % (args.agreed_speed or speeds[0]), "speed")
         if args.trace_draws:
             c.send("tracedraws %d %d" % (args.trace_draws, args.trace_from or -1), "tracedraws")
+        if args.stall_profile:
+            c.send("stallprofile", "stallprofile")
         starts[c.k] = c.send("hash", "hash")
         if args.scenario == "city" and not args.no_invade:
             c.send("invade %d" % INVADE_MEN, "invade")

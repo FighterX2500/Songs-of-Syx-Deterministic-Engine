@@ -1,6 +1,6 @@
 diff -ru -U2 a/game/battle/state/BattleState.java b/game/battle/state/BattleState.java
 --- a/game/battle/state/BattleState.java	2026-01-31 08:38:56.000000000 +0500
-+++ b/game/battle/state/BattleState.java	2026-10-24 18:17:23.839603200 +0500
++++ b/game/battle/state/BattleState.java	2026-10-24 21:18:49.185189900 +0500
 @@ -94,7 +94,8 @@
  	
  	private void view() {
@@ -15,12 +15,22 @@ diff -ru -U2 a/game/battle/state/BattleState.java b/game/battle/state/BattleStat
  	
  	
  	public void reloadBattle() {
-+		if (sosdet.game.cmd.MapBattles.restartRefused()) // SOSDET: refused in a session, with a notice (SOS-32)
++		if (sosdet.game.cmd.MapBattles.restart()) // SOSDET: in a session a command, which runs this in the step (SOS-41)
 +			return;
  		new GameLoader(saveFile){
  			
  			@Override
-@@ -230,11 +233,18 @@
+@@ -122,7 +125,8 @@
+ 				VIEW.b().activate(BattleState.this);
+ 				VIEW.b().getWindow().centererTile.set(THRONE.coo());
+ 				VIEW.b().getWindow().zoomoutmax();
+-				GAME.SPEED.speedSet(0);
++				if (sosdet.game.cmd.MapBattles.setsSpeed()) // SOSDET: in a session the speed is the players' own (SOS-41)
++					GAME.SPEED.speedSet(0);
+ 				
+ 			}
+ 			
+@@ -230,11 +234,18 @@
  		ILiveConclude(CharSequence title, boolean retreat, boolean win){
  			pin();
  			persistantSet();
@@ -39,7 +49,7 @@ diff -ru -U2 a/game/battle/state/BattleState.java b/game/battle/state/BattleStat
  					hide();
  					liveResolve(retreat, win);
  				}
-@@ -273,7 +283,8 @@
+@@ -273,7 +284,8 @@
  
  		@Override
  		protected boolean update(float ds) {
@@ -51,7 +61,7 @@ diff -ru -U2 a/game/battle/state/BattleState.java b/game/battle/state/BattleStat
  //			if (timer >= 10) {
 diff -ru -U2 a/game/battle/state/BattleStateExiter.java b/game/battle/state/BattleStateExiter.java
 --- a/game/battle/state/BattleStateExiter.java	2025-08-29 11:08:26.000000000 +0500
-+++ b/game/battle/state/BattleStateExiter.java	2026-10-24 18:17:23.840604300 +0500
++++ b/game/battle/state/BattleStateExiter.java	2026-10-24 21:18:49.181664700 +0500
 @@ -10,12 +10,13 @@
  	
  	public void exit(BATTLE_RESULT res, int plosses, int elosses) {
@@ -69,7 +79,7 @@ diff -ru -U2 a/game/battle/state/BattleStateExiter.java b/game/battle/state/Batt
  			
 diff -ru -U2 a/view/battle/IDeploy.java b/view/battle/IDeploy.java
 --- a/view/battle/IDeploy.java	2025-09-12 16:12:40.000000000 +0500
-+++ b/view/battle/IDeploy.java	2026-10-24 18:17:23.841605400 +0500
++++ b/view/battle/IDeploy.java	2026-10-24 21:18:49.181664700 +0500
 @@ -17,7 +17,8 @@
  	private final GButt.ButtPanel butt = new GButt.ButtPanel(Dic.¤¤Start) {
  		@Override

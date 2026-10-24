@@ -79,6 +79,7 @@ import view.main.VIEW;
  *   seed &lt;n&gt;                            seed the simulation stream
  *   tracedraws &lt;steps&gt; [from]          debugging: record each simulation draw's call site for the last steps,
  *                                       from that step on (default: now)
+ *   stallprofile                        debugging: during a step over 100 ms, record the stack every 50 ms, not once
  *   invade &lt;men&gt;                        the next city run starts an invasion of that many men at steps 1 and 2
  *   ai &lt;instep | host ID | peer ID&gt;    where the AI general runs; before the save loads (ID names the start)
  *   ailog &lt;host|peer&gt; &lt;file&gt;           after the load: the host appends its AI log to the file every frame,
@@ -98,7 +99,11 @@ import view.main.VIEW;
  *   answerprompts                       the host's player answers every world-battle prompt (auto-resolve, occupy)
  *   answerprompts engage &lt;steps&gt;        the same, but a field battle is fought on the battle map: Start, and Retreat
  *                                       that many steps after it (0: fight on), Close at its end (SOS-32)
+ *   answerprompts engage &lt;steps&gt; restart &lt;steps&gt;  as above, and restart the battle once, that many steps after
+ *                                       Start (SOS-41)
  *   showmessages                        the city's messages stay open (the played copy of --play)
+ *   inbattle &lt;steps&gt; &lt;action...&gt;       a player action (as cmd), once, that many steps after a map battle's Start
+ *                                       (SOS-41: a world command in a battle is skipped)
  *   nudge &lt;step&gt;                        forced desync: at that step, inside it, one soldier gets fatal injuries
  *   resyncat &lt;step&gt; &lt;save&gt; &lt;state&gt;     host: hold the run at that step, save the resync there and load it
  *   resyncnow &lt;save&gt; &lt;state&gt;           host: save the resync at the current step and load it
@@ -174,6 +179,7 @@ public final class Rig implements SCRIPT {
         private final Path eventsFile = dir.resolve("events.jsonl");
 
         private static final long STALL_NANOS = 100_000_000; // the timing rule counts steps over 100 ms
+        private static final long STALL_SAMPLE_MILLIS = 50; // with stallprofile, a long step's stack this often
 
         private int frames;
         private boolean running;
@@ -186,6 +192,10 @@ public final class Rig implements SCRIPT {
         private PromptAnswers prompts;
         /** The city's messages stay open for a human (showmessages): the played copy. */
         private boolean showMessages;
+        /** A player action for inside the next map battle (inbattle), or null; the steps after Start; Start's step. */
+        private String[] inBattleAction;
+        private long inBattleAfter;
+        private long inBattleFrom = -1;
         /** The draw trace starts at this step (-1: not waiting); tracing from the start would slow a long replay. */
         private long traceFrom = -1;
         private int traceSteps;
@@ -257,6 +267,7 @@ public final class Rig implements SCRIPT {
         // stall sampler: the simulation thread's stack for every step over 100 ms
         private volatile Thread simThread;
         private volatile boolean sampling;
+        private volatile boolean stallProfile;
 
         Instance() {
             try {
@@ -343,9 +354,16 @@ public final class Rig implements SCRIPT {
                 if (answered != null) {
                     event("prompt", "\"answer\":\"" + answered + "\",\"step\":" + Engine.step());
                 }
+                if (inBattleAction != null) {
+                    inBattle();
+                }
                 if (city && !showMessages) {
                     // the city's messages (the invasion's, a noble's death...) would pause the game waiting for a human
                     VIEW.inters().messages.hide();
+                    if (VIEW.inters().fullScreen.isActivated()) { // an engine notice (SOS-41) would too
+                        VIEW.inters().fullScreen.deactivate();
+                        event("notice", "\"step\":" + Engine.step());
+                    }
                 }
                 if (vanilla ? gameSeconds >= gameSecondsLeft : Engine.step() >= lastStep) {
                     finish();
@@ -652,7 +670,6 @@ public final class Rig implements SCRIPT {
 
         /** The first frame of the game loaded at a map battle's end (SOS-32): the run goes on at the same step. */
         private void battleReturned() {
-            VIEW.inters().load.deactivate();
             GAME.SPEED.speedSet(speed);
             event("battlereturned", "\"step\":" + Engine.step());
         }
@@ -661,7 +678,6 @@ public final class Rig implements SCRIPT {
         private void resynced() {
             double seconds = (System.nanoTime() - resyncLoadStarted) / 1e9;
             resyncLoadStarted = 0;
-            VIEW.inters().load.deactivate();
             if (!city) {
                 try {
                     hideDeployPanel();
@@ -770,17 +786,25 @@ public final class Rig implements SCRIPT {
             frameGameSeconds = 0;
         }
 
-        /** Records the simulation thread's stack once for every step that runs over 100 ms. */
+        /**
+         * Records the simulation thread's stack once for every step that runs over 100 ms; with {@code stallprofile},
+         * every 50 ms while it runs, so the samples show where a long step's time goes.
+         */
         private void startStallSampler(Path file) {
             sampling = true;
             Thread t = new Thread(() -> {
                 long sampled = 0;
+                long sampledAt = 0;
                 while (sampling) {
                     long start = Engine.stepStartNanos();
                     Thread sim = simThread;
-                    if (start != 0 && start != sampled && sim != null && System.nanoTime() - start > STALL_NANOS) {
+                    long now = System.nanoTime();
+                    boolean again = stallProfile && start == sampled && now - sampledAt >= STALL_SAMPLE_MILLIS * 1_000_000;
+                    if (start != 0 && (start != sampled || again) && sim != null && now - start > STALL_NANOS) {
                         sampled = start;
-                        StringBuilder sb = new StringBuilder("step over 100 ms, at step " + safeStep() + ":\n");
+                        sampledAt = now;
+                        StringBuilder sb = new StringBuilder("step over 100 ms, at step " + safeStep() + ", "
+                                + (now - start) / 1_000_000 + " ms in:\n");
                         for (StackTraceElement e : sim.getStackTrace()) {
                             sb.append("  at ").append(e).append('\n');
                         }
@@ -858,6 +882,10 @@ public final class Rig implements SCRIPT {
                 return;
             case "loadbattle":
                 loadBattle(rest(c));
+                return;
+            case "stallprofile":
+                stallProfile = true;
+                event("stallprofile", "\"every\":" + STALL_SAMPLE_MILLIS);
                 return;
             case "tracedraws":
                 traceSteps = Integer.parseInt(c[1]);
@@ -992,12 +1020,19 @@ public final class Rig implements SCRIPT {
                 worldKeys = Arrays.asList(c[4].split(","));
                 event("worldat", "\"step\":" + worldStep);
                 return;
+            case "inbattle":
+                inBattleAfter = Long.parseLong(c[1]);
+                inBattleAction = Arrays.copyOfRange(c, 2, c.length);
+                inBattleFrom = -1;
+                event("inbattlearmed", "\"after\":" + inBattleAfter);
+                return;
             case "showmessages":
                 showMessages = true;
                 event("showmessages", "");
                 return;
-            case "answerprompts": // answerprompts [engage <retreat after steps>]
-                prompts = new PromptAnswers(c.length > 2 && c[1].equals("engage"), c.length > 2 ? Long.parseLong(c[2]) : 0);
+            case "answerprompts": // answerprompts [engage <retreat after steps> [restart <steps>]]
+                prompts = new PromptAnswers(c.length > 2 && c[1].equals("engage"), c.length > 2 ? Long.parseLong(c[2]) : 0,
+                        c.length > 4 && c[3].equals("restart") ? Long.parseLong(c[4]) : 0);
                 event("answerprompts", "");
                 return;
             case "nudge":
@@ -1044,6 +1079,24 @@ public final class Rig implements SCRIPT {
         // ------------------------------------------------------------ runs
 
         /** The UI call behind one player action, queued to run after this frame's update, outside the step. */
+        /** The inbattle action, once its steps after the map battle's Start have passed. */
+        private void inBattle() {
+            BattleState b = VIEW.b().state();
+            if (b == null || b.deploying()) {
+                return;
+            }
+            if (inBattleFrom < 0) {
+                inBattleFrom = Engine.step();
+            }
+            if (Engine.step() - inBattleFrom < inBattleAfter) {
+                return;
+            }
+            String[] a = inBattleAction;
+            inBattleAction = null;
+            playerAction(a);
+            event("inbattle", "\"action\":\"" + clean(String.join(" ", a)) + "\",\"step\":" + Engine.step());
+        }
+
         private void playerAction(String[] a) {
             if (!(LawActions.run(a) || RoomActions.run(a) || EmploymentActions.run(a) || MilitaryActions.run(a)
                     || NameActions.run(a) || ToolActions.run(a) || CopyActions.run(a)

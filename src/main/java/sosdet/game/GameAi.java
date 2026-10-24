@@ -19,6 +19,7 @@ import sosdet.ai.AiApplier;
 import sosdet.ai.AiEntry;
 import sosdet.game.cmd.CommandParts;
 import sosdet.game.cmd.Commands;
+import sosdet.game.cmd.MapBattles;
 
 /**
  * Applies the host's log entries to the battle, on the simulation thread at the entry's step: the AI general's
@@ -36,7 +37,18 @@ public final class GameAi implements AiApplier {
     private final BattleOrderTask task = new BattleOrderTask();
     private long artilleryMissed;
     /** World commands of this step, held for its world part; empty between steps. */
-    private final ArrayDeque<byte[]> worldCommands = new ArrayDeque<>();
+    private final ArrayDeque<WorldCommand> worldCommands = new ArrayDeque<>();
+
+    private static final class WorldCommand {
+        final byte[] payload;
+        /** The PC that gave it. */
+        final int pc;
+
+        WorldCommand(byte[] payload, int pc) {
+            this.payload = payload;
+            this.pc = pc;
+        }
+    }
 
     /** The general's thread only. */
     byte[] encode(SAVABLE order) {
@@ -58,13 +70,14 @@ public final class GameAi implements AiApplier {
 
     /**
      * A world command applies at the start of its step's world part, in order: it reads the city through the report
-     * and changes it through transactions, as the world part does (ADR 0005).
+     * and changes it through transactions, as the world part does (ADR 0005). During a map battle it is skipped, on
+     * every PC alike: the battle's end loads the game saved before it, which would undo it (SOS-41).
      */
     @Override
     public void worldPart() {
-        byte[] payload;
-        while ((payload = worldCommands.poll()) != null) {
-            if (!Commands.apply(payload)) {
+        WorldCommand c;
+        while ((c = worldCommands.poll()) != null) {
+            if (MapBattles.worldCommandSkipped(c.pc) || !Commands.apply(c.payload)) {
                 commandsSkipped++;
             }
         }
@@ -76,7 +89,7 @@ public final class GameAi implements AiApplier {
         case AiEntry.COMMAND:
             byte[] payload = e.payload();
             if (CommandParts.world(payload)) {
-                worldCommands.add(payload);
+                worldCommands.add(new WorldCommand(payload, e.pc));
                 return;
             }
             if (!CommandParts.everyPc(payload) && !Hooks.cityCommandHere(e.pc)) {

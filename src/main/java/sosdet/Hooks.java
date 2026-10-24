@@ -35,6 +35,7 @@ import sosdet.report.Reports;
 import sosdet.txn.Txn;
 import sosdet.txn.TxnKind;
 import util.data.DOUBLE_O;
+import view.main.VIEW;
 import world.entity.army.WArmy;
 
 /**
@@ -238,6 +239,12 @@ public final class Hooks {
     public static boolean ownCity() {
         Session s = Engine.session();
         return s != null && s.ownCity;
+    }
+
+    /** True when {@code pc} is this PC (the player who gave a command or order). */
+    public static boolean localPc(int pc) {
+        Session s = Engine.session();
+        return s != null && pc == s.ai().localPc();
     }
 
     /** Whether a city command PC {@code pc} gave applies here: always in co-op; an own city's only on its own PC. */
@@ -996,6 +1003,10 @@ public final class Hooks {
         if (s.resyncDraws >= 0) {
             s.streams.drawsSinceLoad(s.resyncDraws);
             s.resyncDraws = -1;
+            if (s.plans().inGame()) {
+                // a map battle's end or a resync: the session goes on at this step, with no "click to continue" (SOS-41)
+                VIEW.inters().load.deactivate();
+            }
         }
     }
 
@@ -1171,7 +1182,8 @@ public final class Hooks {
 
     /**
      * A map battle ends inside the step, and the game saved before it loads next (the loader runs between frames): the
-     * steps hold until then, and the load continues at this step, on every PC alike.
+     * steps hold until then, and the load continues at this step, on every PC alike. A restart loads the battle as
+     * generated the same way (SOS-41).
      */
     public static void battleLeaving() {
         Session s = Engine.session();
