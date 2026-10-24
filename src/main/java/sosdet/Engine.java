@@ -274,6 +274,10 @@ public final class Engine {
         if (s.clock.step() != r.step) {
             throw new IllegalStateException("SOSDET: a world resync for step " + r.step + " loaded at step " + s.clock.step());
         }
+        if (s.reports.current() == null) {
+            throw new IllegalStateException("SOSDET: a world resync at step " + r.step + ", before the first city report:"
+                    + " the load counts the soldiers away from it");
+        }
         Path scratch;
         try {
             scratch = java.nio.file.Files.createTempFile("sosdet-city", ".bin");
@@ -286,6 +290,7 @@ public final class Engine {
         } finally {
             s.worldLoading = false;
         }
+        s.worldLoads++;
         s.streams.worldDraws(r.worldDraws);
         s.reports.ledgerIn(r.ledger);
         s.hashes.rewind(r.step, r.hashEpoch);

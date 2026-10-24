@@ -1,6 +1,7 @@
 package sosdet.game;
 
 import java.util.List;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
 import game.GAME;
@@ -45,15 +46,24 @@ public final class GameTxns implements Consumer<Txn> {
 
     private final GameInputs inputs;
     private final List<Input> cityInputs;
+    private final BooleanSupplier follower;
 
-    /** {@code cityInputs}: the next report's, for a soldier the city cannot take in. */
-    public GameTxns(GameInputs inputs, List<Input> cityInputs) {
+    /**
+     * {@code cityInputs}: the next report's, for a soldier the city cannot take in. {@code follower}: whether this PC's
+     * world reads another PC's city, so the kinds that are that city's own are not applied here
+     * ({@link sosdet.txn.TxnKind#followerApplies}).
+     */
+    public GameTxns(GameInputs inputs, List<Input> cityInputs, BooleanSupplier follower) {
         this.inputs = inputs;
         this.cityInputs = cityInputs;
+        this.follower = follower;
     }
 
     @Override
     public void accept(Txn t) {
+        if (!t.kind.followerApplies() && follower.getAsBoolean()) {
+            return;
+        }
         switch (t.kind) {
         case BUYER_RESERVE:
             ((PBuyer) t.a).addReserve(t.i, (TRADE_TYPE) t.b, t.j, (Faction) t.c);

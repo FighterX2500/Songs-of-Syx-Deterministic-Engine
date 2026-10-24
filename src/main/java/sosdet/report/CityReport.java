@@ -19,7 +19,7 @@ import sosdet.hash.HashLog;
 public final class CityReport {
 
     static final int MAGIC = 0x53444352; // "SDCR"
-    public static final int PROTOCOL_VERSION = 3;
+    public static final int PROTOCOL_VERSION = 4;
 
     /** The faction whose city this is. */
     public final int faction;

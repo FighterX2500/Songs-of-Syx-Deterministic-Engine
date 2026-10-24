@@ -314,14 +314,15 @@ def stop_copies():
 
 
 class Watcher:
-    """Compares the copies' per-step hash logs while they run; finds the first step where any copy differs."""
+    """Compares the copies' per-step hash logs while they run, from step `start`; finds the first step where any copy
+    differs."""
 
-    def __init__(self, logs):
+    def __init__(self, logs, start=1):
         self.logs = logs  # copy -> path of its per-step log
         self.offsets = {k: 0 for k in logs}
         self.partial = {k: "" for k in logs}
         self.hashes = {k: {} for k in logs}
-        self.next_step = 1
+        self.next_step = start
         self.diverged = None
         self.resynced = {}  # copy -> the step it resynced at (its marker line)
 
@@ -658,9 +659,11 @@ def take_lock():
     """One runner at a time: two would send every command twice to the same copies (SOS-32)."""
     if LOCK.exists():
         pid = LOCK.read_text().strip()
-        alive = subprocess.run(["powershell", "-NoProfile", "-Command", "if (Get-Process -Id %s -ErrorAction SilentlyContinue)"
-                                " { 'yes' }" % pid], capture_output=True, text=True).stdout.strip() == "yes"
-        if alive and pid.isdigit():
+        # a runner stopped from outside leaves its lock, and Windows soon gives its process number to another program
+        alive = pid.isdigit() and subprocess.run(
+            ["powershell", "-NoProfile", "-Command", "if ((Get-CimInstance Win32_Process -Filter 'ProcessId=%s').CommandLine"
+             " -match 'rig\\.py') { 'yes' }" % pid], capture_output=True, text=True).stdout.strip() == "yes"
+        if alive:
             fail("another rig.py (process %s) is running; stop it first" % pid)
     LOCK.parent.mkdir(parents=True, exist_ok=True)
     LOCK.write_text(str(os.getpid()))
@@ -710,6 +713,10 @@ def main():
                          " its reports with cities of their own, and the copies are compared on the world only")
     ap.add_argument("--world-resync", type=int, default=0,
                     help="with --follow: copy 1 saves at this step, and every copy reloads only the world from it")
+    ap.add_argument("--follower-saves", default="",
+                    help="with --follow: each follower's own save (copies 2..N, comma-separated) instead of --save; their"
+                         " worlds differ from copy 1's until the world resync, which must come before the first hash"
+                         " (1 to %d)" % (HASH_EVERY - 1))
     ap.add_argument("--cmds", default="",
                     help="player actions copy 1 takes once every copy runs, ';'-separated or @file (one per line), 3 s apart, through the UI's"
                          " own calls (e.g. 'curfew 1;men 0 40'); the others get them through the host's log (ADR 0002);"
@@ -765,6 +772,17 @@ def main():
              % (args.pace_lead, HASH_EVERY, HASH_EVERY))
     if args.world_resync and not args.follow:
         fail("--world-resync is for --follow runs; co-op runs use --resync")
+    follower_saves = [s for s in args.follower_saves.split(",") if s]
+    if follower_saves:
+        if not args.follow or len(follower_saves) != args.copies - 1:
+            fail("--follower-saves needs --follow and one save per follower (%d)" % (args.copies - 1))
+        if not 0 < args.world_resync < HASH_EVERY:
+            # before it, a follower's world is its own save's: the first hashes (step 30) and the host's first AI log
+            # entries (step 30 and on) must find the host's world there
+            fail("--follower-saves needs --world-resync 1 to %d" % (HASH_EVERY - 1))
+        for s in follower_saves:
+            if not (REAL / "saves" / "saves" / s).is_file():
+                fail("no save %s" % (REAL / "saves" / "saves" / s))
     saves, autoload = scenario_saves(args)
 
     if args.remote and (not REMOTE or not 1 < args.remote <= args.copies or args.play):
@@ -775,7 +793,8 @@ def main():
     copies = [RemoteCopy(k, game, args.remote_root) if k == args.remote else Copy(k, game)
               for k in range(1, args.copies + 1)]
     for c in copies:
-        c.prepare(saves, args.window or (args.play and c.k == 1))
+        own = {"sosdet-city.save": REAL / "saves" / "saves" / follower_saves[c.k - 2]} if follower_saves and c.k > 1 else saves
+        c.prepare(own, args.window or (args.play and c.k == 1))
     if args.remote:
         start_relays(copies)
     for c in copies:
@@ -913,7 +932,9 @@ def main():
         log("copy 1 (the host's player): " + action)
 
     # Until the reference finishes: compare the copies as they run, and stop them all at the first difference.
-    watcher = Watcher({c.k: c.rig / ("%s-c%d.csv" % (args.tag, c.k)) for c in copies})
+    # followers from other saves have worlds of their own until the world resync: compare from the step after it
+    compare_from = args.world_resync + 1 if follower_saves else 1
+    watcher = Watcher({c.k: c.rig / ("%s-c%d.csv" % (args.tag, c.k)) for c in copies}, compare_from)
     finished, deadline = {}, time.time() + 6 * 3600
     resync = None  # copy 1's resyncsaved event, once it saved
     checked = time.time()
@@ -962,7 +983,7 @@ def main():
             finished[c.k] = c.wait_finished(marks[c.k], 600, c.rig / ("%s-c%d.csv" % (args.tag, c.k)))
     ends = {k: f["endStep"] for k, f in finished.items()}
 
-    after = resync["step"] + 1 if resync and args.nudge else 1  # a forced desync is only repaired from the resync on
+    after = resync["step"] + 1 if resync and args.nudge else compare_from  # a forced desync is only repaired from the resync on
     identical, lines = compare(copies, run_dir, args.tag, ref, args.steps, ends, after, resync["step"] if resync else 0)
     if resync:
         lines.insert(0, "resync: copy 1 saved at step %d in %d ms (save %d bytes, engine state %d bytes)"

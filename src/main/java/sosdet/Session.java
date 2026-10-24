@@ -125,6 +125,8 @@ final class Session {
     long reportsReceived;
     /** A world resync's load is running: its resets of the world never reach the city (SOS-38). */
     boolean worldLoading;
+    /** The world resyncs loaded: a game cache made from the world before one starts again after it (SOS-32). */
+    int worldLoads;
 
     /** The seed of the random stream at a step: the same on every PC, whatever happened before. */
     int stepSeed(long step) {
@@ -299,7 +301,7 @@ final class Session {
 
     java.util.function.Consumer<Txn> txnApplier() {
         if (txnApplier == null) {
-            txnApplier = new GameTxns(inputs(), cityInputs);
+            txnApplier = new GameTxns(inputs(), cityInputs, () -> reportsFrom >= 0);
         }
         return txnApplier;
     }

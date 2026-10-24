@@ -21,5 +21,7 @@ public enum Count {
     /** The boost values ({@code BValue}) the game's boosters read, as the city report found them. */
     BOOSTS,
     /** {@code GVALUES.FACTION.all()}. */
-    VALUES
+    VALUES,
+    /** The unlocks of techs, levels and titles on a faction or a region, as the city report found them. */
+    UNLOCKS
 }

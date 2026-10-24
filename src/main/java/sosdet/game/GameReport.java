@@ -13,11 +13,15 @@ import game.boosting.Boostable;
 import game.boosting.Booster;
 import game.faction.FACTIONS;
 import game.faction.Faction;
+import game.faction.player.PLevels.Level;
+import game.faction.player.PTitles.PTitle;
 import game.faction.player.Player;
 import game.tourism.TOURISM;
 import init.race.RACES;
 import init.race.Race;
 import init.resources.RESOURCE;
+import init.tech.TECH;
+import init.tech.TECHS;
 import init.trade.TR;
 import init.trade.TRADABLE;
 import init.trade.TRADABLEO;
@@ -28,9 +32,13 @@ import init.type.HCLASS_RACE;
 import init.type.HCLASSES;
 import init.type.HTYPES;
 import init.value.GVALUES;
+import init.value.Lock;
+import init.value.Locker;
+import init.value.Lockers;
 import init.value.Value;
 import settlement.battle.invasion.Invador;
 import settlement.main.SETT;
+import settlement.stats.Induvidual;
 import settlement.stats.POP;
 import settlement.stats.STATS;
 import settlement.stats.colls.StatsBattle.StatTraining;
@@ -41,6 +49,7 @@ import sosdet.report.Field;
 import sosdet.report.ReportLayout;
 import world.army.AD;
 import world.army.WDIV;
+import world.map.regions.Region;
 import world.region.RD;
 
 /**
@@ -54,6 +63,9 @@ public final class GameReport implements CitySource {
     private final IdentityHashMap<BValue, Integer> boostIndex = new IdentityHashMap<>();
     private final LIST<Value<Faction>> values = GVALUES.FACTION.all();
     private final IdentityHashMap<Value<Faction>, Integer> valueIndex = new IdentityHashMap<>();
+    /** Every unlock of a tech, level or title on a faction or a region, in the order the game lists them. */
+    private final ArrayList<Lock<?>> unlocks = new ArrayList<>();
+    private final IdentityHashMap<Locker<?>, Integer> unlockIndex = new IdentityHashMap<>();
     private final ReportLayout layout;
     /** {@code Invador.ref}, private: the ref the city's next invasion gets (C6). */
     private final java.lang.reflect.Field invasionRef;
@@ -86,10 +98,45 @@ public final class GameReport implements CitySource {
         for (int i = 0; i < values.size(); i++) {
             valueIndex.put(values.get(i), i);
         }
+        for (TECH t : TECHS.ALL()) {
+            addUnlocks(t.lockers);
+        }
+        for (Level lv : FACTIONS.player().level().all()) {
+            addUnlocks(lv.lockers);
+        }
+        for (PTitle ti : FACTIONS.player().titles.all()) {
+            addUnlocks(ti.lockers);
+        }
         // in sosdet.report.Count order
         layout = new ReportLayout(TR.ALL().size(), TRADE_TYPE.all.size(), RACES.all().size(), HCLASSES.ALL().size(),
                 GAME.ARMIES().player().divisions().size(), STATS.EQUIP().BATTLE_ALL().size(),
-                STATS.BATTLE().TRAINING_ALL.size(), boosts.size(), values.size());
+                STATS.BATTLE().TRAINING_ALL.size(), boosts.size(), values.size(), unlocks.size());
+    }
+
+    /** A person's unlocks get no slot: the world part reads none on the player's people. */
+    private void addUnlocks(Lockers ls) {
+        for (Lock<?> lock : ls.all()) {
+            if (lock.lockable.values == GVALUES.FACTION || lock.lockable.values == GVALUES.REGION) {
+                unlockIndex.put(lock.unlocker, unlocks.size());
+                unlocks.add(lock);
+            }
+        }
+    }
+
+    /** True for the player, a player region or one of the player's people: what an unlock reads the city's state for. */
+    public static boolean playerOwns(Object t) {
+        Faction p = FACTIONS.player();
+        return t == p || t instanceof Region && ((Region) t).faction() == p
+                || t instanceof Induvidual && ((Induvidual) t).faction() == p;
+    }
+
+    /** An unlock's value on the player, or on its capital for a region's: the same, as each reads only the player's. */
+    @SuppressWarnings("unchecked") // the lock's values are GVALUES.FACTION's or GVALUES.REGION's, so is its locker
+    private static double playerUnlock(Lock<?> lock) {
+        if (lock.lockable.values == GVALUES.FACTION) {
+            return ((Locker<Faction>) lock.unlocker).progress(FACTIONS.player());
+        }
+        return ((Locker<Region>) lock.unlocker).progress(FACTIONS.player().capitolRegion());
     }
 
     @Override
@@ -99,7 +146,8 @@ public final class GameReport implements CitySource {
 
     @Override
     public int indexOf(Field f, Object key) {
-        Integer i = f == Field.BOOST ? boostIndex.get(key) : f == Field.VALUE ? valueIndex.get(key) : null;
+        Integer i = f == Field.BOOST ? boostIndex.get(key) : f == Field.VALUE ? valueIndex.get(key)
+                : f == Field.UNLOCK ? unlockIndex.get(key) : null;
         return i == null ? -1 : i;
     }
 
@@ -216,6 +264,9 @@ public final class GameReport implements CitySource {
         v[l.slot(Field.PROXIMITY_TOLL, 0)] = RD.DIST().bProximityToll.get(HCLASSES.CITIZEN().get(null));
         for (int i = 0; i < values.size(); i++) {
             v[l.slot(Field.VALUE, i)] = values.get(i).d.getD(player);
+        }
+        for (int i = 0; i < unlocks.size(); i++) {
+            v[l.slot(Field.UNLOCK, i)] = playerUnlock(unlocks.get(i));
         }
     }
 

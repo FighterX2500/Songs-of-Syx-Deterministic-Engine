@@ -204,7 +204,7 @@ public final class Events {
                 return i;
             }
         }
-        throw new IllegalArgumentException("SOSDET: a raider not in the game's list");
+        return -1; // a message from before a world resync, whose raiders it replaced: refused on every PC (SOS-32)
     }
 
     /** The raider at an index, while it is still the current one. */

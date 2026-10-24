@@ -106,3 +106,21 @@ If a follower's world differs from copy 1's, the world part read something from 
 | P2 | host, 2 peers, laptop peer; LLM players on copies 1, 3 and 4 (187 actions), with the fix | 60,000 | all 4 copies identical at every step and engine hashes agree; 174 orders applied on every copy, 2 skipped |
 
 So far no math difference between the two CPUs: no StrictMath change was needed. The players saw credits fall from 2.28 million to almost nothing, and the soldiers from 146 to about 30, while the invasion ended. It happened the same way on every copy, so it is game behaviour, not a split. It is not explained yet: a gift moves only its own amount (`DealParty.execute`).
+
+## SOS-32: followers on older saves (2026-10-24)
+
+The owner's 30-minute session runs followers on their own, older cities: the host plays Mogus-72, and the followers load Mogus-40 and Mogus-20 and take the host's world at the world resync. Each follower's world differs from the host's until the resync, so the rig now compares the copies' logs from the step after it (`--follower-saves`; the runner's `compare_from`). All runs: `city`, `--follow --world-resync 15`, `rig/cmds/m3.txt` (attach, recall, recruit, gift), draws traced.
+
+- *F1* (3 copies at speeds 5, 7 and 7; Mogus-40 and Mogus-20 followers): the engine's clock section split at step 60. The first differing world draw is at step 33 (`RDRacePopulation`).
+- *F2*, *F3* (the host and the Mogus-40 follower, 300 and 150 steps, with a temporary region probe): on the follower, region 100's City Hall ran at no efficiency. **Cause:** its "Organization I–IV" tech locks read the follower's own tech (`Lockers`, a code-made `Locker`), so workforce, every building's efficiency and the region's capacity split. **Fix:** the world part reads tech, level and title unlocks on the player and the player's regions from the report's new `UNLOCK` (report format version 4). The region build points' per-update fill is now keyed by part (`RDBuildPoints`, patch 98), as the other caches are.
+- *F4* (F1 with the fix, 12,000 steps): every copy's world identical at every step from 16, but the clock section split at step 5,670. The first differing world draw is at step 5,665 on the Mogus-40 follower, in a region's loyalty (`RDRaceLoyalty`).
+- *F5* (the host and the Mogus-40 follower, 6,000 steps, logging every region's loyalty-target boosters every 300 steps): **PASS** to 6,000, but from step 2,400 region 100's "Army presence" booster read 19.84 on the host and 17.58 on the follower.
+- *F6* (F5 with each player army's divisions in the log): the stored divisions' experience and training differed from step 300, before any command, and the host's were twice the follower's for one division. **Cause:** the game's own `WDivStored.load` adds the soldiers' stats to the totals already there and never clears them, so a second load in one JVM, or the world resync's load, counts them on top of the last save's. Army power, and so each region's army presence, then differ by PC. **Fix:** the load clears the totals first (patch 14).
+- *F7* (F1 with both fixes; 3 copies, 12,000 steps): **PASS**. Every copy identical to copy 1 at every step from 16 to 12,000, 800 engine hashes compared per copy with none missed, `reportMisses` 0, no transactions skipped. The world resync: 627 KB saved in 226 ms, loaded in 232–310 ms.
+- *F8* (the same save on every copy, 9,000 steps, world resync at 3,000) and *F9* (co-op, no follow mode, 6,000 steps), both with both fixes: **PASS**. Every copy identical at every step, engine hashes agree, `reportMisses` 0.
+
+The rig's lock now also checks that the process it names is a `rig.py`: a runner stopped from outside left its lock, and Windows had given its process number to another program.
+
+Two points from the camera and clicks audit:
+- A5 needs no code: sprite timers and corpse dirtiness change outside the step but feed neither the step nor the hash.
+- A2 (patch 67): between steps the supply room's resource set (`ROOM_SUPPLY.has`) is read, never refilled, under `outsideStep()`, not `worldCacheClosed()`. The city part fills that set itself, and `worldCacheClosed()` is true in the city part too.

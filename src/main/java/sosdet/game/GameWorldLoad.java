@@ -10,6 +10,9 @@ import java.util.Arrays;
 import java.util.List;
 
 import game.GAME;
+import game.boosting.tmp.TmpBoostable;
+import game.boosting.tmp.TmpBoosting;
+import game.events.EVENTS;
 import game.faction.FACTIONS;
 import game.faction.FactionResource;
 import game.faction.player.PLevels;
@@ -34,12 +37,19 @@ import util.keymap.RMAPS;
  * Loads the world's sections of a save into the running game and keeps this PC's city (ADR 0005 §5, SOS-38): the
  * world-load spike's reading loop, as {@code GameSaver.load} reads a save, for the sections the world is in. Their
  * player faction holds the city's own data too (credits, goods history, tech, titles, level, race order, bonus
- * settings, trade settings, colours): it is saved aside before the load and put back after it.
+ * settings, trade settings, colours), and so do the temporary boosts of the city's population classes: they are saved
+ * aside before the load and put back after it.
  */
 public final class GameWorldLoad {
 
-    /** The sections the world is in (the world-load spike): the map's resources, every faction, the raiders. */
-    public static final List<String> KEYS = Arrays.asList("WORLD", "FACTIONS", "RAIDING");
+    /**
+     * The sections the world is in: the map's resources, every faction, the raiders (the world-load spike); the
+     * calendar, which the world's events and wars count by; the temporary boosts of regions and factions; and the
+     * world's events, without the city's ({@link #EVENTS_KEY}) (SOS-32).
+     */
+    public static final List<String> KEYS = Arrays.asList("TIME", "WORLD", "FACTIONS", "RAIDING", "TEMP_EVENTS", "EVENTS");
+    /** Saved and loaded with only the world's events ({@link StepParts#worldEvent}): the city's are each PC's own. */
+    private static final String EVENTS_KEY = "EVENTS";
 
     private static final String VERSION = " (SOSDET supports Songs of Syx V71, build 71.44)";
     private static final Field SMAP = field(GameSaver.class, "smap");
@@ -59,6 +69,11 @@ public final class GameWorldLoad {
     private static final Field LEVEL = field(PLevels.class, "saver");
     private static final Field RACES = field(Player.PlayerRaces.class, "saver");
     private static final Field TRADE = field(PTrade.class, "saver");
+    private static final Method EVENT_SAVE = method(EVENTS.EventResource.class, "save", FilePutter.class);
+    private static final Method EVENT_LOAD = method(EVENTS.EventResource.class, "load", FileGetter.class);
+    private static final Method EVENT_CLEAR = method(EVENTS.EventResource.class, "clear");
+    /** {@code TmpBoosting.datas}: each boostable's active temporary boosts, regions first, then population classes. */
+    private static final Field BOOST_DATAS = field(TmpBoosting.class, "datas");
     /** Room for the player's city-owned data: a late-game city's is a few hundred KB. */
     private static final int KEEP_BYTES = 1 << 24;
 
@@ -82,6 +97,10 @@ public final class GameWorldLoad {
         p.bonusesCustom.save(keep);
         saver(TRADE, p.trade).save(keep);
         PlayerColors.saver.save(keep);
+        SAVABLE[] popBoosts = popBoosts();
+        for (SAVABLE b : popBoosts) {
+            b.save(keep);
+        }
         keep.save();
         sections(save);
         try {
@@ -95,6 +114,9 @@ public final class GameWorldLoad {
             p.bonusesCustom.load(back);
             saver(TRADE, p.trade).load(back);
             PlayerColors.saver.load(back);
+            for (SAVABLE b : popBoosts) {
+                b.load(back);
+            }
             Files.delete(scratch);
         } catch (IOException e) {
             throw new IllegalStateException("SOSDET: the city's part of the player faction could not be put back from "
@@ -104,7 +126,8 @@ public final class GameWorldLoad {
 
     /**
      * Saves the running game's world sections ({@link #KEYS}) to {@code file} for {@link #load}: a save as
-     * {@code GameSaver} writes one, with no game spec and only these sections. A whole save can't serve. The game
+     * {@code GameSaver} writes one, with no game spec and only these sections ({@code EVENTS} with the world's events
+     * only). A whole save can't serve. The game
      * writes every section's objects into one Java object stream, and its back-references count from the start of the
      * file, so a load that skips the city's sections misreads the raiders: {@code RAIDING} then makes new ones from
      * each PC's own draws (found by a probe in the S3 smoke run).
@@ -147,8 +170,77 @@ public final class GameWorldLoad {
             f.chars(s.key);
             int pos = f.getPosition();
             f.i(0);
-            SECTION_SAVE.invoke(s, f);
+            if (s.key.equals(EVENTS_KEY)) {
+                saveWorldEvents(f);
+            } else {
+                SECTION_SAVE.invoke(s, f);
+            }
             f.setAtPosition(pos, f.getPosition() - pos - 4);
+        }
+    }
+
+    /** The world's events, as {@code EVENTS}' {@code SuperSaver} writes all of them: a count, then key, length, data. */
+    private static void saveWorldEvents(FilePutter f) throws IllegalAccessException, InvocationTargetException {
+        LIST<EVENTS.EventResource> all = GAME.events().all();
+        int am = 0;
+        for (int i = 0; i < all.size(); i++) {
+            if (StepParts.worldEvent(all.get(i).key)) {
+                am++;
+            }
+        }
+        f.i(am);
+        for (int i = 0; i < all.size(); i++) {
+            EVENTS.EventResource e = all.get(i);
+            if (!StepParts.worldEvent(e.key)) {
+                continue;
+            }
+            f.chars(e.key);
+            int pos = f.getPosition();
+            f.i(0);
+            EVENT_SAVE.invoke(e, f);
+            f.setAtPosition(pos, f.getPosition() - pos - 4);
+        }
+    }
+
+    /** The world's events from {@link #saveWorldEvents}, each cleared and loaded as {@code SuperSaver} does; the city's stay. */
+    private static void loadWorldEvents(FileGetter f) throws IOException, IllegalAccessException,
+            InvocationTargetException {
+        LIST<EVENTS.EventResource> all = GAME.events().all();
+        int am = f.i();
+        for (int i = 0; i < am; i++) {
+            String k = f.chars();
+            int le = f.i();
+            int end = f.getPosition() + le;
+            EVENTS.EventResource e = null;
+            for (int j = 0; j < all.size(); j++) {
+                if (all.get(j).key.equals(k)) {
+                    e = all.get(j);
+                }
+            }
+            if (e == null || !StepParts.worldEvent(k)) {
+                throw new IllegalStateException("SOSDET: no world event " + k + " in this game" + VERSION);
+            }
+            EVENT_CLEAR.invoke(e);
+            EVENT_LOAD.invoke(e, f);
+            if (f.getPosition() != end) {
+                throw new IllegalStateException("SOSDET: world event " + k + " read " + (f.getPosition() - end + le)
+                        + " of " + le + " bytes" + VERSION);
+            }
+        }
+    }
+
+    /** The temporary boosts of the city's population classes ({@code TEMP_EVENTS}' {@code popcl} range). */
+    private static SAVABLE[] popBoosts() {
+        try {
+            Object[] datas = (Object[]) BOOST_DATAS.get(GAME.BOOST());
+            TmpBoostable<?> pop = GAME.BOOST().popcl;
+            SAVABLE[] r = new SAVABLE[pop.max];
+            for (int i = 0; i < pop.max; i++) {
+                r[i] = (SAVABLE) datas[pop.startIndex + i];
+            }
+            return r;
+        } catch (IllegalAccessException e) {
+            throw new IllegalStateException("SOSDET: cannot read " + BOOST_DATAS + VERSION, e);
         }
     }
 
@@ -195,7 +287,11 @@ public final class GameWorldLoad {
                     if (s == null) {
                         throw new IllegalStateException("SOSDET: no save section " + k + " in this game" + VERSION);
                     }
-                    SECTION_LOAD.invoke(s, f);
+                    if (k.equals(EVENTS_KEY)) {
+                        loadWorldEvents(f);
+                    } else {
+                        SECTION_LOAD.invoke(s, f);
+                    }
                     if (f.getPosition() != end) {
                         throw new IllegalStateException("SOSDET: save section " + k + " read " + (f.getPosition() - end + le)
                                 + " of " + le + " bytes" + VERSION);
