@@ -112,6 +112,13 @@ final class Session {
     PathQueue pathQueue;
     /** The part of the step running: 0 the city part, 1 the world part, -1 outside them (ADR 0005). */
     int part = -1;
+    /** This PC's human: the slot of its faction (ADR 0004); slot 0 until the mod sets another. */
+    int localHuman;
+    /**
+     * The world part's current human, the one the world is working on: each human in turn for its own world half, the
+     * first human (slot 0, always a human) otherwise, for now (plan 0004, M1).
+     */
+    int currentHuman;
     /** Game time since the player's own faction update last ran in the city part; 0 after every load. */
     double playerUpdateAcc;
     /** The player's city reports, which the world part reads instead of the live city (ADR 0005 §2). */

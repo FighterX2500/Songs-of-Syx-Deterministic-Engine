@@ -119,6 +119,7 @@ import view.main.VIEW;
  *   hash                                the current battle and city hashes
  *   makehuman &lt;auto n|k,k&gt;              setup: NPC slots become humans (SOS-46); then save and load
  *   humans                              the human slots and their state
+ *   localhuman &lt;slot&gt;                   at step 0: this copy's human (SOS-46)
  *   savegame &lt;file&gt;                     save to the run folder
  *   roundtrip &lt;from&gt; &lt;to&gt;              load from, save to right after the load (no frame), compare the two
  * </pre>
@@ -1052,6 +1053,10 @@ public final class Rig implements SCRIPT {
                 return;
             case "humans":
                 event("humans", RigHumans.state());
+                return;
+            case "localhuman":
+                Engine.localHuman(Integer.parseInt(c[1]));
+                event("localhuman", "\"slot\":" + Integer.parseInt(c[1]));
                 return;
             case "savegame":
                 event("savegame", RigHumans.save(dir.resolve(c[1])));

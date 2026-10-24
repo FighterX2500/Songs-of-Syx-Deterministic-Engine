@@ -7,6 +7,7 @@ import sosdet.ai.Commanders;
 import java.nio.file.Path;
 
 import sosdet.game.GameAi;
+import sosdet.game.GameHumans;
 import sosdet.game.GameResync;
 import sosdet.game.GameWorldLoad;
 import sosdet.game.OwnArmy;
@@ -328,6 +329,25 @@ public final class Engine {
     /** Host: the AI log written since the last call, for the mod to send to every peer. */
     public static byte[] aiLogOut() {
         return required().ai().logOut();
+    }
+
+    /**
+     * This PC's human (ADR 0004): the slot of its faction, a human in the loaded game. Outside the world part
+     * {@code FACTIONS.player()} is this human, and the city part runs only its city; in the world part it is the human
+     * the world is working on. Set it at step 0, on every PC; slot 0 by default.
+     */
+    public static void localHuman(int slot) {
+        Session s = required();
+        if (s.clock.step() != 0) {
+            throw new IllegalStateException("SOSDET: this PC's human is set before the run (step " + s.clock.step() + ")");
+        }
+        for (int h : GameHumans.get().slots()) {
+            if (h == slot) {
+                s.localHuman = slot;
+                return;
+            }
+        }
+        throw new IllegalArgumentException("SOSDET: slot " + slot + " is not a human in this game");
     }
 
     /** The mod's number for this PC: 0 on the host, from 1 on a peer (for feedback only the issuer gets). */

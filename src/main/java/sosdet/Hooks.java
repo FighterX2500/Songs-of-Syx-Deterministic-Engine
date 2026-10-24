@@ -9,6 +9,7 @@ import game.faction.FACTIONS;
 import game.faction.FCredits.CTYPE;
 import game.faction.Faction;
 import game.faction.player.PCredits;
+import game.faction.player.Player;
 import init.type.CAUSE_LEAVE;
 import init.type.HCLASS_RACE;
 import init.trade.TRADABLE;
@@ -344,7 +345,39 @@ public final class Hooks {
         return s == null || (s.part == StepParts.WORLD_PART) == StepParts.worldEvent(key);
     }
 
-    /** True when the world part's faction updater runs this faction: not the player's own in a session. */
+    // ------------------------------------------------------------ the humans (ADR 0004, SOS-46)
+
+    /**
+     * {@code FACTIONS.player()}: slot 0's Player without a session; in one, this PC's human, and in the world part the
+     * human the world is working on. While a game loads, before its humans are in their slots, it is slot 0's.
+     */
+    public static Player player(Player first) {
+        Session s = Engine.session();
+        if (s == null) {
+            return first;
+        }
+        int slot = s.part == StepParts.WORLD_PART ? s.currentHuman : s.localHuman;
+        if (slot == 0) {
+            return first;
+        }
+        Faction f = FACTIONS.getByIndex(slot);
+        return f instanceof Player ? (Player) f : first;
+    }
+
+    /** True when the world part runs every human's world half: in a session; without one only slot 0's, as in vanilla. */
+    public static boolean everyHuman() {
+        return Engine.session() != null;
+    }
+
+    /** The world part works on the human in {@code slot} (its own world half), or on the first human again (slot 0). */
+    public static void currentHuman(int slot) {
+        Session s = Engine.session();
+        if (s != null) {
+            s.currentHuman = slot;
+        }
+    }
+
+    /** True when the world part's faction updater runs this faction: no human's own in a session. */
     public static boolean worldUpdatesFaction(Object faction) {
         return Engine.session() == null || StepParts.worldUpdatesFaction(faction);
     }

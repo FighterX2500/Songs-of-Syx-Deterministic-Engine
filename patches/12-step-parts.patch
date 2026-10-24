@@ -1,6 +1,6 @@
 diff -ru -U2 a/game/events/EVENTS.java b/game/events/EVENTS.java
 --- a/game/events/EVENTS.java	2026-02-17 17:15:30.000000000 +0500
-+++ b/game/events/EVENTS.java	2026-10-25 02:21:53.216847000 +0500
++++ b/game/events/EVENTS.java	2026-10-25 02:33:40.423257900 +0500
 @@ -131,7 +131,7 @@
  			return;
  		prof.logStart(EVENTS.class);
@@ -12,7 +12,7 @@ diff -ru -U2 a/game/events/EVENTS.java b/game/events/EVENTS.java
  	}
 diff -ru -U2 a/game/faction/FACTIONS.java b/game/faction/FACTIONS.java
 --- a/game/faction/FACTIONS.java	2026-03-25 10:31:18.000000000 +0500
-+++ b/game/faction/FACTIONS.java	2026-10-25 02:21:53.223240000 +0500
++++ b/game/faction/FACTIONS.java	2026-10-25 02:33:40.427222700 +0500
 @@ -41,7 +41,7 @@
  
  		@Override
@@ -45,22 +45,47 @@ diff -ru -U2 a/game/faction/FACTIONS.java b/game/faction/FACTIONS.java
  			return;
  		boolean a = f.isActive();
  		if (f.wasActive != a) {
-@@ -161,6 +163,14 @@
+@@ -161,6 +163,15 @@
  
  	@Override
  	protected void update(double ds, Profiler prof) {
 +		if (sosdet.Hooks.cityPart()) {
 +			// SOSDET: the player's own update is city work: the city part runs it, on a clock of its own (ADR 0005)
 +			double due = sosdet.Hooks.playerUpdateDue(ds, TIME.days().bitSeconds()/4);
-+			if (due > 0 && player.isActive())
-+				((Faction) player).update(due); // Player's own override, called from this package
-+			player.updateSpecial(ds, prof);
++			Player p = player(); // SOSDET: this PC's human only; every other human's city is its own PC's (ADR 0004)
++			if (due > 0 && p.isActive())
++				((Faction) p).update(due); // Player's own override, called from this package
++			p.updateSpecial(ds, prof);
 +			return;
 +		}
  		
  		prof.logStart(updater.getClass());
  		updater.update(ds);
-@@ -286,13 +296,15 @@
+@@ -171,7 +182,13 @@
+ 		prof.logEnd(npcManager.getClass());
+ 		
+ 		prof.logStart(player.getClass());
+-		player.updateSpecial(ds, prof);
++		for (int i = 0; i < all.size(); i++) { // SOSDET: every human's world half, in slot order, each the current human in turn (ADR 0004)
++			if (all.get(i) instanceof Player && (i == 0 || sosdet.Hooks.everyHuman())) {
++				sosdet.Hooks.currentHuman(i);
++				((Player) all.get(i)).updateSpecial(ds, prof);
++			}
++		}
++		sosdet.Hooks.currentHuman(0);
+ 		prof.logEnd(player.getClass());
+ 		
+ 		prof.logStart(dip.getClass());
+@@ -180,7 +197,7 @@
+ 	}
+ 	
+ 	public static Player player() {
+-		return self.player;
++		return sosdet.Hooks.player(self.player); // SOSDET: this PC's human; in the world part, the human it works on (ADR 0004)
+ 	}
+ 
+ 	public static Faction getByIndex(int index) {
+@@ -286,13 +303,15 @@
  	public static LIST<Faction> active(){
  		if (self.dirty) {
  			self.active.clearSloppy();
@@ -83,7 +108,7 @@ diff -ru -U2 a/game/faction/FACTIONS.java b/game/faction/FACTIONS.java
  		}
 diff -ru -U2 a/game/faction/player/Player.java b/game/faction/player/Player.java
 --- a/game/faction/player/Player.java	2026-06-17 10:48:04.000000000 +0500
-+++ b/game/faction/player/Player.java	2026-10-25 02:21:53.217846700 +0500
++++ b/game/faction/player/Player.java	2026-10-25 02:33:40.423257900 +0500
 @@ -158,21 +158,22 @@
  	}
  	
