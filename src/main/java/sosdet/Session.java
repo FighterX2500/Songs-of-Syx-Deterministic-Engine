@@ -56,6 +56,11 @@ final class Session {
     /** The world-battle prompt open on this PC (and, opened by the step, on every PC): what it decides, and its close. */
     Object worldPrompt;
     Runnable worldPromptClose;
+    /** Its default answer when its time runs out, the time it has waited, and the armies waiting while it is open (SOS-45). */
+    Runnable worldPromptTimeout;
+    final PromptTimer promptTimer = new PromptTimer();
+    int[] worldPromptArmies = NO_ARMIES;
+    static final int[] NO_ARMIES = new int[0];
     /** The simulation's yes/no questions not yet answered ({@code cmd.StepPrompts}): key, then the yes and no actions. */
     final java.util.Map<Long, Object[]> stepPrompts = new java.util.HashMap<>();
     /** The step the last question opened at, and how many opened in it: the next question's key. */

@@ -54,7 +54,7 @@ First three read-only audits (camera and clicks, battles from the map, older-sav
 
 - **The engine:** full city simulation and the world map in lockstep. Copying the competing mod (MIT, with attribution in THIRD-PARTY-NOTICES.md) is allowed.
 - **Stage order:** world lockstep (D) comes before the city play sessions (C), so the owner can trade.
-- **World-battle prompts:** the world holds for everyone while one is open.
+- **World-battle prompts:** the world holds for everyone while one is open. *Changed 2026-10-25 (SOS-45):* only the battle's armies wait, and the prompt answers itself after 30 s.
 - **Command hooks:** in the declaring method, or at the UI call site when the class is unsafe at the menu or the method is hot.
 - **Factions:** several human factions are the mod's work. The engine keeps the save's one player faction identical on every PC.
 - **Room planning:** plan locally, hidden from the step; Build is one command, using the stash approach.
