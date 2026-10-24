@@ -19,9 +19,11 @@ import settlement.stats.muls.StatsMultipliers.StatMultiplier;
 import settlement.stats.muls.StatsMultipliers.StatMultiplierAction;
 import settlement.stats.service.StatServiceImp;
 import settlement.stats.stat.StatDecree;
+import sosdet.Engine;
 import sosdet.game.cmd.Laws;
 import sosdet.rig.Rig;
 import util.race.PERMISSION;
+import view.main.VIEW;
 
 /**
  * The rig's scripted player: law actions, each the call the game's UI makes (SOS-34). Where the hook sits at the UI's
@@ -189,6 +191,23 @@ public final class LawActions {
             int t = Integer.parseInt(a[1]);
             int level = Integer.parseInt(a[2]);
             Rig.later(() -> FACTIONS.player().tech().levelSet(TECHS.ALL().get(t), level));
+            return true;
+        }
+        case "research": { // research open|close: the research window's button, and its close button
+            boolean open = a[1].equals("open");
+            Rig.later(() -> {
+                if (open) {
+                    VIEW.UI().tech.activate();
+                } else {
+                    VIEW.UI().manager.close();
+                }
+            });
+            return true;
+        }
+        case "techlevel": { // techlevel <index>: a probe note of the technology's level, the step and the research window
+            int t = Integer.parseInt(a[1]);
+            Rig.later(() -> Rig.note("techlevel " + t + ": level " + FACTIONS.player().tech().level(TECHS.ALL().get(t))
+                    + " at step " + Engine.step() + ", research window " + (VIEW.UI().manager.open() ? "open" : "closed")));
             return true;
         }
         case "admit": { // admit <race> <amount>: the population tab's authorize button

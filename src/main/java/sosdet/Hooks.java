@@ -26,6 +26,7 @@ import sosdet.ai.AiMode;
 import sosdet.game.GameReport;
 import sosdet.game.StepParts;
 import sosdet.game.WorldStatics;
+import sosdet.game.cmd.BannerDraft;
 import sosdet.game.cmd.PlanStash;
 import sosdet.hash.HashLog;
 import sosdet.report.CityReport;
@@ -74,8 +75,10 @@ public final class Hooks {
     }
 
     /**
-     * Whether an open window pauses the game, as in vanilla. Not in a session (mod spec section 4): a click there is a
-     * command for a later step, which a pause would hold until the window closed (SOS-32).
+     * Whether an open window stops game time, as in vanilla: its own pause, and VIEW giving the game no time while the
+     * window holds the frame. Not in a session (mod spec section 4): a click there, or a prompt's answer, is a command
+     * for a later step, which a stopped PC would hold until the window closed, and every other PC would wait for it
+     * (SOS-32, SOS-36). Input still stops at the window.
      */
     public static boolean menusPause() {
         return Engine.session() == null;
@@ -1091,6 +1094,11 @@ public final class Hooks {
     /** This PC's room plan and its stash around the steps (ADR 0003), for the room placer's commands. */
     public static PlanStash planStash() {
         return Engine.session().plans();
+    }
+
+    /** This PC's player's banner draft (SOS-32), for the profile's banner editor. */
+    public static BannerDraft bannerDraft() {
+        return Engine.session().bannerDraft;
     }
 
     /**
