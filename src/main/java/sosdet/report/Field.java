@@ -94,8 +94,16 @@ public enum Field {
     // A7: boosts
     /** The player's value of each boost value: what every booster reads on the player, a player region or division. */
     BOOST(Shape.BOOST),
+    /**
+     * Each boost value on the city's population class ({@code HCLASS_RACE.clP()}): what a boostable read on the
+     * player's people as a whole sees, such as the royals' opinion and trust of the player. It can differ from
+     * {@link #BOOST}, which a booster reads on the player as a faction.
+     */
+    BOOST_CLP(Shape.BOOST),
     /** {@code RAID_SECURITY} on the city's population class, as raiders' ransom reads it. */
     RAID_SECURITY(Shape.ONE),
+    /** Whether the city may build barracks ({@code BARRACKS.reqs.passes}): a raider takes interest only then. */
+    BARRACKS_UNLOCKED(Shape.ONE),
     /** The proximity toll boost on the city's citizens, as the toll on the player's trade reads it. */
     PROXIMITY_TOLL(Shape.ONE),
     // A8: data-driven values

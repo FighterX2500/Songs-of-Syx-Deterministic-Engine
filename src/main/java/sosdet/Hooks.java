@@ -10,6 +10,7 @@ import game.faction.FCredits.CTYPE;
 import game.faction.Faction;
 import game.faction.player.PCredits;
 import init.type.CAUSE_LEAVE;
+import init.type.HCLASS_RACE;
 import init.trade.TRADABLE;
 import init.trade.TRADE_TYPE;
 import init.value.Value;
@@ -327,6 +328,20 @@ public final class Hooks {
         }
         s.reportMisses++;
         return v.vGet(FACTIONS.player());
+    }
+
+    /**
+     * In the world part: a boost value on the city's population class ({@code HCLASS_RACE.clP()}), from the report. As
+     * {@link #reportBoost}, one without a slot is read live and counted in {@link Stats#reportMisses}.
+     */
+    public static double reportBoostClP(BValue v) {
+        Session s = Engine.session();
+        int i = s.city().indexOf(Field.BOOST, v);
+        if (i >= 0) {
+            return s.reports.current().get(Field.BOOST_CLP, i);
+        }
+        s.reportMisses++;
+        return v.vGet(HCLASS_RACE.clP());
     }
 
     /** A faction value's value: the player's from the report in the world part, otherwise the game's own. */
@@ -742,6 +757,16 @@ public final class Hooks {
     /** A cache kept per update ({@code GAME.updateI()}) that must not carry the city part's values into the world part. */
     public static int partKey(int updateI) {
         return reportRead() ? ~updateI : updateI;
+    }
+
+    /**
+     * True with a session anywhere but the world part's own thread (the city part, the UI between steps, another
+     * thread): a world cache whose value comes from the city, such as an army's power, is computed afresh there and
+     * neither read nor filled, so the world part only ever sees the value it made from the report (ADR 0005).
+     */
+    public static boolean worldCacheClosed() {
+        Session s = Engine.session();
+        return s != null && (s.part != StepParts.WORLD_PART || !s.streams.isSimulationThread());
     }
 
     /** {@code ADSupply.current().get}: outside the world part, what the city sent the army that the world has not applied. */

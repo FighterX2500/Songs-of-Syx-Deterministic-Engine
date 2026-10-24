@@ -1,6 +1,33 @@
+diff -ru -U2 a/game/battle/util/Power.java b/game/battle/util/Power.java
+--- a/game/battle/util/Power.java	2026-05-18 14:41:46.000000000 +0500
++++ b/game/battle/util/Power.java	2026-10-24 12:45:43.841654300 +0500
+@@ -46,6 +46,7 @@
+ 	
+ 	private double minPower = -1;
+ 	private double maxPI = -1.0;
++	private double minPowerO = -1, maxPIO = -1; private boolean closed; // SOSDET: the world part keeps its own scale, made from the report; the UI and the city part, which read the live city, keep theirs (ADR 0005)
+ 	private double bestRanged = 1;
+ 	
+ 	Power(){
+@@ -54,11 +55,15 @@
+ 			@Override
+ 			public void exe(Path t) {
+ 				maxPI = -1;
++				maxPIO = -1; // SOSDET: both scales
+ 			}
+ 		});
+ 	}
+ 
+ 	public double get(DIV_SPEC div) {
++		if (closed != sosdet.Hooks.worldCacheClosed()) { // SOSDET: the world part keeps its own scale, made from the report; the UI and the city part, which read the live city, keep theirs (ADR 0005)
++			double m = minPower, p = maxPI; minPower = minPowerO; maxPI = maxPIO; minPowerO = m; maxPIO = p; closed = !closed;
++		}
+ 		init();	
+ 		
+ 		double d = pget(div);
 diff -ru -U2 a/game/faction/FWorth.java b/game/faction/FWorth.java
 --- a/game/faction/FWorth.java	2026-06-25 10:49:36.000000000 +0500
-+++ b/game/faction/FWorth.java	2026-10-23 23:09:52.975103800 +0500
++++ b/game/faction/FWorth.java	2026-10-24 12:45:43.833339700 +0500
 @@ -58,8 +58,8 @@
  			}
  			for (int ei = 0; ei < STATS.EQUIP().BATTLE_ALL().size(); ei++) {
@@ -21,9 +48,29 @@ diff -ru -U2 a/game/faction/FWorth.java b/game/faction/FWorth.java
  		}
  		return 0;
  	}
+@@ -201,7 +201,7 @@
+ 		WINT(CharSequence name, CharSequence desc, SPRITE icon){
+ 			this.info = new INFO(name, desc);
+ 			this.icon = icon;
+-			Arrays.fill(upI, -1);
++			Arrays.fill(upI, Integer.MIN_VALUE); // SOSDET: never a part key (Hooks.partKey(0) is -1)
+ 		}
+ 		
+ 		public int player() {
+@@ -211,8 +211,8 @@
+ 		public final int get(Faction f) {
+ 			if (f == null)
+ 				return 0;
+-			if (upI[f.index()] != GAME.updateI()) {
+-				upI[f.index()] = GAME.updateI();
++			if (upI[f.index()] != sosdet.Hooks.partKey(GAME.updateI())) { // SOSDET: one value per part: the city part's live worth never reaches the world part (ADR 0005)
++				upI[f.index()] = sosdet.Hooks.partKey(GAME.updateI());
+ 				cache[f.index()] = pget(f);
+ 			}
+ 			return cache[f.index()];
 diff -ru -U2 a/game/faction/diplomacy/DipWarPlayer.java b/game/faction/diplomacy/DipWarPlayer.java
 --- a/game/faction/diplomacy/DipWarPlayer.java	2026-04-04 17:39:24.000000000 +0500
-+++ b/game/faction/diplomacy/DipWarPlayer.java	2026-10-23 23:09:52.976603300 +0500
++++ b/game/faction/diplomacy/DipWarPlayer.java	2026-10-24 12:45:43.833339700 +0500
 @@ -71,7 +71,7 @@
  	
  	
@@ -44,7 +91,7 @@ diff -ru -U2 a/game/faction/diplomacy/DipWarPlayer.java b/game/faction/diplomacy
  		d.upI = GAME.updateI();
 diff -ru -U2 a/game/faction/diplomacy/deal/DealBools.java b/game/faction/diplomacy/deal/DealBools.java
 --- a/game/faction/diplomacy/deal/DealBools.java	2026-05-18 09:29:22.000000000 +0500
-+++ b/game/faction/diplomacy/deal/DealBools.java	2026-10-23 23:09:52.979103100 +0500
++++ b/game/faction/diplomacy/deal/DealBools.java	2026-10-24 12:45:43.834336400 +0500
 @@ -286,7 +286,7 @@
  //			if (DIP.get(a.f(), b.f()).minLoyalty > 0 && DIP.get(a.f(), b.f()).minLoyalty > ss.minLoyalty)
  //				return ¤¤pDowngrade;
@@ -56,7 +103,7 @@ diff -ru -U2 a/game/faction/diplomacy/deal/DealBools.java b/game/faction/diploma
  			}
 diff -ru -U2 a/game/faction/player/PTitles.java b/game/faction/player/PTitles.java
 --- a/game/faction/player/PTitles.java	2026-06-12 10:34:58.000000000 +0500
-+++ b/game/faction/player/PTitles.java	2026-10-23 23:09:52.990104200 +0500
++++ b/game/faction/player/PTitles.java	2026-10-24 12:45:43.834336400 +0500
 @@ -147,7 +147,7 @@
  
  			@Override
@@ -77,7 +124,7 @@ diff -ru -U2 a/game/faction/player/PTitles.java b/game/faction/player/PTitles.ja
  		
 diff -ru -U2 a/game/faction/player/emmi/Emissaries.java b/game/faction/player/emmi/Emissaries.java
 --- a/game/faction/player/emmi/Emissaries.java	2026-03-25 20:23:06.000000000 +0500
-+++ b/game/faction/player/emmi/Emissaries.java	2026-10-23 23:09:52.993103800 +0500
++++ b/game/faction/player/emmi/Emissaries.java	2026-10-24 12:45:43.835335600 +0500
 @@ -233,8 +233,8 @@
  	private int viewI = -1;
  	
@@ -91,7 +138,7 @@ diff -ru -U2 a/game/faction/player/emmi/Emissaries.java b/game/faction/player/em
  				am = Math.floor(am);
 diff -ru -U2 a/game/raiding/RaidingUtil.java b/game/raiding/RaidingUtil.java
 --- a/game/raiding/RaidingUtil.java	2026-02-06 15:19:52.000000000 +0500
-+++ b/game/raiding/RaidingUtil.java	2026-10-23 23:09:52.995105800 +0500
++++ b/game/raiding/RaidingUtil.java	2026-10-24 12:45:43.835335600 +0500
 @@ -57,7 +57,7 @@
  	}
  	
@@ -112,7 +159,7 @@ diff -ru -U2 a/game/raiding/RaidingUtil.java b/game/raiding/RaidingUtil.java
  		if (cp == GAME.updateI())
 diff -ru -U2 a/util/data/DOUBLE_O.java b/util/data/DOUBLE_O.java
 --- a/util/data/DOUBLE_O.java	2024-05-08 10:24:34.000000000 +0500
-+++ b/util/data/DOUBLE_O.java	2026-10-23 23:09:52.998103300 +0500
++++ b/util/data/DOUBLE_O.java	2026-10-24 12:45:43.836333700 +0500
 @@ -28,8 +28,8 @@
  		
  		@Override
@@ -124,9 +171,35 @@ diff -ru -U2 a/util/data/DOUBLE_O.java b/util/data/DOUBLE_O.java
  				upR = t;
  				cache = getValue(t);
  			}
+diff -ru -U2 a/world/army/ADPower.java b/world/army/ADPower.java
+--- a/world/army/ADPower.java	2025-12-09 10:56:44.000000000 +0500
++++ b/world/army/ADPower.java	2026-10-24 12:45:43.836333700 +0500
+@@ -46,7 +46,8 @@
+ 	}
+ 	
+ 	public int get(WArmy a) {
+-		
++		if (sosdet.Hooks.worldCacheClosed()) // SOSDET: only the world part fills the cache, from the report; the UI and the city part read the live city (ADR 0005)
++			return (int) Math.ceil(CLAMP.i((int)GAME.battle().power.get(a), 0, Integer.MAX_VALUE)*morale(a));
+ 		if (carmy.get(a) == 0) {
+ 			army.set(a,  CLAMP.i((int)GAME.battle().power.get(a), 0, Integer.MAX_VALUE));
+ 		}
+@@ -55,6 +56,12 @@
+ 	}
+ 	
+ 	public int get(Faction f) {
++		if (sosdet.Hooks.worldCacheClosed()) { // SOSDET: only the world part fills the cache, from the report; the UI and the city part read the live city (ADR 0005)
++			int p = 0;
++			for (int ai = 0; ai < f.armies().all().size(); ai++)
++				p += get(f.armies().all().get(ai));
++			return p;
++		}
+ 		if (cfaction.get(f) == 0) {
+ 			
+ 			int p = 0;
 diff -ru -U2 a/world/region/RDBoostCache.java b/world/region/RDBoostCache.java
 --- a/world/region/RDBoostCache.java	2024-11-22 17:46:48.000000000 +0500
-+++ b/world/region/RDBoostCache.java	2026-10-23 23:09:53.000105100 +0500
++++ b/world/region/RDBoostCache.java	2026-10-24 12:45:43.837335700 +0500
 @@ -29,6 +29,8 @@
  	public double get(Region reg) {
  		if (reg == null)
@@ -138,7 +211,7 @@ diff -ru -U2 a/world/region/RDBoostCache.java b/world/region/RDBoostCache.java
  			cache.set(reg, upI);
 diff -ru -U2 a/world/region/RDMilitaryGar.java b/world/region/RDMilitaryGar.java
 --- a/world/region/RDMilitaryGar.java	2026-07-01 08:35:36.000000000 +0500
-+++ b/world/region/RDMilitaryGar.java	2026-10-23 23:09:53.016605000 +0500
++++ b/world/region/RDMilitaryGar.java	2026-10-24 12:45:43.837335700 +0500
 @@ -348,6 +348,7 @@
  	final static class WDivsCapitol implements LIST<WDIV>, SAVABLE {
  
@@ -240,7 +313,7 @@ diff -ru -U2 a/world/region/RDMilitaryGar.java b/world/region/RDMilitaryGar.java
  				
 diff -ru -U2 a/world/region/building/RDLevelsTmp.java b/world/region/building/RDLevelsTmp.java
 --- a/world/region/building/RDLevelsTmp.java	2026-06-17 10:48:06.000000000 +0500
-+++ b/world/region/building/RDLevelsTmp.java	2026-10-23 23:09:53.004105600 +0500
++++ b/world/region/building/RDLevelsTmp.java	2026-10-24 12:45:43.837335700 +0500
 @@ -29,7 +29,7 @@
  	}
  	
@@ -252,7 +325,7 @@ diff -ru -U2 a/world/region/building/RDLevelsTmp.java b/world/region/building/RD
  	}
 diff -ru -U2 a/world/region/pop/RDRaces.java b/world/region/pop/RDRaces.java
 --- a/world/region/pop/RDRaces.java	2026-06-08 10:30:50.000000000 +0500
-+++ b/world/region/pop/RDRaces.java	2026-10-23 23:09:53.006103500 +0500
++++ b/world/region/pop/RDRaces.java	2026-10-24 12:45:43.838693000 +0500
 @@ -341,11 +341,15 @@
  		}
  		

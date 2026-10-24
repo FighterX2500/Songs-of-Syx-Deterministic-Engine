@@ -222,26 +222,31 @@ In the own-city mode, the engine would refuse those for now, as V0.1 refuses Eng
 
 ## Live-city reads found after milestone 4 (2026-10-24)
 
-The M4 smoke test and its trace (M4T, `stage-e-smoke-tests.md`) found that the world part still reads the live city in places, outside the report. An audit of the world part followed (WORLD, RAIDING, and the world halves of FACTIONS and EVENTS). It was read-only, and its main rows were spot-checked in the source. The owner decides on the fixes; none is built.
+The M4 smoke test and its trace (M4T, `stage-e-smoke-tests.md`) found that the world part still reads the live city in places, outside the report. An audit of the world part followed (WORLD, RAIDING, and the world halves of FACTIONS and EVENTS). It was read-only, and its main rows were spot-checked in the source. On the owner's go-ahead the raider and `FWorth` rows are fixed; a probe run then found the raider's real cause (the army power cache) and a second audit, of NPC-player diplomacy, found two more. The "Status" column says which are built.
 
-| Where (game source) | What it reads | Effect | Proposed fix |
-|---|---|---|---|
-| `game/raiding/Raider.java` `hasInterrest`, `isScared`; `RaidingUtil.ransomCurrent`, `defences` | population, the player's credits, RAID_SECURITY, the barracks' requirements, the capital's defences | only the host's world starts a raid (M4T, step 99,216) | carry these values in the report and read them from it in own-city mode (report format version bump) |
-| `init/value/Lockers.java:46-62` and the tech, level and title lockers reached through `Lockable.passes/progress`; e.g. `game/events/faction/player/Stance.java:85` returns before its `RND.oneIn(4)` | the player's live tech level, level and title | the world part's draw count; havens (`WHavenType:178`), region efficiency (`RDBuilding:330`) | a report field per locker the world part reads, as `LockerValue` already has (patch 14) |
-| `game/faction/FWorth.java:213-219` (`WINT.get`) | a cache keyed on `GAME.updateI()` only, filled in the city part (`PCredits.java:103`) | trust and diplomacy (`RTrust:54`), raider demand (`MessDemand:113`) read the live city's worth | key it with `Hooks.partKey`, as `_BOOST` is |
-| `game/faction/diplomacy/UpVassal.java:97` | `credits().worth` history, which only the city keeps | the tribute amount | a report field |
-| `game/raiding/RaidingCurrent.java:380` | `SETT.INVADOR().invading()` through the report's `INVADING`, which is stale for up to 60 steps after `RaiderArmy.invade` | a new invasion can be cancelled at once (not a desync) | change `INVADING` in the ledger when the invasion is sent |
-| `world/entity/haven/Player.java:111` | WRITES `SETT.ENTRY().immi()` from the world part | a write to the city with no hook | a city input |
+| Where (game source) | What it reads | Effect | Proposed fix | Status |
+|---|---|---|---|---|
+| `game/raiding/Raider.java` `hasInterrest`, `isScared`; `RaidingUtil.ransomCurrent`, `defences` | population, the player's credits, RAID_SECURITY, the barracks' requirements, the capital's defences | only the host's world starts a raid (M4T, step 99,216) | carry these values in the report and read them from it in own-city mode (report format version bump) | the barracks requirement is now in the report (`BARRACKS_UNLOCKED`, format version 3); the rest already was. The split's real cause is the next row |
+| `world/army/ADPower.java` `get(WArmy)`, `get(Faction)` | an army's power, cached in the army's data until a division joins or leaves; the top bar filled the cache between steps from the live city | the raider's `isScared` (`RaidingUtil.defences`), war and region decisions read each PC's own value (S1 probe: from step 13,875) | only the world part's own thread reads and fills the cache (`Hooks.worldCacheClosed`) | built (patch 98); S2, W1R |
+| `game/boosting/superb/SuperSpec.java` `Wrap.get`, through `HCLASS_RACE.boostableValue` | the royals' opinion and trust of the player, read on the population class (`clP()`), so a faction booster reads `vGet(Player)` live, round the `vGet(Faction)` hook | NPC war, stance and deal decisions | the report's `BOOST_CLP`; a boost read on `clP()` in the world part reads it | built (patch 14) |
+| `game/battle/util/Power.java` `init` | the army power scale, made from reference divisions of the player's faction (its global battle boosts), once after a load, by whoever calls first | every army power in the world part | the world part keeps its own scale | built (patch 98) |
+| `init/value/Lockers.java:46-62` and the tech, level and title lockers reached through `Lockable.passes/progress`; e.g. `game/events/faction/player/Stance.java:85` returns before its `RND.oneIn(4)` | the player's live tech level, level and title | the world part's draw count; havens (`WHavenType:178`), region efficiency (`RDBuilding:330`) | a report field per locker the world part reads, as `LockerValue` already has (patch 14) | open |
+| `game/faction/FWorth.java:213-219` (`WINT.get`) | a cache keyed on `GAME.updateI()` only, filled in the city part (`PCredits.java:103`) | trust and diplomacy (`RTrust:54`), raider demand (`MessDemand:113`) read the live city's worth | key it with `Hooks.partKey`, as `_BOOST` is | built (patch 98) |
+| `game/faction/diplomacy/UpVassal.java:97` | `credits().worth` history, which only the city keeps | the tribute amount | a report field | open |
+| `game/raiding/RaidingCurrent.java:380` | `SETT.INVADOR().invading()` through the report's `INVADING`, which is stale for up to 60 steps after `RaiderArmy.invade` | a new invasion can be cancelled at once (not a desync) | change `INVADING` in the ledger when the invasion is sent | open |
+| `world/entity/haven/Player.java:111` | WRITES `SETT.ENTRY().immi()` from the world part | a write to the city with no hook | a city input | open |
 
 The audit also lists caches with the same pattern as `FWorth`, keyed on the update or a step window: `RaidRegion.spoils`, `RaidingUtil.cache`, `DipWarPlayer.init/distress`, `Emissaries.penaltyMul` and `RDMilitaryGar.divisions`. Each needs `partKey` if its owning code is ever called from the city part.
 
 It is unsure about four places:
 - the recipe boosts that each settlement randomises (`Recipes.fboosts`, read by `NPCRes.update`);
-- `BValue.vGet(HCLASS_RACE)`, which takes the `vGet(Player)` overload around the patched `vGet(Faction)`;
+- `BValue.vGet(HCLASS_RACE)`, which takes the `vGet(Player)` overload around the patched `vGet(Faction)` (now fixed for `clP()`; other classes and races, such as `RDBuilding:494` and `CLIMATES:235`, are still read live);
 - `DivGeneration.set:214`;
 - mercy (`OpsStance.java:156,176`).
 
-W1, the own-city test with the laptop as follower, split on the clock at step 41,520 with no raider active, so at least one of these other reads is live in a normal run.
+W1, the own-city test with the laptop as follower, split on the clock at step 41,520 with no raider active. With the army power, barracks and `FWorth` fixes, W1R passed to step 60,000.
+
+The diplomacy audit also notes that `DipWarPlayer`'s and `RaidingUtil`'s window caches don't save where their window starts, so a PC that loads a resync save on its own refreshes them at other steps than the rest. That matters only for a resync of one PC or a late join; every copy loads the world resync at the same step.
 
 **The rig's gap:** `GameHash.worldHash` doesn't hash the RAIDING state, so the per-step world hash missed the raider split; only the engine's draw count caught it.
 

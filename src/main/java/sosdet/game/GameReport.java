@@ -209,8 +209,10 @@ public final class GameReport implements CitySource {
         Player player = FACTIONS.player();
         for (int i = 0; i < boosts.size(); i++) {
             v[l.slot(Field.BOOST, i)] = boosts.get(i).vGet(player);
+            v[l.slot(Field.BOOST_CLP, i)] = boosts.get(i).vGet(HCLASS_RACE.clP());
         }
         v[l.slot(Field.RAID_SECURITY, 0)] = BOOSTABLES.CIVICS().RAID_SECURITY.get(HCLASS_RACE.clP());
+        v[l.slot(Field.BARRACKS_UNLOCKED, 0)] = bool(SETT.ROOMS().BARRACKS.get(0).reqs.passes(player));
         v[l.slot(Field.PROXIMITY_TOLL, 0)] = RD.DIST().bProximityToll.get(HCLASSES.CITIZEN().get(null));
         for (int i = 0; i < values.size(); i++) {
             v[l.slot(Field.VALUE, i)] = values.get(i).d.getD(player);
