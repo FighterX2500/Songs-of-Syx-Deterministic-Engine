@@ -317,6 +317,81 @@ class AiLogTest {
         assertEquals(List.of("31:0:9:7:2"), hr.applied);
     }
 
+    /** Divisions 0 and 1 the host's, 2 the peer's, 3 the general's; army 0's artillery the host's, army 1's the peer's. */
+    private static final byte[] TABLE = Commanders.payload(new int[] {0, 0, 1, AiEntry.AI}, new int[] {0, 1});
+
+    @Test
+    void anEntryForADivisionItsSourceDoesNotCommandIsSkippedOnEveryPc() throws InterruptedException {
+        ByPc hr = new ByPc();
+        AiLog host = AiLog.host(START, hr);
+        ByPc pr = new ByPc();
+        AiLog peer = AiLog.peer(START, pr);
+        peer.localPc(1);
+        host.captureCommanders(TABLE);
+        host.stepBegin(1); // stamped 31
+        host.captureOrder(AiEntry.GUARD, 0, AiEntry.ints(1)); // the host's division
+        host.captureOrder(AiEntry.GUARD, 2, AiEntry.ints(1)); // the peer's: skipped
+        peer.captureOrder(AiEntry.AMMO, 2, AiEntry.ints(2)); // its own
+        peer.captureOrder(AiEntry.AMMO, 1, AiEntry.ints(2)); // the host's: skipped
+        host.ordersIn(1, peer.ordersOut());
+        captureOnGeneralThread(host, AiEntry.TASK, 3, 5); // the general's own
+        captureOnGeneralThread(host, AiEntry.RUNNING, 0, 1); // a player's division: skipped
+        for (long s = 2; s <= 61; s++) {
+            host.stepBegin(s); // stamped 32 at step 2
+        }
+        peer.logIn(host.logOut());
+        for (long s = 1; s <= 61; s++) {
+            peer.stepBegin(s);
+        }
+        assertEquals(List.of("32:1:2:3:-1", "32:3:3:0:0", "32:5:9:2:1"), hr.applied);
+        assertEquals(hr.applied, pr.applied);
+        assertEquals(3, host.commanders().skipped());
+        assertEquals(3, peer.commanders().skipped());
+        assertEquals(2, host.appliedOrders(), "skipped orders are not applied ones");
+        assertEquals(1, host.commanders().of(2));
+        assertEquals(0, host.commanders().ownArmy());
+        assertEquals(1, peer.commanders().ownArmy(), "the peer commands division 2, in army 1");
+        assertTrue(peer.commanders().commandsHere(2));
+        assertFalse(peer.commanders().commandsHere(0));
+        assertTrue(peer.commanders().commandsArtilleryHere(1));
+        assertEquals(host.commanders().hash(), peer.commanders().hash());
+    }
+
+    @Test
+    void aResyncCarriesTheTableAndAClearedOneRestrictsNothing() {
+        AiLog host = AiLog.host(START, new ByPc());
+        host.captureCommanders(TABLE);
+        for (long s = 1; s <= 31; s++) {
+            host.stepBegin(s);
+        }
+        host.captureOrder(AiEntry.GUARD, 2, AiEntry.ints(1));
+        host.stepBegin(32);
+        for (long s = 33; s <= 62; s++) {
+            host.stepBegin(s);
+        }
+        AiLog peer = AiLog.peer(START, new ByPc());
+        peer.localPc(1);
+        peer.resyncIn(host.resyncOut());
+        assertEquals(1, peer.commanders().skipped());
+        assertEquals(AiEntry.AI, peer.commanders().of(3));
+        assertEquals(1, peer.commanders().ownArmy());
+        assertEquals(host.commanders().hash(), peer.commanders().hash());
+
+        long unset = new Commanders().hash();
+        host.captureCommanders(Commanders.payload(null, null));
+        for (long s = 63; s <= 93; s++) {
+            host.stepBegin(s);
+        }
+        assertFalse(host.commanders().set());
+        assertEquals(Commanders.UNSET, host.commanders().of(2));
+        assertTrue(host.commanders().allows(5, 2));
+        assertEquals(unset, host.commanders().hash());
+        assertThrows(IllegalArgumentException.class, () -> Commanders.payload(new int[] {0, 1, 2}, new int[] {0, 1}),
+                "the divisions split evenly by army");
+        assertThrows(IllegalArgumentException.class, () -> Commanders.payload(new int[] {0, -3}, new int[] {0, 0}));
+        assertThrows(IllegalStateException.class, () -> peer.captureCommanders(TABLE), "only the host sets them");
+    }
+
     @Test
     void aMissingOrderOrAnotherStartIsRefused() {
         AiLog peer = AiLog.peer(START, new ByPc());

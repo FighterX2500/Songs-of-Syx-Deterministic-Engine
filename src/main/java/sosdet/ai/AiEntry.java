@@ -24,14 +24,16 @@ public final class AiEntry {
     public static final int SPEED = 15;
     /** A player's command (ADR 0002): the payload is the command's id and its arguments ({@link CmdWriter}). */
     public static final int COMMAND = 16;
-    static final int KINDS = 17;
+    /** Who commands each division and each army's artillery from this step ({@link Commanders}); not a battle change. */
+    public static final int COMMANDERS = 17;
+    static final int KINDS = 18;
     public static String kindName(int kind) {
         return KIND_NAMES[kind];
     }
 
     private static final String[] KIND_NAMES = {"path", "dest", "task", "guard", "running", "fireAtWill", "formation",
         "artillery", "holdFire", "ammo", "muster", "mopUp", "artilleryMuster", "artilleryFire", "teleport", "speed",
-        "command"};
+        "command", "commanders"};
 
     /** The general, as opposed to a player's PC. */
     public static final int AI = -1;

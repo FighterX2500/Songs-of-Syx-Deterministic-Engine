@@ -95,6 +95,13 @@ python rig\rig.py field --tag P1 --play --copies 3
 python rigig.py field --tag V1 --play --copies 2 --remote 2 --watch 2 --govern --trace-draws 600
 ```
 
+`--commanders "ARMY0 ARMY1"` (field, SOS-15): copy 1 sets who commands each army at the battle's start: a PC (0 the host, K-1 copy K), `ai`, or `A/B`, the army's divisions with men split in half between PCs A and B (the artillery A's). The summary counts the entries skipped as not commanded by their source.
+
+```
+python rigig.py field --tag V3 --play --copies 2 --remote 2 --govern --commanders "0 1"
+python rigig.py field --tag V4 --play --copies 2 --remote 2 --govern --commanders "0/1 ai"
+```
+
 `--warm K[,K]`: those copies play the autoloaded game normally for 30 game seconds before the session, so their session game is not the first one their process ran (the competing mod's first-game desync; SOS-32 found none).
 
 `--trace-draws N` adds the call site of every simulation draw for the last N steps, dumped around a desync; it slows the copies by roughly half.

@@ -26,7 +26,9 @@ public final class AiLog {
 
     /** Steps between the host taking a change and every PC applying it: 0.5 s at 1x. */
     public static final int DELAY_STEPS = 30;
-    static final int FORMAT_VERSION = 3;
+    /** 4: the commanders entry (SOS-15). A format 3 log is a format 4 log without one, so it is read too. */
+    static final int FORMAT_VERSION = 4;
+    static final int OLDEST_FORMAT = 3;
     static final int MAGIC = 0x53444149; // "SDAI"
     static final int HEADER_BYTES = 4 + 4 + 4 + 8;
     static final byte ENTRY = 1;
@@ -64,6 +66,8 @@ public final class AiLog {
     /** This PC's player only watches: its orders and commands are dropped, and how many were (SOS-15). */
     private volatile boolean watchOnly;
     private long watchedDropped;
+    /** Who commands each division, as the log last set it (SOS-15). */
+    private final Commanders commanders = new Commanders();
     private static final int NOT_APPLYING = Integer.MIN_VALUE;
     private long appliedOrders;
     private final long[] appliedByKind = new long[AiEntry.KINDS];
@@ -175,6 +179,21 @@ public final class AiLog {
         }
     }
 
+    /**
+     * Host: a commanders table ({@link Commanders#payload}) into the log, applied at the step it stamps on every PC. It
+     * comes from the mod, not a player, so watch-only never drops it.
+     */
+    public void captureCommanders(byte[] payload) {
+        if (mode != AiMode.HOST) {
+            throw new IllegalStateException("SOSDET: only the host sets the commanders (mode " + mode + ")");
+        }
+        captured.add(new AiEntry(-1, -1, AiEntry.COMMANDERS, -1, 0, payload.clone()));
+    }
+
+    public Commanders commanders() {
+        return commanders;
+    }
+
     /** Peer: its player's orders given since the last call, for the mod to send to the host. */
     public byte[] ordersOut() {
         if (mode != AiMode.PEER) {
@@ -229,11 +248,19 @@ public final class AiLog {
                 throw new IllegalStateException("SOSDET: AI log entry " + due.seq + " for step " + due.step
                         + " is still pending at step " + step);
             }
-            applyingPc = due.pc;
-            try {
-                applier.apply(due);
-            } finally {
-                applyingPc = NOT_APPLYING;
+            boolean skipped = false;
+            if (due.kind == AiEntry.COMMANDERS) {
+                commanders.apply(due);
+            } else if (due.div >= 0 && !commanders.allows(due.pc, due.div)) {
+                commanders.skip(); // its source doesn't command that division, on every PC alike
+                skipped = true;
+            } else {
+                applyingPc = due.pc;
+                try {
+                    applier.apply(due);
+                } finally {
+                    applyingPc = NOT_APPLYING;
+                }
             }
             if (due.kind == AiEntry.COMMAND && lastCommand != null && due.pc == localPc
                     && Arrays.equals(due.payload(), lastCommand)) {
@@ -242,7 +269,7 @@ public final class AiLog {
             (due.pc == AiEntry.AI ? recentAi : recentOrders).add(due);
             applied++;
             appliedByKind[due.kind]++;
-            if (due.pc != AiEntry.AI) {
+            if (due.pc != AiEntry.AI && !skipped && due.kind != AiEntry.COMMANDERS) { // the table is the mod's, no order
                 appliedOrders++;
             }
             if (mode == AiMode.PEER) {
@@ -322,7 +349,7 @@ public final class AiLog {
         int version = in.getInt();
         int delay = in.getInt();
         long id = in.getLong();
-        if (magic != MAGIC || version != FORMAT_VERSION) {
+        if (magic != MAGIC || version < OLDEST_FORMAT || version > FORMAT_VERSION) {
             throw new IllegalStateException("SOSDET: not an AI log of format " + FORMAT_VERSION + " (magic "
                     + Integer.toHexString(magic) + ", version " + version + ")");
         }
@@ -390,7 +417,7 @@ public final class AiLog {
         if (mode != AiMode.HOST) {
             throw new IllegalStateException("SOSDET: only the host saves a resync (mode " + mode + ")");
         }
-        int bytes = 4 + 8 + 8 + 8 * AiEntry.KINDS + 4;
+        int bytes = 4 + 8 + 8 + 8 * AiEntry.KINDS + commanders.bytes() + 4;
         for (AiEntry e : pending) {
             bytes += entryBytes(e);
         }
@@ -399,6 +426,7 @@ public final class AiLog {
         for (long n : appliedByKind) {
             b.putLong(n);
         }
+        commanders.writeTo(b);
         b.putInt(pending.size());
         for (AiEntry e : pending) {
             putEntry(b, e);
@@ -428,6 +456,7 @@ public final class AiLog {
         for (int k = 0; k < appliedByKind.length; k++) {
             appliedByKind[k] = b.getLong();
         }
+        commanders.readFrom(b);
         List<AiEntry> due = new ArrayList<>();
         for (int n = b.getInt(); n > 0; n--) {
             due.add(getEntry(b));
@@ -501,6 +530,7 @@ public final class AiLog {
             throw new IllegalArgumentException("SOSDET: PC " + pc);
         }
         localPc = pc;
+        commanders.localPc(pc);
     }
 
     public int localPc() {

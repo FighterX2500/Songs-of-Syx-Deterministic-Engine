@@ -1,0 +1,146 @@
+diff -ru -U2 a/view/battle/BattlePlacer.java b/view/battle/BattlePlacer.java
+--- a/view/battle/BattlePlacer.java	2026-10-24 23:39:03.934220600 +0500
++++ b/view/battle/BattlePlacer.java	2026-10-24 23:39:28.204101500 +0500
+@@ -81,8 +81,8 @@
+ 			action.clicked = false;
+ 			s.clear();
+ 			boolean allSelected = true;
+-			for (Div d : GAME.ARMIES().player().divisions()) {
+-				if (d.menNrOf() > 0) {
++			for (Div d : sosdet.game.OwnArmy.own().divisions()) {
++				if (d.menNrOf() > 0 && sosdet.game.OwnArmy.selectable(d)) {
+ 					allSelected &= s.selected(d);
+ 					s.select(d);
+ 				}
+diff -ru -U2 a/view/battle/BattlePlacerSelect.java b/view/battle/BattlePlacerSelect.java
+--- a/view/battle/BattlePlacerSelect.java	2026-10-24 23:39:04.022038100 +0500
++++ b/view/battle/BattlePlacerSelect.java	2026-10-24 23:39:28.204101500 +0500
+@@ -61,7 +61,7 @@
+ 					Div d = ((Humanoid) e).division();
+ 
+ 					if (d != null)
+-						if (debug || d.army() == GAME.ARMIES().player()) {
++						if (debug || d.army() == sosdet.game.OwnArmy.own() && sosdet.game.OwnArmy.selectable(d)) {
+ 							s.hover(d);
+ 							include |= !s.selected(d);
+ 						}
+@@ -74,7 +74,7 @@
+ 					if (r != null && r instanceof ArtilleryInstance) {
+ 						ArtilleryInstance ca = (ArtilleryInstance) r;
+ 						
+-						if (ca.army() == GAME.ARMIES().player()) {
++						if (ca.army() == sosdet.game.OwnArmy.own() && sosdet.game.OwnArmy.selectable(ca)) {
+ 							ca.hovered = true;
+ 							include |= !ca.selected;
+ 						}
+@@ -89,7 +89,7 @@
+ 						Div d = ((Humanoid) e).division();
+ 
+ 						if (d != null)
+-							if (debug || d.army() == GAME.ARMIES().player()) {
++							if (debug || d.army() == sosdet.game.OwnArmy.own() && sosdet.game.OwnArmy.selectable(d)) {
+ 								if (include)
+ 									s.select(d);
+ 								else
+@@ -106,7 +106,7 @@
+ 								Div d = ((Humanoid) e).division();
+ 
+ 								if (d != null)
+-									if (debug || d.army() == GAME.ARMIES().player()) {
++									if (debug || d.army() == sosdet.game.OwnArmy.own() && sosdet.game.OwnArmy.selectable(d)) {
+ 										if (include)
+ 											s.select(d);
+ 										else
+@@ -119,7 +119,7 @@
+ 						Room r = SETT.ROOMS().map.get(x, y);
+ 						if (r != null && r instanceof ArtilleryInstance) {
+ 							ArtilleryInstance ca = (ArtilleryInstance) r;
+-							if (ca.army() == GAME.ARMIES().player()) {
++							if (ca.army() == sosdet.game.OwnArmy.own() && sosdet.game.OwnArmy.selectable(ca)) {
+ 								if (include)
+ 									s.artillery.select(ca);
+ 								else
+@@ -233,7 +233,7 @@
+ 					s.hover(d);
+ 					if (GAME.SPEED.isPaused() || VIEW.renderSecond() - hovDelay > 1.5) {
+ 						d.hoverInfo(text);
+-						if (d.army() == GAME.ARMIES().player()) {
++						if (d.army() == sosdet.game.OwnArmy.own() && sosdet.game.OwnArmy.selectable(d)) {
+ 							text.NL(5);
+ 							text.text(sSelect);
+ 							
+diff -ru -U2 a/view/battle/BattleRenderer.java b/view/battle/BattleRenderer.java
+--- a/view/battle/BattleRenderer.java	2026-10-24 23:39:04.109444900 +0500
++++ b/view/battle/BattleRenderer.java	2026-10-24 23:39:28.204101500 +0500
+@@ -63,7 +63,7 @@
+ 				if (e instanceof Humanoid) {
+ 					Div d = ((Humanoid) e).division();
+ 					if (d != null && (s.hovered(d) || s.selected(d))) {
+-						if (d.army() == GAME.ARMIES().enemy())
++						if (d.army() == sosdet.game.OwnArmy.other())
+ 							cHoverEnemy.bind();
+ 						else
+ 							cHover.bind();
+@@ -187,7 +187,7 @@
+ 			
+ 			
+ 			if (ins.hovered) {
+-				if (ins.army() != GAME.ARMIES().player()) {
++				if (ins.army() != sosdet.game.OwnArmy.own()) {
+ 					cHoverEnemy.bind();
+ 				}else {
+ 					cHover.bind();
+@@ -256,7 +256,7 @@
+ 		SPRITE s = SPRITES.icons().s.circle;
+ 		for (Div d : GAME.ARMIES().divisions()) {
+ 			COLOR.GREEN40.bind();
+-			if ((d.army() == GAME.ARMIES().player() || S.get().developer) && (this.s.hovered(d) || this.s.selected(d) || KEYS.BATTLE().SHOW_DIVISIONS.isPressed())) {
++			if ((d.army() == sosdet.game.OwnArmy.own() || S.get().developer) && (this.s.hovered(d) || this.s.selected(d) || KEYS.BATTLE().SHOW_DIVISIONS.isPressed())) {
+ 				
+ 				if ( S.get().developer)
+ 					DivRenderer.render(ren, d.position(), data);
+diff -ru -U2 a/view/battle/CatSelection.java b/view/battle/CatSelection.java
+--- a/view/battle/CatSelection.java	2026-10-24 23:39:04.282749800 +0500
++++ b/view/battle/CatSelection.java	2026-10-24 23:39:28.205110400 +0500
+@@ -31,7 +31,7 @@
+ 	}
+ 	
+ 	public void select(ArtilleryInstance s) {
+-		if (!s.selected) {
++		if (!s.selected && sosdet.game.OwnArmy.selectable(s)) { // SOSDET: only the artillery this PC commands (SOS-15)
+ 			s.selected = true;
+ 			selection.add(s);
+ 		}
+diff -ru -U2 a/view/battle/DivSelection.java b/view/battle/DivSelection.java
+--- a/view/battle/DivSelection.java	2026-10-24 23:39:04.196671000 +0500
++++ b/view/battle/DivSelection.java	2026-10-24 23:39:28.205110400 +0500
+@@ -23,7 +23,7 @@
+ 	private final DivFormationImp tmp = new DivFormationImp();
+ 	
+ 	public void select(Div f) {
+-		if (selected[f.index()])
++		if (selected[f.index()] || !sosdet.game.OwnArmy.selectable(f)) // SOSDET: only the divisions this PC commands (SOS-15)
+ 			return;
+ 		selection.add(f);
+ 		selected[f.index()] = true;
+@@ -116,7 +116,7 @@
+ 	}
+ 	
+ 	public boolean shouldMuster() {
+-		for (Div d : GAME.ARMIES().player().divisions()) {
++		for (Div d : sosdet.game.OwnArmy.own().divisions()) {
+ 			if (d.menNrOf() > 0 && !d.settings().mustering())
+ 				return true;
+ 		}
+diff -ru -U2 a/view/battle/UIPanelArtillery.java b/view/battle/UIPanelArtillery.java
+--- a/view/battle/UIPanelArtillery.java	2026-10-24 23:39:04.366817200 +0500
++++ b/view/battle/UIPanelArtillery.java	2026-10-24 23:39:28.206106300 +0500
+@@ -43,7 +43,7 @@
+ 					upI = GAME.updateI();
+ 					all.clearSoft();
+ 					for (ArtilleryInstance bb : selection.all()) {
+-						if (bb.army() == army) {
++						if (bb.army() == sosdet.game.OwnArmy.seen(army)) { // SOSDET: this PC's army (SOS-15)
+ 							all.add(bb);
+ 						}
+ 					}

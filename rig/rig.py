@@ -760,6 +760,9 @@ def main():
     ap.add_argument("--play", action="store_true",
                     help="the owner plays copy 1 (the host) in a normal window from 1x, giving orders and changing speed;"
                          " the other copies replay its log at 25x; the run ends when the owner closes the window")
+    ap.add_argument("--commanders", default="",
+                    help="field: 'ARMY0 ARMY1', who commands each army from the battle's start: a PC (0 the host, K-1"
+                         " copy K), 'ai', or 'A/B' (its divisions split in half between PCs A and B); SOS-15")
     ap.add_argument("--watch", default="",
                     help="K[,K]: those copies' players only watch: their clicked orders and commands are dropped (SOS-15)")
     ap.add_argument("--govern", action="store_true",
@@ -935,6 +938,8 @@ def main():
             c.send("followspeed", "followspeed")
         if c.k in watched:
             c.send("watchonly", "watchonly")
+        if c.k == 1 and args.commanders:
+            c.send("commanders " + args.commanders, "commanders")
         if c.k == 1 and args.scenario == "city" and not args.play and not args.replay:
             if args.engage >= 0:  # field battles on the battle map (SOS-32)
                 c.send("answerprompts engage %d%s" % (args.engage, " restart %d" % args.restart if args.restart else ""),
@@ -1088,6 +1093,11 @@ def main():
     for k in watched:
         w = copies[k - 1].all_of("watched")
         summary.append("copy %d only watched: %d clicked orders and commands dropped" % (k, w[-1]["dropped"] if w else 0))
+    if args.commanders:
+        for c in copies:
+            n = c.all_of("notcommanded")
+            summary.append("copy %d commanders %s: %d orders and AI changes skipped as not commanded by their source"
+                           % (c.k, args.commanders, n[-1]["skipped"] if n else 0))
     summary += lines
     desyncs = {c.k: c.find("desync", 0) for c in copies}
     for c in copies:
