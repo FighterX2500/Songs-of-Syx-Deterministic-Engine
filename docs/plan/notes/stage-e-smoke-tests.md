@@ -85,7 +85,9 @@ If a follower's world differs from copy 1's, the world part read something from 
 - *S4* (S3 to step 4,200, also logging the raiders' powers): the powers were identical on every copy before the world resync and different on every copy after it. **Cause:** the world resync's load misread the raiders and `RAIDING` made new ones from each PC's own draws (`city-world-link.md`, "The world resync"). The rig's world hash doesn't cover the raiders, so nothing flagged it at the load.
 - **Fix:** the world resync writes a save of the world's sections only (`GameWorldLoad.save`). The world hash now covers the raiders (power, defeat, raids, and the raider now raiding; hash format version 5).
 - *S5* (S4 with the fix): every copy's probe log identical to step 4,200. The world resync save is now 625 KB in 161 ms (it was 3.4 MB in 1,100 ms); the loads take 107–146 ms.
-- *M4R2* (M4 with every fix): see below.
+- *M4R2* (M4 with every fix, before the hash change; 3 copies at speeds 5, 7 and 7, 108,000 steps): **PASS**. Every copy identical to copy 1 at every step, 7,200 engine hashes compared per copy with none missed, `reportMisses` 0, 21,252 transactions applied on every copy and none skipped. The world resync: 625 KB saved in 165 ms, loaded in 123–152 ms.
+- *S6* (the raiders in the world hash, format 5; 3 copies, 9,000 steps with the world resync at 3,000): **PASS**.
+- *W1R2* (W1 again with every fix; W1R loaded the broken world resync too): **PASS**. The laptop identical to copy 1 at every step to 60,000. The laptop compared all 2,000 of the host's engine hashes; the host compared 90 of the laptop's (1,672 came too late, because the laptop runs behind and the host doesn't wait in own-city mode). `reportMisses` 0 on both. The world resync: 625 KB saved in 152 ms, loaded in 115 ms here and 154 ms on the laptop.
 
 ## Two PCs and LLM players (2026-10-24)
 
