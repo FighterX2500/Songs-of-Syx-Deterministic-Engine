@@ -50,7 +50,7 @@ On the reference PC (Intel Core i5-11600K, 16 GB RAM; mod spec §13) unless a li
 
 ## 5. Verification
 
-- A scenario suite (save, seed, order log, AI log, expected hashes every N steps) replayed in several copies at different speeds; it runs in CI (card SOS-31).
+- A scenario suite (save, seed, order log, AI log, expected hashes every N steps) replayed in several copies at different speeds; it runs as one local command (card SOS-31).
 - Until then, the spike rig in SOSGSGMP (`spikes/determinism/matrix.sh`).
 
 ## 6. Open questions

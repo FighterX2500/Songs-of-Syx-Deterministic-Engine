@@ -80,6 +80,12 @@ If a follower's world differs from copy 1's, the world part read something from 
   - the royals' opinion and trust of the player read the player's boosts on the population class (`HCLASS_RACE.clP()`), which went round the `BValue.vGet(Faction)` hook to a live read. NPC war, stance and deal decisions read them. In the world part a boost read on `clP()` now reads the report's new `BOOST_CLP`;
   - the army power scale (`Power.minPower`, `maxPI`) comes from reference divisions of the player's faction and was worked out once after a load by whoever called first. The world part now keeps its own scale.
 - *M4R* (M4 again with all five fixes; 3 copies, 108,000 steps): every copy's world identical at every step, but the engine's clock section split again at step 99,600, copy 1 (speed 5) against copies 2 and 3 (speed 7), as in M4. So one more read in the world part differs between the cities this late in the run. A traced rerun (M4T2, `--trace-draws 90`) looks for it.
+- *M4T2* (the trace): the first differing draw is at step 99,031, and this time the followers start a raid that copy 1 doesn't (`RaiderText.set`, `RaidingCurrent.raid`).
+- *S3* (a new probe, the same 3 copies at speeds 5, 7 and 7, logging the raid timer and each raider's interest and fear once per world step): the first difference is at step 3,185, just after the world resync. A raider was scared on two copies and not on the third, with the same capital defences on all three.
+- *S4* (S3 to step 4,200, also logging the raiders' powers): the powers were identical on every copy before the world resync and different on every copy after it. **Cause:** the world resync's load misread the raiders and `RAIDING` made new ones from each PC's own draws (`city-world-link.md`, "The world resync"). The rig's world hash doesn't cover the raiders, so nothing flagged it at the load.
+- **Fix:** the world resync writes a save of the world's sections only (`GameWorldLoad.save`). The world hash now covers the raiders (power, defeat, raids, and the raider now raiding; hash format version 5).
+- *S5* (S4 with the fix): every copy's probe log identical to step 4,200. The world resync save is now 625 KB in 161 ms (it was 3.4 MB in 1,100 ms); the loads take 107–146 ms.
+- *M4R2* (M4 with every fix): see below.
 
 ## Two PCs and LLM players (2026-10-24)
 

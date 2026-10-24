@@ -16,7 +16,7 @@ ADR 0005 resyncs the world without touching the city: a PC whose world differs l
 
 ## How a save is laid out
 
-`GameSaver` writes `GameSpec`, then two lists of named sections ("before", then "all"). Each section has its key and its length in bytes, and the loader skips a key it doesn't know. So one section can be loaded alone, without touching the rest of the save.
+`GameSaver` writes `GameSpec`, then two lists of named sections ("before", then "all"). Each section has its key and its length in bytes, and the loader skips a key it doesn't know. So one section can be loaded alone, without touching the rest of the save. (Correction, SOS-38, 2026-10-24: not a section that reads Java objects. The game writes all of them into one object stream for the whole file, whose back-references count from its start, so skipping earlier sections breaks them. RAIDING then makes new raiders. The world resync now writes a save of the world's sections only; see `docs/plan/notes/city-world-link.md`.)
 
 Mogus-72's sections, uncompressed, with the compressed size of the big ones:
 

@@ -241,7 +241,8 @@ public final class Engine {
     }
 
     /**
-     * Host, own-city mode, between steps: saves the game to {@code file} for a world resync at the current step, and
+     * Host, own-city mode, between steps: saves the world's sections to {@code file} for a world resync at the
+     * current step ({@link GameWorldLoad#save}), and
      * returns the engine's world state at that step; then holds there. Every PC, the host included, then loads it with
      * {@link #worldResyncLoad}: only the world reloads, and every city goes on.
      */
@@ -254,7 +255,7 @@ public final class Engine {
             throw new IllegalStateException("SOSDET: a world resync is saved between steps, not inside one");
         }
         long step = s.clock.step();
-        GameResync.save(file);
+        GameWorldLoad.save(file);
         s.clock.runUntil(step); // the host waits for its own load too
         return new WorldResync(step, s.hashes.epoch() + 1, s.streams.worldDraws(), s.reports.ledgerOut()).toBytes();
     }

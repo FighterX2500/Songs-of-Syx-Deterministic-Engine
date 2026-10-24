@@ -20,9 +20,11 @@ import game.faction.player.Player;
 import game.faction.player.PlayerColors;
 import game.save.GameSaver;
 import game.save.Savable;
+import settlement.main.SETT;
 import snake2d.util.file.FileGetter;
 import snake2d.util.file.FilePutter;
 import snake2d.util.file.SAVABLE;
+import snake2d.util.misc.ACTION;
 import snake2d.util.sets.KeyMap;
 import snake2d.util.sets.LIST;
 import util.data.DataO;
@@ -45,6 +47,11 @@ public final class GameWorldLoad {
     private static final Method SECTION_SAVE = method(Savable.class, "save", FilePutter.class);
     /** {@code GameSaver}'s first list: the layout headers ({@code DataO}, {@code RMAPS}) and a few other sections. */
     private static final Field BEFORE = field(GameSaver.class, "before");
+    /** {@code GameSaver}'s second list: every other section. */
+    private static final Field ALL = field(GameSaver.class, "all");
+    /** As a whole save's buffer ({@code GameResync}): the world's sections are most of a save. */
+    private static final int SAVE_BYTES_PER_TILE = 120;
+    private static final ACTION NO_PROGRESS = () -> { };
     private static final Method RESOURCE_SAVE = method(FactionResource.class, "save", FilePutter.class);
     private static final Method RESOURCE_LOAD = method(FactionResource.class, "load", FileGetter.class);
     private static final Field TECH = field(PTech.class, "saver");
@@ -92,6 +99,56 @@ public final class GameWorldLoad {
         } catch (IOException e) {
             throw new IllegalStateException("SOSDET: the city's part of the player faction could not be put back from "
                     + scratch, e);
+        }
+    }
+
+    /**
+     * Saves the running game's world sections ({@link #KEYS}) to {@code file} for {@link #load}: a save as
+     * {@code GameSaver} writes one, with no game spec and only these sections. A whole save can't serve. The game
+     * writes every section's objects into one Java object stream, and its back-references count from the start of the
+     * file, so a load that skips the city's sections misreads the raiders: {@code RAIDING} then makes new ones from
+     * each PC's own draws (found by a probe in the S3 smoke run).
+     */
+    public static void save(Path file) {
+        layoutSavers();
+        try {
+            @SuppressWarnings("unchecked") // GameSaver.before and .all are ArrayListGrower<Savable>
+            LIST<Savable> before = (LIST<Savable>) BEFORE.get(GAME.saver());
+            @SuppressWarnings("unchecked")
+            LIST<Savable> all = (LIST<Savable>) ALL.get(GAME.saver());
+            Files.deleteIfExists(file);
+            FilePutter f = new FilePutter(file, SAVE_BYTES_PER_TILE * SETT.TAREA);
+            f.i(0); // the game spec's length: none
+            saveSections(f, before);
+            saveSections(f, all);
+            if (!f.zip(NO_PROGRESS)) {
+                throw new IllegalStateException("SOSDET: cannot write the world save " + file);
+            }
+        } catch (IOException | IllegalAccessException | InvocationTargetException e) {
+            throw new IllegalStateException("SOSDET: the world could not be saved to " + file, e);
+        }
+    }
+
+    /** One of {@code GameSaver}'s lists, as {@code GameSaver.save} writes it, with only the world's sections. */
+    private static void saveSections(FilePutter f, LIST<Savable> list) throws IllegalAccessException,
+            InvocationTargetException {
+        int am = 0;
+        for (int i = 0; i < list.size(); i++) {
+            if (KEYS.contains(list.get(i).key)) {
+                am++;
+            }
+        }
+        f.i(am);
+        for (int i = 0; i < list.size(); i++) {
+            Savable s = list.get(i);
+            if (!KEYS.contains(s.key)) {
+                continue;
+            }
+            f.chars(s.key);
+            int pos = f.getPosition();
+            f.i(0);
+            SECTION_SAVE.invoke(s, f);
+            f.setAtPosition(pos, f.getPosition() - pos - 4);
         }
     }
 
