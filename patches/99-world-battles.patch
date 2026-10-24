@@ -1,6 +1,45 @@
+diff -ru -U2 a/settlement/battle/invasion/Attack.java b/settlement/battle/invasion/Attack.java
+--- a/settlement/battle/invasion/Attack.java	2026-06-17 10:48:04.000000000 +0500
++++ b/settlement/battle/invasion/Attack.java	2026-10-23 23:09:52.149104000 +0500
+@@ -155,7 +155,7 @@
+ 			
+ 			new MVictory2(ress).send();
+ 			
+-			for (InvasionListener ll : InvasionListener.all) {
++			if (!sosdet.Hooks.invasionTell(sosdet.Hooks.TELL_VICTORY, result.playerLosses, result.enemyLosses, invasion.ref)) for (InvasionListener ll : InvasionListener.all) { // SOSDET: the world's listeners hear it in the city's next report (B4, ADR 0005)
+ 				ll.victory(result.playerLosses, result.enemyLosses, invasion.ref);
+ 			}
+ 			
+@@ -197,7 +197,7 @@
+ 			for (WArmy a : armies()) {
+ 				for (int di = 0; di < a.divs().size(); di++) {
+ 					if (ddi < result.playerSurvivors.length) {
+-						a.divs().get(di).resolve(result.playerSurvivors[ddi++]);
++						if (!sosdet.Hooks.divResolve(a.divs().get(di), result.playerSurvivors[ddi])) a.divs().get(di).resolve(result.playerSurvivors[ddi]); ddi++; // SOSDET: a world division's survivors reach it in the city's next report (B4, ADR 0005)
+ 					}
+ 				}
+ 			}
 diff -ru -U2 a/settlement/battle/invasion/Invasion.java b/settlement/battle/invasion/Invasion.java
 --- a/settlement/battle/invasion/Invasion.java	2026-03-25 10:31:18.000000000 +0500
-+++ b/settlement/battle/invasion/Invasion.java	2026-10-23 16:21:50.184212600 +0500
++++ b/settlement/battle/invasion/Invasion.java	2026-10-23 23:09:52.145602400 +0500
+@@ -148,7 +148,7 @@
+ 		
+ 		if (spot.body.width()*spot.body.height() < 8) {
+ 			GAME.Warn(""+spot.body);
+-			for (InvasionListener li : InvasionListener.all)
++			if (!sosdet.Hooks.invasionTell(sosdet.Hooks.TELL_WEIRDNESS, 0, 0, spec.ref)) for (InvasionListener li : InvasionListener.all) // SOSDET: the world's listeners hear it in the city's next report (B4, ADR 0005)
+ 				li.weirdness(spec.ref);
+ 			return false;
+ 		}
+@@ -215,7 +215,7 @@
+ 					CharSequence title = ¤¤Retreat;
+ 					CharSequence text = ¤¤RetreatD;
+ 					new MessageText(title, text).send();
+-					for (InvasionListener ll : InvasionListener.all) {
++					if (!sosdet.Hooks.invasionTell(sosdet.Hooks.TELL_WEIRDNESS, 0, 0, spec.ref)) for (InvasionListener ll : InvasionListener.all) { // SOSDET: the world's listeners hear it in the city's next report (B4, ADR 0005)
+ 						ll.weirdness(spec.ref);
+ 					}
+ 					return false;
 @@ -349,7 +349,7 @@
  					state = STATE.DONE;
  				}
@@ -10,9 +49,33 @@ diff -ru -U2 a/settlement/battle/invasion/Invasion.java b/settlement/battle/inva
  			resolve(true);
  			return false;
  		}else if (GAME.ARMIES().enemy().men() > 0){
+@@ -379,12 +379,12 @@
+ 		int pLosses = STATS.POP().COUNT.leaves().get(CAUSE_LEAVES.SLAYED().index()).statistics(HCLASSES.CITIZEN()).get(null)-this.pLosses;
+ 		
+ 		if (victory) {
+-			for (InvasionListener ll : InvasionListener.all) {
++			if (!sosdet.Hooks.invasionTell(sosdet.Hooks.TELL_VICTORY, pLosses, eDeaths, spec.ref)) for (InvasionListener ll : InvasionListener.all) { // SOSDET: the world's listeners hear it in the city's next report (B4, ADR 0005)
+ 				ll.victory(pLosses, eDeaths, spec.ref);
+ 			}
+ 			GAME.count().INVASIONS_WON.inc(1);
+ 		}else {
+-			for (InvasionListener ll : InvasionListener.all) {
++			if (!sosdet.Hooks.invasionTell(sosdet.Hooks.TELL_DEFEAT, pLosses, eDeaths, spec.ref)) for (InvasionListener ll : InvasionListener.all) { // SOSDET: the world's listeners hear it in the city's next report (B4, ADR 0005)
+ 				ll.defeat(pLosses, eDeaths, spec.ref);
+ 			}
+ 			GAME.count().INVASIONS_LOST.inc(1);
+@@ -432,7 +432,7 @@
+ 			
+ 			m.paragraph(Str.TMP.clear().add(¤¤LooseDFaction).insert(0, f.name));
+ 			
+-			ROPINION.STANCE().setNewStance(f, DIP.VASSAL(), false);
++			if (!sosdet.Hooks.vassal(f)) ROPINION.STANCE().setNewStance(f, DIP.VASSAL(), false); // SOSDET: the world part makes the player vassal (B4, ADR 0005)
+ 			
+ 		}
+ 		
 diff -ru -U2 a/view/world/ui/battle/BattleAssist.java b/view/world/ui/battle/BattleAssist.java
 --- a/view/world/ui/battle/BattleAssist.java	2025-09-12 16:10:28.000000000 +0500
-+++ b/view/world/ui/battle/BattleAssist.java	2026-10-23 16:21:50.177212200 +0500
++++ b/view/world/ui/battle/BattleAssist.java	2026-10-23 23:09:52.107603300 +0500
 @@ -44,6 +44,8 @@
  		bb = new Butt(UI.icons().s.sword, ¤¤Command) {
  			@Override
@@ -42,7 +105,7 @@ diff -ru -U2 a/view/world/ui/battle/BattleAssist.java b/view/world/ui/battle/Bat
  			}
 diff -ru -U2 a/view/world/ui/battle/BattleBattle.java b/view/world/ui/battle/BattleBattle.java
 --- a/view/world/ui/battle/BattleBattle.java	2026-01-08 07:48:44.000000000 +0500
-+++ b/view/world/ui/battle/BattleBattle.java	2026-10-23 16:21:50.177212200 +0500
++++ b/view/world/ui/battle/BattleBattle.java	2026-10-23 23:09:52.109604500 +0500
 @@ -44,6 +44,8 @@
  		bb = new Butt(UI.icons().s.sword, ¤¤Command) {
  			@Override
@@ -72,7 +135,7 @@ diff -ru -U2 a/view/world/ui/battle/BattleBattle.java b/view/world/ui/battle/Bat
  			}
 diff -ru -U2 a/view/world/ui/battle/BattleLastStand.java b/view/world/ui/battle/BattleLastStand.java
 --- a/view/world/ui/battle/BattleLastStand.java	2025-09-12 16:09:02.000000000 +0500
-+++ b/view/world/ui/battle/BattleLastStand.java	2026-10-23 16:21:50.178212500 +0500
++++ b/view/world/ui/battle/BattleLastStand.java	2026-10-23 23:09:52.113104900 +0500
 @@ -54,6 +54,8 @@
  		bb = new Butt(UI.icons().s.sword, ¤¤Command) {
  			@Override
@@ -93,7 +156,7 @@ diff -ru -U2 a/view/world/ui/battle/BattleLastStand.java b/view/world/ui/battle/
  			}
 diff -ru -U2 a/view/world/ui/battle/BattleSally.java b/view/world/ui/battle/BattleSally.java
 --- a/view/world/ui/battle/BattleSally.java	2026-01-12 14:19:00.000000000 +0500
-+++ b/view/world/ui/battle/BattleSally.java	2026-10-23 16:21:50.178212500 +0500
++++ b/view/world/ui/battle/BattleSally.java	2026-10-23 23:09:52.116604900 +0500
 @@ -54,6 +54,8 @@
  		bb = new Butt(UI.icons().s.sword, ¤¤Command) {
  			@Override
@@ -123,7 +186,7 @@ diff -ru -U2 a/view/world/ui/battle/BattleSally.java b/view/world/ui/battle/Batt
  			}
 diff -ru -U2 a/view/world/ui/battle/BattleSiege.java b/view/world/ui/battle/BattleSiege.java
 --- a/view/world/ui/battle/BattleSiege.java	2025-09-22 07:59:26.000000000 +0500
-+++ b/view/world/ui/battle/BattleSiege.java	2026-10-23 16:21:50.178212500 +0500
++++ b/view/world/ui/battle/BattleSiege.java	2026-10-23 23:09:52.118106500 +0500
 @@ -110,6 +110,8 @@
  			
  			@Override
@@ -153,7 +216,7 @@ diff -ru -U2 a/view/world/ui/battle/BattleSiege.java b/view/world/ui/battle/Batt
  			}
 diff -ru -U2 a/view/world/ui/battle/Conquer.java b/view/world/ui/battle/Conquer.java
 --- a/view/world/ui/battle/Conquer.java	2026-06-17 10:48:04.000000000 +0500
-+++ b/view/world/ui/battle/Conquer.java	2026-10-23 16:21:50.179213100 +0500
++++ b/view/world/ui/battle/Conquer.java	2026-10-23 23:09:52.119604500 +0500
 @@ -168,6 +168,8 @@
  				
  				@Override
@@ -183,7 +246,7 @@ diff -ru -U2 a/view/world/ui/battle/Conquer.java b/view/world/ui/battle/Conquer.
  					AD.stats().mercy().incD(FACTIONS.player(), mercy());
 diff -ru -U2 a/view/world/ui/battle/Res.java b/view/world/ui/battle/Res.java
 --- a/view/world/ui/battle/Res.java	2026-06-25 10:22:22.000000000 +0500
-+++ b/view/world/ui/battle/Res.java	2026-10-23 16:21:50.179213100 +0500
++++ b/view/world/ui/battle/Res.java	2026-10-23 23:09:52.121101900 +0500
 @@ -115,6 +115,10 @@
  			
  			@Override
@@ -197,7 +260,7 @@ diff -ru -U2 a/view/world/ui/battle/Res.java b/view/world/ui/battle/Res.java
  					AD.stats().mercy().incD(FACTIONS.player(), slaves.mercy());
 diff -ru -U2 a/view/world/ui/battle/UIWBattlePrompt.java b/view/world/ui/battle/UIWBattlePrompt.java
 --- a/view/world/ui/battle/UIWBattlePrompt.java	2026-01-12 14:21:48.000000000 +0500
-+++ b/view/world/ui/battle/UIWBattlePrompt.java	2026-10-23 16:21:50.180245900 +0500
++++ b/view/world/ui/battle/UIWBattlePrompt.java	2026-10-23 23:09:52.124605400 +0500
 @@ -58,6 +58,7 @@
  		b.get(battle);
  		
@@ -237,7 +300,7 @@ diff -ru -U2 a/view/world/ui/battle/UIWBattlePrompt.java b/view/world/ui/battle/
  
 diff -ru -U2 a/world/entity/army/WArmyState.java b/world/entity/army/WArmyState.java
 --- a/world/entity/army/WArmyState.java	2026-06-08 21:03:50.000000000 +0500
-+++ b/world/entity/army/WArmyState.java	2026-10-23 16:21:50.183213000 +0500
++++ b/world/entity/army/WArmyState.java	2026-10-23 23:09:52.126104800 +0500
 @@ -364,7 +364,7 @@
  				if (a.faction() == FACTIONS.player() && reg.faction() != a.faction() && !DIP.WAR().is(reg.faction(), a.faction()) && reg.faction() != null) {
  					aReg = reg;

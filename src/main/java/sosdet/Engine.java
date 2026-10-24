@@ -7,7 +7,10 @@ import java.nio.file.Path;
 
 import sosdet.game.GameAi;
 import sosdet.game.GameResync;
+import sosdet.game.GameWorldLoad;
+import sosdet.report.CityReport;
 import sosdet.hash.Desync;
+import sosdet.report.Shape;
 
 /**
  * The engine's API for the mod and the test rig (requirements §3). The patched game calls {@link Hooks}.
@@ -135,6 +138,7 @@ public final class Engine {
      */
     public static byte[] resyncSave(Path file) {
         Session s = required();
+        refuseOwnCity(s, "resyncSave");
         if (s.streams.inStep()) {
             throw new IllegalStateException("SOSDET: a resync is saved between steps, not inside one");
         }
@@ -163,6 +167,7 @@ public final class Engine {
      */
     public static void resyncLoad(Path file, byte[] state, Runnable afterSet) {
         Session s = required();
+        refuseOwnCity(s, "resyncLoad");
         Resync r = Resync.fromBytes(state);
         if (r.hashInterval != s.hashes.interval()) {
             throw new IllegalStateException("SOSDET: the host hashes every " + r.hashInterval + " steps, this PC every "
@@ -170,6 +175,121 @@ public final class Engine {
         }
         s.resync = r; // taken up when the load begins (Hooks.loadBegin)
         GameResync.load(file, afterSet, r.game);
+    }
+
+    private static void refuseOwnCity(Session s, String call) {
+        if (s.ownCity) {
+            throw new IllegalStateException("SOSDET: " + call + " reloads the whole game, this PC's city too; in own-city"
+                    + " mode use worldResyncSave and worldResyncLoad");
+        }
+    }
+
+    // ------------------------------------------------------------ own city (ADR 0005 §1, §5, §6; SOS-38)
+
+    /**
+     * Own-city mode: this PC's city is its own, and only the world is lockstep. Its city commands apply on this PC
+     * only, its city part draws from its own stream, its reports go out through {@link #reportsOut}, and the hash
+     * compares the world, the report the world reads, and the world part's draws. Set it at step 0, on every PC,
+     * after {@link #localPc}. Off by default: co-op, every PC runs the same city.
+     */
+    public static void ownCity() {
+        Session s = required();
+        if (s.clock.step() != 0) {
+            throw new IllegalStateException("SOSDET: own-city mode is set before the run (step " + s.clock.step() + ")");
+        }
+        s.ownCity = true;
+        s.hashes.worldOnly(true);
+        s.streams.traceWorldOnly = true;
+    }
+
+    /** Own-city mode: this PC's city reports taken since the last call, for the mod to send to every other PC. */
+    public static byte[] reportsOut() {
+        Session s = required();
+        if (!s.ownCity) {
+            throw new IllegalStateException("SOSDET: reportsOut in co-op; every PC takes the same reports itself");
+        }
+        return s.reportFeed.drain();
+    }
+
+    /**
+     * Own-city mode: the world part reads PC {@code pc}'s city instead of this PC's own, from the reports that come in
+     * through {@link #reportsIn}. The engine keeps the save's single player faction, so this is SOS-38's follower: a
+     * PC whose own city differs runs the world from another PC's reports, and must get the same world. It waits at
+     * each step for the report that step reads. Several cities in one world are the mod's work (plan 0002, decision 4).
+     */
+    public static void reportsFrom(int pc) {
+        Session s = required();
+        if (!s.ownCity) {
+            throw new IllegalStateException("SOSDET: reportsFrom needs own-city mode");
+        }
+        if (pc < 0 || pc == s.ai().localPc()) {
+            throw new IllegalArgumentException("SOSDET: reports from PC " + pc + " (this PC is " + s.ai().localPc() + ")");
+        }
+        s.reportsFrom = pc;
+    }
+
+    /** More of PC {@code pc}'s reports, in any pieces; a repeated report changes nothing. Feed them after the load. */
+    public static void reportsIn(int pc, byte[] bytes) {
+        Session s = required();
+        if (pc != s.reportsFrom) {
+            throw new IllegalArgumentException("SOSDET: reports from PC " + pc + ", the world reads PC " + s.reportsFrom
+                    + "'s city");
+        }
+        for (byte[] r : s.reportFeed.read(bytes)) {
+            s.reportReceived(CityReport.fromBytes(r, s.city().layout()));
+        }
+    }
+
+    /**
+     * Host, own-city mode, between steps: saves the world's sections to {@code file} for a world resync at the
+     * current step ({@link GameWorldLoad#save}), and
+     * returns the engine's world state at that step; then holds there. Every PC, the host included, then loads it with
+     * {@link #worldResyncLoad}: only the world reloads, and every city goes on.
+     */
+    public static byte[] worldResyncSave(Path file) {
+        Session s = required();
+        if (!s.ownCity) {
+            throw new IllegalStateException("SOSDET: a world resync is for own-city mode; co-op uses resyncSave");
+        }
+        if (s.streams.inStep()) {
+            throw new IllegalStateException("SOSDET: a world resync is saved between steps, not inside one");
+        }
+        long step = s.clock.step();
+        GameWorldLoad.save(file);
+        s.clock.runUntil(step); // the host waits for its own load too
+        return new WorldResync(step, s.hashes.epoch() + 1, s.streams.worldDraws(), s.reports.ledgerOut()).toBytes();
+    }
+
+    /**
+     * Every PC, the host included, between steps at the resync step: loads the world's sections of the host's save
+     * ({@link GameWorldLoad#KEYS}) into the running game, keeping this PC's city, and continues with the host's world
+     * state, holding until {@link #runUntil}. Hashes from before the resync are no longer compared.
+     */
+    public static void worldResyncLoad(Path file, byte[] state) {
+        Session s = required();
+        WorldResync r = WorldResync.fromBytes(state);
+        if (s.streams.inStep()) {
+            throw new IllegalStateException("SOSDET: a world resync is loaded between steps, not inside one");
+        }
+        if (s.clock.step() != r.step) {
+            throw new IllegalStateException("SOSDET: a world resync for step " + r.step + " loaded at step " + s.clock.step());
+        }
+        Path scratch;
+        try {
+            scratch = java.nio.file.Files.createTempFile("sosdet-city", ".bin");
+        } catch (java.io.IOException e) {
+            throw new IllegalStateException("SOSDET: no scratch file for the city's part of the player faction", e);
+        }
+        s.worldLoading = true;
+        try {
+            GameWorldLoad.load(file, scratch);
+        } finally {
+            s.worldLoading = false;
+        }
+        s.streams.worldDraws(r.worldDraws);
+        s.reports.ledgerIn(r.ledger);
+        s.hashes.rewind(r.step, r.hashEpoch);
+        s.clock.runUntil(r.step);
     }
 
     // ------------------------------------------------------------ the AI general (requirements §3)
@@ -271,6 +391,16 @@ public final class Engine {
         required().hashes.in(pc, bytes);
     }
 
+    /**
+     * How far another PC has got: the last step its hashes ({@link #hashIn}) have reached, or -1 before the first (and
+     * before this PC's own first hash, one hash interval in). The
+     * host paces the game by it (mod spec §4: the slowest PC caps the speed): it lets itself {@link #runUntil} the
+     * slowest PC's step plus a lead the mod chooses, at least one hash interval.
+     */
+    public static long peerStep(int pc) {
+        return required().hashes.reached(pc);
+    }
+
     /** The first desync found, or null. */
     public static Desync desync() {
         return required().hashes.desync();
@@ -334,7 +464,10 @@ public final class Engine {
                 s.ai().applied(AiEntry.ARTILLERY), s.ai().pending(), s.ai().appliedOrders(), s.ai().applied(AiEntry.COMMAND),
                 s.ai().commandsSkipped(), s.clock.agreedSpeed(),
                 s.hashes.taken(), s.hashes.meanMs(), s.hashes.maxMs(),
-                s.hashes.compared(), s.hashes.missed());
+                s.hashes.compared(), s.hashes.missed(), s.reportsTaken, s.reportNanos, s.reportBytes, s.reportMaxBytes,
+                s.reportMisses, s.city == null ? 0 : s.city.layout().count(Shape.BOOST),
+                s.city == null ? 0 : s.city.layout().count(Shape.VALUE), s.txns.applied(), s.txns.skipped(),
+                s.txns.maxInStep(), s.inputsSent, s.reportsReceived);
     }
 
     public static void resetStats() {

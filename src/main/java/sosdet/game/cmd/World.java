@@ -7,21 +7,16 @@ import game.battle.div.Div;
 import game.battle.util.DIV_SPEC.DIV_SPECE;
 import game.faction.FACTIONS;
 import game.faction.FCredits.CTYPE;
-import game.faction.FResources.RTYPE;
 import game.faction.Faction;
 import game.faction.diplomacy.DIP;
 import game.faction.npc.FactionNPC;
 import game.faction.royalty.opinion.ROPINION;
 import init.constant.Config;
 import init.race.Race;
-import init.resources.RESOURCES;
-import init.resources.ResSupply;
-import settlement.main.SETT;
 import settlement.stats.STATS;
 import settlement.stats.colls.StatsBattle.StatTraining;
 import settlement.stats.equip.EquipBattle;
 import snake2d.util.datatypes.COORDINATE;
-import snake2d.util.misc.CLAMP;
 import sosdet.Hooks;
 import sosdet.ai.CmdReader;
 import sosdet.ai.CmdWriter;
@@ -650,16 +645,9 @@ public final class World {
         }
         WDivRegional d = AD.regional().create(race, (double) men / Config.battle().MEN_PER_DIVISION, a);
         d.bannerSet(banner);
-        for (ResSupply s : RESOURCES.SUP().ALL) {
-            if (s.health <= 0) {
-                continue;
-            }
-            int am = s.amount(race, men);
-            am = CLAMP.i(am, 0, SETT.ROOMS().STOCKPILE.tally().amountReservable.get(s.resource));
-            if (am > 0) {
-                s.resource.remove(am, RTYPE.ARMY_SUPPLY);
-                AD.supplies().get(s).current().inc(a, am);
-            }
+        // The city's stockpiles give the supplies in the step's city tail, and its next report brings them (ADR 0005)
+        if (!Hooks.armySupplies(a, race, men)) {
+            throw new IllegalStateException("SOSDET: a recruit command applied outside the world part");
         }
         for (int i = 0; i < training.length; i++) {
             d.target.trainingSet(STATS.BATTLE().TRAINING_ALL.get(i), training[i]);

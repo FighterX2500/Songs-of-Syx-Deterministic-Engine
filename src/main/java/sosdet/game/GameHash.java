@@ -9,6 +9,7 @@ import game.battle.setting.DivSettings;
 import game.faction.FACTIONS;
 import game.faction.Faction;
 import game.faction.diplomacy.DIP;
+import game.raiding.Raider;
 import settlement.entity.ENTITY;
 import settlement.entity.humanoid.Humanoid;
 import settlement.main.SETT;
@@ -18,6 +19,7 @@ import sosdet.Hooks;
 import sosdet.hash.HashLog;
 import sosdet.hash.StateSource;
 import world.WORLD;
+import world.entity.WEntity;
 import world.army.AD;
 import world.entity.army.WArmy;
 import world.map.regions.Region;
@@ -107,8 +109,13 @@ public final class GameHash implements StateSource {
         sections[HashLog.WORLD] = worldHash();
     }
 
-    /** The world map: every army's slot, faction, tile, state and men; every region's owner; every faction's credits and wars. */
-    private static long worldHash() {
+    /**
+     * The world map: every army's slot, faction, tile, state and men; every world entity; every region's owner; every
+     * faction's credits and wars; every raider's power, defeat and raids, and the raider now raiding. In own-city mode
+     * the player's credits are the city's and are left out (ADR 0005).
+     * Public for the rig's per-step log of a follower run.
+     */
+    public static long worldHash() {
         long h = HashLog.start();
         for (int i = 0; i < WORLD.ENTITIES().armies.max(); i++) {
             WArmy a = WORLD.ENTITIES().armies.get(i);
@@ -123,19 +130,46 @@ public final class GameHash implements StateSource {
             h = HashLog.mix(h, a.state().index());
             h = HashLog.mix(h, AD.men(null).get(a));
         }
+        h = entitiesHash(h, WORLD.ENTITIES().allFast());
+        h = entitiesHash(h, WORLD.ENTITIES().allSlow());
         LIST<Region> regions = WORLD.REGIONS().all();
         for (int i = 0; i < regions.size(); i++) {
             Faction f = regions.get(i).faction();
             h = HashLog.mix(h, f == null ? -1 : f.index());
         }
         LIST<Faction> factions = FACTIONS.active();
+        boolean ownCity = Hooks.ownCity();
         for (int i = 0; i < factions.size(); i++) {
             Faction f = factions.get(i);
             h = HashLog.mix(h, f.index());
-            h = HashLog.mix(h, Double.doubleToLongBits(f.credits().getD()));
+            if (!ownCity || f != FACTIONS.player()) {
+                h = HashLog.mix(h, Double.doubleToLongBits(f.credits().getD()));
+            }
             for (int k = i + 1; k < factions.size(); k++) {
                 h = HashLog.mix(h, DIP.WAR().is(f, factions.get(k)) ? 1 : 0);
             }
+        }
+        LIST<Raider> raiders = GAME.raiders().ALL();
+        for (int i = 0; i < raiders.size(); i++) {
+            Raider r = raiders.get(i);
+            h = HashLog.mix(h, r.army.power);
+            h = HashLog.mix(h, r.defeated ? 1 : 0);
+            h = HashLog.mix(h, r.raids);
+        }
+        Raider current = GAME.raiders().current.current();
+        h = HashLog.mix(h, current == null ? -1 : current.army.power);
+        return h;
+    }
+
+    /** Every world entity, caravans and camps too: its slot, kind, tile and faction (SOS-38). */
+    private static long entitiesHash(long h, LIST<WEntity> ents) {
+        h = HashLog.mix(h, ents.size());
+        for (int i = 0; i < ents.size(); i++) {
+            WEntity e = ents.get(i);
+            h = HashLog.mix(h, e.getClass().getName().hashCode());
+            h = HashLog.mix(h, e.body().x1());
+            h = HashLog.mix(h, e.body().y1());
+            h = HashLog.mix(h, e.faction() == null ? -1 : e.faction().index());
         }
         return h;
     }

@@ -29,18 +29,22 @@ public final class HashLog {
     public static final int DIVISIONS = 2;
     public static final int PROJECTILES = 3;
     public static final int ENTITIES = 4;
-    /** The world map: armies, region owners, faction credits and wars (SOS-35). */
+    /** The world map: armies, region owners, faction credits and wars (SOS-35), the raiders (SOS-38). */
     public static final int WORLD = 5;
-    public static final int SECTIONS = 6;
-    static final String[] SECTION_NAMES = {"clock", "soldiers", "divisions", "projectiles", "entities", "world"};
+    /** The city report the world part reads (ADR 0005 §2, SOS-38). */
+    public static final int REPORT = 6;
+    public static final int SECTIONS = 7;
+    static final String[] SECTION_NAMES = {"clock", "soldiers", "divisions", "projectiles", "entities", "world",
+            "report"};
 
-    static final int FORMAT_VERSION = 3;
+    static final int FORMAT_VERSION = 5;
     static final int MAGIC = 0x53444853; // "SDHS"
     static final int HEADER_BYTES = 4 * 5;
     static final long FNV_OFFSET = 0xcbf29ce484222325L;
     private static final long FNV_PRIME = 0x100000001b3L;
 
     private int interval = DEFAULT_INTERVAL;
+    private boolean worldOnly;
     private int divisions = -1;
     // the ring, allocated at the first hash
     private long[] steps;
@@ -99,12 +103,23 @@ public final class HashLog {
         return interval;
     }
 
+    /**
+     * Own-city mode (ADR 0005 §1): each PC's city is its own, so the city's sections (soldiers, divisions,
+     * projectiles, entities) are left out, and every PC compares the world, the report and the clock only.
+     */
+    public void worldOnly(boolean on) {
+        worldOnly = on;
+    }
+
     public boolean due(long step) {
         return step > 0 && step % interval == 0;
     }
 
-    /** Hashes the state at the end of {@code step}; {@code clock} is the engine's own counters, already mixed. */
-    public void take(long step, long clock, StateSource source) {
+    /**
+     * Hashes the state at the end of {@code step}; {@code clock} is the engine's own counters, already mixed, and
+     * {@code report} the city report in force.
+     */
+    public void take(long step, long clock, long report, StateSource source) {
         long t0 = System.nanoTime();
         if (steps == null) {
             allocate(source.divisions());
@@ -114,7 +129,14 @@ public final class HashLog {
         long[] div = divisionHashes[slot];
         Arrays.fill(div, FNV_OFFSET);
         sec[CLOCK] = clock;
+        sec[REPORT] = report;
         source.hash(sec, div);
+        if (worldOnly) {
+            Arrays.fill(div, FNV_OFFSET);
+            sec[DIVISIONS] = 0;
+            sec[PROJECTILES] = 0;
+            sec[ENTITIES] = 0;
+        }
         long soldiers = FNV_OFFSET;
         for (long d : div) {
             soldiers = mix(soldiers, d);
@@ -221,6 +243,7 @@ public final class HashLog {
     private void drain(Remote r) {
         long[] rec;
         while ((rec = r.next()) != null) {
+            r.reached = Math.max(r.reached, rec[0]);
             if (rec[1] < epoch) {
                 continue; // taken before the last resync
             }
@@ -230,6 +253,16 @@ public final class HashLog {
                 compare(r.pc, rec);
             }
         }
+    }
+
+    /** The last step another PC's hashes have reached, or -1 before its first or before this PC's own first hash. */
+    public long reached(int pc) {
+        for (int i = 0; i < remotes.size(); i++) {
+            if (remotes.get(i).pc == pc) {
+                return remotes.get(i).reached;
+            }
+        }
+        return -1;
     }
 
     private Remote remote(int pc) {
@@ -284,6 +317,7 @@ public final class HashLog {
         boolean headerRead;
         int theirDivisions;
         final ArrayDeque<long[]> waiting = new ArrayDeque<>();
+        long reached = -1;
 
         Remote(int pc) {
             this.pc = pc;

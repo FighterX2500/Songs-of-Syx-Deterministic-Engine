@@ -21,6 +21,9 @@ final class Streams {
     private long simulationDraws;
     /** Simulation draws since the last load; part of the state hash, so never reset by {@link #resetCounts()}. */
     private long drawsSinceLoad;
+    /** The world part's draws since the last load: the own-city mode's hash counts only these (ADR 0005, SOS-38). */
+    private long worldDraws;
+    private boolean worldPart;
     /** Draws by other threads during a step. Diagnostic only; counted without synchronisation. */
     private long foreignDraws;
     /** The seed the simulation's generator takes before its next draw (set at every step's start). */
@@ -28,6 +31,8 @@ final class Streams {
     private boolean reseed;
     /** Debugging: where every simulation draw comes from; null when off. */
     DrawTrace trace;
+    /** Own-city mode: the trace keeps the world part's draws only, as the hash counts them (each city's are its own). */
+    boolean traceWorldOnly;
 
     Random pick(Random simulation) {
         if (!inStep || cosmeticDepth > 0) {
@@ -43,7 +48,10 @@ final class Streams {
         }
         simulationDraws++;
         drawsSinceLoad++;
-        if (trace != null) {
+        if (worldPart) {
+            worldDraws++;
+        }
+        if (trace != null && (worldPart || !traceWorldOnly)) {
             trace.draw();
         }
         return simulation;
@@ -105,6 +113,21 @@ final class Streams {
 
     void loaded() {
         drawsSinceLoad = 0;
+        worldDraws = 0;
+    }
+
+    /** The step's world part begins (true) or ends (false); the city tail's draws are the city's. */
+    void worldPart(boolean in) {
+        worldPart = in;
+    }
+
+    long worldDraws() {
+        return worldDraws;
+    }
+
+    /** A world resync: the count the host had at the resync step. */
+    void worldDraws(long draws) {
+        worldDraws = draws;
     }
 
     /** A resync: the count the host had at the resync step. */

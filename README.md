@@ -55,7 +55,7 @@ The first build downloads Gradle, ECJ 3.40.0 and JUnit. The result is the mod fo
 | Command | What it does |
 | --- | --- |
 | `gradlew.bat assemble` | Builds the mod folder only |
-| `gradlew.bat releaseZip` | Packs the mod folder and the release notes into `buildelease\SOSDET-<version>.zip` |
+| `gradlew.bat releaseZip` | Packs the mod folder and the release notes into `build\release\SOSDET-<version>.zip` |
 | `gradlew.bat compileJava compileTestJava` | Fast check |
 | `gradlew.bat test` | Tests |
 | `gradlew.bat check` | Tests and the byte-for-byte checks |

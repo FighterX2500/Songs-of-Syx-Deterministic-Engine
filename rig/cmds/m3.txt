@@ -1,0 +1,18 @@
+# Stage E milestone 3 (SOS-38): the city<->world transactions, through the UI's own calls.
+# Every copy runs the same city, so every copy's transactions and report inputs must match.
+# 1. C1 two-phase, B2: city division 0 sent out to army 0; the city tail takes its supplies from the stockpiles
+#    (ARMY_SUPPLY_DIV), and its soldiers leave for the army as report inputs (B1)
+wattach 0 0
+# the soldiers walk to the map's edge first; a recall before they reach it sends none (the first M3 runs: 30 s was
+# too short in one, enough for a few in another)
+wait 90
+# 2. C4: the division recalled; its soldiers come home through the entry in the city tail (SOLDIER_RETURNS)
+wrecall 0
+wait 30
+# 3. C1: a recruit in the realm for army 0 (a world command, applied in the world part); supplies in the city tail
+#    (ARMY_SUPPLY_RECRUIT)
+wrecruit 0 0
+wait 10
+# 4. C3: denari given to an NPC (a world command): the credits leave the city in the city tail (CREDITS)
+wgift 100
+wait 10

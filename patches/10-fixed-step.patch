@@ -1,6 +1,6 @@
 diff -ru -U2 a/game/GAME.java b/game/GAME.java
 --- a/game/GAME.java	2026-06-17 19:41:18.000000000 +0500
-+++ b/game/GAME.java	2026-10-23 18:32:14.942051900 +0500
++++ b/game/GAME.java	2026-10-23 21:10:05.037823700 +0500
 @@ -255,7 +255,9 @@
  		double speed = SPEED.update(slowDown);
  		
@@ -12,7 +12,7 @@ diff -ru -U2 a/game/GAME.java b/game/GAME.java
  			for (GameResource s : GameResource.all) {
  				if (s.isBattle || !VIEW.b().isActive())
  					s.update(0, game.profiler);
-@@ -263,16 +265,45 @@
+@@ -263,16 +265,53 @@
  			game.updateI++;
  		}else {
  			ds *= speed;
@@ -29,6 +29,9 @@ diff -ru -U2 a/game/GAME.java b/game/GAME.java
 +			}
  			
  			for (int i = 0; i < fulls; i++){
+-				for (GameResource s : GameResource.all) {
+-					if (s.isBattle|| !VIEW.b().isActive())
+-						s.update(max, game.profiler);
 +				if (sosdet.Hooks.fixedSteps()) {
 +					game.updateI++; // SOSDET: counted as the step starts, before its commands apply: between steps the UI sees
 +					// the tick just run, so a tick-keyed cache the simulation filled is only read, and one the UI fills is
@@ -37,21 +40,28 @@ diff -ru -U2 a/game/GAME.java b/game/GAME.java
 +						game.updateI--; // no step ran
 +						break;
 +					}
-+				}
+ 				}
+-				game.updateI++;
 +				boolean battleView = VIEW.b().isActive(); // SOSDET: inside the step the same on every PC (VIEW patch, SOS-32)
 +				if (sosdet.Hooks.fixedSteps()) {
 +					max = (float) sosdet.Hooks.stepSeconds(); // SOSDET: a speed change from the log takes effect at its step (B16)
++					for (int part = 0; part < 2; part++) {
++						sosdet.Hooks.stepPart(part); // SOSDET: the city part, then the world part on a stream of its own (ADR 0005)
++						for (GameResource s : GameResource.all) {
++							if (sosdet.Hooks.afterTickIn(s, part) && (s.isBattle|| (!battleView && !sosdet.Hooks.worldHeld())))
++								s.afterTick(); // SOSDET: once per step, not per rendered frame: it does simulation work (B7)
++						}
++						for (GameResource s : GameResource.all) {
++							if (sosdet.Hooks.updatesIn(s, part) && (s.isBattle|| (!battleView && !sosdet.Hooks.worldHeld())))
++								s.update(max, game.profiler);
++						}
++					}
++				}else {
 +					for (GameResource s : GameResource.all) {
-+						if (s.isBattle|| (!battleView && !sosdet.Hooks.worldHeld()))
-+							s.afterTick(); // SOSDET: once per step, not per rendered frame: it does simulation work (B7)
++						if (s.isBattle|| !VIEW.b().isActive())
++							s.update(max, game.profiler);
 +					}
 +				}
- 				for (GameResource s : GameResource.all) {
--					if (s.isBattle|| !VIEW.b().isActive())
-+					if (s.isBattle|| (!battleView && !sosdet.Hooks.worldHeld()))
- 						s.update(max, game.profiler);
- 				}
--				game.updateI++;
 +				if (sosdet.Hooks.battleStateInStep() && battleView && VIEW.b().state() != null)
 +					VIEW.b().state().update(max);
 +				if (sosdet.Hooks.fixedSteps())
@@ -61,7 +71,7 @@ diff -ru -U2 a/game/GAME.java b/game/GAME.java
  			}
  			
  			if (last > 0) {
-@@ -289,11 +320,14 @@
+@@ -289,11 +328,14 @@
  		
  		game.profiler.logEnd(game);
  		game.profiler.log();
@@ -77,7 +87,7 @@ diff -ru -U2 a/game/GAME.java b/game/GAME.java
  		for (GameResource s : GameResource.all) {
  			s.afterTick();
  		}
-@@ -410,6 +444,10 @@
+@@ -410,6 +452,10 @@
  	}
  	
  	public static void Error(String s) {
@@ -88,7 +98,7 @@ diff -ru -U2 a/game/GAME.java b/game/GAME.java
  	    if (S.get().developer || S.get().debug) {
  	    	Warn(s);
  	    }else {
-@@ -419,6 +457,10 @@
+@@ -419,6 +465,10 @@
  	}
  	
  	public static void Warn(String s) {
@@ -99,7 +109,7 @@ diff -ru -U2 a/game/GAME.java b/game/GAME.java
  	    if (S.get().developer || S.get().debug) {
  	    	SPEED.speedSet(0);
  	    	LOG.err("SYX WARNING: " + s);
-@@ -504,7 +546,7 @@
+@@ -504,7 +554,7 @@
  		}
  		
  		public boolean shouldAndReset() {
@@ -110,7 +120,7 @@ diff -ru -U2 a/game/GAME.java b/game/GAME.java
  			}
 diff -ru -U2 a/view/battle/BattleView.java b/view/battle/BattleView.java
 --- a/view/battle/BattleView.java	2025-11-19 14:24:46.000000000 +0500
-+++ b/view/battle/BattleView.java	2026-10-23 18:32:14.940056200 +0500
++++ b/view/battle/BattleView.java	2026-10-23 21:10:05.035303000 +0500
 @@ -109,7 +109,7 @@
  	@Override
  	protected boolean update(float ds, boolean should){

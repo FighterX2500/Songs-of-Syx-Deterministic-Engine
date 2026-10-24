@@ -24,7 +24,7 @@ A short map for an AI agent (or a person) about to change SOSDET. Read it first,
    - Battle jobs run inside the step, not on their threads (patch `30`).
    - Path jobs queued in the step run at its end, before the hash: share 0 on the simulation thread, shares 1 and 2 on path threads, job i always on share i % 3 (patch `35`, `PathWorkers`).
    - The host's AI general keeps its own thread, but writes only to the log (patch `90`).
-5. **`Hooks.stepEnd`:** every 30 steps the state hash ([`GameHash`](../src/main/java/sosdet/game/GameHash.java), [`HashLog`](../src/main/java/sosdet/hash/HashLog.java)). It has six sections: clock, soldiers, divisions, projectiles, entities and world. Rooms, stock and stats are not hashed, so a split there shows up in the entities a few steps later.
+5. **`Hooks.stepEnd`:** every 30 steps the state hash ([`GameHash`](../src/main/java/sosdet/game/GameHash.java), [`HashLog`](../src/main/java/sosdet/hash/HashLog.java)). It has seven sections: clock, soldiers, divisions, projectiles, entities, world (armies, every world entity, region owners, credits, wars) and report (the city report the world part reads, ADR 0005). Rooms, stock and stats are not hashed, so a split there shows up in the entities a few steps later.
 6. **Between steps** come the UI and rendering. They draw from the cosmetic stream and must never write simulation state (patches `65`, `67`, `98`).
 
 ## Player input: commands

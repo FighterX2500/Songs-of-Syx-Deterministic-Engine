@@ -107,6 +107,21 @@ final class GameCodec {
         return hashEnd(h);
     }
 
+    /** What was written to the putter since {@link #hashBegin}, as bytes. */
+    byte[] written() {
+        return Arrays.copyOfRange(putterBuffer.array(), payloadStart, putterBuffer.position());
+    }
+
+    /** A reader of these bytes, for a game constructor that loads itself from one. */
+    FileGetter reader(byte[] bytes) {
+        try {
+            GETTER_BUFFER.set(getter, ByteBuffer.wrap(bytes));
+        } catch (IllegalAccessException e) {
+            throw new IllegalStateException("SOSDET: cannot point the reader at " + bytes.length + " bytes", e);
+        }
+        return getter;
+    }
+
     void decode(byte[] bytes, SAVABLE into) {
         try {
             GETTER_BUFFER.set(getter, ByteBuffer.wrap(bytes));

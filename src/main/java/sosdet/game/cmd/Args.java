@@ -133,6 +133,11 @@ public final class Args {
     public static WArmy army(CmdReader r) {
         int index = r.i();
         int iteration = r.i();
+        return army(index, iteration);
+    }
+
+    /** The army with this index and iteration; null when it is gone or disbanded since. */
+    public static WArmy army(int index, int iteration) {
         if (index < 0 || index >= WORLD.ENTITIES().armies.max()) {
             return null;
         }

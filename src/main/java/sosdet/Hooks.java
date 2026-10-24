@@ -3,12 +3,35 @@ package sosdet;
 import java.util.Random;
 
 import game.GAME;
+import game.GAME.GameResource;
+import game.boosting.BValue;
+import game.faction.FACTIONS;
+import game.faction.FCredits.CTYPE;
+import game.faction.Faction;
+import game.faction.player.PCredits;
+import init.type.CAUSE_LEAVE;
+import init.type.HCLASS_RACE;
+import init.trade.TRADABLE;
+import init.trade.TRADE_TYPE;
+import init.value.Value;
+import settlement.trade.PBuyer;
+import settlement.entity.humanoid.Humanoid;
+import settlement.stats.Induvidual;
+import settlement.trade.PSeller;
+import snake2d.util.datatypes.COORDINATE;
 import snake2d.util.rnd.RND;
 import sosdet.ai.AiApplier;
 import sosdet.ai.AiMode;
+import sosdet.game.StepParts;
 import sosdet.game.WorldStatics;
 import sosdet.game.cmd.PlanStash;
 import sosdet.hash.HashLog;
+import sosdet.report.CityReport;
+import sosdet.report.Field;
+import sosdet.report.Reports;
+import sosdet.txn.Txn;
+import sosdet.txn.TxnKind;
+import world.entity.army.WArmy;
 
 /**
  * What the engine's patches to the game call (docs/hooks.md). Each hook asks one question or reports one
@@ -96,13 +119,14 @@ public final class Hooks {
 
     /**
      * Starts a step; false when the session may not run further (the frame's other steps are dropped): at its last
-     * step, or as a peer that is already 30 steps past the host's last confirmed step. This PC's room plan is lifted out
+     * step, as a peer that is already 30 steps past the host's last confirmed step, or as a follower whose source's
+     * report for the step has not come in (ADR 0005 §4). This PC's room plan is lifted out
      * of the simulation before the frame's first step (ADR 0003). The AI log entries due at this step are applied
      * first, before anything else runs.
      */
     public static boolean stepBegin() {
         Session s = Engine.session();
-        if (!s.ai().mayRun(s.clock.step() + 1)) {
+        if (!s.ai().mayRun(s.clock.step() + 1) || !s.worldMayRun(s.clock.step() + 1)) {
             s.clock.hold();
             return false;
         }
@@ -112,7 +136,7 @@ public final class Hooks {
         s.plans().lift();
         s.streams.enter();
         // Reseeded every step: the stream depends only on the seed and the step, so a resync needs no random state
-        s.streams.reseed(s.stepSeed(s.clock.step()));
+        s.streams.reseed(s.citySeed(s.clock.step()));
         if (s.streams.trace != null) {
             s.streams.trace.step(s.clock.step());
         }
@@ -131,13 +155,21 @@ public final class Hooks {
             s.pathNanos += System.nanoTime() - start;
             s.pathQueue = null;
         }
+        s.streams.worldPart(false);
+        if (!s.txns.isEmpty()) {
+            s.part = StepParts.CITY; // the city tail: the world part's changes to the city apply (ADR 0005 §3)
+            s.txns.apply(s.txnApplier());
+        }
         if (s.hashes.due(step)) {
-            long clock = HashLog.mix(HashLog.mix(HashLog.mix(HashLog.start(), step), s.streams.drawsSinceLoad()),
-                    s.ai().applied());
-            s.hashes.take(step, clock, s.source());
+            // an own city's draws are its own: the world part's alone are counted (ADR 0005 §1)
+            long draws = s.ownCity ? s.streams.worldDraws() : s.streams.drawsSinceLoad();
+            long clock = HashLog.mix(HashLog.mix(HashLog.mix(HashLog.start(), step), draws), s.ai().applied());
+            CityReport r = s.reports.current();
+            s.hashes.take(step, clock, r == null ? 0 : r.hash(), s.source());
         }
         s.times.record(System.nanoTime() - s.stepStartNanos);
         s.stepStartNanos = 0;
+        s.part = -1;
         s.streams.leave();
     }
 
@@ -155,6 +187,593 @@ public final class Hooks {
     /** True with a session: the battle state updates inside the step, not from the battle view's frame. */
     public static boolean battleStateInStep() {
         return Engine.session() != null;
+    }
+
+    // ------------------------------------------------------------ the step's two parts (ADR 0005, SOS-38)
+
+    /**
+     * The step enters a part: 0 the city part, 1 the world part. Between them, every 30 steps, the city part takes its
+     * report for 30 steps later; the world part then reads the report due now (the first one is taken at once), and
+     * first applies its inputs. The world part takes a random stream of its own, seeded from the seed and the step, so
+     * the city's draws on this PC never shift the world's.
+     */
+    public static void stepPart(int part) {
+        Session s = Engine.session();
+        if (part == StepParts.WORLD_PART) {
+            long step = s.clock.step();
+            if (s.reports.current() == null) {
+                s.takeReport(step, step);
+            }
+            if (Reports.takenAt(step)) {
+                s.takeReport(step, step + Reports.DELAY);
+            }
+            s.part = part;
+            s.streams.reseed(s.worldSeed(step));
+            s.streams.worldPart(true);
+            s.reports.applyDue(step, s.inputApplier());
+            if (s.reports.current() == null) {
+                throw new IllegalStateException("SOSDET: no city report from PC " + s.reportsFrom + " for step " + step);
+            }
+            s.ai().worldPart();
+            return;
+        }
+        s.part = part;
+    }
+
+    /** True in own-city mode (ADR 0005 §1): the hash leaves this PC's city out, the player's credits included. */
+    public static boolean ownCity() {
+        Session s = Engine.session();
+        return s != null && s.ownCity;
+    }
+
+    /** Whether a city command PC {@code pc} gave applies here: always in co-op; an own city's only on its own PC. */
+    public static boolean cityCommandHere(int pc) {
+        Session s = Engine.session();
+        return s == null || !s.ownCity || pc == s.ai().localPc();
+    }
+
+    /** True when the resource updates in this part of the step. */
+    public static boolean updatesIn(GameResource r, int part) {
+        return StepParts.updatesIn(r, part);
+    }
+
+    /** True when the resource's once-per-step work runs at the start of this part. */
+    public static boolean afterTickIn(GameResource r, int part) {
+        return StepParts.afterTickIn(r, part);
+    }
+
+    /** True in a session's city part: a resource that runs in both parts does its city half. */
+    public static boolean cityPart() {
+        Session s = Engine.session();
+        return s != null && s.part == StepParts.CITY;
+    }
+
+    /** True for a resource's city half: in the city part, or always without a session. */
+    public static boolean cityHalf() {
+        Session s = Engine.session();
+        return s == null || s.part == StepParts.CITY;
+    }
+
+    /** True for a resource's world half: in the world part, or always without a session. */
+    public static boolean worldHalf() {
+        Session s = Engine.session();
+        return s == null || s.part == StepParts.WORLD_PART;
+    }
+
+    /** True when the event with this save key runs in the current part (always without a session). */
+    public static boolean eventRuns(String key) {
+        Session s = Engine.session();
+        return s == null || (s.part == StepParts.WORLD_PART) == StepParts.worldEvent(key);
+    }
+
+    /** True when the world part's faction updater runs this faction: not the player's own in a session. */
+    public static boolean worldUpdatesFaction(Object faction) {
+        return Engine.session() == null || StepParts.worldUpdatesFaction(faction);
+    }
+
+    /**
+     * The city part runs the player's own faction update on a clock of its own: the time to pass when one is due
+     * this step ({@code period} of game time since the last), else 0.
+     */
+    public static double playerUpdateDue(double ds, double period) {
+        Session s = Engine.session();
+        s.playerUpdateAcc += ds;
+        if (s.playerUpdateAcc < period) {
+            return 0;
+        }
+        s.playerUpdateAcc -= period;
+        return period;
+    }
+
+    // ------------------------------------------------------------ the city report (ADR 0005 §2, SOS-38)
+
+    /**
+     * True in a session's world part: a city value it reads comes from the city's report, not the live city. Outside
+     * the step (the UI) and in the city part the live city is read.
+     */
+    public static boolean reportRead() {
+        Session s = Engine.session();
+        return s != null && s.part == StepParts.WORLD_PART;
+    }
+
+    public static double reportD(Field f, int i) {
+        return Engine.session().reports.value(f, i);
+    }
+
+    public static double reportD(Field f, int i, int j) {
+        return Engine.session().reports.value(f, i, j);
+    }
+
+    public static int reportI(Field f, int i) {
+        return (int) reportD(f, i);
+    }
+
+    public static int reportI(Field f, int i, int j) {
+        return (int) reportD(f, i, j);
+    }
+
+    public static boolean reportB(Field f, int i) {
+        return reportD(f, i) != 0;
+    }
+
+    /**
+     * In the world part: the player's value of a boost value, from the report. One the report has no slot for (a
+     * booster added after the report's layout was made) is read live and counted in {@link Stats#reportMisses}.
+     */
+    public static double reportBoost(BValue v) {
+        Session s = Engine.session();
+        int i = s.city().indexOf(Field.BOOST, v);
+        if (i >= 0) {
+            return s.reports.current().get(Field.BOOST, i);
+        }
+        s.reportMisses++;
+        return v.vGet(FACTIONS.player());
+    }
+
+    /**
+     * In the world part: a boost value on the city's population class ({@code HCLASS_RACE.clP()}), from the report. As
+     * {@link #reportBoost}, one without a slot is read live and counted in {@link Stats#reportMisses}.
+     */
+    public static double reportBoostClP(BValue v) {
+        Session s = Engine.session();
+        int i = s.city().indexOf(Field.BOOST, v);
+        if (i >= 0) {
+            return s.reports.current().get(Field.BOOST_CLP, i);
+        }
+        s.reportMisses++;
+        return v.vGet(HCLASS_RACE.clP());
+    }
+
+    /** A faction value's value: the player's from the report in the world part, otherwise the game's own. */
+    public static <T> double reportValue(Value<T> v, T t) {
+        if (reportRead() && t == (Object) FACTIONS.player()) {
+            Session s = Engine.session();
+            int i = s.city().indexOf(Field.VALUE, v);
+            if (i >= 0) {
+                return s.reports.current().get(Field.VALUE, i);
+            }
+            s.reportMisses++;
+        }
+        return v.d.getD(t);
+    }
+
+    // ------------------------------------------------------------ transactions (ADR 0005 §3, SOS-38)
+
+    /**
+     * In the world part: a new transaction of this kind, queued for the step's city tail. Null anywhere else: the
+     * caller changes the city at once, as in vanilla (the city part, the tail itself, the UI, no session).
+     */
+    private static Txn toCity(TxnKind kind) {
+        Session s = Engine.session();
+        if (s == null || s.part != StepParts.WORLD_PART) {
+            return null;
+        }
+        Txn t = s.txns.add(s.clock.step());
+        t.kind = kind;
+        return t;
+    }
+
+    /**
+     * {@code PBuyer.addReserve}: true when queued. The world part reads the credits paid and the goods queued at once,
+     * through the report's ledger.
+     */
+    public static boolean buyerReserve(PBuyer b, int amount, TRADE_TYPE type, int price, Faction seller) {
+        Txn t = toCity(TxnKind.BUYER_RESERVE);
+        if (t == null) {
+            return false;
+        }
+        t.a = b;
+        t.b = type;
+        t.c = seller;
+        t.i = amount;
+        t.j = price;
+        Session s = Engine.session();
+        long step = s.clock.step();
+        s.reports.change(step, Field.CREDITS, 0, -price);
+        s.reports.change(step, Field.QUEUED, b.tradable.index(), 0, amount);
+        s.reports.change(step, Field.QUEUED, b.tradable.index(), type.index + 1, amount);
+        return true;
+    }
+
+    /** {@code PBuyer.addDeliver}: true when queued. The goods stay queued, so the ledger has nothing to add. */
+    public static boolean buyerDeliver(PBuyer b, int amount, TRADE_TYPE type) {
+        Txn t = toCity(TxnKind.BUYER_DELIVER);
+        if (t == null) {
+            return false;
+        }
+        t.a = b;
+        t.b = type;
+        t.i = amount;
+        return true;
+    }
+
+    /** {@code PSeller.remove}: true when queued. The world part reads the credits paid and the goods promised at once. */
+    public static boolean sellerRemove(PSeller p, int amount, TRADE_TYPE type, int price, Faction buyer) {
+        Txn t = toCity(TxnKind.SELLER_REMOVE);
+        if (t == null) {
+            return false;
+        }
+        t.a = p;
+        t.b = type;
+        t.c = buyer;
+        t.i = amount;
+        t.j = price;
+        Session s = Engine.session();
+        long step = s.clock.step();
+        s.reports.change(step, Field.CREDITS, 0, price);
+        s.reports.change(step, Field.PROMISED, p.type.index(), 0, amount);
+        s.reports.change(step, Field.PROMISED, p.type.index(), type.index + 1, amount);
+        return true;
+    }
+
+    /** {@code PCredits.inc}: true when queued. The treasury counts whole credits ({@code CredHistory}), as here. */
+    public static boolean credits(PCredits c, double amount, CTYPE type) {
+        Txn t = toCity(TxnKind.CREDITS);
+        if (t == null) {
+            return false;
+        }
+        t.a = c;
+        t.b = type;
+        t.d = amount;
+        Engine.session().reports.change(Engine.session().clock.step(), Field.CREDITS, 0, (int) amount);
+        return true;
+    }
+
+    /** {@code PCredits.inc} for traded goods: true when queued. */
+    public static boolean credits(PCredits c, double amount, CTYPE type, TRADABLE res, int resAm) {
+        Txn t = toCity(TxnKind.CREDITS_TRADE);
+        if (t == null) {
+            return false;
+        }
+        t.a = c;
+        t.b = type;
+        t.c = res;
+        t.d = amount;
+        t.i = resAm;
+        Engine.session().reports.change(Engine.session().clock.step(), Field.CREDITS, 0, (int) amount);
+        return true;
+    }
+
+    /**
+     * {@code WDivStoredAll.update} (C4): in the world part, the entry point a returning soldier takes is picked in the
+     * city tail; this stands in for it and carries the pick's seed as its x.
+     */
+    public static COORDINATE entryLater(int seed) {
+        return sosdet.game.GameTxns.entryLater(seed); // there, so the game types load only in a game
+    }
+
+    /**
+     * {@code WDivStored.popSoldier} (C4): true when queued. The world part goes on to take the soldier out of their
+     * division; the city tail brings a copy of them, as they were now, into the city at an entry point.
+     */
+    public static boolean soldierReturns(Induvidual t, int div, int entrySeed) {
+        Txn x = toCity(TxnKind.SOLDIER_RETURNS);
+        if (x == null) {
+            return false;
+        }
+        Induvidual copy = new Induvidual(t.hType(), t.race());
+        copy.copyFrom(t);
+        x.a = copy;
+        x.i = div;
+        x.j = entrySeed;
+        return true;
+    }
+
+    /** {@code WDivStored.age} (C4): true when queued; the world part has taken the retiree out of their division. */
+    public static boolean retiree(Induvidual i) {
+        Txn x = toCity(TxnKind.RETIREE);
+        if (x == null) {
+            return false;
+        }
+        x.a = i;
+        return true;
+    }
+
+    /** {@code StatsRelations.setSoldier} (C5): the city's relation table; true when queued. */
+    public static boolean relSoldier(Induvidual i, int storedId) {
+        Txn x = toCity(TxnKind.REL_SOLDIER);
+        if (x == null) {
+            return false;
+        }
+        x.a = i;
+        x.i = storedId;
+        return true;
+    }
+
+    /** {@code StatsRelations.setDeath} (C5): true when queued. */
+    public static boolean relDeath(Induvidual i, CAUSE_LEAVE cause) {
+        Txn x = toCity(TxnKind.REL_DEATH);
+        if (x == null) {
+            return false;
+        }
+        x.a = i;
+        x.b = cause;
+        return true;
+    }
+
+    /** {@code StatsRelations.setHumanoid} (C5): true when queued. */
+    public static boolean relHumanoid(Humanoid h) {
+        Txn x = toCity(TxnKind.REL_HUMANOID);
+        if (x == null) {
+            return false;
+        }
+        x.a = h;
+        return true;
+    }
+
+    /**
+     * {@code WDivStoredAll.attach} (C1): true when queued. The city tail takes the division's supplies from its
+     * stockpiles, as much as it has, and its next report gives them to the army (B2): the world asks, the city answers.
+     */
+    public static boolean armySupplies(WArmy a, int div) {
+        Txn x = toCity(TxnKind.ARMY_SUPPLY_DIV);
+        if (x == null) {
+            return false;
+        }
+        x.a = a;
+        x.i = div;
+        return true;
+    }
+
+    /** As {@link #armySupplies(WArmy, int)}, for {@code men} recruited of a race (the recruit command). */
+    public static boolean armySupplies(WArmy a, Object race, int men) {
+        Txn x = toCity(TxnKind.ARMY_SUPPLY_RECRUIT);
+        if (x == null) {
+            return false;
+        }
+        x.a = a;
+        x.b = race;
+        x.i = men;
+        return true;
+    }
+
+    /** {@code WDivCity.resolve} (C5): a world battle's result for a capitol garrison division; true when queued. */
+    public static boolean garrisonResolve(Object div, int survivors, double experiencePerMan) {
+        Txn x = toCity(TxnKind.GARRISON_RESOLVE);
+        if (x == null) {
+            return false;
+        }
+        x.a = div;
+        x.i = survivors;
+        x.d = experiencePerMan;
+        return true;
+    }
+
+    /** {@code WDivCity.resolve(Induvidual[])} (C5): true when queued. */
+    public static boolean garrisonResolve(Object div, Induvidual[] survivors) {
+        Txn x = toCity(TxnKind.GARRISON_RESOLVE_PEOPLE);
+        if (x == null) {
+            return false;
+        }
+        x.a = div;
+        x.b = survivors;
+        return true;
+    }
+
+    /**
+     * {@code Invador.invade} (C6): in the world part the world gives the invasion its ref, the report's next one plus the
+     * world's own invasions since, so every PC knows it at once and the city tail starts the invasion with it.
+     */
+    public static int invasionRef() {
+        return (int) Engine.session().reports.value(Field.INVASION_REF, 0);
+    }
+
+    /** {@code Invador.invade} (C6): true when queued for the city tail. */
+    public static boolean invade(Object spec) {
+        Txn x = toCity(TxnKind.INVADE);
+        if (x == null) {
+            return false;
+        }
+        x.a = spec;
+        Session s = Engine.session();
+        s.reports.change(s.clock.step(), Field.INVASION_REF, 0, 1);
+        return true;
+    }
+
+    /** {@code Invador.invade} in the city tail: true while it starts the invasion the world part made. */
+    public static boolean invasionArrives(Object spec) {
+        Session s = Engine.session();
+        if (s == null) {
+            return false;
+        }
+        Txn t = s.txns.applying();
+        return t != null && t.kind == TxnKind.INVADE && t.a == spec;
+    }
+
+    /** {@code Invador.cancel} (C6): true when queued. */
+    public static boolean invasionCancel(int ref) {
+        Session s = Engine.session();
+        if (s != null && s.worldLoading) {
+            return true; // a world resync clears the raiders it reloads; the city's invasion goes on
+        }
+        Txn x = toCity(TxnKind.INVASION_CANCEL);
+        if (x == null) {
+            return false;
+        }
+        x.i = ref;
+        return true;
+    }
+
+    /**
+     * {@code Invador}'s diplomacy listener (C6): a war with the player ended in the world part; the city tail runs the
+     * listener, which calls off that faction's invasions. True when queued.
+     */
+    public static boolean warEnded(Object listener, Object faction, Object other, Object old, Object stance) {
+        Txn x = toCity(TxnKind.WAR_ENDED);
+        if (x == null) {
+            return false;
+        }
+        x.a = listener;
+        x.b = new Object[] {faction, other, old, stance};
+        return true;
+    }
+
+    // ------------------------------------------------------------ city inputs to the world (ADR 0005 §2)
+
+    /** In the city part, an input for the next report; outside it, null. */
+    private static Session inCityPart() {
+        Session s = Engine.session();
+        return s != null && s.part == StepParts.CITY ? s : null;
+    }
+
+    /**
+     * {@code WDivStoredAll.add} (B1): in the city part, the soldier joins their world division when the city's next
+     * report applies; true when sent.
+     */
+    public static boolean soldierJoins(Induvidual i, int div) {
+        Session s = inCityPart();
+        if (s == null) {
+            return false;
+        }
+        s.cityInputs.add(s.inputs().soldierJoins(i, div));
+        return true;
+    }
+
+    /** {@code ADSupply.current().set} (B2): in the city part, the change goes to the world in the next report. */
+    public static boolean supplyFromCity(int supply, WArmy a, int delta) {
+        Session s = inCityPart();
+        if (s == null || a == null) {
+            return false;
+        }
+        if (delta != 0) {
+            s.cityInputs.add(s.inputs().supply(supply, a, delta));
+        }
+        return true;
+    }
+
+    /** The outcomes {@code Invador.tell} passes to the invasion listeners (B4). */
+    public static final int TELL_VICTORY = 0;
+    public static final int TELL_DEFEAT = 1;
+    public static final int TELL_WEIRDNESS = 2;
+
+    /** {@code Invador.tell} (B4): in the city part, an invasion's outcome reaches the world's listeners in the next report. */
+    public static boolean invasionTell(int kind, int lossed, int kills, int ref) {
+        Session s = inCityPart();
+        if (s == null) {
+            return false;
+        }
+        s.cityInputs.add(s.inputs().invasionTell(kind, lossed, kills, ref));
+        return true;
+    }
+
+    /** {@code ADStats.report} (B4): in the city part, the battle reaches the army stats in the next report. */
+    public static boolean battleStats(Faction f, boolean victory, int losses, int kills) {
+        Session s = inCityPart();
+        if (s == null) {
+            return false;
+        }
+        s.cityInputs.add(s.inputs().battleStats(f, victory, losses, kills));
+        return true;
+    }
+
+    /** {@code Invasion.loose} (B4): in the city part, the invader takes the player as vassal in the world part. */
+    public static boolean vassal(Faction f) {
+        Session s = inCityPart();
+        if (s == null) {
+            return false;
+        }
+        s.cityInputs.add(s.inputs().vassal(f));
+        return true;
+    }
+
+    /**
+     * {@code Attack.afterExit} (B4): in the city part, the survivors of a world division that fought the invaders in the
+     * city reach it in the next report.
+     */
+    public static boolean divResolve(Object div, Induvidual[] survivors) {
+        Session s = inCityPart();
+        if (s == null) {
+            return false;
+        }
+        s.cityInputs.add(s.inputs().divResolve(div, survivors));
+        return true;
+    }
+
+    /** The targets and kinds of world mark a scripted event sets ({@code EContext}'s selections, B6). */
+    public static final int EVENT_REGION = 0;
+    public static final int EVENT_FACTION = 1;
+    public static final int EVENT_ROYAL = 2;
+    public static final int EVENT_FLAG = 0;
+    public static final int EVENT_MARK = 1;
+
+    /**
+     * {@code EContext}'s selections (B6): outside the world part a scripted event's world mark travels in the city's
+     * next report instead of changing the world; {@code world} is the world's value now. True when handled so.
+     */
+    public static boolean eventMarkSet(int target, int kind, int index, int value, int world) {
+        Session s = Engine.session();
+        if (s == null || s.part == StepParts.WORLD_PART) {
+            return false;
+        }
+        if (s.eventMarks.set(target, kind, index, value, world)) {
+            s.cityInputs.add(s.inputs().eventMark(target, kind, index, value));
+        }
+        return true;
+    }
+
+    /** {@code EContext}'s selections (B6): outside the world part, the world's mark with what the city sent over it. */
+    public static int eventMarkGet(int target, int kind, int index, int world) {
+        Session s = Engine.session();
+        if (s == null || s.part == StepParts.WORLD_PART) {
+            return world;
+        }
+        return s.eventMarks.read(target, kind, index, world);
+    }
+
+    /**
+     * A scripted event's world action ({@code _BOOST_PERM}, {@code _OPINION}, {@code _REGION_POP}, {@code _INVASION}
+     * and their removals, B6): outside the world part it travels in the city's next report, and the world part runs
+     * it. True when sent.
+     */
+    public static boolean eventAction(Object action, Object event, Object context) {
+        Session s = Engine.session();
+        if (s == null || s.part == StepParts.WORLD_PART) {
+            return false;
+        }
+        s.cityInputs.add(s.inputs().eventAction(action, event, context));
+        return true;
+    }
+
+    /** A cache kept per update ({@code GAME.updateI()}) that must not carry the city part's values into the world part. */
+    public static int partKey(int updateI) {
+        return reportRead() ? ~updateI : updateI;
+    }
+
+    /**
+     * True with a session anywhere but the world part's own thread (the city part, the UI between steps, another
+     * thread): a world cache whose value comes from the city, such as an army's power, is computed afresh there and
+     * neither read nor filled, so the world part only ever sees the value it made from the report (ADR 0005).
+     */
+    public static boolean worldCacheClosed() {
+        Session s = Engine.session();
+        return s != null && (s.part != StepParts.WORLD_PART || !s.streams.isSimulationThread());
+    }
+
+    /** {@code ADSupply.current().get}: outside the world part, what the city sent the army that the world has not applied. */
+    public static int supplyPending(int supply, WArmy a) {
+        Session s = Engine.session();
+        return s == null || a == null || s.part == StepParts.WORLD_PART ? 0
+                : s.sentSupplies.pending(supply, a.armyIndex(), a.iteration());
     }
 
     // ------------------------------------------------------------ RND: the two streams (B10)

@@ -19,6 +19,7 @@ While they run, the runner compares the copies' logs and holds every copy at the
 Results: build/rig/runs/<tag>/ (per-step hash logs, events, summary.txt); exit code 0 = all copies identical.
 """
 import argparse
+import base64
 import json
 import os
 import pathlib
@@ -39,6 +40,13 @@ REAL = pathlib.Path(os.environ["APPDATA"]) / "songsofsyx"
 BASE_SAVE = "sosmp-det-base.save"  # the SOS-11 base save in the user's saves
 BATTLE_SEED, MEN_PER_SIDE, LOAD_SEED, RUN_SEED, INVADE_MEN = 12345, 2000, 555, 777, 1000
 HASH_EVERY = 30  # the engine's default hash interval (steps)
+# --remote: the other PC, as user@host (SSH key login, Windows with OpenSSH), from the environment, never the repository
+REMOTE = os.environ.get("SOSDET_RIG_REMOTE", "")
+REMOTE_KEY = os.environ.get("SOSDET_RIG_REMOTE_KEY", str(pathlib.Path.home() / ".ssh" / "sosdet_laptop"))
+SSH = ["ssh", "-i", REMOTE_KEY, "-o", "BatchMode=yes", "-o", "ConnectTimeout=20", "-o", "LogLevel=ERROR"]
+RELAY, RELAY_SRC, RELAY_PORT = BUILD / "rig" / "relay", ROOT / "rig" / "relay" / "Relay.java", 47710
+# what a remote copy reads from the copies on this PC; everything else stays here
+SHARED = "hashes.bin,ai-host.log,reports.bin,resync.save,resync.state,wresync.save,wresync.state,wresync.state.done"
 
 
 def log(msg):
@@ -124,6 +132,25 @@ class Copy:
                 return e
         return None
 
+    def alive(self):
+        return copy_running(self.k)
+
+    def wait_finished(self, since, timeout, log_path):
+        """Its "finished" event; a copy whose game has died ends where its per-step log does (the summary says so)."""
+        end, checked = time.time() + timeout, time.time()
+        while time.time() < end:
+            e = self.find("finished", since)
+            if e:
+                return e
+            if time.time() - checked > 20:
+                checked = time.time()
+                if not self.alive():
+                    step = last_logged_step(log_path)
+                    log("copy %d: its game is gone (a crash file?) at step %d" % (self.k, step))
+                    return {"endStep": step, "endHash": None, "men": 0, "wallSeconds": 0, "stats": {}}
+            time.sleep(2)
+        fail("copy %d: no 'finished' event within %d s" % (self.k, timeout))
+
     def send(self, command, event, timeout=300):
         since = self.events_count()
         self.command(command)
@@ -145,6 +172,107 @@ class Copy:
             except PermissionError:  # the rig has the old file open for a moment
                 time.sleep(0.1)
         fail("copy %d: cannot hand over the command %r" % (self.k, command))
+
+
+def remote_ps(script):
+    """Runs a PowerShell script on the remote PC; returns its output. Encoded, so nothing in it needs quoting."""
+    # an error stops the script with its message; a quiet miss (-ErrorAction SilentlyContinue) is not a failure
+    wrapped = "$ProgressPreference='SilentlyContinue'; $ErrorActionPreference='Stop'; try { %s } catch { $_ | Out-String; exit 1 }; exit 0" % script
+    enc = base64.b64encode(wrapped.encode("utf-16-le")).decode()
+    r = subprocess.run(SSH + [REMOTE, "powershell -NoProfile -NonInteractive -EncodedCommand " + enc],
+                       capture_output=True, text=True)
+    if r.returncode != 0:
+        fail("on %s: %s" % (REMOTE, (r.stderr or r.stdout).strip()[-500:]))
+    return r.stdout.replace("\r", "")
+
+
+def remote_task(name, path):
+    """Runs a .cmd on the remote PC in the logged-on user's session (a game started over SSH would have no screen)."""
+    remote_ps('schtasks /create /tn %s /tr "%s" /sc once /st 23:59 /it /f | Out-Null; schtasks /run /tn %s | Out-Null'
+              % (name, path, name))
+
+
+class RemoteCopy(Copy):
+    """A copy on the other PC (--remote). Its data folder is made here as for a local copy and sent there; its rig
+    folder here is a mirror the relay keeps up to date, so the runner reads its events and per-step log and writes
+    its commands exactly as for a local copy."""
+
+    def __init__(self, k, game, root):
+        super().__init__(k, game)
+        self.root = root  # on the remote PC: game\, relay\, inst\<k>\
+        self.remote_appdata = "%s\\inst\\%d" % (root, k)
+        self.remote_rig = self.remote_appdata + "\\songsofsyx\\sosdet-rig"
+
+    def prepare(self, saves, window=False):
+        super().prepare(saves, False)
+        # the remote copy's last data folder goes, but its cache stays (the first run there sends it)
+        cached = remote_ps("$d = '%s\\songsofsyx'; New-Item -ItemType Directory -Force $d | Out-Null;"
+                           " Get-ChildItem $d -Exclude cache | Remove-Item -Recurse -Force; Test-Path $d\\cache\\*"
+                           % self.remote_appdata).strip() == "True"
+        tar = [r"C:\Windows\System32\tar.exe", "-cf", "-", "-C", str(self.appdata)]
+        tar += (["--exclude", "songsofsyx/cache"] if cached else []) + ["songsofsyx"]
+        pack = subprocess.Popen(tar, stdout=subprocess.PIPE)
+        unpack = subprocess.run(SSH + [REMOTE, 'tar -xf - -C "%s"' % self.remote_appdata], stdin=pack.stdout,
+                                capture_output=True, text=True)
+        pack.stdout.close()
+        if pack.wait() != 0 or unpack.returncode != 0:
+            fail("copy %d: sending its data folder to %s failed: %s" % (self.k, REMOTE, unpack.stderr.strip()))
+        for f in self.rig.iterdir():
+            f.unlink()  # the mirror fills it from the remote copy's rig folder
+
+    def alive(self):
+        # the copy's game is the remote game's Java that isn't the relay (one remote copy at most)
+        return remote_ps("@(Get-CimInstance Win32_Process -Filter \"Name='java.exe'\" | Where-Object { $_.ExecutablePath"
+                         " -like '%s\*' -and $_.CommandLine -notlike '*Relay*' }).Count" % self.root).strip() not in ("", "0")
+
+    def start(self, autoload):
+        script = ("@echo off\r\nset APPDATA=%s\r\nset SOSDET_RIG_AUTOLOAD=%s\r\ncd /d %s\\game\r\n"
+                  "jre\\bin\\java.exe -cp SongsOfSyx.jar init.Main\r\n" % (self.remote_appdata, autoload, self.root))
+        path = self.remote_appdata + "\\start.cmd"
+        remote_ps("[IO.File]::WriteAllText('%s', '%s')" % (path, script.replace("'", "''")))
+        remote_task("SOSDET-copy-%d" % self.k, path)
+
+
+def start_relays(copies):
+    """The relays between this PC and the remote one: the remote copy's rig folder comes here; the files it reads
+    from the copies here (SHARED) and its commands go there, with this PC's paths in the commands made its own."""
+    remote = [c for c in copies if isinstance(c, RemoteCopy)]
+    if len(remote) != 1:
+        fail("one remote copy at most")
+    r = remote[0]
+    (INST / "relay-pc.log").unlink(missing_ok=True)
+    if not (RELAY / "Relay.class").exists() or (RELAY / "Relay.class").stat().st_mtime < RELAY_SRC.stat().st_mtime:
+        RELAY.mkdir(parents=True, exist_ok=True)
+        subprocess.run(["javac", "--release", "21", "-d", str(RELAY), str(RELAY_SRC)], check=True)
+    remote_ps("New-Item -ItemType Directory -Force '%s\\relay' | Out-Null" % r.root)
+    subprocess.run(["scp"] + SSH[1:] + ["-q"] + [str(p) for p in RELAY.glob("*.class")]
+                   + ["%s:%s/relay/" % (REMOTE, r.root.replace("\\", "/"))], check=True)
+    for c in copies:  # stale mirrors from an earlier run (an old resync marker would be loaded)
+        if c is not r:
+            remote_ps("Remove-Item -Recurse -Force '%s\\inst\\%d' -ErrorAction SilentlyContinue" % (r.root, c.k))
+    java = '"%s\\game\\jre\\bin\\java.exe"' % r.root
+    serve = ("@echo off\r\n%s -cp %s\\relay Relay serve 0.0.0.0 %d --out %s %s - --map %s %s\\inst"
+             " --log %s\\relay\\relay.log\r\n" % (java, r.root, RELAY_PORT, r.remote_rig, r.rig, INST, r.root, r.root))
+    remote_ps("Remove-Item '%s\\relay\\relay.log' -ErrorAction SilentlyContinue;"
+              " [IO.File]::WriteAllText('%s\\relay\\relay.cmd', '%s')" % (r.root, r.root, serve.replace("'", "''")))
+    remote_task("SOSDET-relay", r.root + "\\relay\\relay.cmd")
+    outs = []
+    for c in copies:
+        if c is not r:
+            c.rig.mkdir(parents=True, exist_ok=True)
+            outs += ["--out", str(c.rig), "%s\\inst\\%d\\songsofsyx\\sosdet-rig" % (r.root, c.k), SHARED]
+    # its class path names the rig's build folder and its arguments the copies, so stop_copies() stops it with them
+    subprocess.Popen([str(r.game / "jre" / "bin" / "java.exe"), "-cp", str(RELAY), "Relay", "connect",
+                      REMOTE.split("@")[-1], str(RELAY_PORT)] + outs
+                     + ["--cmd", str(r.rig), r.remote_rig, "--log", str(INST / "relay-pc.log")],
+                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    log("relays up between this PC and %s; copy %d runs there" % (REMOTE, r.k))
+
+
+def stop_remote(root):
+    """Stops the game copies and the relay on the remote PC (everything run by its game's Java)."""
+    remote_ps("Get-Process java -ErrorAction SilentlyContinue | Where-Object { $_.Path -like '%s\\*' } | Stop-Process -Force"
+              % root)
 
 
 def copy_running(k):
@@ -559,6 +687,11 @@ def main():
     ap.add_argument("--resync", type=int, default=0, help="copy 1 saves a resync at this step; every copy loads it")
     ap.add_argument("--resync-on-desync", action="store_true",
                     help="at the first desync an engine reports, copy 1 saves a resync at its step; the others load it")
+    ap.add_argument("--world-at", type=int, default=0,
+                    help="spike (SOS-38): copy 1 saves at this step and runs on; the --world-load copies load only the"
+                         " --world-keys sections from that save into their running game, then run on")
+    ap.add_argument("--world-keys", default="WORLD,FACTIONS,RAIDING", help="the save sections a world load reads")
+    ap.add_argument("--world-load", default="2,3", help="the copies that load the world (1: copy 1 too, after its save)")
     ap.add_argument("--trace-draws", type=int, default=0,
                     help="debugging: every copy records the call site of each simulation draw for this many steps;"
                          " a desync writes the draws around it, and the summary names the first draw that differs")
@@ -572,6 +705,11 @@ def main():
     ap.add_argument("--no-invade", action="store_true", help="city: no invasion, the city as it is")
     ap.add_argument("--hold-world", action="store_true",
                     help="city: hold the world map still, as before SOS-35 (the world runs in the step by default)")
+    ap.add_argument("--follow", action="store_true",
+                    help="city: own-city mode (SOS-38); copy 1's city is the one the world reads, the other copies follow"
+                         " its reports with cities of their own, and the copies are compared on the world only")
+    ap.add_argument("--world-resync", type=int, default=0,
+                    help="with --follow: copy 1 saves at this step, and every copy reloads only the world from it")
     ap.add_argument("--cmds", default="",
                     help="player actions copy 1 takes once every copy runs, ';'-separated or @file (one per line), 3 s apart, through the UI's"
                          " own calls (e.g. 'curfew 1;men 0 40'); the others get them through the host's log (ADR 0002);"
@@ -582,6 +720,13 @@ def main():
     ap.add_argument("--play", action="store_true",
                     help="the owner plays copy 1 (the host) in a normal window from 1x, giving orders and changing speed;"
                          " the other copies replay its log at 25x; the run ends when the owner closes the window")
+    ap.add_argument("--pace-lead", type=int, default=60,
+                    help="copy 1 (the host) runs at most this many steps past the slowest copy, as the mod will (spec"
+                         " section 4: the slowest PC caps the speed); at least the hash interval (%d); 0: off" % HASH_EVERY)
+    ap.add_argument("--remote", type=int, default=0,
+                    help="this copy runs on the other PC (SOSDET_RIG_REMOTE=user@host, over SSH; its game folder under"
+                         " --remote-root\\game); the relay mirrors its files over a direct TCP link")
+    ap.add_argument("--remote-root", default=r"C:\SOSTest", help="with --remote: the folder for the game, relay and copies there")
     ap.add_argument("--evals", action="store_true",
                     help="the timing rule instead: host and peer, one copy alone each, at speed 1")
     ap.add_argument("--vanilla", action="store_true", help="with --evals: measure vanilla again (default: SOS-23's figures)")
@@ -611,18 +756,34 @@ def main():
     shutil.rmtree(run_dir, ignore_errors=True)
     run_dir.mkdir(parents=True)
 
+    if args.follow and (args.scenario != "city" or args.ai != "host" or args.replay or args.resync
+                        or args.resync_on_desync):
+        fail("--follow needs a city run with the AI on the host, without --replay or --resync (a whole-game resync"
+             " would take the followers' cities; use --world-resync)")
+    if 0 < args.pace_lead < HASH_EVERY:
+        fail("--pace-lead %d: the host learns a copy's step from its hashes, every %d steps; use 0 or at least %d"
+             % (args.pace_lead, HASH_EVERY, HASH_EVERY))
+    if args.world_resync and not args.follow:
+        fail("--world-resync is for --follow runs; co-op runs use --resync")
     saves, autoload = scenario_saves(args)
 
+    if args.remote and (not REMOTE or not 1 < args.remote <= args.copies or args.play):
+        fail("--remote needs SOSDET_RIG_REMOTE=user@host and a copy other than copy 1 (the host), not --play")
     stop_copies()
-    copies = [Copy(k, game) for k in range(1, args.copies + 1)]
+    if args.remote:
+        stop_remote(args.remote_root)
+    copies = [RemoteCopy(k, game, args.remote_root) if k == args.remote else Copy(k, game)
+              for k in range(1, args.copies + 1)]
     for c in copies:
         c.prepare(saves, args.window or (args.play and c.k == 1))
+    if args.remote:
+        start_relays(copies)
     for c in copies:
         c.start(autoload)
         time.sleep(3)
     for c in copies:
         c.wait("loaded", 0, 600)
-        if not (args.window or (args.play and c.k == 1)):
+        if not (args.window or (args.play and c.k == 1) or c.k == args.remote):
             move_offscreen(c.k)  # test copies out of sight; only a played or watched copy stays on screen
     log("%d copies up; %s, %s test, speeds %s; copy %d runs %d steps, the others until it stops"
         % (len(copies), args.scenario, baseline, speeds, ref, args.steps))
@@ -644,8 +805,18 @@ def main():
         host_log = run_dir / "replayed-host.log"
         shutil.copy2(args.replay, host_log)
     resync_save, resync_state = copies[0].rig / "resync.save", copies[0].rig / "resync.state"
+    reports_file = copies[0].rig / "reports.bin"
+    wresync_save, wresync_state = copies[0].rig / "wresync.save", copies[0].rig / "wresync.state"
+    for stale in (wresync_state, pathlib.Path(str(wresync_state) + ".done")):
+        if stale.exists():
+            stale.unlink()
 
     warm = {int(k) for k in args.warm.split(",") if k}
+    world_loaders = {int(k) for k in args.world_load.split(",") if k}
+    world_save = copies[0].rig / "world.save"
+    for stale in (world_save, pathlib.Path(str(world_save) + ".done")):
+        if stale.exists():
+            stale.unlink()
 
     def start_copy(c, speed):
         if c.k in warm:
@@ -658,6 +829,8 @@ def main():
         if args.ai == "host":
             c.send("ai %s %s" % ("host" if c.k == 1 and not args.replay else "peer", start_id), "ai")
             c.send("pc %d" % (c.k - 1), "pc")  # the host is PC 0
+            if args.follow:
+                c.send("owncity", "owncity")
         else:
             c.send("ai instep", "ai")
         c.send("loadseed %d" % LOAD_SEED, "loadseed")
@@ -670,6 +843,22 @@ def main():
         time.sleep(5)
         if args.ai == "host":
             c.send("ailog %s %s" % ("host" if c.k == 1 and not args.replay else "peer", host_log), "ailog")
+        if args.follow:
+            # copy 1's city reports go to the followers through a file, as the mod will send them over the network
+            if c.k == 1:
+                c.send("reportsout %s" % reports_file, "reportsout")
+            else:
+                c.send("reportsfrom 0 %s" % reports_file, "reportsfrom")
+            if args.world_resync:
+                c.send("worldresyncat %d %s %s %s" % (args.world_resync, "save" if c.k == 1 else "load", wresync_save,
+                                                      wresync_state), "worldresyncat")
+        if args.ai == "host" and not args.follow and not args.replay:
+            # a peer's player acts too: its orders go to the host, which stamps them into its log (SOS-33)
+            if c.k == 1:
+                for o in copies[1:]:
+                    c.send("ordersfrom %d %s" % (o.k - 1, o.rig / "orders.bin"), "ordersfrom")
+            else:
+                c.send("ordersout %s" % (c.rig / "orders.bin"), "ordersout")
         # every copy sends its engine's state hashes to the others through files, as the mod will over the network
         c.send("hashes %s" % (c.rig / "hashes.bin"), "hashes")
         for o in copies:
@@ -677,12 +866,18 @@ def main():
                 c.send("hashpeer %d %s" % (o.k, o.rig / "hashes.bin"), "hashpeer")
         if c.k == nudged:
             c.send("nudge %d" % args.nudge, "nudge")
+        if c.k == 1 and len(copies) > 1 and args.pace_lead > 0:
+            c.send("pace %d" % args.pace_lead, "pace")
         if c.k == 1 and args.scenario == "city" and not args.play and not args.replay:
             c.send("answerprompts", "answerprompts")  # nobody clicks the world-battle prompt in a rig run
         if c.k == 1 and args.play:
             c.send("showmessages", "showmessages")  # the owner reads the messages in the played window
         if c.k == 1 and args.resync:
             c.send("resyncat %d %s %s" % (args.resync, resync_save, resync_state), "resyncat")
+        if args.world_at and (c.k == 1 or c.k in world_loaders):
+            mode = ("saveload" if c.k in world_loaders else "save") if c.k == 1 else "load"
+            c.send("worldat %d %s %s %s" % (args.world_at, mode, world_save, args.world_keys),
+                   "worldat")
         c.send("seed %d" % RUN_SEED, "seeded")
         # the agreed starting speed (it sets the step length): copy 1's; each copy's own speed only sets its pace
         c.send("speed %s" % (args.agreed_speed or speeds[0]), "speed")
@@ -755,6 +950,8 @@ def main():
         for c in copies[1:]:
             path, deadline = c.rig / ("%s-c%d.csv" % (args.tag, c.k)), time.time() + 600
             while last_logged_step(path) <= args.steps and time.time() < deadline:
+                if int(deadline - time.time()) % 30 < 2 and not c.alive():
+                    break
                 time.sleep(2)
     marks = {c.k: c.events_count() for c in copies if c.k not in finished}
     for c in copies:  # hold the rest now, wherever they are
@@ -762,7 +959,7 @@ def main():
             c.command("hold")
     for c in copies:
         if c.k not in finished:
-            finished[c.k] = c.wait("finished", marks[c.k], 600)
+            finished[c.k] = c.wait_finished(marks[c.k], 600, c.rig / ("%s-c%d.csv" % (args.tag, c.k)))
     ends = {k: f["endStep"] for k, f in finished.items()}
 
     after = resync["step"] + 1 if resync and args.nudge else 1  # a forced desync is only repaired from the resync on
@@ -774,6 +971,23 @@ def main():
             loading, done_ = c.find("resyncloading", 0), c.find("resynced", 0)
             lines.insert(1, "resync: copy %d loaded it from its step %s, at step %s, in %s s"
                          % (c.k, loading and loading["fromStep"], done_ and done_["step"], done_ and done_["loadSeconds"]))
+    if args.world_at:
+        saved = copies[0].find("worldsaved", 0)
+        lines.insert(0, "world: copy 1 saved at step %s in %s ms (%s bytes)"
+                     % (saved and saved["step"], saved and saved["saveMs"], saved and saved["saveBytes"]))
+        for c in copies:
+            if c.k in world_loaders:
+                w = c.find("worldloaded", 0)
+                lines.insert(1, "world: copy %d loaded %s at step %s in %s ms: %s"
+                             % (c.k, args.world_keys, w and w["step"], w and w["loadMs"], w and json.dumps(w["sections"])))
+    if args.world_resync:
+        saved = copies[0].find("worldresyncsaved", 0)
+        lines.insert(0, "world resync: copy 1 saved at step %s in %s ms (%s bytes)"
+                     % (saved and saved["step"], saved and saved["saveMs"], saved and saved["saveBytes"]))
+        for c in reversed(copies):
+            w = c.find("worldresynced", 0)
+            lines.insert(1, "world resync: copy %d loaded the world at step %s in %s ms"
+                         % (c.k, w and w["step"], w and w["loadMs"]))
     for c in copies:
         shutil.copy2(c.events, run_dir / ("events-c%d.jsonl" % c.k))
     summary = ["SOSDET rig: %s, %s test, tag %s, %d copies; copy %d runs %d steps, the others until it stops"
@@ -783,6 +997,10 @@ def main():
         summary.append("copy %d at speed %.0f: start %s, end step %d, end %s, men %d, %.0f s wall, stats %s"
                        % (c.k, speeds[c.k - 1], starts[c.k]["battle" if args.scenario == "field" else "city"],
                           f["endStep"], f["endHash"], f["men"], f["wallSeconds"], json.dumps(f["stats"])))
+    if len(copies) > 1 and args.pace_lead > 0:
+        f = finished[1]
+        summary.append("pacing: copy 1 ran at most %d steps past the slowest copy; held by the others in %d frames, %.1f s"
+                       % (args.pace_lead, f.get("pacedFrames", 0), f.get("pacedSeconds", 0)))
     summary += lines
     desyncs = {c.k: c.find("desync", 0) for c in copies}
     for c in copies:
@@ -827,6 +1045,12 @@ def main():
     print("\n".join(summary))
     if not args.keep:
         stop_copies()
+        if args.remote:
+            stop_remote(args.remote_root)
+    if args.remote:
+        shutil.copy2(INST / "relay-pc.log", run_dir / "relay-pc.log")
+        subprocess.run(["scp"] + SSH[1:] + ["-q", "%s:%s/relay/relay.log" % (REMOTE, args.remote_root.replace("\\", "/")),
+                                            str(run_dir / "relay-remote.log")], check=False)
     sys.exit(0 if identical else 1)
 
 

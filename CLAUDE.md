@@ -17,7 +17,7 @@ Read [docs/architecture.md](docs/architecture.md) first: how a session runs, the
 
 ## Current phase: V0.1 and its session fixes
 
-- Built: the engine core, the AI log, the state hash, resync and battle orders (cards SOS-25 to SOS-32 under the epic SOS-22; SOS-31, the scenario suite in CI, is still open); the city commands (SOS-34); the world lockstep and the V0.1 package (SOS-35).
+- Built: the engine core, the AI log, the state hash, resync and battle orders (cards SOS-25 to SOS-32 under the epic SOS-22; SOS-31, the scenario suite, is still open); the city commands (SOS-34); the world lockstep and the V0.1 package (SOS-35).
 - Now: SOS-36, fixes from the owner's first V0.1 session (prompt deadlock, room copier and blueprints, messages).
 - Next: stage E of [plan 0002](docs/plan/0002-city-and-world-lockstep.md), the city↔world link. Engage (world battles on the battle map) comes after V0.1.
 - Where the last session stopped: [docs/plan/HANDOFF.md](docs/plan/HANDOFF.md).

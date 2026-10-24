@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+import java.util.NoSuchElementException;
 
 import game.GAME;
 import game.battle.state.BattleState;
@@ -25,6 +26,8 @@ import game.battle.util.DivGeneration;
 import game.faction.FACTIONS;
 import game.faction.Faction;
 import game.save.GameLoader;
+import game.save.GameSaver;
+import game.save.Savable;
 import game.time.TIME;
 import init.constant.Config;
 import init.paths.PATHS;
@@ -42,7 +45,10 @@ import snake2d.util.file.FileGetter;
 import snake2d.util.file.FilePutter;
 import snake2d.util.misc.ACTION;
 import snake2d.util.rnd.RND;
+import snake2d.util.sets.KeyMap;
 import sosdet.Engine;
+import sosdet.game.GameHash;
+import sosdet.game.GameResync;
 import sosdet.rig.act.CopyActions;
 import sosdet.rig.act.EmploymentActions;
 import sosdet.rig.act.LawActions;
@@ -83,6 +89,12 @@ import view.main.VIEW;
  *   hashes &lt;file&gt;                      after the load: append this copy's state hashes to the file every frame
  *   hashpeer &lt;pc&gt; &lt;file&gt;               and read another copy's; on the first desync the engine finds, write
  *                                       &lt;tag&gt;-desync.txt (the engine's report) and a desync event
+ *   pace &lt;steps&gt;                        host: run at most that many steps past the slowest hashpeer (0: off);
+ *                                       the slowest PC caps the speed (mod spec §4)
+ *   ordersout &lt;file&gt;                    peer: append its player's orders to the file every frame
+ *   ordersfrom &lt;pc&gt; &lt;file&gt;             host: take in peer pc's orders from its file every frame
+ *   state                               what a player sees: step, people, soldiers, credits, invasion, raider
+ *   play &lt;action...&gt;                   as cmd, but a failed action is a "refused" event, not an error (LLM players)
  *   answerprompts                       the host's player answers every world-battle prompt (auto-resolve, occupy)
  *   showmessages                        the city's messages stay open (the played copy of --play)
  *   nudge &lt;step&gt;                        forced desync: at that step, inside it, one soldier gets fatal injuries
@@ -130,7 +142,7 @@ public final class Rig implements SCRIPT {
         Engine.betweenSteps(() -> {
             try {
                 action.run();
-            } catch (IllegalStateException | IllegalArgumentException | IndexOutOfBoundsException e) {
+            } catch (IllegalStateException | IllegalArgumentException | IndexOutOfBoundsException | NoSuchElementException e) {
                 current.event("cmdskipped", "\"reason\":\"" + Instance.clean(String.valueOf(e.getMessage())) + "\"");
             }
         });
@@ -196,12 +208,43 @@ public final class Rig implements SCRIPT {
         private long[] hashOffsets = new long[0];
         private boolean desyncReported;
         private long nudgeStep = -1;
+        // pacing (SOS-38): the host runs at most paceLead steps past its slowest peer, as the mod will (spec §4)
+        private long paceLead;
+        /** The last step the run may reach, before pacing. */
+        private long limit;
+        private long pacedFrames;
+        private long pacedNanos;
+        private long frameNanos;
+        /** The limit the engine was last given, after pacing. */
+        private long pacedLast = -1;
+        // the players' orders between peers and the host, through files (a peer's player acts too)
+        private Path ordersOutFile;
+        private final List<Path> ordersPeers = new ArrayList<>();
+        private final List<Integer> ordersPeerPcs = new ArrayList<>();
+        private long[] ordersOffsets = new long[0];
         // resync (SOS-30)
         private double speed;
         private long resyncStep = -1;
         private Path resyncSave;
         private Path resyncState;
         private long resyncLoadStarted;
+        // world-only load (SOS-38 spike): copy 1 saves at worldStep, the loading copies load only worldKeys from it
+        private long worldStep = -1;
+        private boolean worldSaver;
+        private boolean worldSelfLoad;
+        private Path worldFile;
+        private List<String> worldKeys = new ArrayList<>();
+        // own-city mode (SOS-38 milestone 4): copy 1's reports to the followers through a file, the world hash per step
+        private boolean ownCity;
+        private Path reportsOutFile;
+        private Path reportsInFile;
+        private int reportsPc;
+        private long reportsOffset;
+        // world resync (SOS-38): copy 1 saves at wresyncStep; every copy, copy 1 too, loads only the world from it
+        private long wresyncStep = -1;
+        private boolean wresyncSaver;
+        private Path wresyncSave;
+        private Path wresyncState;
         // stall sampler: the simulation thread's stack for every step over 100 ms
         private volatile Thread simThread;
         private volatile boolean sampling;
@@ -250,7 +293,7 @@ public final class Rig implements SCRIPT {
                 nudge();
             }
             try {
-                log.write(step + "," + Long.toHexString(city ? cityHash() : battleHash()) + "," + men() + ","
+                log.write(step + "," + Long.toHexString(stateHash()) + "," + men() + ","
                         + TIME.currentSecond() + "\n");
             } catch (IOException e) {
                 throw new IllegalStateException("SOSDET rig: cannot write the hash log", e);
@@ -262,7 +305,10 @@ public final class Rig implements SCRIPT {
                 resynced();
             }
             exchangeAiLog();
+            exchangeOrders();
+            exchangeReports();
             exchangeHashes();
+            pace();
             if (traceFrom >= 0 && Engine.active() && Engine.step() >= traceFrom) {
                 Engine.traceDraws(traceSteps);
                 event("tracing", "\"step\":" + Engine.step());
@@ -270,6 +316,12 @@ public final class Rig implements SCRIPT {
             }
             if (running && resyncStep >= 0 && Engine.step() == resyncStep) {
                 saveResync();
+            }
+            if (running && worldStep >= 0 && Engine.step() == worldStep) {
+                worldAtStep();
+            }
+            if (running && wresyncStep >= 0 && Engine.step() == wresyncStep) {
+                worldResyncAtStep();
             }
             if (running) {
                 timing();
@@ -310,6 +362,62 @@ public final class Rig implements SCRIPT {
             } catch (IOException e) {
                 throw new IllegalStateException("SOSDET rig: AI log file " + aiFile, e);
             }
+        }
+
+        /** A peer appends its player's new orders; the host takes in what is new from each peer. Between frames. */
+        private void exchangeOrders() {
+            if (!Engine.active()) {
+                return;
+            }
+            try {
+                if (ordersOutFile != null) {
+                    byte[] out = Engine.ordersOut();
+                    if (out.length > 0) {
+                        Files.write(ordersOutFile, out, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+                    }
+                }
+                for (int i = 0; i < ordersPeers.size(); i++) {
+                    byte[] in = readNew(ordersPeers.get(i), ordersOffsets[i]);
+                    ordersOffsets[i] += in.length;
+                    if (in.length > 0) {
+                        Engine.ordersIn(ordersPeerPcs.get(i), in);
+                    }
+                }
+            } catch (IOException e) {
+                throw new IllegalStateException("SOSDET rig: orders file", e);
+            }
+        }
+
+        /** Own-city mode: copy 1 appends its new reports; a follower takes in what is new. Between frames. */
+        private void exchangeReports() {
+            if (!Engine.active()) {
+                return;
+            }
+            try {
+                if (reportsOutFile != null) {
+                    byte[] out = Engine.reportsOut();
+                    if (out.length > 0) {
+                        Files.write(reportsOutFile, out, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+                    }
+                }
+                if (reportsInFile != null) {
+                    byte[] in = readNew(reportsInFile, reportsOffset);
+                    reportsOffset += in.length;
+                    if (in.length > 0) {
+                        Engine.reportsIn(reportsPc, in);
+                    }
+                }
+            } catch (IOException e) {
+                throw new IllegalStateException("SOSDET rig: report file", e);
+            }
+        }
+
+        /** The per-step log's hash: the city, or in own-city mode the world only (each copy's city is its own). */
+        private long stateHash() {
+            if (!city) {
+                return battleHash();
+            }
+            return ownCity ? GameHash.worldHash() : cityHash();
         }
 
         /** This copy's new hashes go to its file; the other copies' new hashes go to the engine. Between frames. */
@@ -419,6 +527,115 @@ public final class Rig implements SCRIPT {
             });
         }
 
+        /**
+         * Held at the world step: copy 1 saves the whole game and runs on; a loading copy waits for that save, loads
+         * only the world's sections from it into the running game (SOS-38 spike), and runs on.
+         */
+        private void worldAtStep() {
+            Path done = Paths.get(worldFile + ".done");
+            long t0 = System.nanoTime();
+            if (worldSaver) {
+                GameResync.save(worldFile);
+                try {
+                    Files.write(done, new byte[0]);
+                } catch (IOException e) {
+                    throw new IllegalStateException("SOSDET rig: cannot write " + done, e);
+                }
+                event("worldsaved", String.format(Locale.ROOT, "\"step\":%d,\"saveMs\":%.0f,\"saveBytes\":%d", Engine.step(),
+                        (System.nanoTime() - t0) / 1e6, worldFile.toFile().length()));
+                if (worldSelfLoad) {
+                    long t1 = System.nanoTime();
+                    String loaded = loadWorld();
+                    event("worldloaded", String.format(Locale.ROOT, "\"step\":%d,\"loadMs\":%.0f,\"sections\":%s",
+                            Engine.step(), (System.nanoTime() - t1) / 1e6, loaded));
+                }
+            } else {
+                if (!Files.exists(done)) {
+                    return; // copy 1 hasn't saved yet: stay held
+                }
+                String loaded = loadWorld();
+                event("worldloaded", String.format(Locale.ROOT, "\"step\":%d,\"loadMs\":%.0f,\"sections\":%s", Engine.step(),
+                        (System.nanoTime() - t0) / 1e6, loaded));
+            }
+            worldStep = -1;
+            runOn();
+        }
+
+        /**
+         * The world resync (SOS-38): copy 1 saves the game and the engine's world state, then loads only the world
+         * from it; every other copy holds at the step until copy 1 has saved, then does the same load.
+         */
+        private void worldResyncAtStep() {
+            Path done = Paths.get(wresyncState + ".done");
+            long t0 = System.nanoTime();
+            byte[] state;
+            try {
+                if (wresyncSaver) {
+                    state = Engine.worldResyncSave(wresyncSave);
+                    Files.write(wresyncState, state);
+                    Files.write(done, new byte[0]);
+                    event("worldresyncsaved", String.format(Locale.ROOT, "\"step\":%d,\"saveMs\":%.0f,\"saveBytes\":%d",
+                            Engine.step(), (System.nanoTime() - t0) / 1e6, wresyncSave.toFile().length()));
+                    t0 = System.nanoTime();
+                } else {
+                    if (!Files.exists(done)) {
+                        return; // copy 1 hasn't saved yet: stay held
+                    }
+                    state = Files.readAllBytes(wresyncState);
+                }
+            } catch (IOException e) {
+                throw new IllegalStateException("SOSDET rig: world resync files " + wresyncState, e);
+            }
+            Engine.worldResyncLoad(wresyncSave, state);
+            event("worldresynced", String.format(Locale.ROOT, "\"step\":%d,\"loadMs\":%.0f", Engine.step(),
+                    (System.nanoTime() - t0) / 1e6));
+            wresyncStep = -1;
+            runOn();
+        }
+
+        /** Loads the sections named in worldKeys from worldFile into the running game, as GameSaver.load reads them. */
+        private String loadWorld() {
+            StringBuilder loaded = new StringBuilder("{");
+            try {
+                Field smapField = GameSaver.class.getDeclaredField("smap");
+                smapField.setAccessible(true);
+                @SuppressWarnings("unchecked") // GameSaver.smap is a KeyMap<Savable>
+                KeyMap<Savable> smap = (KeyMap<Savable>) smapField.get(GAME.saver());
+                Method load = Savable.class.getDeclaredMethod("load", FileGetter.class);
+                load.setAccessible(true);
+                FileGetter f = new FileGetter(worldFile, true);
+                int spec = f.i();
+                f.setPosition(f.getPosition() + spec); // GameSpec
+                for (int list = 0; list < 2; list++) { // GameSaver's "before" list, then "all"
+                    int am = f.i();
+                    for (int i = 0; i < am; i++) {
+                        String k = f.chars();
+                        int le = f.i();
+                        int end = f.getPosition() + le;
+                        if (worldKeys.contains(k)) {
+                            Savable s = smap.get(k);
+                            if (s == null) {
+                                throw new IllegalStateException("SOSDET rig: no section " + k + " in this game");
+                            }
+                            long t = System.nanoTime();
+                            load.invoke(s, f);
+                            if (f.getPosition() != end) {
+                                throw new IllegalStateException("SOSDET rig: section " + k + " read " + (f.getPosition() - end + le)
+                                        + " of " + le + " bytes");
+                            }
+                            loaded.append(loaded.length() == 1 ? "" : ",").append(String.format(Locale.ROOT,
+                                    "\"%s\":{\"bytes\":%d,\"ms\":%.0f}", k, le, (System.nanoTime() - t) / 1e6));
+                        } else {
+                            f.setPosition(end);
+                        }
+                    }
+                }
+            } catch (IOException | ReflectiveOperationException e) {
+                throw new IllegalStateException("SOSDET rig: world load from " + worldFile + " failed", e);
+            }
+            return loaded.append('}').toString();
+        }
+
         /** Peer: the first frame of the game loaded for a resync. */
         private void resynced() {
             double seconds = (System.nanoTime() - resyncLoadStarted) / 1e9;
@@ -444,11 +661,46 @@ public final class Rig implements SCRIPT {
 
         /** Lets the run go on to its last step, or freely. */
         private void runOn() {
-            if (lastStep == Long.MAX_VALUE) {
+            limit(lastStep);
+        }
+
+        /** The run may reach this step ({@code Long.MAX_VALUE}: no last step), and no further than pacing allows. */
+        private void limit(long last) {
+            limit = last;
+            applyLimit();
+        }
+
+        /** The run's limit; on a paced host, no more than paceLead steps past the slowest peer's last hash. */
+        private void applyLimit() {
+            long last = limit;
+            if (paceLead > 0) {
+                long slowest = Long.MAX_VALUE;
+                for (int i = 0; i < hashPeerPcs.size(); i++) {
+                    slowest = Math.min(slowest, Engine.peerStep(hashPeerPcs.get(i)));
+                }
+                if (slowest != Long.MAX_VALUE) {
+                    last = Math.min(last, Math.max(Engine.step(), slowest + paceLead));
+                }
+            }
+            pacedLast = last;
+            if (last == Long.MAX_VALUE) {
                 Engine.runFreely();
             } else {
-                Engine.runUntil(lastStep);
+                Engine.runUntil(last);
             }
+        }
+
+        /** Between frames of a paced run: the limit follows the peers, and a frame the peers held is counted. */
+        private void pace() {
+            long now = System.nanoTime();
+            if (running && !vanilla && paceLead > 0 && resyncLoadStarted == 0 && Engine.active()) {
+                if (pacedLast >= 0 && Engine.step() == pacedLast && pacedLast < limit && frameNanos != 0) {
+                    pacedFrames++;
+                    pacedNanos += now - frameNanos;
+                }
+                applyLimit();
+            }
+            frameNanos = now;
         }
 
         /** One line per frame: the previous frame's update time (patch 91) and the game time it advanced. */
@@ -594,6 +846,16 @@ public final class Rig implements SCRIPT {
                 playerAction(Arrays.copyOfRange(c, 1, c.length));
                 event("cmd", "\"action\":\"" + clean(rest(c)) + "\"");
                 return;
+            case "play":
+                // a player who may be wrong (an LLM agent): an action that fails is refused, not a failed run
+                try {
+                    playerAction(Arrays.copyOfRange(c, 1, c.length));
+                } catch (RuntimeException e) {
+                    event("refused", "\"action\":\"" + clean(rest(c)) + "\",\"message\":\"" + clean(e.toString()) + "\"");
+                    return;
+                }
+                event("played", "\"action\":\"" + clean(rest(c)) + "\",\"step\":" + Engine.step());
+                return;
             case "ailog":
                 aiHost = c[1].equals("host");
                 aiFile = Paths.get(rest(Arrays.copyOfRange(c, 1, c.length)));
@@ -605,6 +867,20 @@ public final class Rig implements SCRIPT {
                 Files.deleteIfExists(hashFile);
                 desyncReported = false;
                 event("hashes", "\"file\":\"" + clean(hashFile.toString()) + "\"");
+                return;
+            case "ordersout":
+                ordersOutFile = Paths.get(rest(c));
+                Files.deleteIfExists(ordersOutFile);
+                event("ordersout", "\"file\":\"" + clean(ordersOutFile.toString()) + "\"");
+                return;
+            case "ordersfrom":
+                ordersPeerPcs.add(Integer.parseInt(c[1]));
+                ordersPeers.add(Paths.get(rest(Arrays.copyOfRange(c, 1, c.length))));
+                ordersOffsets = Arrays.copyOf(ordersOffsets, ordersPeers.size());
+                event("ordersfrom", "\"pc\":" + c[1]);
+                return;
+            case "state":
+                event("state", state());
                 return;
             case "hashpeer":
                 hashPeerPcs.add(Integer.parseInt(c[1]));
@@ -625,6 +901,42 @@ public final class Rig implements SCRIPT {
                 return;
             case "resyncload":
                 loadResync(Paths.get(c[1]), Files.readAllBytes(Paths.get(c[2])));
+                return;
+            case "pace":
+                paceLead = Long.parseLong(c[1]);
+                event("pace", "\"lead\":" + paceLead);
+                return;
+            case "owncity":
+                Engine.ownCity();
+                ownCity = true;
+                event("owncity", "");
+                return;
+            case "reportsout":
+                reportsOutFile = Paths.get(rest(c));
+                Files.deleteIfExists(reportsOutFile);
+                event("reportsout", "\"file\":\"" + clean(reportsOutFile.toString()) + "\"");
+                return;
+            case "reportsfrom":
+                reportsPc = Integer.parseInt(c[1]);
+                Engine.reportsFrom(reportsPc);
+                reportsInFile = Paths.get(rest(Arrays.copyOfRange(c, 1, c.length)));
+                reportsOffset = 0;
+                event("reportsfrom", "\"pc\":" + reportsPc);
+                return;
+            case "worldresyncat":
+                wresyncStep = Long.parseLong(c[1]);
+                wresyncSaver = c[2].equals("save");
+                wresyncSave = Paths.get(c[3]);
+                wresyncState = Paths.get(c[4]);
+                event("worldresyncat", "\"step\":" + wresyncStep);
+                return;
+            case "worldat":
+                worldStep = Long.parseLong(c[1]);
+                worldSaver = c[2].startsWith("save");
+                worldSelfLoad = c[2].equals("saveload");
+                worldFile = Paths.get(c[3]);
+                worldKeys = Arrays.asList(c[4].split(","));
+                event("worldat", "\"step\":" + worldStep);
                 return;
             case "showmessages":
                 showMessages = true;
@@ -649,7 +961,7 @@ public final class Rig implements SCRIPT {
                     throw new IllegalStateException("SOSDET rig: hold needs a run going");
                 }
                 lastStep = Engine.step();
-                Engine.runUntil(lastStep);
+                limit(lastStep);
                 finish();
                 return;
             case "hash":
@@ -658,6 +970,17 @@ public final class Rig implements SCRIPT {
             default:
                 event("error", "\"message\":\"unknown command: " + clean(String.join(" ", c)) + "\"");
             }
+        }
+
+        /** What a player sees, read between frames as the UI reads it: never changes the game. */
+        private String state() {
+            Faction p = FACTIONS.player();
+            String raider = GAME.raiders().current.current() == null ? "" : clean(GAME.raiders().current.current().name);
+            return String.format(Locale.ROOT, "\"step\":%d,\"day\":%.2f,\"people\":%d,\"soldiers\":%d,\"credits\":%.0f,"
+                    + "\"invasion\":%b,\"raider\":\"%s\",\"armies\":%d,\"running\":%b",
+                    Engine.active() ? Engine.step() : -1, TIME.currentSecond() / TIME.secondsPerDay(),
+                    STATS.POP().POP.data(null).get(null), GAME.ARMIES().player().men(), p.credits().getD(),
+                    SETT.INVADOR().invading(), raider, p.armies().all().size(), running);
         }
 
         private static String rest(String[] c) {
@@ -692,10 +1015,16 @@ public final class Rig implements SCRIPT {
             openTiming();
             startStallSampler(dir.resolve(tag + "-stalls.txt"));
             Engine.resetStats();
+            pacedFrames = 0;
+            pacedNanos = 0;
             long from = Engine.step();
             lastStep = steps > 0 ? from + steps : Long.MAX_VALUE; // 0: until hold
             if (resyncStep >= 0) {
-                Engine.runUntil(Math.min(lastStep, resyncStep)); // held there for the resync save
+                limit(Math.min(lastStep, resyncStep)); // held there for the resync save
+            } else if (worldStep >= 0) {
+                limit(Math.min(lastStep, worldStep)); // held there for the world save or load
+            } else if (wresyncStep >= 0) {
+                limit(Math.min(lastStep, wresyncStep)); // held there for the world resync
             } else {
                 runOn();
             }
@@ -751,7 +1080,7 @@ public final class Rig implements SCRIPT {
             running = false;
             sampling = false;
             GAME.SPEED.speedSet(0);
-            String end = Long.toHexString(city ? cityHash() : battleHash());
+            String end = Long.toHexString(stateHash());
             try {
                 timing.close();
                 if (!vanilla) {
@@ -768,8 +1097,9 @@ public final class Rig implements SCRIPT {
                         (System.nanoTime() - started) / 1e9));
                 return;
             }
-            event("finished", String.format(Locale.ROOT, "\"tag\":\"%s\",\"endStep\":%d,\"endHash\":\"%s\",\"men\":%d,\"wallSeconds\":%.1f,\"stats\":%s",
-                    tag, Engine.step(), end, men(), (System.nanoTime() - started) / 1e9, Engine.stats().toJson()));
+            event("finished", String.format(Locale.ROOT, "\"tag\":\"%s\",\"endStep\":%d,\"endHash\":\"%s\",\"men\":%d,\"wallSeconds\":%.1f,"
+                    + "\"pacedFrames\":%d,\"pacedSeconds\":%.1f,\"stats\":%s", tag, Engine.step(), end, men(),
+                    (System.nanoTime() - started) / 1e9, pacedFrames, pacedNanos / 1e9, Engine.stats().toJson()));
         }
 
         /** Step 1: the debug panel's invasion. Step 2: its launch (the end of the warning): the army enters the city. */
