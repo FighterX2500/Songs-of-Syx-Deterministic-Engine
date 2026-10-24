@@ -1,6 +1,141 @@
+diff -ru -U2 a/game/events/faction/EventFactionPeace.java b/game/events/faction/EventFactionPeace.java
+--- a/game/events/faction/EventFactionPeace.java	2025-09-22 07:59:34.000000000 +0500
++++ b/game/events/faction/EventFactionPeace.java	2026-10-25 04:14:00.785138400 +0500
+@@ -78,7 +78,7 @@
+ 			if (e == null)
+ 				return;
+ 			
+-			if (e == FACTIONS.player())
++			if (!(e instanceof FactionNPC)) // SOSDET: a human that is not this one is no NPC (ADR 0004)
+ 				return;
+ 			
+ 			if (DIP.WAR().is((FactionNPC) e) && DIP.ALLY().is(f)) {
+diff -ru -U2 a/game/events/faction/EventFactionWar.java b/game/events/faction/EventFactionWar.java
+--- a/game/events/faction/EventFactionWar.java	2025-09-22 07:59:34.000000000 +0500
++++ b/game/events/faction/EventFactionWar.java	2026-10-25 04:14:00.785138400 +0500
+@@ -22,7 +22,7 @@
+ public class EventFactionWar extends EventResource{
+ 
+ 	
+-	private static final double dtime = TIME.secondsPerDay()*16;
++	private final double dtime = TIME.secondsPerDay()*16; // SOSDET: per instance, so the menu's script scan can load the shipped class (SOS-46)
+ 	private double timer = dtime;
+ 	private int nextFaction;
+ 	
+@@ -59,7 +59,7 @@
+ 			for (RegDist d : WORLD.PATH().regFinder.all(f, Treaty.FACTION_BORDERS, WRegSel.CAPITOLS())) {
+ 				if (d.reg.faction() == null)
+ 					continue;
+-				if (d.reg.faction() == f || d.reg.faction() == FACTIONS.player())
++				if (d.reg.faction() == f || !(d.reg.faction() instanceof FactionNPC)) // SOSDET: a human that is not this one is no NPC (ADR 0004)
+ 					continue;
+ 				if (FACTIONS.player().realm().regions() < 3 && RD.DIST().reachable(d.reg))
+ 					continue;
+diff -ru -U2 a/game/events/faction/player/War.java b/game/events/faction/player/War.java
+--- a/game/events/faction/player/War.java	2026-06-08 07:29:28.000000000 +0500
++++ b/game/events/faction/player/War.java	2026-10-25 04:14:00.786140700 +0500
+@@ -48,7 +48,7 @@
+ 			
+ 			@Override
+ 			public double vGet(Player f) {
+-				return teachings;
++				return f.index() == 0 ? teachings : 0; // SOSDET: the war event works for slot 0's human until M4 (SOS-46)
+ 			}
+ 		};
+ 		
+@@ -67,7 +67,7 @@
+ 	public void load(FileGetter file) throws IOException {
+ 		warCount = file.d();
+ 		int fi = file.i();
+-		warner = fi >= 0 ? (FactionNPC) FACTIONS.all().get(fi) : null;
++		warner = fi >= 0 && FACTIONS.all().get(fi) instanceof FactionNPC ? (FactionNPC) FACTIONS.all().get(fi) : null; // SOSDET: a human that is not this one is no NPC (ADR 0004)
+ 	}
+ 
+ 	public void clear() {
+@@ -177,7 +177,7 @@
+ 		LIST<RegDist> proxies = WORLD.PATH().regFinder.all(f, Treaty.FACTION_REACHABLE_NPC_TRADE, WRegSel.DUMMY());
+ 		int am = 0;
+ 		for (RegDist d : proxies) {
+-			if (d.reg.faction() != null && d.reg.faction() != f && DIP.WAR().is(FACTIONS.player(), d.reg.faction())) {
++			if (d.reg.faction() instanceof FactionNPC && d.reg.faction() != f && DIP.WAR().is(FACTIONS.player(), d.reg.faction())) { // SOSDET: a human that is not this one is no NPC (ADR 0004)
+ 				am++;
+ 			}
+ 		}
+@@ -185,7 +185,7 @@
+ 			return false;
+ 		am = RND.rInt(am);
+ 		for (RegDist d : proxies) {
+-			if (d.reg.faction() != null && d.reg.faction() != f && DIP.WAR().is(FACTIONS.player(), d.reg.faction())) {
++			if (d.reg.faction() instanceof FactionNPC && d.reg.faction() != f && DIP.WAR().is(FACTIONS.player(), d.reg.faction())) { // SOSDET: a human that is not this one is no NPC (ADR 0004)
+ 				am--;
+ 				if (am <= 0) {
+ 					int a = proxyMove(f, (FactionNPC) d.reg.faction());
+diff -ru -U2 a/game/faction/diplomacy/DipStance.java b/game/faction/diplomacy/DipStance.java
+--- a/game/faction/diplomacy/DipStance.java	2026-06-17 10:48:06.000000000 +0500
++++ b/game/faction/diplomacy/DipStance.java	2026-10-25 04:14:00.786140700 +0500
+@@ -83,11 +83,16 @@
+ 		private Faction cf;
+ 		private final ArrayList<Faction> tmp = new ArrayList<Faction>(FACTIONS.MAX());
+ 		private final ArrayList<FactionNPC> player = new ArrayList<FactionNPC>(FACTIONS.MAX());
++		// SOSDET: the player list's own stamp and the human it was built for: with several humans FACTIONS.player()
++		// is this PC's human in the city part and the current one in the world part, and the list is shared (SOS-46)
++		private int playerState = -1;
++		private Faction playerFor;
+ 		
+ 		public LIST<? extends Faction> all(Faction f){
+ 			if (f == FACTIONS.player()) {
+-				if (state[f.index()] != DIP.s.stateI) {
+-					state[f.index()] = DIP.s.stateI;
++				if (playerFor != f || playerState != DIP.s.stateI) { // SOSDET: rebuilt for another human (SOS-46)
++					playerFor = f;
++					playerState = DIP.s.stateI;
+ 					player.clearSloppy();
+ 					for (FactionNPC o : FACTIONS.NPCs()) {
+ 						if (f != o && is(o, f))
+diff -ru -U2 a/game/faction/diplomacy/UpVassal.java b/game/faction/diplomacy/UpVassal.java
+--- a/game/faction/diplomacy/UpVassal.java	2026-06-17 10:48:04.000000000 +0500
++++ b/game/faction/diplomacy/UpVassal.java	2026-10-25 04:14:00.786140700 +0500
+@@ -94,7 +94,8 @@
+ 			
+ 			int credits = (int) FACTIONS.WORTH().faction();
+ 			credits*= 0.1;
+-			credits = Math.max(credits, FACTIONS.player().credits().worth.get(0)-FACTIONS.player().credits().worth.get(1));
++			credits = Math.max(credits, sosdet.Hooks.reportRead() ? sosdet.Hooks.reportI(sosdet.report.Field.WORTH_SEASON, 0) // SOSDET: the world part reads the city's report: only the
++					: FACTIONS.player().credits().worth.get(0)-FACTIONS.player().credits().worth.get(1));                 // human's own PC updates its worth (SOS-46)
+ 			if (credits < 0)
+ 				credits = 100;
+ 			
+@@ -153,6 +154,10 @@
+ 			aa = new boolean[all.size()];
+ 			Arrays.fill(aa, true);
+ 			for (int i = 0; i < all.size(); i++) {
++				if (!(all.get(i) instanceof FactionNPC)) { // SOSDET: a human that is not this one is no NPC (ADR 0004)
++					fi[i] = -1;
++					continue;
++				}
+ 				FactionNPC f = (FactionNPC) all.get(i);
+ 				fi[i] = f.index();
+ 				fii[i] = f.iteration();
+@@ -235,6 +240,7 @@
+ 				protected void clickA() {
+ 					if (!accepted && TIME.days().bitsSinceStart()-day < 4) {
+ 						accepted = true;
++						if (!sosdet.game.cmd.Diplomacy.tributeAccept(fi, fii, creds, aa)) // SOSDET: in a session a command, applied in the step (SOS-46)
+ 						for (int i = 0; i < creds.length; i++) {
+ 							if (f(i) != null) {
+ 								if (aa[i]) {
+@@ -261,7 +267,7 @@
+ 		}
+ 		
+ 		private FactionNPC f(int i) {
+-			FactionNPC f = (FactionNPC) FACTIONS.getByIndex(fi[i]);
++			FactionNPC f = fi[i] < 0 ? null : (FactionNPC) FACTIONS.getByIndex(fi[i]); // SOSDET: a human that is not this one is no NPC (ADR 0004)
+ 			if (f != null &&f.isActive() &&  f.iteration() == fii[i] && DIP.overlord(f) == FACTIONS.player()) {
+ 				return f;
+ 			}
 diff -ru -U2 a/game/faction/player/BoostCompound.java b/game/faction/player/BoostCompound.java
 --- a/game/faction/player/BoostCompound.java	2026-06-12 10:41:16.000000000 +0500
-+++ b/game/faction/player/BoostCompound.java	2026-10-25 02:22:40.897515900 +0500
++++ b/game/faction/player/BoostCompound.java	2026-10-25 04:14:00.787140200 +0500
 @@ -37,6 +37,24 @@
  		return ((FactionNPC)f).bonus.getD(bo);
  	}
@@ -69,9 +204,27 @@ diff -ru -U2 a/game/faction/player/BoostCompound.java b/game/faction/player/Boos
  		}
  	}
  	
+diff -ru -U2 a/game/faction/player/PBonusSetting.java b/game/faction/player/PBonusSetting.java
+--- a/game/faction/player/PBonusSetting.java	2026-06-18 20:59:32.000000000 +0500
++++ b/game/faction/player/PBonusSetting.java	2026-10-25 04:14:00.787140200 +0500
+@@ -103,11 +103,13 @@
+ 				
+ 				@Override
+ 				public double vGet(Player f) {
+-					return 1.0;
++					return f.bonusesCustom == PBonusSetting.this ? 1.0 : 0; // SOSDET: each human's own bonuses (SOS-46)
+ 				}
+ 				
+ 				@Override
+ 				public double vGet(HCLASS_RACE t) {
++					if (FACTIONS.player().bonusesCustom != PBonusSetting.this) // SOSDET: the city's own human's bonuses only (SOS-46)
++						return 0;
+ 					if (b == BOOSTABLES.BEHAVIOUR().HAPPI) {
+ 						if (t.cl == HCLASSES.CITIZEN() && STATS.POP().POP.data(HCLASSES.CITIZEN()).get(t.race) == 0)
+ 							return 0;
 diff -ru -U2 a/game/faction/player/PLevels.java b/game/faction/player/PLevels.java
 --- a/game/faction/player/PLevels.java	2026-06-29 08:30:04.000000000 +0500
-+++ b/game/faction/player/PLevels.java	2026-10-25 02:22:40.898514300 +0500
++++ b/game/faction/player/PLevels.java	2026-10-25 04:14:00.788182800 +0500
 @@ -96,6 +96,11 @@
  		bos = new BoostCompound<PLevels.Level>(boosters, levels) {
  			
@@ -83,4 +236,176 @@ diff -ru -U2 a/game/faction/player/PLevels.java b/game/faction/player/PLevels.ja
 +			@Override
  			protected double getValue(Level t) {
  				return current.index >= t.index ? 1 : 0;
+ 			}
+diff -ru -U2 a/game/faction/trade/TradeSorter.java b/game/faction/trade/TradeSorter.java
+--- a/game/faction/trade/TradeSorter.java	2026-06-25 10:27:14.000000000 +0500
++++ b/game/faction/trade/TradeSorter.java	2026-10-25 04:14:00.788182800 +0500
+@@ -194,6 +194,8 @@
+ 	}
+ 	
+ 	private int sellPriceItemPlayer(TRADABLE res, int am, Faction buyer, double distance) {
++		if (!(buyer instanceof FactionNPC)) // SOSDET: a human that is not this one is no NPC (ADR 0004)
++			return -1;
+ 		FactionNPC f = (FactionNPC) buyer;
+ 		int price = f.res(res).priceAt(am);
+ 		double toll = TradeManager.totalFee(FACTIONS.player(), buyer, distance, res, am)/(double)am;
+diff -ru -U2 a/util/colors/COLOR_MAP.java b/util/colors/COLOR_MAP.java
+--- a/util/colors/COLOR_MAP.java	2026-04-06 08:53:34.000000000 +0500
++++ b/util/colors/COLOR_MAP.java	2026-10-25 04:14:00.789151400 +0500
+@@ -47,7 +47,7 @@
+ 			return F_REBEL;
+ 		if (f == FACTIONS.player())
+ 			return F_PLAYER;
+-		if (DIP.get((FactionNPC)f).ally)
++		if (f instanceof FactionNPC && DIP.get((FactionNPC)f).ally) // SOSDET: a human that is not this one is no NPC (ADR 0004)
+ 			return F_ALLY;
+ 		if (!DIP.WAR().is(FACTIONS.player(), f))
+ 			return F_NEAUTRAL;
+diff -ru -U2 a/util/text/InsertFaction.java b/util/text/InsertFaction.java
+--- a/util/text/InsertFaction.java	2025-09-12 16:09:04.000000000 +0500
++++ b/util/text/InsertFaction.java	2026-10-25 04:14:00.789151400 +0500
+@@ -31,8 +31,8 @@
+ 
+ 			@Override
+ 			public void set(Faction t, Str str) {
+-				if (t == FACTIONS.player())
+-					str.add(FACTIONS.player().rulerName());
++				if (!(t instanceof FactionNPC)) // SOSDET: a human that is not this one is no NPC (ADR 0004)
++					str.add(((game.faction.player.Player) t).rulerName());
+ 				else {
+ 					str.add(((FactionNPC)t).court().king().name);
+ 				}
+@@ -59,7 +59,7 @@
+ 
+ 			@Override
+ 			public void set(Faction f, Str str) {
+-				if (f == FACTIONS.player()) {
++				if (!(f instanceof FactionNPC)) { // SOSDET: a human that is not this one is no NPC (ADR 0004)
+ 					str.add(RD.RACE(f.race()).names.rIntro.get(0));
+ 				}else {
+ 					str.add(((FactionNPC)f).nameIntro);
+@@ -73,8 +73,8 @@
+ 
+ 			@Override
+ 			public void set(Faction ff, Str str) {
+-				if (ff == FACTIONS.player()) {
+-					for (PTitle t : FACTIONS.player().titles.all()) {
++				if (!(ff instanceof FactionNPC)) { // SOSDET: a human that is not this one is no NPC (ADR 0004)
++					for (PTitle t : ((game.faction.player.Player) ff).titles.all()) {
+ 						if (t.selected()) {
+ 							str.add(t.name);
+ 							str.add(',').s();
+diff -ru -U2 a/view/world/ui/region/OtherHov.java b/view/world/ui/region/OtherHov.java
+--- a/view/world/ui/region/OtherHov.java	2026-05-23 10:49:42.000000000 +0500
++++ b/view/world/ui/region/OtherHov.java	2026-10-25 04:14:00.790150800 +0500
+@@ -46,7 +46,7 @@
+ 			
+ 		}else {
+ 			
+-			FactionNPC f = (FactionNPC) reg.faction();
++			game.faction.Faction f = reg.faction(); // SOSDET: a human that is not this one is no NPC (ADR 0004)
+ 			if (reg.capitol()) {
+ 				b.add(UI.icons().s.crown);
+ 			}
+@@ -74,10 +74,10 @@
+ 		
+ 		if (reg.faction() != null) {
+ 			b.tab(9);
+-			FactionNPC f = (FactionNPC) reg.faction();
++			FactionNPC f = reg.faction() instanceof FactionNPC ? (FactionNPC) reg.faction() : null; // SOSDET: a human that is not this one is no NPC (ADR 0004)
+ 			if (DIP.WAR().is(FACTIONS.player(), reg.faction()))
+ 				b.error(Dic.¤¤AtWar);
+-			else {
++			else if (f != null) {
+ 				b.add(UI.icons().s.heart);
+ 				b.add(GFORMAT.perc(b.text(), ROPINION.get(f.court().king().roy())));
+ 			}
+@@ -93,7 +93,8 @@
+ 			b.add(b.text().add(2).s().add(RD.DIST().reachable(reg)));
+ 			b.NL();
+ 			if (reg.faction() != null) {
+-				b.add(b.text().add(3).s().add(((FactionNPC)reg.faction()).sanctified));
++				if (reg.faction() instanceof FactionNPC) // SOSDET: a human that is not this one is no NPC (ADR 0004)
++					b.add(b.text().add(3).s().add(((FactionNPC)reg.faction()).sanctified));
+ 			}	
+ 			
+ 			box.NL();
+diff -ru -U2 a/view/world/ui/region/PlayDebug.java b/view/world/ui/region/PlayDebug.java
+--- a/view/world/ui/region/PlayDebug.java	2026-02-16 13:37:58.000000000 +0500
++++ b/view/world/ui/region/PlayDebug.java	2026-10-25 04:14:00.790150800 +0500
+@@ -63,7 +63,8 @@
+ 			@Override
+ 			protected void clickA() {
+ 				if (reg.capitol()) {
+-					FACTIONS.remove((FactionNPC) reg.faction(), true);
++					if (reg.faction() instanceof FactionNPC) // SOSDET: a human that is not this one is no NPC (ADR 0004)
++							FACTIONS.remove((FactionNPC) reg.faction(), true);
+ 				}
+ 				
+ 				RD.setFaction(reg, selectedIs() ? null : FACTIONS.player(), true);
+diff -ru -U2 a/world/army/ai/War.java b/world/army/ai/War.java
+--- a/world/army/ai/War.java	2026-04-09 18:46:34.000000000 +0500
++++ b/world/army/ai/War.java	2026-10-25 04:14:00.791150900 +0500
+@@ -47,7 +47,7 @@
+ 		Faction f = FACTIONS.getByIndex(i);
+ 		if (!f.isActive())
+ 			return;
+-		if (f == FACTIONS.player())
++		if (!(f instanceof FactionNPC)) // SOSDET: a human that is not this one is no NPC (ADR 0004)
+ 			return;
+ 		recruiter.recruit((FactionNPC) f);
+ 		planForWar(f);
+diff -ru -U2 a/world/battle/Util.java b/world/battle/Util.java
+--- a/world/battle/Util.java	2026-06-18 21:36:26.000000000 +0500
++++ b/world/battle/Util.java	2026-10-25 04:14:00.795147900 +0500
+@@ -214,11 +214,13 @@
+ 
+ 		Faction fAttacker = side.us.get(0).faction();
+ 		Faction fDefender = reg.faction();
++		if (fDefender instanceof game.faction.player.Player && reg.capitol()) // SOSDET: a human's capitol falls only to an invasion
++			return;                                                           // of its city (M2); never taken here (SOS-46)
+ 		
+ 		if (fDefender == FACTIONS.player()) {
+ 			Str.TMP.clear().add(¤¤lostC).insert(0, reg.info.name());
+ 			new MessageText(¤¤lost).paragraph(Str.TMP).send();
+-		}else if (fDefender != null && fDefender.capitolRegion() == reg) {
++		}else if (fDefender instanceof FactionNPC && fDefender.capitolRegion() == reg) { // SOSDET: a human that is not this one is no NPC (ADR 0004)
+ 			Region newCapitol = reg;
+ 			int ri = Rnd.i(reg.faction().realm().all().size());
+ 			for (int i = 0; i < reg.faction().realm().all().size(); i++) {
+diff -ru -U2 a/world/map/fow/FOW.java b/world/map/fow/FOW.java
+--- a/world/map/fow/FOW.java	2025-12-10 17:58:10.000000000 +0500
++++ b/world/map/fow/FOW.java	2026-10-25 04:14:00.791150900 +0500
+@@ -82,7 +82,7 @@
+ 					visible.set(t, d, true);
+ 				if (WORLD.PATH().map.can(t, d)) {
+ 					Region to = WORLD.REGIONS().map.get(t, d);
+-					if (to == null || from == null || from == to || from.faction() == FACTIONS.player() || (from.faction() != null && DIP.get((FactionNPC) from.faction()).transit))
++					if (to == null || from == null || from == to || from.faction() == FACTIONS.player() || (from.faction() instanceof FactionNPC && DIP.get((FactionNPC) from.faction()).transit)) // SOSDET: a human that is not this one is no NPC (ADR 0004)
+ 						GUTIL.flooder().pushSmaller(t, d, t.getValue()+d.tileDistance());
+ 				}
+ 			}
+diff -ru -U2 a/world/overlay/OverlayDiplomacy.java b/world/overlay/OverlayDiplomacy.java
+--- a/world/overlay/OverlayDiplomacy.java	2026-06-17 10:48:04.000000000 +0500
++++ b/world/overlay/OverlayDiplomacy.java	2026-10-25 04:14:00.792150500 +0500
+@@ -43,7 +43,7 @@
+ 		}
+ 			
+ 		COLOR c = GCOLOR.MAP().F_REBEL;
+-		if (reg != null && reg.faction() != null && reg.faction() != FACTIONS.player()) {
++		if (reg != null && reg.faction() instanceof FactionNPC) { // SOSDET: a human that is not this one is no NPC (ADR 0004)
+ 			ColorImp col = ColorImp.TMP;
+ 			GCOLOR.UI().badToGood(col, ROPINION.get(((FactionNPC)reg.faction()).court().king().roy()));
+ 			c = col;
+diff -ru -U2 a/world/region/RDMilitary.java b/world/region/RDMilitary.java
+--- a/world/region/RDMilitary.java	2026-05-30 13:40:54.000000000 +0500
++++ b/world/region/RDMilitary.java	2026-10-25 04:14:00.792150500 +0500
+@@ -177,7 +177,7 @@
+ 	
+ 	public int conscripts(Race r, Faction f) {
+ 		
+-		if (f == FACTIONS.player()) {
++		if (!(f instanceof FactionNPC)) { // SOSDET: a human that is not this one is no NPC (ADR 0004)
+ 			if (RD.RACES().get(r) == null) {
+ 				return 0;
  			}

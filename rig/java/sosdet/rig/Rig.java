@@ -262,12 +262,13 @@ public final class Rig implements SCRIPT {
         private boolean worldSelfLoad;
         private Path worldFile;
         private List<String> worldKeys = new ArrayList<>();
-        // own-city mode (SOS-38 milestone 4): copy 1's reports to the followers through a file, the world hash per step
+        // own-city mode (SOS-38 milestone 4): copy 1's reports to the followers through a file, the world hash per step;
+        // with several humans (SOS-46) each copy's reports to every other copy
         private boolean ownCity;
         private Path reportsOutFile;
-        private Path reportsInFile;
-        private int reportsPc;
-        private long reportsOffset;
+        private final List<Path> reportsIn = new ArrayList<>();
+        private final List<Integer> reportsInPcs = new ArrayList<>();
+        private long[] reportsOffsets = new long[0];
         // world resync (SOS-38): copy 1 saves at wresyncStep; every copy, copy 1 too, loads only the world from it
         private long wresyncStep = -1;
         private boolean wresyncSaver;
@@ -441,11 +442,11 @@ public final class Rig implements SCRIPT {
                         Files.write(reportsOutFile, out, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
                     }
                 }
-                if (reportsInFile != null) {
-                    byte[] in = readNew(reportsInFile, reportsOffset);
-                    reportsOffset += in.length;
+                for (int i = 0; i < reportsIn.size(); i++) {
+                    byte[] in = readNew(reportsIn.get(i), reportsOffsets[i]);
+                    reportsOffsets[i] += in.length;
                     if (in.length > 0) {
-                        Engine.reportsIn(reportsPc, in);
+                        Engine.reportsIn(reportsInPcs.get(i), in);
                     }
                 }
             } catch (IOException e) {
@@ -502,6 +503,12 @@ public final class Rig implements SCRIPT {
         }
 
         /** What a file has past {@code offset} (a record still being written waits in the engine). */
+        private void reportsIn(String[] c) {
+            reportsInPcs.add(Integer.parseInt(c[1]));
+            reportsIn.add(Paths.get(rest(Arrays.copyOfRange(c, 1, c.length))));
+            reportsOffsets = Arrays.copyOf(reportsOffsets, reportsIn.size());
+        }
+
         private static byte[] readNew(Path file, long offset) throws IOException {
             if (!Files.exists(file)) {
                 return new byte[0];
@@ -993,11 +1000,13 @@ public final class Rig implements SCRIPT {
                 event("reportsout", "\"file\":\"" + clean(reportsOutFile.toString()) + "\"");
                 return;
             case "reportsfrom":
-                reportsPc = Integer.parseInt(c[1]);
-                Engine.reportsFrom(reportsPc);
-                reportsInFile = Paths.get(rest(Arrays.copyOfRange(c, 1, c.length)));
-                reportsOffset = 0;
-                event("reportsfrom", "\"pc\":" + reportsPc);
+                Engine.reportsFrom(Integer.parseInt(c[1]));
+                reportsIn(c);
+                event("reportsfrom", "\"pc\":" + c[1]);
+                return;
+            case "reportsin": // reportsin <pc> <file>: another PC's human's reports (SOS-46)
+                reportsIn(c);
+                event("reportsin", "\"pc\":" + c[1]);
                 return;
             case "worldresyncat":
                 wresyncStep = Long.parseLong(c[1]);
@@ -1057,6 +1066,10 @@ public final class Rig implements SCRIPT {
             case "localhuman":
                 Engine.localHuman(Integer.parseInt(c[1]));
                 event("localhuman", "\"slot\":" + Integer.parseInt(c[1]));
+                return;
+            case "pchuman": // pchuman <pc> <slot>
+                Engine.pcHuman(Integer.parseInt(c[1]), Integer.parseInt(c[2]));
+                event("pchuman", "\"pc\":" + c[1] + ",\"slot\":" + c[2]);
                 return;
             case "savegame":
                 event("savegame", RigHumans.save(dir.resolve(c[1])));

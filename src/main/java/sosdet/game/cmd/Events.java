@@ -20,6 +20,7 @@ import game.raiding.RaidingCurrent;
 import init.trade.TR;
 import init.trade.TRADABLE;
 import init.trade.TRADE_TYPE;
+import sosdet.Hooks;
 import sosdet.ai.CmdReader;
 import sosdet.ai.CmdWriter;
 import view.ui.message.MessageSection;
@@ -63,15 +64,15 @@ public final class Events {
                 for (int i = 0; i < res.length; i++) {
                     res[i] = r.i();
                 }
-                if (raider == null || res.length != TR.ALL().size()) {
-                    return false;
+                if (raider == null || res.length != TR.ALL().size() || !Hooks.issuerIsFirstHuman()) {
+                    return false; // the raid asks the first human until M4 (SOS-46)
                 }
                 return pay(raider, credits, res);
             }),
             new Command(RAIDER_ALLY_HELP, "raiderAllyHelp", r -> {
                 Raider raider = raider(r.i());
-                if (raider == null) {
-                    return false;
+                if (raider == null || !Hooks.issuerIsFirstHuman()) {
+                    return false; // the raid asks the first human until M4 (SOS-46)
                 }
                 invoke(RAIDER_SET_ALLY_FIGHT, GAME.raiders().current);
                 return true;

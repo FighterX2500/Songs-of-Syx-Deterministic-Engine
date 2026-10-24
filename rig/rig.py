@@ -566,6 +566,28 @@ def scenario_saves(args):
     return saves, autoload
 
 
+def make_humans(game, saves, n, run_dir):
+    """--humans: copy 1 makes n - 1 NPCs humans in the save and saves it, before the run; every copy then starts from
+    that save (SOS-46). Returns the saves and the human slots, slot 0 first."""
+    stop_copies()
+    c = Copy(1, game)
+    c.prepare(saves)
+    shutil.rmtree(c.data / "cache", ignore_errors=True)
+    c.start("sosdet-city")
+    c.wait("loaded", 0, 600)
+    move_offscreen(1)
+    c.send("load sosdet-city", "loaded", 600)
+    made = c.send("makehuman auto %d" % (n - 1), "makehuman", 600)
+    c.send("savegame humans.save", "savegame", 600)
+    stop_copies()
+    slots = [h["slot"] for h in made["humans"]]
+    if len(slots) != n:
+        fail("--humans %d: the save has %d humans: %s" % (n, len(slots), slots))
+    shutil.copy2(c.rig / "humans.save", run_dir / "humans.save")
+    log("the save with %d humans, slots %s: %s" % (n, slots, run_dir / "humans.save"))
+    return {"sosdet-city.save": run_dir / "humans.save"}, slots
+
+
 def run_evals(args):
     """The timing rule (requirements §4): vanilla, host and peer, one copy alone each, 10 minutes at speed 1."""
     game = pathlib.Path(os.environ.get("SOS_GAME_DIR") or fail("SOS_GAME_DIR is not set"))
@@ -748,6 +770,10 @@ def main():
     ap.add_argument("--follow", action="store_true",
                     help="city: own-city mode (SOS-38); copy 1's city is the one the world reads, the other copies follow"
                          " its reports with cities of their own, and the copies are compared on the world only")
+    ap.add_argument("--humans", type=int, default=0,
+                    help="city: N humans (SOS-46), one per copy: copy 1 first makes N - 1 NPCs humans and saves; copy k"
+                         " then runs human k's city in own-city mode and reads every other copy's reports; the copies"
+                         " are compared on the world only")
     ap.add_argument("--world-resync", type=int, default=0,
                     help="with --follow: copy 1 saves at this step, and every copy reloads only the world from it")
     ap.add_argument("--follower-saves", default="",
@@ -757,7 +783,8 @@ def main():
     ap.add_argument("--cmds", default="",
                     help="player actions copy 1 takes once every copy runs, ';'-separated or @file (one per line), 3 s apart, through the UI's"
                          " own calls (e.g. 'curfew 1;men 0 40'); the others get them through the host's log (ADR 0002);"
-                         " 'wait <s>' pauses the actions")
+                         " 'wait <s>' pauses the actions; 'k: <action>' is copy k's player's instead (SOS-46: with"
+                         " --humans each copy is its own human)")
     ap.add_argument("--warm", default="",
                     help="copies (e.g. 3 or 2,3) that play the autoloaded game normally for 30 game seconds before the"
                          " session, so their session game is not the first one their process has run")
@@ -814,6 +841,11 @@ def main():
                         or args.resync_on_desync):
         fail("--follow needs a city run with the AI on the host, without --replay or --resync (a whole-game resync"
              " would take the followers' cities; use --world-resync)")
+    if args.humans and (args.humans != args.copies or args.humans < 2 or args.scenario != "city" or args.ai != "host"
+                        or args.follow or args.replay or args.resync or args.resync_on_desync or args.world_resync
+                        or args.remote):
+        fail("--humans N needs N copies (2 or more), a city run with the AI on the host, without --follow, --replay,"
+             " --resync, --world-resync or --remote")
     if 0 < args.pace_lead < HASH_EVERY:
         fail("--pace-lead %d: the host learns a copy's step from its hashes, every %d steps; use 0 or at least %d"
              % (args.pace_lead, HASH_EVERY, HASH_EVERY))
@@ -831,6 +863,9 @@ def main():
             if not (REAL / "saves" / "saves" / s).is_file():
                 fail("no save %s" % (REAL / "saves" / "saves" / s))
     saves, autoload = scenario_saves(args)
+    human_slots = []
+    if args.humans:
+        saves, human_slots = make_humans(game, saves, args.humans, run_dir)
 
     if args.remote and (not REMOTE or not 1 < args.remote <= args.copies):
         fail("--remote needs SOSDET_RIG_REMOTE=user@host and a copy other than copy 1 (the host)")
@@ -899,7 +934,7 @@ def main():
         if args.ai == "host":
             c.send("ai %s %s" % ("host" if c.k == 1 and not args.replay else "peer", start_id), "ai")
             c.send("pc %d" % (c.k - 1), "pc")  # the host is PC 0
-            if args.follow:
+            if args.follow or args.humans:
                 c.send("owncity", "owncity")
         else:
             c.send("ai instep", "ai")
@@ -913,6 +948,15 @@ def main():
         time.sleep(5)
         if args.ai == "host":
             c.send("ailog %s %s" % ("host" if c.k == 1 and not args.replay else "peer", host_log), "ailog")
+        if args.humans:
+            # each copy is one human (SOS-46): its city's reports go to every other copy through files, as the mod
+            # will send them over the network
+            for o in copies:
+                c.send("pchuman %d %d" % (o.k - 1, human_slots[o.k - 1]), "pchuman")
+            c.send("reportsout %s" % (c.rig / "reports.bin"), "reportsout")
+            for o in copies:
+                if o.k != c.k:
+                    c.send("reportsin %d %s" % (o.k - 1, o.rig / "reports.bin"), "reportsin")
         if args.follow:
             # copy 1's city reports go to the followers through a file, as the mod will send them over the network
             if c.k == 1:
@@ -995,6 +1039,11 @@ def main():
             time.sleep(float(action.split()[1]))
             continue
         time.sleep(3)
+        k, sep, rest = action.partition(":")  # "k: action": copy k's player acts (SOS-46: each copy is a human)
+        if sep and k.strip().isdigit() and 1 <= int(k) <= len(copies):
+            copies[int(k) - 1].send("cmd " + rest.strip(), "cmd")
+            log("copy %d's player: %s" % (int(k), rest.strip()))
+            continue
         copies[0].send("cmd " + action, "cmd")
         log("copy 1 (the host's player): " + action)
 

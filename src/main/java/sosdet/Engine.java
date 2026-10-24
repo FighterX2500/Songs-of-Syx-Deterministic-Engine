@@ -229,18 +229,42 @@ public final class Engine {
         if (pc < 0 || pc == s.ai().localPc()) {
             throw new IllegalArgumentException("SOSDET: reports from PC " + pc + " (this PC is " + s.ai().localPc() + ")");
         }
+        if (s.humans().length > 1) {
+            throw new IllegalStateException("SOSDET: reportsFrom with " + s.humans().length + " humans; each PC runs its own"
+                    + " human's city (ADR 0004)");
+        }
         s.reportsFrom = pc;
     }
 
-    /** More of PC {@code pc}'s reports, in any pieces; a repeated report changes nothing. Feed them after the load. */
+    /**
+     * More of PC {@code pc}'s reports, in any pieces: its human's city (ADR 0004), or on a follower the source's. A
+     * repeated report changes nothing. Feed them after the load.
+     */
     public static void reportsIn(int pc, byte[] bytes) {
         Session s = required();
-        if (pc != s.reportsFrom) {
+        if (!s.ownCity) {
+            throw new IllegalStateException("SOSDET: reportsIn in co-op; every PC takes the same reports itself");
+        }
+        if (s.reportsFrom >= 0 && pc != s.reportsFrom) {
             throw new IllegalArgumentException("SOSDET: reports from PC " + pc + ", the world reads PC " + s.reportsFrom
                     + "'s city");
         }
-        for (byte[] r : s.reportFeed.read(bytes)) {
-            s.reportReceived(CityReport.fromBytes(r, s.city().layout()));
+        if (pc < 0 || pc >= s.pcHumans.length) {
+            throw new IllegalArgumentException("SOSDET: reports from PC " + pc + ", not 0 to " + (s.pcHumans.length - 1));
+        }
+        if (pc == s.ai().localPc()) {
+            throw new IllegalArgumentException("SOSDET: reports from PC " + pc + ", this PC itself");
+        }
+        if (s.loading) {
+            throw new IllegalStateException("SOSDET: reports from PC " + pc + " while the game loads; feed them after the load");
+        }
+        for (byte[] r : s.feedIn(pc).read(bytes)) {
+            CityReport c = CityReport.fromBytes(r, s.city().layout());
+            if (s.reportsFrom < 0 && c.faction != s.pcHumans[pc]) {
+                throw new IllegalArgumentException("SOSDET: PC " + pc + " sent a city report of faction " + c.faction
+                        + ", its human is slot " + s.pcHumans[pc]);
+            }
+            s.reportReceived(c);
         }
     }
 
@@ -258,10 +282,12 @@ public final class Engine {
         if (s.streams.inStep()) {
             throw new IllegalStateException("SOSDET: a world resync is saved between steps, not inside one");
         }
+        oneHuman(s);
         long step = s.clock.step();
         GameWorldLoad.save(file);
         s.clock.runUntil(step); // the host waits for its own load too
-        return new WorldResync(step, s.hashes.epoch() + 1, s.streams.worldDraws(), s.reports.ledgerOut()).toBytes();
+        return new WorldResync(step, s.hashes.epoch() + 1, s.streams.worldDraws(),
+                s.reports(s.localHuman).ledgerOut()).toBytes();
     }
 
     /**
@@ -278,7 +304,8 @@ public final class Engine {
         if (s.clock.step() != r.step) {
             throw new IllegalStateException("SOSDET: a world resync for step " + r.step + " loaded at step " + s.clock.step());
         }
-        if (s.reports.current() == null) {
+        oneHuman(s);
+        if (s.reports(s.localHuman).current() == null) {
             throw new IllegalStateException("SOSDET: a world resync at step " + r.step + ", before the first city report:"
                     + " the load counts the soldiers away from it");
         }
@@ -296,9 +323,17 @@ public final class Engine {
         }
         s.worldLoads++;
         s.streams.worldDraws(r.worldDraws);
-        s.reports.ledgerIn(r.ledger);
+        s.reports(s.localHuman).ledgerIn(r.ledger);
         s.hashes.rewind(r.step, r.hashEpoch);
         s.clock.runUntil(r.step);
+    }
+
+    /** A world resync carries one human's open changes; several humans' come after milestone 1 (plan 0004). */
+    private static void oneHuman(Session s) {
+        if (s.humans().length > 1) {
+            throw new IllegalStateException("SOSDET: a world resync with " + s.humans().length + " humans is not supported"
+                    + " yet (plan 0004)");
+        }
     }
 
     // ------------------------------------------------------------ the AI general (requirements §3)
@@ -344,10 +379,32 @@ public final class Engine {
         for (int h : GameHumans.get().slots()) {
             if (h == slot) {
                 s.localHuman = slot;
+                s.pcHumans[s.ai().localPc()] = slot; // this PC's world commands act for it too
                 return;
             }
         }
         throw new IllegalArgumentException("SOSDET: slot " + slot + " is not a human in this game");
+    }
+
+    /**
+     * PC {@code pc}'s human (ADR 0004): its world commands act for that human, and its city reports are that human's.
+     * Set it at step 0, for every PC, the same on every PC; for this PC it also sets {@link #localHuman}.
+     */
+    public static void pcHuman(int pc, int slot) {
+        Session s = required();
+        if (s.clock.step() != 0) {
+            throw new IllegalStateException("SOSDET: a PC's human is set before the run (step " + s.clock.step() + ")");
+        }
+        if (pc < 0 || pc >= Session.SLOTS) {
+            throw new IllegalArgumentException("SOSDET: PC " + pc + " is out of range");
+        }
+        if (!s.isHuman(slot)) {
+            throw new IllegalArgumentException("SOSDET: slot " + slot + " is not a human in this game");
+        }
+        s.pcHumans[pc] = slot;
+        if (pc == s.ai().localPc()) {
+            s.localHuman = slot;
+        }
     }
 
     /** The mod's number for this PC: 0 on the host, from 1 on a peer (for feedback only the issuer gets). */

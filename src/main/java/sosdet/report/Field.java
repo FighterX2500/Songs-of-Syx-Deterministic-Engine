@@ -8,6 +8,8 @@ package sosdet.report;
 public enum Field {
     // A3, B7: the treasury
     CREDITS(Shape.ONE),
+    /** The treasury's worth now less a season ago ({@code PCredits.worth}): the vassal tribute's floor (SOS-46). */
+    WORTH_SEASON(Shape.ONE),
     // A10: the entry
     ENTRY_CLOSED(Shape.ONE),
     ENTRY_POINTS(Shape.ONE),

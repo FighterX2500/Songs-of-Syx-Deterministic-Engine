@@ -53,6 +53,7 @@ public final class Hooks {
     private static final long TILE_ORDER_SEED = 0x5050L;
     private static final long RANDOM_TABLE_SEED = 0x52414E30L;
     private static final int LOAD_VIEW_SEED = 0x56494557; // "VIEW"
+    private static final int[] FIRST_HUMAN = {0};
 
     private Hooks() {
     }
@@ -171,6 +172,16 @@ public final class Hooks {
      */
     public static boolean stepBegin() {
         Session s = Engine.session();
+        if (s.ownCity && s.clock.step() == 0) {
+            s.checkPcHumans();
+        }
+        if (s.ownCity && s.reportsFrom < 0 && s.reports(s.localHuman).current() == null
+                && !s.reports(s.localHuman).pending()) {
+            // the load report goes out before this PC waits for the others' (SOS-46): with several humans every PC waits
+            // for every other's first report, which none would send from a world part it may not run
+            // taken at the last step run, so a regular report the next step takes is never a repeat of it
+            s.takeReport(s.clock.step(), s.clock.step() + 1);
+        }
         if (s.battleLeaving || !s.ai().mayRun(s.clock.step() + 1) || !s.worldMayRun(s.clock.step() + 1)) {
             s.clock.hold();
             return false;
@@ -196,6 +207,9 @@ public final class Hooks {
         long step = s.clock.step();
         if (s.pathQueue != null) {
             long start = System.nanoTime();
+            // the city's paths, queued in the city part: run as the city part, so the report hooks read the live city
+            // and FACTIONS.player() is this PC's human, not the world part's current one (SOS-46)
+            s.part = StepParts.CITY;
             s.pathJobs += s.paths.run(s.pathQueue);
             s.pathNanos += System.nanoTime() - start;
             s.pathQueue = null;
@@ -203,7 +217,7 @@ public final class Hooks {
         s.streams.worldPart(false);
         if (!s.txns.isEmpty()) {
             s.part = StepParts.CITY; // the city tail: the world part's changes to the city apply (ADR 0005 §3)
-            s.txns.apply(s.txnApplier());
+            s.txns.apply(s.ownTxns); // this PC's human's only (ADR 0004)
         }
         if (s.hashes.due(step)) {
             // an own city's draws are its own: the world part's alone are counted (ADR 0005 §1)
@@ -212,8 +226,17 @@ public final class Hooks {
             if (s.ai().commanders().set()) {
                 clock = HashLog.mix(clock, s.ai().commanders().hash()); // left out until a table is set (SOS-15)
             }
-            CityReport r = s.reports.current();
-            s.hashes.take(step, clock, r == null ? 0 : r.hash(), s.source());
+            if (s.ownCity && s.humans().length > 1) {
+                // the human slots and each PC's: the same table on every PC, or each acts for other humans (SOS-46)
+                for (int h : s.humans()) {
+                    clock = HashLog.mix(clock, h);
+                }
+                for (int pc : s.pcHumans) {
+                    clock = HashLog.mix(clock, pc);
+                }
+            }
+            s.part = -1; // the same part on every PC, whether or not this one ran city paths or a city tail (SOS-46)
+            s.hashes.take(step, clock, s.reportsHash(), s.source());
         }
         s.times.record(System.nanoTime() - s.stepStartNanos);
         s.stepStartNanos = 0;
@@ -270,7 +293,11 @@ public final class Hooks {
         Session s = Engine.session();
         if (part == StepParts.WORLD_PART) {
             long step = s.clock.step();
-            if (s.reports.current() == null) {
+            if (!s.ownCity && s.humans().length > 1) {
+                throw new IllegalStateException("SOSDET: " + s.humans().length + " humans need own-city mode: each"
+                        + " human's city runs on its own PC");
+            }
+            if (s.reports(s.localHuman).current() == null && !s.reports(s.localHuman).pending()) {
                 s.takeReport(step, step);
             }
             if (Reports.takenAt(step)) {
@@ -279,14 +306,22 @@ public final class Hooks {
             s.part = part;
             s.streams.reseed(s.worldSeed(step));
             s.streams.worldPart(true);
-            s.reports.applyDue(step, s.inputApplier());
-            if (s.reports.current() == null) {
-                throw new IllegalStateException("SOSDET: no city report from PC " + s.reportsFrom + " for step " + step);
+            int[] humans = s.humans();
+            for (int h : humans) {
+                s.currentHuman = h; // a report's inputs act for its own human
+                s.reports(h).applyDue(step, s.inputApplier());
+                if (s.reports(h).current() == null) {
+                    throw new IllegalStateException("SOSDET: no city report of the human in slot " + h + " for step " + step
+                            + (h == s.localHuman ? " from PC " + s.reportsFrom : ""));
+                }
             }
+            s.currentHuman = 0;
             s.ai().worldPart();
             // after the world's commands: an answer given at this step comes first (SOS-45)
             if (s.promptTimer.step(s.clock.stepSeconds(), s.clock.agreedSpeed()) && s.worldPromptTimeout != null) {
+                s.currentHuman = s.worldPromptHuman; // as the human asked, whose answer it stands in for (SOS-46)
                 s.worldPromptTimeout.run();
+                s.currentHuman = 0;
             }
             return;
         }
@@ -361,12 +396,43 @@ public final class Hooks {
             return first;
         }
         Faction f = FACTIONS.getByIndex(slot);
-        return f instanceof Player ? (Player) f : first;
+        if (f instanceof Player) {
+            return (Player) f;
+        }
+        if (s.loading) {
+            return first;
+        }
+        throw new IllegalStateException("SOSDET: slot " + slot + " is this PC's or the current human, but no human (ADR 0004)");
     }
 
     /** True when the world part runs every human's world half: in a session; without one only slot 0's, as in vanilla. */
     public static boolean everyHuman() {
         return Engine.session() != null;
+    }
+
+    /**
+     * The human of PC {@code pc}: the one its world commands act for (ADR 0004); slot 0 for a PC the mod hasn't set
+     * while the game has one human.
+     */
+    public static int humanOf(int pc) {
+        Session s = Engine.session();
+        if (s == null) {
+            return 0;
+        }
+        int h = pc < 0 || pc >= s.pcHumans.length ? -1 : s.pcHumans[pc];
+        if (h >= 0) {
+            return h;
+        }
+        if (s.humans().length > 1) {
+            throw new IllegalStateException("SOSDET: PC " + pc + " has no human; set each PC's with pcHuman (ADR 0004)");
+        }
+        return 0;
+    }
+
+    /** The human slots, in slot order: slot 0 alone without a session. Not to be changed. */
+    public static int[] humanSlots() {
+        Session s = Engine.session();
+        return s == null ? FIRST_HUMAN : s.humans();
     }
 
     /** The world part works on the human in {@code slot} (its own world half), or on the first human again (slot 0). */
@@ -432,11 +498,22 @@ public final class Hooks {
     }
 
     public static double reportD(Field f, int i) {
-        return Engine.session().reports.value(f, i);
+        return Engine.session().reports().value(f, i);
+    }
+
+    /** A value of the human in {@code human}, from its report, whichever human the world part works on (ADR 0004). */
+    public static double reportD(int human, Field f, int i) {
+        return Engine.session().reports(human).value(f, i);
+    }
+
+    /** {@code PCredits.getD} in the world part: the treasury of the human it is, from its report (ADR 0004). */
+    public static double reportCredits(PCredits c) {
+        Session s = Engine.session();
+        return s.reports(creditsOwner(s, c)).value(Field.CREDITS, 0);
     }
 
     public static double reportD(Field f, int i, int j) {
-        return Engine.session().reports.value(f, i, j);
+        return Engine.session().reports().value(f, i, j);
     }
 
     public static int reportI(Field f, int i) {
@@ -445,6 +522,15 @@ public final class Hooks {
 
     public static int reportI(Field f, int i, int j) {
         return (int) reportD(f, i, j);
+    }
+
+    /** As {@link #reportI(Field, int)}, from the report of the human in {@code human} (ADR 0004). */
+    public static int reportI(int human, Field f, int i) {
+        return (int) reportD(human, f, i);
+    }
+
+    public static int reportI(int human, Field f, int i, int j) {
+        return (int) Engine.session().reports(human).value(f, i, j);
     }
 
     public static boolean reportB(Field f, int i) {
@@ -456,13 +542,23 @@ public final class Hooks {
      * booster added after the report's layout was made) is read live and counted in {@link Stats#reportMisses}.
      */
     public static double reportBoost(BValue v) {
+        return boostOf(v, FACTIONS.player().index());
+    }
+
+    /** As {@link #reportBoost(BValue)}, on the human {@code f}: from that human's report (ADR 0004). */
+    public static double reportBoost(BValue v, Faction f) {
+        return boostOf(v, f instanceof Player ? f.index() : FACTIONS.player().index());
+    }
+
+    // by slot, so this class's verification never loads the game's faction types (the tests run without the game)
+    private static double boostOf(BValue v, int human) {
         Session s = Engine.session();
         int i = s.city().indexOf(Field.BOOST, v);
         if (i >= 0) {
-            return s.reports.current().get(Field.BOOST, i);
+            return s.reports(human).current().get(Field.BOOST, i);
         }
-        s.reportMisses++;
-        return v.vGet(FACTIONS.player());
+        s.reportMiss(v);
+        return v.vGet((Player) FACTIONS.getByIndex(human));
     }
 
     /**
@@ -473,38 +569,46 @@ public final class Hooks {
         Session s = Engine.session();
         int i = s.city().indexOf(Field.BOOST, v);
         if (i >= 0) {
-            return s.reports.current().get(Field.BOOST_CLP, i);
+            return s.reports().current().get(Field.BOOST_CLP, i);
         }
-        s.reportMisses++;
+        s.reportMiss(v);
         return v.vGet(HCLASS_RACE.clP());
     }
 
-    /** A faction value's value: the player's from the report in the world part, otherwise the game's own. */
+    /** A faction value's value: a human's from its report in the world part, otherwise the game's own. */
     public static <T> double reportValue(Value<T> v, T t) {
-        if (reportRead() && t == (Object) FACTIONS.player()) {
+        if (reportRead() && t instanceof Player) {
             Session s = Engine.session();
             int i = s.city().indexOf(Field.VALUE, v);
             if (i >= 0) {
-                return s.reports.current().get(Field.VALUE, i);
+                return s.reports(((Player) t).index()).current().get(Field.VALUE, i);
             }
-            s.reportMisses++;
+            s.reportMiss(v);
         }
         return v.d.getD(t);
     }
 
     /**
-     * An unlock of a tech, level or title ({@code Lockers}) on something the player owns: the player's from the report
-     * in the world part, otherwise the game's own. It reads the city's tech, level and titles, which on another PC are
-     * that PC's (SOS-32). One without a slot (on a person) is read live and counted in {@link Stats#reportMisses}.
+     * An unlock of a tech, level or title ({@code Lockers}) on something a human owns: that human's from its report in
+     * the world part, otherwise the game's own. It reads the city's tech, level and titles, which on another PC are
+     * that PC's (SOS-32). A person's has no slot: in own-city mode or with several humans the world part takes it as
+     * unlocked, the same on every PC, since a human's people live in that human's city (SOS-46). Any other without a slot is read live and counted in
+     * {@link Stats#reportMisses}.
      */
     public static <T> double reportUnlock(Locker<T> l, DOUBLE_O<T> v, T t) {
-        if (reportRead() && GameReport.playerOwns(t)) {
-            Session s = Engine.session();
-            int i = s.city().indexOf(Field.UNLOCK, l);
-            if (i >= 0) {
-                return s.reports.current().get(Field.UNLOCK, i);
+        if (reportRead()) {
+            int h = GameReport.ownerHuman(t);
+            if (h >= 0) {
+                Session s = Engine.session();
+                int i = s.city().indexOf(Field.UNLOCK, l);
+                if (i >= 0) {
+                    return s.reports(h).current().get(Field.UNLOCK, i);
+                }
+                if (GameReport.person(t) && (s.ownCity || s.humans().length > 1)) {
+                    return 1; // co-op with one human reads it live, as before: every PC has the same city
+                }
+                s.reportMiss(l);
             }
-            s.reportMisses++;
         }
         return v.getD(t);
     }
@@ -512,8 +616,9 @@ public final class Hooks {
     // ------------------------------------------------------------ transactions (ADR 0005 §3, SOS-38)
 
     /**
-     * In the world part: a new transaction of this kind, queued for the step's city tail. Null anywhere else: the
-     * caller changes the city at once, as in vanilla (the city part, the tail itself, the UI, no session).
+     * In the world part: a new transaction of this kind for the current human, queued for the step's city tail. Null
+     * anywhere else: the caller changes the city at once, as in vanilla (the city part, the tail itself, the UI, no
+     * session).
      */
     private static Txn toCity(TxnKind kind) {
         Session s = Engine.session();
@@ -522,7 +627,18 @@ public final class Hooks {
         }
         Txn t = s.txns.add(s.clock.step());
         t.kind = kind;
+        t.human = s.currentHuman;
         return t;
+    }
+
+    /** The human whose treasury {@code c} is; the current human for one no human has. */
+    private static int creditsOwner(Session s, PCredits c) {
+        for (int h : s.humans()) {
+            if (((Player) FACTIONS.getByIndex(h)).credits() == c) {
+                return h;
+            }
+        }
+        return s.currentHuman;
     }
 
     /**
@@ -541,9 +657,10 @@ public final class Hooks {
         t.j = price;
         Session s = Engine.session();
         long step = s.clock.step();
-        s.reports.change(step, Field.CREDITS, 0, -price);
-        s.reports.change(step, Field.QUEUED, b.tradable.index(), 0, amount);
-        s.reports.change(step, Field.QUEUED, b.tradable.index(), type.index + 1, amount);
+        Reports r = s.reports(t.human);
+        r.change(step, Field.CREDITS, 0, -price);
+        r.change(step, Field.QUEUED, b.tradable.index(), 0, amount);
+        r.change(step, Field.QUEUED, b.tradable.index(), type.index + 1, amount);
         return true;
     }
 
@@ -572,9 +689,10 @@ public final class Hooks {
         t.j = price;
         Session s = Engine.session();
         long step = s.clock.step();
-        s.reports.change(step, Field.CREDITS, 0, price);
-        s.reports.change(step, Field.PROMISED, p.type.index(), 0, amount);
-        s.reports.change(step, Field.PROMISED, p.type.index(), type.index + 1, amount);
+        Reports r = s.reports(t.human);
+        r.change(step, Field.CREDITS, 0, price);
+        r.change(step, Field.PROMISED, p.type.index(), 0, amount);
+        r.change(step, Field.PROMISED, p.type.index(), type.index + 1, amount);
         return true;
     }
 
@@ -587,7 +705,9 @@ public final class Hooks {
         t.a = c;
         t.b = type;
         t.d = amount;
-        Engine.session().reports.change(Engine.session().clock.step(), Field.CREDITS, 0, (int) amount);
+        Session s = Engine.session();
+        t.human = creditsOwner(s, c);
+        s.reports(t.human).change(s.clock.step(), Field.CREDITS, 0, (int) amount);
         return true;
     }
 
@@ -602,7 +722,9 @@ public final class Hooks {
         t.c = res;
         t.d = amount;
         t.i = resAm;
-        Engine.session().reports.change(Engine.session().clock.step(), Field.CREDITS, 0, (int) amount);
+        Session s = Engine.session();
+        t.human = creditsOwner(s, c);
+        s.reports(t.human).change(s.clock.step(), Field.CREDITS, 0, (int) amount);
         return true;
     }
 
@@ -618,11 +740,12 @@ public final class Hooks {
      * {@code WDivStored.popSoldier} (C4): true when queued. The world part goes on to take the soldier out of their
      * division; the city tail brings a copy of them, as they were now, into the city at an entry point.
      */
-    public static boolean soldierReturns(Induvidual t, int div, int entrySeed) {
+    public static boolean soldierReturns(Induvidual t, int div, int entrySeed, int human) {
         Txn x = toCity(TxnKind.SOLDIER_RETURNS);
         if (x == null) {
             return false;
         }
+        x.human = human; // the division's human, whose city takes them back (SOS-46)
         Induvidual copy = new Induvidual(t.hType(), t.race());
         copy.copyFrom(t);
         x.a = copy;
@@ -632,11 +755,12 @@ public final class Hooks {
     }
 
     /** {@code WDivStored.age} (C4): true when queued; the world part has taken the retiree out of their division. */
-    public static boolean retiree(Induvidual i) {
+    public static boolean retiree(Induvidual i, int human) {
         Txn x = toCity(TxnKind.RETIREE);
         if (x == null) {
             return false;
         }
+        x.human = human; // the division's human (SOS-46)
         x.a = i;
         return true;
     }
@@ -727,7 +851,7 @@ public final class Hooks {
      * world's own invasions since, so every PC knows it at once and the city tail starts the invasion with it.
      */
     public static int invasionRef() {
-        return (int) Engine.session().reports.value(Field.INVASION_REF, 0);
+        return (int) Engine.session().reports().value(Field.INVASION_REF, 0);
     }
 
     /** {@code Invador.invade} (C6): true when queued for the city tail. */
@@ -738,7 +862,7 @@ public final class Hooks {
         }
         x.a = spec;
         Session s = Engine.session();
-        s.reports.change(s.clock.step(), Field.INVASION_REF, 0, 1);
+        s.reports(x.human).change(s.clock.step(), Field.INVASION_REF, 0, 1);
         return true;
     }
 
@@ -1080,6 +1204,7 @@ public final class Hooks {
         s.stepPromptShown = -1;
         if (s.plans().inGame()) { // unit tests have no game to reset
             WorldStatics.reset();
+            s.dropGameObjects();
         }
         s.afterLoad();
         s.loading = true;
@@ -1096,6 +1221,12 @@ public final class Hooks {
             return;
         }
         s.loading = false;
+        if (s.plans().inGame()) {
+            s.dropGameObjects(); // anything made while loading saw a game half built (SOS-46)
+            if (s.ownCity && s.clock.step() > 0) {
+                s.checkPcHumans(); // a load in the run (a resync, a battle's end): its humans must still match the PCs
+            }
+        }
         if (s.loadSeed != 0) {
             s.streams.leave();
         }
@@ -1216,15 +1347,48 @@ public final class Hooks {
      * {@code close} hides it. Kept for the decision command (SOS-35, {@code cmd.WorldBattles}). {@code timeout} is the
      * answer given when nobody answers in time, and {@code armies} wait in place until then (SOS-45).
      */
-    public static void worldPromptOpened(Object decides, Runnable close, Runnable timeout, int[] armies) {
+    public static boolean worldPromptOpened(Object decides, Runnable close, Runnable timeout, int[] armies) {
         Session s = Engine.session();
-        if (s != null) {
-            s.worldPrompt = decides;
-            s.worldPromptClose = close;
-            s.worldPromptTimeout = timeout;
-            s.worldPromptArmies = armies;
-            s.promptTimer.open();
+        if (s == null) {
+            return true;
         }
+        s.worldPrompt = decides;
+        s.worldPromptClose = close;
+        s.worldPromptTimeout = timeout;
+        s.worldPromptArmies = armies;
+        s.worldPromptHuman = s.part == StepParts.WORLD_PART ? s.currentHuman : s.localHuman;
+        s.promptTimer.open();
+        return s.worldPromptHuman == s.localHuman;
+    }
+
+    /**
+     * The world-battle prompt's "already open" test: with a session the engine's, the same on every PC, since only the
+     * asked human's PC shows the dialog (SOS-46); without one the dialog's own.
+     */
+    public static boolean worldPromptBlocked(boolean dialogOpen) {
+        Session s = Engine.session();
+        return s == null ? dialogOpen : s.worldPrompt != null;
+    }
+
+    /** True when the open world-battle prompt asks this PC's human (the rig answers only those). */
+    public static boolean worldPromptHere() {
+        Session s = Engine.session();
+        return s == null || s.worldPrompt == null || s.worldPromptHuman == s.localHuman;
+    }
+
+    /** Inside a command: true when it acts for the human the open world-battle prompt asks (SOS-46). */
+    public static boolean worldPromptAnswerer() {
+        Session s = Engine.session();
+        return s == null || s.currentHuman == s.worldPromptHuman;
+    }
+
+    /**
+     * Inside a world command: true when it acts for the first human. NPC requests and proposals and the raids ask the
+     * first human until M3 and M4 give each human their own (plan 0004); another human's answer is skipped (SOS-46).
+     */
+    public static boolean issuerIsFirstHuman() {
+        Session s = Engine.session();
+        return s == null || s.currentHuman == s.humans()[0];
     }
 
     /** True in a session's step: a yes/no the simulation asks is kept, and answered by command (cmd.StepPrompts). */
@@ -1232,18 +1396,37 @@ public final class Hooks {
         return Engine.session() != null && !outsideStep();
     }
 
-    /** The step asks a yes/no: keeps its actions; returns its key (the step and its order in the step), the same on every PC. */
+    /**
+     * The step asks a yes/no: keeps its actions; returns its key (the step and its order in the step), the same on every
+     * PC for a world question. A city question (asked in the city part, on its own PC only) counts apart, keys 32 to 63
+     * of its step. Returns -1 when this PC doesn't show it: a world question to another PC's human (SOS-46).
+     */
     public static long stepPromptOpened(Object yes, Object no) {
         Session s = Engine.session();
         long step = Engine.step();
         if (s.stepPromptStep != step) {
             s.stepPromptStep = step;
             s.stepPromptsInStep = 0;
+            s.stepCityPromptsInStep = 0;
         }
-        long key = step * 64 + s.stepPromptsInStep++;
-        s.stepPrompts.put(key, new Object[] {yes, no});
+        boolean world = s.part == StepParts.WORLD_PART;
+        int n = world ? s.stepPromptsInStep++ : 32 + s.stepCityPromptsInStep++;
+        if (n >= (world ? 32 : 64)) {
+            throw new IllegalStateException("SOSDET: more than 32 " + (world ? "world" : "city") + " questions in step " + step);
+        }
+        long key = step * 64 + n;
+        int human = world ? s.currentHuman : s.localHuman;
+        s.stepPrompts.put(key, new Object[] {yes, no, human});
+        if (human != s.localHuman) {
+            return -1;
+        }
         s.stepPromptShown = key; // the game's dialog shows one question: the last one asked
         return key;
+    }
+
+    /** True when the question's key is a world question's (asked in the world part, kept on every PC). */
+    public static boolean stepPromptWorld(long key) {
+        return key % 64 < 32;
     }
 
     /** The kept question this PC's dialog shows, or -1. */
@@ -1260,13 +1443,14 @@ public final class Hooks {
         }
     }
 
-    /** The oldest kept question's key, or -1 (the rig answers it). */
+    /** The oldest kept question to this PC's human, or -1 (the rig answers it). */
     public static long stepPromptOldest() {
         Session s = Engine.session();
         long oldest = -1;
         if (s != null) {
-            for (long key : s.stepPrompts.keySet()) {
-                if (oldest < 0 || key < oldest) {
+            for (java.util.Map.Entry<Long, Object[]> e : s.stepPrompts.entrySet()) {
+                long key = e.getKey();
+                if ((Integer) e.getValue()[2] == s.localHuman && (oldest < 0 || key < oldest)) {
                     oldest = key;
                 }
             }
@@ -1274,11 +1458,19 @@ public final class Hooks {
         return oldest;
     }
 
-    /** The answer command takes the kept question: the chosen action, or null when it is gone or has none. */
+    /**
+     * The answer command takes the kept question: the chosen action, or null when it is gone or has none. A world
+     * question's answer applies only from the human it asks (inside the world command, the current human); another's
+     * is skipped and the question stays (SOS-46).
+     */
     public static Object stepPromptTake(long key, boolean yes) {
         Session s = Engine.session();
-        Object[] actions = s == null ? null : s.stepPrompts.remove(key);
-        return actions == null ? null : actions[yes ? 0 : 1];
+        Object[] actions = s == null ? null : s.stepPrompts.get(key);
+        if (actions == null || stepPromptWorld(key) && (Integer) actions[2] != s.currentHuman) {
+            return null;
+        }
+        s.stepPrompts.remove(key);
+        return actions[yes ? 0 : 1];
     }
 
     // ------------------------------------------------------------ map battles (SOS-32)

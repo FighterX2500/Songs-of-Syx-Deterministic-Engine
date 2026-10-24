@@ -407,6 +407,32 @@ public final class WorldActions {
             });
             return true;
         }
+        case "wpeace": // wpeace: the faction screen's peace deal with the strongest NPC at war with the player, with the
+            // denari it asks, accepted (SOS-46)
+            Rig.later(() -> {
+                FactionNPC f = null;
+                for (FactionNPC ff : DIP.WAR().player()) {
+                    if (f == null || AD.power().get(ff) > AD.power().get(f)) {
+                        f = ff;
+                    }
+                }
+                if (f == null) {
+                    throw new IllegalStateException("the player is at war with no NPC");
+                }
+                Deal d = new Deal();
+                d.setFactionAndClear(f);
+                d.bools.PEACE.set(true);
+                int asked = Math.max(0, (int) -d.valueCredits() + 1);
+                d.player.credits.set(asked);
+                if (!d.canBeAccepted()) {
+                    throw new IllegalStateException("faction " + f.index() + " refuses peace for " + asked + " denari");
+                }
+                Rig.note("peace with faction " + f.index() + " for " + asked + " denari");
+                if (!Diplomacy.dealAccept(d)) {
+                    d.execute(true);
+                }
+            });
+            return true;
         case "wproposal": { // wproposal <happiness>: the NPC's proposal message accepted (an empty deal; skipped without a request)
             double happiness = Double.parseDouble(a[1]);
             Rig.later(() -> {

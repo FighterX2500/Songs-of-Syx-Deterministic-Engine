@@ -7,6 +7,8 @@ import java.util.Map;
 
 import game.GAME;
 import game.boosting.BOOSTING;
+import game.boosting.Boostable;
+import game.boosting.Booster;
 import game.faction.FACTIONS;
 import game.faction.Faction;
 import game.faction.npc.FactionNPC;
@@ -18,6 +20,8 @@ import snake2d.util.file.FileGetter;
 import snake2d.util.file.FilePutter;
 import snake2d.util.misc.ACTION;
 import snake2d.util.sets.ArrayList;
+import snake2d.util.sets.ArrayListGrower;
+import snake2d.util.sets.LIST;
 import snake2d.util.sets.KeyMap;
 import snake2d.util.sets.LinkedList;
 
@@ -46,6 +50,8 @@ public final class GameHumans extends Savable {
     private static final Field LISTENERS = field(Faction.FactionActivityListener.class, "all");
     private static final Field CONNECTERS = field(BOOSTING.class, "connecters");
     private static final Field LOCKS = field(GValueCat.Locks.class, "map");
+    private static final Field LOCK_INITS = field(GValueCat.Locks.class, "inits");
+    private static final Field BOOSTERS = field(Boostable.class, "all");
 
     private final ArrayList<Faction> all;
     private final ArrayList<FactionNPC> npcs;
@@ -64,6 +70,7 @@ public final class GameHumans extends Savable {
             spares[i] = spare();
         }
         GAME.saver().addSpecialSaver(this);
+        GAME.saver().add(new GameCityDivs(this)); // after AD's and FACTIONS's sections: the world is built first (SOS-46)
     }
 
     /** This game's humans: the {@code GameHumans} its {@code FACTIONS} holds. */
@@ -122,6 +129,9 @@ public final class GameHumans extends Savable {
         FactionNPC npc = (FactionNPC) old;
         if (npc == FACTIONS.otherFaction()) {
             throw new IllegalArgumentException("SOSDET: slot " + slot + " is the game's \"other faction\", which stays an NPC");
+        }
+        if (!npc.isActive() || npc.capitolRegion() == null) {
+            throw new IllegalArgumentException("SOSDET: slot " + slot + " has no realm; a human starts with a capitol");
         }
         Player p = put(slot);
         p.name.clear().add(npc.name);
@@ -212,7 +222,11 @@ public final class GameHumans extends Savable {
      * A Player that registers nothing game-wide. Its parts push values and locks under fixed keys, where a second push
      * crashes ({@code PCredits}, {@code PBonusSetting}, {@code PLevels}, {@code PTitles}), and connect boosters to the
      * boostables ({@code BoostCompound}). The registries are set aside while it is built and put back after, so only
-     * slot 0's Player is registered; its values and boosters read the Player they are asked about.
+     * slot 0's Player is registered; its values and boosters read the Player they are asked about. Its unlocks
+     * ({@code Lockers}: a level's or a title's) are dropped too: each would add a lock to what it unlocks, and the game
+     * passes a lockable only when every lock does, so an unused spare's title would lock its unlocks for everyone
+     * (SOS-46); slot 0's read the human asked. So are the boosters it adds to a boostable itself ({@code Emissaries}):
+     * each would count once more for every human.
      */
     private static Player spare() throws IOException {
         try {
@@ -232,7 +246,38 @@ public final class GameHumans extends Savable {
                 kept.add(copy);
                 m.clear();
             }
+            java.util.ArrayList<java.util.Set<ACTION>> lockInits = new java.util.ArrayList<>();
+            for (GValueCat<?> c : CATEGORIES) {
+                java.util.Set<ACTION> before = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
+                for (ACTION a : lockInits(c)) {
+                    before.add(a);
+                }
+                lockInits.add(before);
+            }
+            LIST<Boostable> boostables = BOOSTING.ALL();
+            int[] boosters = new int[boostables.size()];
+            int[] globals = new int[boostables.size()];
+            for (int i = 0; i < boostables.size(); i++) {
+                boosters[i] = boosters(boostables.get(i)).size();
+                globals[i] = boostables.get(i).fGlobal.size();
+            }
             Player p = new Player(new ArrayList<Faction>(1));
+            for (int i = 0; i < boostables.size(); i++) {
+                dropFrom(boosters(boostables.get(i)), boosters[i]);
+                dropFrom(boostables.get(i).fGlobal, globals[i]);
+            }
+            for (int i = 0; i < CATEGORIES.length; i++) {
+                LinkedList<ACTION> l = lockInits(CATEGORIES[i]);
+                java.util.ArrayList<ACTION> unlocks = new java.util.ArrayList<>();
+                for (ACTION a : l) {
+                    if (!lockInits.get(i).contains(a) && a.getClass().getName().equals(UNLOCK_PROMISE)) {
+                        unlocks.add(a);
+                    }
+                }
+                for (ACTION a : unlocks) {
+                    l.remove(a);
+                }
+            }
             for (int i = 0; i < maps.size(); i++) {
                 maps.get(i).clear();
                 for (Map.Entry<String, Object> e : kept.get(i).entrySet()) {
@@ -249,10 +294,39 @@ public final class GameHumans extends Savable {
         }
     }
 
+    private static final GValueCat<?>[] CATEGORIES = { GVALUES.INDU, GVALUES.REGION, GVALUES.FACTION, GVALUES.ROYALTY };
+    /** The promise a {@code Lockers} entry queues: an unlock, resolved into a lock when the values are set up. */
+    private static final String UNLOCK_PROMISE = "init.value.Lockers$LPromise";
+
+    /** A boostable's boosters ({@code Boostable.all}). */
+    private static ArrayListGrower<Booster> boosters(Boostable b) throws IllegalAccessException {
+        @SuppressWarnings("unchecked") // Boostable.all is an ArrayListGrower<Booster>
+        ArrayListGrower<Booster> l = (ArrayListGrower<Booster>) BOOSTERS.get(b);
+        return l;
+    }
+
+    /** Removes the boosters added after the first {@code keep}. */
+    private static void dropFrom(ArrayListGrower<Booster> l, int keep) {
+        java.util.ArrayList<Booster> added = new java.util.ArrayList<>();
+        for (int i = keep; i < l.size(); i++) {
+            added.add(l.get(i));
+        }
+        for (Booster b : added) {
+            l.remove(b);
+        }
+    }
+
+    /** A category's queued lock promises ({@code GValueCat.Locks.inits}). */
+    private static LinkedList<ACTION> lockInits(GValueCat<?> c) throws IllegalAccessException {
+        @SuppressWarnings("unchecked") // GValueCat.Locks.inits is a LinkedList<ACTION>
+        LinkedList<ACTION> l = (LinkedList<ACTION>) LOCK_INITS.get(c.LOCK);
+        return l;
+    }
+
     /** Every GVALUES category's values and locks, by key. */
     private static java.util.ArrayList<KeyMap<Object>> registries() throws IllegalAccessException {
         java.util.ArrayList<KeyMap<Object>> l = new java.util.ArrayList<>();
-        for (GValueCat<?> c : new GValueCat<?>[] { GVALUES.INDU, GVALUES.REGION, GVALUES.FACTION, GVALUES.ROYALTY }) {
+        for (GValueCat<?> c : CATEGORIES) {
             @SuppressWarnings("unchecked") // only emptied and refilled with its own entries
             KeyMap<Object> values = (KeyMap<Object>) (KeyMap<?>) c.map();
             @SuppressWarnings("unchecked") // GValueCat.Locks.map is a KeyMap of lockables

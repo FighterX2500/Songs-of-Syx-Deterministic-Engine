@@ -101,10 +101,12 @@ public final class GameReport implements CitySource {
         for (TECH t : TECHS.ALL()) {
             addUnlocks(t.lockers);
         }
-        for (Level lv : FACTIONS.player().level().all()) {
+        // slot 0's levels and titles: only its unlocks are the game's locks (GameHumans.spare), on every PC (SOS-46)
+        Player first = (Player) FACTIONS.getByIndex(0);
+        for (Level lv : first.level().all()) {
             addUnlocks(lv.lockers);
         }
-        for (PTitle ti : FACTIONS.player().titles.all()) {
+        for (PTitle ti : first.titles.all()) {
             addUnlocks(ti.lockers);
         }
         // in sosdet.report.Count order
@@ -123,11 +125,19 @@ public final class GameReport implements CitySource {
         }
     }
 
-    /** True for the player, a player region or one of the player's people: what an unlock reads the city's state for. */
-    public static boolean playerOwns(Object t) {
-        Faction p = FACTIONS.player();
-        return t == p || t instanceof Region && ((Region) t).faction() == p
-                || t instanceof Induvidual && ((Induvidual) t).faction() == p;
+    /**
+     * The slot of the human that is {@code t} or owns it (its region, one of its people), or -1: what an unlock reads a
+     * city's state for (ADR 0004).
+     */
+    public static int ownerHuman(Object t) {
+        Faction f = t instanceof Faction ? (Faction) t : t instanceof Region ? ((Region) t).faction()
+                : t instanceof Induvidual ? ((Induvidual) t).faction() : null;
+        return f instanceof Player ? f.index() : -1;
+    }
+
+    /** True for one of a city's people: an unlock on a person has no report slot. */
+    public static boolean person(Object t) {
+        return t instanceof Induvidual;
     }
 
     /** An unlock's value on the player, or on its capital for a region's: the same, as each reads only the player's. */
@@ -136,7 +146,8 @@ public final class GameReport implements CitySource {
         if (lock.lockable.values == GVALUES.FACTION) {
             return ((Locker<Faction>) lock.unlocker).progress(FACTIONS.player());
         }
-        return ((Locker<Region>) lock.unlocker).progress(FACTIONS.player().capitolRegion());
+        Region capitol = FACTIONS.player().capitolRegion();
+        return capitol == null ? 0 : ((Locker<Region>) lock.unlocker).progress(capitol); // no realm left (SOS-46)
     }
 
     @Override
@@ -157,9 +168,15 @@ public final class GameReport implements CitySource {
     }
 
     @Override
+    public int[] humans() {
+        return GameHumans.get().slots();
+    }
+
+    @Override
     public void fill(double[] v) {
         ReportLayout l = layout;
         v[l.slot(Field.CREDITS, 0)] = FACTIONS.player().credits().getD();
+        v[l.slot(Field.WORTH_SEASON, 0)] = FACTIONS.player().credits().worth.get(0) - FACTIONS.player().credits().worth.get(1);
         v[l.slot(Field.ENTRY_CLOSED, 0)] = bool(SETT.ENTRY().isClosed());
         v[l.slot(Field.ENTRY_POINTS, 0)] = bool(SETT.ENTRY().points.hasAny());
 

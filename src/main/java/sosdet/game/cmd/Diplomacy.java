@@ -3,6 +3,7 @@ package sosdet.game.cmd;
 import java.util.List;
 
 import game.faction.FACTIONS;
+import game.faction.FCredits.CTYPE;
 import game.faction.diplomacy.DIP;
 import game.faction.diplomacy.deal.Deal;
 import game.faction.diplomacy.deal.DealParty;
@@ -34,6 +35,7 @@ public final class Diplomacy {
     static final int REQUEST_EXPIRE = 8002;
     static final int VASSAL_RELEASE = 8003;
     static final int EMISSARIES = 8004;
+    static final int TRIBUTE_ACCEPT = 8005;
 
     /** The only {@code UIDipMessAction} in V71.44: a vassal asking for its freedom. */
     private static final String VASSAL_REQUEST = "game.events.faction.player.WarMessages$VassalRequest";
@@ -50,8 +52,9 @@ public final class Diplomacy {
             new Command(DEAL_PROPOSAL, "dealProposal", r -> {
                 Deal d = deal(r);
                 double happiness = r.d();
-                if (d == null || !d.npc.npc().request.has()) {
-                    return false; // answered or expired since, or the other player accepted it first
+                if (d == null || !d.npc.npc().request.has() || !sosdet.Hooks.issuerIsFirstHuman()) {
+                    return false; // answered or expired since, the other player accepted it first, or (SOS-46) the
+                                  // request asks the first human until M3
                 }
                 FactionNPC f = d.npc.npc();
                 d.execute(false);
@@ -61,8 +64,8 @@ public final class Diplomacy {
             }),
             new Command(REQUEST_EXPIRE, "requestExpire", r -> {
                 FactionNPC f = Args.npc(r);
-                if (f == null) {
-                    return false;
+                if (f == null || !sosdet.Hooks.issuerIsFirstHuman()) {
+                    return false; // the request asks the first human until M3 (SOS-46)
                 }
                 f.request.expire();
                 return true;
@@ -99,6 +102,33 @@ public final class Diplomacy {
                 }
                 ((EmiTypeRoy) type).set(f.court().all().get(succession), value);
                 return true;
+            }),
+            new Command(TRIBUTE_ACCEPT, "tributeAccept", r -> {
+                int n = r.i();
+                FactionNPC[] vassals = new FactionNPC[n];
+                int[] credits = new int[n];
+                boolean[] taken = new boolean[n];
+                for (int i = 0; i < n; i++) {
+                    vassals[i] = Args.npc(r);
+                    credits[i] = r.i();
+                    taken[i] = r.b();
+                }
+                if (!sosdet.Hooks.issuerIsFirstHuman()) {
+                    return false; // the overlord message goes to the first human until M3 (SOS-46)
+                }
+                boolean any = false;
+                for (int i = 0; i < n; i++) {
+                    FactionNPC f = vassals[i];
+                    if (f == null || DIP.overlord(f) != FACTIONS.player()) {
+                        continue;
+                    }
+                    if (taken[i]) {
+                        FACTIONS.player().credits().inc(credits[i], CTYPE.TRIBUTE);
+                    }
+                    ROPINION.OTHER().acceptTribute(f, taken[i]);
+                    any = true;
+                }
+                return any;
             }));
 
     private Diplomacy() {
@@ -142,6 +172,22 @@ public final class Diplomacy {
             throw new IllegalStateException("SOSDET: no command for the request message " + message.getClass().getName());
         }
         Commands.capture(Args.faction(new CmdWriter(VASSAL_RELEASE), f).d(happiness));
+        return true;
+    }
+
+    /**
+     * Hook in the overlord message's Accept ({@code UpVassal.MOverlord}): the vassals (faction index and iteration), the
+     * tribute each offers and whether it is taken. In vanilla the click pays at once, outside the step (SOS-46).
+     */
+    public static boolean tributeAccept(int[] factions, int[] iterations, int[] credits, boolean[] taken) {
+        if (!Commands.capturing()) {
+            return false;
+        }
+        CmdWriter w = new CmdWriter(TRIBUTE_ACCEPT).i(factions.length);
+        for (int i = 0; i < factions.length; i++) {
+            w.i(factions[i]).i(iterations[i]).i(credits[i]).b(taken[i]);
+        }
+        Commands.capture(w);
         return true;
     }
 
@@ -208,8 +254,8 @@ public final class Diplomacy {
         }
         Terms player = new Terms(r);
         Terms other = new Terms(r);
-        if (npc == null) {
-            return null;
+        if (npc == null || FACTIONS.player().capitolRegion() == null) {
+            return null; // gone, or (SOS-46) the human has no realm left to deal from
         }
         Deal d = new Deal();
         d.setFactionAndClear(npc);

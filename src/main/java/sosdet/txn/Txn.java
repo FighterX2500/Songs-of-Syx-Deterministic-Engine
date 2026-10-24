@@ -15,6 +15,8 @@ public final class Txn {
     public int i;
     public int j;
     public double d;
+    /** The human whose city it changes, by slot: only that human's PC applies it (ADR 0004). */
+    public int human;
 
     public long id() {
         return id;
@@ -28,5 +30,6 @@ public final class Txn {
         i = 0;
         j = 0;
         d = 0;
+        human = 0;
     }
 }

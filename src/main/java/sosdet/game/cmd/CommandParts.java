@@ -20,20 +20,19 @@ public final class CommandParts {
     }
 
     /**
-     * True for a command every PC applies in own-city mode (SOS-38): the world's, and the yes/no answers. A world
-     * question opens on every PC; a city one only on the PC whose city asked it, and elsewhere its answer finds no
-     * question. Any other command acts on its issuer's own city.
+     * True for a command every PC applies in own-city mode (SOS-38): the world's. A city question's answer acts on its
+     * issuer's own city, as any other command (SOS-46: city questions on two PCs may share a key).
      */
     public static boolean everyPc(byte[] payload) {
         return everyPc(new CmdReader(payload).id());
     }
 
     static boolean everyPc(int id) {
-        return world(id) || id == StepPrompts.ANSWER;
+        return world(id);
     }
 
     static boolean world(int id) {
-        return (id >= 7000 && id < StepPrompts.ANSWER) || (id >= 8000 && id < 9000) || id == Events.RAIDER_PAY
-                || id == Events.RAIDER_ALLY_HELP;
+        return (id >= 7000 && id < StepPrompts.ANSWER) || id == StepPrompts.WORLD_ANSWER || (id >= 8000 && id < 9000)
+                || id == Events.RAIDER_PAY || id == Events.RAIDER_ALLY_HELP;
     }
 }

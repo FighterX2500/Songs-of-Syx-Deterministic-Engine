@@ -91,6 +91,9 @@ Each milestone is a PR on SOS-46, rig-checked before the next one starts.
   3. Reports per human: a report store per human, the feed in and out by faction, pacing that waits for every human, the chokepoints reading the faction asked, transactions with their owner, the hash over every human.
   4. The cast guards.
   5. World commands for their issuing faction, the rig's `--humans`, and the smoke.
+- **Done, 2026-10-25.** Steps 1 to 5, then a desync and crash audit before the smoke ([several-humans audit](notes/several-humans-audit.md)) and its 12 fix groups (owner-approved), then one store of stored city divisions per human (audit C9, found by the first smoke with commands) and the fixes from an agent review of the diff. Checks:
+  - S46Q, 3 humans without commands: identical for 600 steps (it split at step 40 before the audit's fixes).
+  - S46S, the M1 smoke: 3 copies, each its own human's city in own-city mode, war, peace, a gift and an army move from every human. All copies identical to step 12,000, 799 to 801 engine hashes compared per copy with none differing, 12 commands applied on each, no report misses, no skipped commands or transactions.
 
 ### M2. "Any human", each one's empire, goods and money (G1, G3, G4)
 

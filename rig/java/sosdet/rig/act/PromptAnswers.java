@@ -85,7 +85,7 @@ public final class PromptAnswers {
             StepPrompts.answer(question, true);
             return "question yes";
         }
-        Object open = Hooks.worldPrompt();
+        Object open = Hooks.worldPromptHere() ? Hooks.worldPrompt() : null; // another PC's human answers its own (SOS-46)
         if (waitOut) {
             return watch(open);
         }

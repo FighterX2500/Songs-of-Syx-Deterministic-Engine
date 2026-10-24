@@ -1,6 +1,6 @@
 diff -ru -U2 a/game/event/engine/EventMessage.java b/game/event/engine/EventMessage.java
 --- a/game/event/engine/EventMessage.java	2026-01-29 11:18:42.000000000 +0500
-+++ b/game/event/engine/EventMessage.java	2026-10-25 01:01:56.918096400 +0500
++++ b/game/event/engine/EventMessage.java	2026-10-25 04:33:15.820079900 +0500
 @@ -116,6 +116,10 @@
  					}
  					if (!c.request.passes(FACTIONS.player()))
@@ -14,7 +14,7 @@ diff -ru -U2 a/game/event/engine/EventMessage.java b/game/event/engine/EventMess
  					
 diff -ru -U2 a/game/events/killer/Messenger.java b/game/events/killer/Messenger.java
 --- a/game/events/killer/Messenger.java	2026-04-06 08:55:42.000000000 +0500
-+++ b/game/events/killer/Messenger.java	2026-10-25 01:01:56.918714000 +0500
++++ b/game/events/killer/Messenger.java	2026-10-25 04:33:15.821080000 +0500
 @@ -178,7 +178,8 @@
  			section.addRelBody(16, DIR.S, new GButt.ButtPanel(Dic.¤¤Yes) {
  				@Override
@@ -27,7 +27,7 @@ diff -ru -U2 a/game/events/killer/Messenger.java b/game/events/killer/Messenger.
  				}
 diff -ru -U2 a/game/faction/npc/NPCRequest.java b/game/faction/npc/NPCRequest.java
 --- a/game/faction/npc/NPCRequest.java	2026-03-27 09:38:32.000000000 +0500
-+++ b/game/faction/npc/NPCRequest.java	2026-10-25 01:01:56.919235800 +0500
++++ b/game/faction/npc/NPCRequest.java	2026-10-25 04:33:15.821080000 +0500
 @@ -36,6 +36,8 @@
  	}
  	
@@ -39,7 +39,7 @@ diff -ru -U2 a/game/faction/npc/NPCRequest.java b/game/faction/npc/NPCRequest.ja
  			has = false;
 diff -ru -U2 a/game/faction/player/emmi/EmiType.java b/game/faction/player/emmi/EmiType.java
 --- a/game/faction/player/emmi/EmiType.java	2026-06-17 10:48:06.000000000 +0500
-+++ b/game/faction/player/emmi/EmiType.java	2026-10-25 01:01:56.920231600 +0500
++++ b/game/faction/player/emmi/EmiType.java	2026-10-25 04:33:15.822079800 +0500
 @@ -80,6 +80,8 @@
  	
  	@Override
@@ -51,7 +51,7 @@ diff -ru -U2 a/game/faction/player/emmi/EmiType.java b/game/faction/player/emmi/
  	}
 diff -ru -U2 a/game/raiding/MessAlly.java b/game/raiding/MessAlly.java
 --- a/game/raiding/MessAlly.java	2026-03-25 10:31:18.000000000 +0500
-+++ b/game/raiding/MessAlly.java	2026-10-25 01:01:56.920231600 +0500
++++ b/game/raiding/MessAlly.java	2026-10-25 04:33:15.822079800 +0500
 @@ -107,7 +107,8 @@
  				protected void clickA() {
  					if (!requested && demand.canRespond()) {
@@ -64,7 +64,7 @@ diff -ru -U2 a/game/raiding/MessAlly.java b/game/raiding/MessAlly.java
  				
 diff -ru -U2 a/game/raiding/MessDemand.java b/game/raiding/MessDemand.java
 --- a/game/raiding/MessDemand.java	2026-06-24 16:30:46.000000000 +0500
-+++ b/game/raiding/MessDemand.java	2026-10-25 01:01:56.921234800 +0500
++++ b/game/raiding/MessDemand.java	2026-10-25 04:33:15.823080900 +0500
 @@ -268,6 +268,11 @@
  					@Override
  					protected void clickA() {
@@ -77,9 +77,26 @@ diff -ru -U2 a/game/raiding/MessDemand.java b/game/raiding/MessDemand.java
  							payed = true;
  							pay();
  							GAME.raiders().current.clear();
+diff -ru -U2 a/view/sett/ui/army/Actions.java b/view/sett/ui/army/Actions.java
+--- a/view/sett/ui/army/Actions.java	2026-02-23 14:07:50.000000000 +0500
++++ b/view/sett/ui/army/Actions.java	2026-10-25 04:33:15.823080900 +0500
+@@ -143,7 +143,12 @@
+ 		
+ 		c = new GButt.ButtPanel(¤¤SendOut) {
+ 			
+-			UIPickerArmy p = new UIPickerArmy(new GETTER.GETTER_IMP<>(FACTIONS.player()), 400) {
++			UIPickerArmy p = new UIPickerArmy(new GETTER<game.faction.Faction>() { // SOSDET: this PC's human, asked each time: the view is built while the save loads (SOS-46)
++				@Override
++				public game.faction.Faction get() {
++					return FACTIONS.player();
++				}
++			}, 400) {
+ 				
+ 				@Override
+ 				protected void pick(WArmy a) {
 diff -ru -U2 a/view/ui/diplomacy/UIDipMessAction.java b/view/ui/diplomacy/UIDipMessAction.java
 --- a/view/ui/diplomacy/UIDipMessAction.java	2026-03-27 07:00:34.000000000 +0500
-+++ b/view/ui/diplomacy/UIDipMessAction.java	2026-10-25 01:01:56.922236100 +0500
++++ b/view/ui/diplomacy/UIDipMessAction.java	2026-10-25 04:33:15.823080900 +0500
 @@ -67,8 +67,10 @@
  			@Override
  			protected void clickA() {
@@ -95,7 +112,7 @@ diff -ru -U2 a/view/ui/diplomacy/UIDipMessAction.java b/view/ui/diplomacy/UIDipM
  			}
 diff -ru -U2 a/view/ui/diplomacy/UIDipMessDeal.java b/view/ui/diplomacy/UIDipMessDeal.java
 --- a/view/ui/diplomacy/UIDipMessDeal.java	2026-04-04 08:52:02.000000000 +0500
-+++ b/view/ui/diplomacy/UIDipMessDeal.java	2026-10-25 01:01:56.922236100 +0500
++++ b/view/ui/diplomacy/UIDipMessDeal.java	2026-10-25 04:33:15.824079800 +0500
 @@ -126,6 +126,11 @@
  				Deal d = DIP.TMP();
  				if (pactive() != null)
@@ -110,7 +127,7 @@ diff -ru -U2 a/view/ui/diplomacy/UIDipMessDeal.java b/view/ui/diplomacy/UIDipMes
  				save.f().request.clear();
 diff -ru -U2 a/view/ui/manage/IManager.java b/view/ui/manage/IManager.java
 --- a/view/ui/manage/IManager.java	2026-06-15 10:04:28.000000000 +0500
-+++ b/view/ui/manage/IManager.java	2026-10-25 01:01:56.924234200 +0500
++++ b/view/ui/manage/IManager.java	2026-10-25 04:33:15.824079800 +0500
 @@ -158,7 +158,8 @@
  
  		@Override
@@ -131,7 +148,7 @@ diff -ru -U2 a/view/ui/manage/IManager.java b/view/ui/manage/IManager.java
  		
 diff -ru -U2 a/view/ui/wiki/WIKI.java b/view/ui/wiki/WIKI.java
 --- a/view/ui/wiki/WIKI.java	2026-04-06 09:00:36.000000000 +0500
-+++ b/view/ui/wiki/WIKI.java	2026-10-25 01:01:56.924234200 +0500
++++ b/view/ui/wiki/WIKI.java	2026-10-25 04:33:15.825112100 +0500
 @@ -171,7 +171,8 @@
  
  	@Override
@@ -144,7 +161,7 @@ diff -ru -U2 a/view/ui/wiki/WIKI.java b/view/ui/wiki/WIKI.java
  	
 diff -ru -U2 a/view/world/ui/army/Army.java b/view/world/ui/army/Army.java
 --- a/view/world/ui/army/Army.java	2026-06-29 10:12:32.000000000 +0500
-+++ b/view/world/ui/army/Army.java	2026-10-25 01:01:56.925234800 +0500
++++ b/view/world/ui/army/Army.java	2026-10-25 04:33:15.825112100 +0500
 @@ -66,6 +66,8 @@
  		@Override
  		public void bannerISet(int bi) {
@@ -190,7 +207,7 @@ diff -ru -U2 a/view/world/ui/army/Army.java b/view/world/ui/army/Army.java
  							if (selected[i]) {
 diff -ru -U2 a/view/world/ui/army/ArmyRecruit.java b/view/world/ui/army/ArmyRecruit.java
 --- a/view/world/ui/army/ArmyRecruit.java	2026-06-18 09:35:18.000000000 +0500
-+++ b/view/world/ui/army/ArmyRecruit.java	2026-10-25 01:01:56.927237800 +0500
++++ b/view/world/ui/army/ArmyRecruit.java	2026-10-25 04:33:15.826112400 +0500
 @@ -92,6 +92,8 @@
  				
  				@Override
@@ -202,8 +219,112 @@ diff -ru -U2 a/view/world/ui/army/ArmyRecruit.java b/view/world/ui/army/ArmyRecr
  						d.bannerSet(editor.div().bannerI());
 diff -ru -U2 a/view/world/ui/army/List.java b/view/world/ui/army/List.java
 --- a/view/world/ui/army/List.java	2025-09-12 16:12:40.000000000 +0500
-+++ b/view/world/ui/army/List.java	2026-10-25 01:01:56.928234600 +0500
-@@ -205,6 +205,8 @@
++++ b/view/world/ui/army/List.java	2026-10-25 04:33:15.826112400 +0500
+@@ -44,7 +44,7 @@
+ 
+ final class List extends ISidePanel{
+ 
+-	private Faction f = FACTIONS.player();
++	private Faction f() { return FACTIONS.player(); } // SOSDET: this PC's human, asked each time: the view is built while the save loads (SOS-46)
+ 	private static int width = 200;
+ 	private final GTableBuilder builder;
+ 	
+@@ -58,7 +58,7 @@
+ 				
+ 				@Override
+ 				public void update(GText text) {
+-					GFORMAT.iIncr(text, AD.conscripts().available(null).get(f));
++					GFORMAT.iIncr(text, AD.conscripts().available(null).get(f()));
+ 				}
+ 				
+ 				@Override
+@@ -71,7 +71,7 @@
+ 						if (r.population().max == 0)
+ 							continue;
+ 						b.add(r.appearance().icon);
+-						b.add(GFORMAT.iIncr(b.text(), AD.conscripts().available(r).get(f)));
++						b.add(GFORMAT.iIncr(b.text(), AD.conscripts().available(r).get(f())));
+ 						b.NL();
+ 					}
+ 					
+@@ -116,11 +116,11 @@
+ 						b.add(supp.resource.icon());
+ 						ADSupply sup = AD.supplies().get(supp);
+ 						b.tab(1);
+-						b.add(GFORMAT.i(b.text(), sup.current().faction(f)));
++						b.add(GFORMAT.i(b.text(), sup.current().faction(f())));
+ 						b.tab(4);
+-						b.add(GFORMAT.i(b.text(), sup.targetAmount(f)));
++						b.add(GFORMAT.i(b.text(), sup.targetAmount(f())));
+ 						b.tab(7);
+-						b.add(GFORMAT.f0(b.text(), -sup.consumedPerDayCurrent(f)));
++						b.add(GFORMAT.f0(b.text(), -sup.consumedPerDayCurrent(f())));
+ 						b.tab(10);
+ 						b.add(GFORMAT.i(b.text(), SETT.ROOMS().SUPPLY.tally.amount.total(supp.resource)));
+ 						b.NL();
+@@ -136,7 +136,7 @@
+ 				
+ 				@Override
+ 				public void update(GText text) {					
+-					GFORMAT.i(text, AD.stats().wins.f().get(f));
++					GFORMAT.i(text, AD.stats().wins.f().get(f()));
+ 				}
+ 				
+ 			}.hh(AD.stats().wins.name, ww).hoverInfoSet(AD.stats().wins.desc));
+@@ -145,7 +145,7 @@
+ 				
+ 				@Override
+ 				public void update(GText text) {					
+-					GFORMAT.i(text, AD.stats().siegeWon.f().get(f));
++					GFORMAT.i(text, AD.stats().siegeWon.f().get(f()));
+ 				}
+ 				
+ 			}.hh(AD.stats().siegeWon.name, ww).hoverInfoSet(AD.stats().siegeWon.desc));
+@@ -154,7 +154,7 @@
+ 				
+ 				@Override
+ 				public void update(GText text) {					
+-					GFORMAT.i(text, AD.stats().defeats.f().get(f));
++					GFORMAT.i(text, AD.stats().defeats.f().get(f()));
+ 				}
+ 				
+ 			}.hh(AD.stats().defeats.name, ww).hoverInfoSet(AD.stats().defeats.desc));
+@@ -163,7 +163,7 @@
+ 				
+ 				@Override
+ 				public void update(GText text) {					
+-					GFORMAT.i(text, AD.stats().kills.f().get(f));
++					GFORMAT.i(text, AD.stats().kills.f().get(f()));
+ 				}
+ 				
+ 			}.hh(AD.stats().kills.name, ww).hoverInfoSet(AD.stats().kills.desc));
+@@ -172,7 +172,7 @@
+ 				
+ 				@Override
+ 				public void update(GText text) {					
+-					GFORMAT.i(text, AD.stats().losses.f().get(f));
++					GFORMAT.i(text, AD.stats().losses.f().get(f()));
+ 				}
+ 				
+ 			}.hh(AD.stats().losses.name, ww).hoverInfoSet(AD.stats().losses.desc));
+@@ -181,7 +181,7 @@
+ 				
+ 				@Override
+ 				public void update(GText text) {					
+-					GFORMAT.percInc(text, AD.stats().repF().getD(f));
++					GFORMAT.percInc(text, AD.stats().repF().getD(f()));
+ 				}
+ 				
+ 			}.hh(AD.stats().repF().info().name, ww).hoverInfoSet(AD.stats().repF().info().desc));
+@@ -198,13 +198,15 @@
+ 			
+ 			@Override
+ 			protected void renAction() {
+-				activeSet(f.armies().canCreate());
++				activeSet(f().armies().canCreate());
+ 			}
+ 			
+ 			@Override
  			protected void clickA() {
  				last().add(List.this, true);
  				if (FACTIONS.player().armies().all().size() == 0) {
@@ -212,7 +333,49 @@ diff -ru -U2 a/view/world/ui/army/List.java b/view/world/ui/army/List.java
  					COORDINATE c = WORLD.PATH().rnd(FACTIONS.player().capitolRegion());
  					int tx = c.x();
  					int ty = c.y();
-@@ -353,6 +355,10 @@
+@@ -224,13 +226,13 @@
+ 			
+ 			@Override
+ 			public int nrOFEntries() {
+-				return f.armies().all().size();
++				return f().armies().all().size();
+ 			}
+ 			
+ 			@Override
+ 			public void hover(int index) {
+ 				if (index >= 0)
+-					WORLD.OVERLAY().things.hover(f.armies().all().get(index).body(), GCOLOR.MAP().get(f), false, 4);
++					WORLD.OVERLAY().things.hover(f().armies().all().get(index).body(), GCOLOR.MAP().get(f()), false, 4);
+ 			}
+ 			
+ 			
+@@ -252,7 +254,7 @@
+ 	
+ 	void set(WArmy a) {
+ 		int i = 0;
+-		for (WArmy aa : f.armies().all()) {
++		for (WArmy aa : f().armies().all()) {
+ 			if (aa == a) {
+ 				builder.set(i);
+ 				break;
+@@ -322,7 +324,7 @@
+ 		}
+ 		
+ 		private WArmy g() {
+-			return f.armies().all().get(ier.get());
++			return f().armies().all().get(ier.get());
+ 		}
+ 		
+ 		@Override
+@@ -346,13 +348,17 @@
+ 		public CharSequence isPlacable(int tx, int ty) {
+ 			if (!WORLD.PATH().map.is.is(tx, ty))
+ 				return Dic.¤¤Unreachable;
+-			if (WORLD.REGIONS().map.get(tx, ty) == null || WORLD.REGIONS().map.get(tx, ty).faction() != f)
++			if (WORLD.REGIONS().map.get(tx, ty) == null || WORLD.REGIONS().map.get(tx, ty).faction() != f())
+ 				return Dic.¤¤MustBeOwnRegion;
+ 			return null;
+ 		}
  
  		@Override
  		public void place(int tx, int ty) {
@@ -225,7 +388,7 @@ diff -ru -U2 a/view/world/ui/army/List.java b/view/world/ui/army/List.java
  			VIEW.world().UI.armies.openList(e);
 diff -ru -U2 a/view/world/ui/army/UIMerenaries.java b/view/world/ui/army/UIMerenaries.java
 --- a/view/world/ui/army/UIMerenaries.java	2025-10-02 07:39:30.000000000 +0500
-+++ b/view/world/ui/army/UIMerenaries.java	2026-10-25 01:01:56.929233300 +0500
++++ b/view/world/ui/army/UIMerenaries.java	2026-10-25 04:33:15.827112500 +0500
 @@ -107,7 +107,7 @@
  				for (Card c : active) {
  					if (c.selectedIs() && Army.army.divs().canAdd()) {
@@ -237,7 +400,7 @@ diff -ru -U2 a/view/world/ui/army/UIMerenaries.java b/view/world/ui/army/UIMeren
  						}
 diff -ru -U2 a/view/world/ui/faction/UIDiplomacy.java b/view/world/ui/faction/UIDiplomacy.java
 --- a/view/world/ui/faction/UIDiplomacy.java	2026-04-04 13:01:16.000000000 +0500
-+++ b/view/world/ui/faction/UIDiplomacy.java	2026-10-25 01:01:56.930613800 +0500
++++ b/view/world/ui/faction/UIDiplomacy.java	2026-10-25 04:33:15.827112500 +0500
 @@ -97,8 +97,12 @@
  				
  				@Override
@@ -275,7 +438,7 @@ diff -ru -U2 a/view/world/ui/faction/UIDiplomacy.java b/view/world/ui/faction/UI
  	}
 diff -ru -U2 a/view/world/ui/region/PlayBuildingsPop.java b/view/world/ui/region/PlayBuildingsPop.java
 --- a/view/world/ui/region/PlayBuildingsPop.java	2026-01-09 10:12:06.000000000 +0500
-+++ b/view/world/ui/region/PlayBuildingsPop.java	2026-10-25 01:01:56.931236500 +0500
++++ b/view/world/ui/region/PlayBuildingsPop.java	2026-10-25 04:33:15.828110300 +0500
 @@ -73,7 +73,8 @@
  		public void render(SPRITE_RENDERER r, float ds) {
  			if (g.get() != current || VIEW.current() != VIEW.world())
@@ -299,7 +462,7 @@ diff -ru -U2 a/view/world/ui/region/PlayBuildingsPop.java b/view/world/ui/region
  					RD.BUILDINGS().tmp().accept();
 diff -ru -U2 a/view/world/ui/region/PlayInfo.java b/view/world/ui/region/PlayInfo.java
 --- a/view/world/ui/region/PlayInfo.java	2026-06-10 10:16:30.000000000 +0500
-+++ b/view/world/ui/region/PlayInfo.java	2026-10-25 01:01:56.931236500 +0500
++++ b/view/world/ui/region/PlayInfo.java	2026-10-25 04:33:15.828110300 +0500
 @@ -243,6 +243,8 @@
  				@Override
  				public void exe() {
@@ -329,7 +492,7 @@ diff -ru -U2 a/view/world/ui/region/PlayInfo.java b/view/world/ui/region/PlayInf
  		};
 diff -ru -U2 a/view/world/ui/region/PlayOutput.java b/view/world/ui/region/PlayOutput.java
 --- a/view/world/ui/region/PlayOutput.java	2026-06-08 10:14:56.000000000 +0500
-+++ b/view/world/ui/region/PlayOutput.java	2026-10-25 01:01:56.932235500 +0500
++++ b/view/world/ui/region/PlayOutput.java	2026-10-25 04:33:15.828110300 +0500
 @@ -49,7 +49,8 @@
  				
  				@Override
@@ -342,7 +505,7 @@ diff -ru -U2 a/view/world/ui/region/PlayOutput.java b/view/world/ui/region/PlayO
  				
 diff -ru -U2 a/view/world/ui/region/PlayPop.java b/view/world/ui/region/PlayPop.java
 --- a/view/world/ui/region/PlayPop.java	2026-05-24 15:25:38.000000000 +0500
-+++ b/view/world/ui/region/PlayPop.java	2026-10-25 01:01:56.932235500 +0500
++++ b/view/world/ui/region/PlayPop.java	2026-10-25 04:33:15.829111800 +0500
 @@ -307,6 +307,8 @@
  						int i = (e.toggled(r).get(g.get())+1)&1;
  						if (i == 1)
@@ -354,7 +517,7 @@ diff -ru -U2 a/view/world/ui/region/PlayPop.java b/view/world/ui/region/PlayPop.
  						e.toggled(r).set(g.get(), i);
 diff -ru -U2 a/view/world/ui/region/PlayToolAttack.java b/view/world/ui/region/PlayToolAttack.java
 --- a/view/world/ui/region/PlayToolAttack.java	2025-09-12 16:10:30.000000000 +0500
-+++ b/view/world/ui/region/PlayToolAttack.java	2026-10-25 01:01:56.933234300 +0500
++++ b/view/world/ui/region/PlayToolAttack.java	2026-10-25 04:33:15.829111800 +0500
 @@ -39,6 +39,8 @@
  
  		@Override
@@ -374,10 +537,71 @@ diff -ru -U2 a/view/world/ui/region/PlayToolAttack.java b/view/world/ui/region/P
  						return;
  					}
  				}
+diff -ru -U2 a/world/army/AD.java b/world/army/AD.java
+--- a/world/army/AD.java	2026-04-16 07:16:06.000000000 +0500
++++ b/world/army/AD.java	2026-10-25 04:33:15.835077500 +0500
+@@ -42,6 +42,8 @@
+ 	public final WArmyAI AI = new WArmyAI();
+ 	
+ 	private final WDivStoredAll divsCity = new WDivStoredAll();
++	// SOSDET: each other human's own stored city divisions, made at first use; the engine saves them (SOS-46)
++	private final WDivStoredAll[] sosdetDivsCity = new WDivStoredAll[game.faction.FACTIONS.MAX()];
+ 	private final WDivMercenaries divsMerc = new WDivMercenaries();
+ 	private final WDivRegionalAll divsReg = new WDivRegionalAll();
+ 	private final INT_OE<WArmy> random = init.dataA.new DataInt("Random");
+@@ -119,6 +121,13 @@
+ 		
+ 		updater.update(ds);
+ 		updaterDiv.update(ds);
++		if (sosdet.Hooks.everyHuman()) { // SOSDET: every human's stored divisions, each as its own human (SOS-46)
++			for (int h : sosdet.Hooks.humanSlots()) {
++				sosdet.Hooks.currentHuman(h);
++				cityDivs(h).update(ds);
++			}
++			sosdet.Hooks.currentHuman(0);
++		} else
+ 		divsCity.update(ds);
+ 		divsMerc.update(ds);
+ 		AI.update(ds);
+@@ -209,7 +218,25 @@
+ 	}
+ 	
+ 	public static WDivStoredAll cityDivs() {
+-		return self.divsCity;
++		return cityDivs(game.faction.FACTIONS.player().index()); // SOSDET: this PC's human's, or the world part's current one (SOS-46)
++	}
++	
++	/** SOSDET: the stored city divisions of the human in {@code slot} (SOS-46). */
++	public static WDivStoredAll cityDivs(int slot) {
++		if (slot == 0)
++			return self.divsCity;
++		if (self.sosdetDivsCity[slot] == null)
++			self.sosdetDivsCity[slot] = new WDivStoredAll(slot);
++		return self.sosdetDivsCity[slot];
++	}
++	
++	/** SOSDET: the engine's save of a human's stored city divisions, slot 0's being in this resource's own (SOS-46). */
++	public static void sosdetSaveCityDivs(int slot, FilePutter file) {
++		cityDivs(slot).save(file);
++	}
++	
++	public static void sosdetLoadCityDivs(int slot, FileGetter file) throws IOException {
++		cityDivs(slot).load(file);
+ 	}
+ 	
+ 	public static WDivRegionalAll regional() {
 diff -ru -U2 a/world/army/ADDivs.java b/world/army/ADDivs.java
 --- a/world/army/ADDivs.java	2025-09-12 16:12:40.000000000 +0500
-+++ b/world/army/ADDivs.java	2026-10-25 01:01:56.933234300 +0500
-@@ -75,6 +75,8 @@
++++ b/world/army/ADDivs.java	2026-10-25 04:33:15.836076700 +0500
+@@ -68,13 +68,15 @@
+ 		
+ 		switch(BType.get(divs[i])) {
+ 			case WDivRegional.type: return AD.regional().get((int)divs[i] & 0x0FFFFFFFF);
+-			case WDivStored.type: return AD.cityDivs().get(divs[i]);
++			case WDivStored.type: return AD.cityDivs(aa.faction() == null ? 0 : aa.faction().index()).get(divs[i]); // SOSDET: the army's own human's (SOS-46)
+ 			case WDivMercenary.type: return AD.mercenaries().get(divs[i]);
+ 			default: throw new RuntimeException();
+ 		}
  	}
  	
  	public void insert(int after, int insert) {
@@ -388,7 +612,7 @@ diff -ru -U2 a/world/army/ADDivs.java b/world/army/ADDivs.java
  		if (after == insert)
 diff -ru -U2 a/world/army/ADSupplies.java b/world/army/ADSupplies.java
 --- a/world/army/ADSupplies.java	2025-12-03 10:14:52.000000000 +0500
-+++ b/world/army/ADSupplies.java	2026-10-25 01:01:56.934234400 +0500
++++ b/world/army/ADSupplies.java	2026-10-25 04:33:15.830113800 +0500
 @@ -263,6 +263,8 @@
  				
  				@Override
@@ -400,7 +624,7 @@ diff -ru -U2 a/world/army/ADSupplies.java b/world/army/ADSupplies.java
  					super.set(t, CLAMP.i(s, 0, max(t)));
 diff -ru -U2 a/world/army/WDivRegional.java b/world/army/WDivRegional.java
 --- a/world/army/WDivRegional.java	2026-06-17 18:46:30.000000000 +0500
-+++ b/world/army/WDivRegional.java	2026-10-25 01:01:56.934234400 +0500
++++ b/world/army/WDivRegional.java	2026-10-25 04:33:15.831112800 +0500
 @@ -341,11 +341,15 @@
  
  		@Override
@@ -446,8 +670,28 @@ diff -ru -U2 a/world/army/WDivRegional.java b/world/army/WDivRegional.java
  		}
 diff -ru -U2 a/world/army/WDivStoredAll.java b/world/army/WDivStoredAll.java
 --- a/world/army/WDivStoredAll.java	2026-06-24 13:16:44.000000000 +0500
-+++ b/world/army/WDivStoredAll.java	2026-10-25 01:01:56.935233900 +0500
-@@ -73,7 +73,9 @@
++++ b/world/army/WDivStoredAll.java	2026-10-25 04:33:15.836076700 +0500
+@@ -33,9 +33,18 @@
+ 	private double upD;
+ 	private int upDI;
+ 	
++	final int sosdetOwner; // SOSDET: the human whose city divisions these are (SOS-46)
++	
+ 	WDivStoredAll(){
+-		for (int i = 0; i < divs.length; i++)
++		this(0);
++	}
++	
++	WDivStoredAll(int owner){
++		sosdetOwner = owner;
++		for (int i = 0; i < divs.length; i++) {
+ 			divs[i] = new WDivStored(i);
++			divs[i].sosdetAll = this;
++		}
+ 	}
+ 	
+ 	void save(FilePutter file) {
+@@ -73,7 +82,9 @@
  	}
  	
  	public void attach(WArmy a, Div div) {
@@ -458,7 +702,7 @@ diff -ru -U2 a/world/army/WDivStoredAll.java b/world/army/WDivStoredAll.java
  			for (ResSupply s : RESOURCES.SUP().ALL) {
  				int am = s.amount(div.info.race(), div.menNrOf());
  				if (am <= 0)
-@@ -96,10 +98,10 @@
+@@ -96,10 +107,10 @@
  //		return (int) s.maximum(div.info.race(), div.menNrOf());
  //	}
  	
@@ -471,7 +715,7 @@ diff -ru -U2 a/world/army/WDivStoredAll.java b/world/army/WDivStoredAll.java
  		}
  	}
  	
-@@ -130,7 +132,7 @@
+@@ -130,7 +141,7 @@
  			if (!shouldReturn(d))
  				continue;
  
@@ -482,7 +726,7 @@ diff -ru -U2 a/world/army/WDivStoredAll.java b/world/army/WDivStoredAll.java
  				upD -= (int) upD;
 diff -ru -U2 a/world/entity/army/WArmy.java b/world/entity/army/WArmy.java
 --- a/world/entity/army/WArmy.java	2026-06-08 21:02:24.000000000 +0500
-+++ b/world/entity/army/WArmy.java	2026-10-25 01:01:56.939233100 +0500
++++ b/world/entity/army/WArmy.java	2026-10-25 04:33:15.831112800 +0500
 @@ -198,7 +198,8 @@
  		
  		int ox = body().x1();

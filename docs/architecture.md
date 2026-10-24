@@ -53,9 +53,9 @@ A player's action never changes state on the PC where it was clicked. It becomes
 | 6000s | `Tools` | placing tools; area-room Build and refurnish, whose plans the `Plan*` classes hold ([ADR 0003](decisions/0003-room-planning.md)); 6100s: copier and blueprints |
 | 7000s | `World` | armies, recruiting, regions |
 | 7900s | `WorldBattles` | world-battle prompt decisions |
-| 7950 | `StepPrompts` | yes/no questions the step asks |
+| 7950, 7951 | `StepPrompts` | yes/no questions the step asks: 7950 a city's, 7951 a world one, answered by the human asked (SOS-46) |
 | 7960s | `MapBattles` | a battle fought on the battle map: Start, Retreat, the victory or defeat panel's Close, Restart (SOS-41). A world command whose step falls in the battle is skipped, with a notice to its PC: the battle's end loads the game saved before it, which would undo it |
-| 8000s | `Diplomacy` | deals, emissaries |
+| 8000s | `Diplomacy` | deals, emissaries, an overlord's tribute (8005) |
 | 9000s | `Events` | event choices, raiders |
 
 [docs/commands.md](commands.md) lists every player entry point in the game and its status.

@@ -1,6 +1,6 @@
 diff -ru -U2 a/game/events/EVENTS.java b/game/events/EVENTS.java
 --- a/game/events/EVENTS.java	2026-02-17 17:15:30.000000000 +0500
-+++ b/game/events/EVENTS.java	2026-10-25 02:33:40.423257900 +0500
++++ b/game/events/EVENTS.java	2026-10-25 04:14:01.076228900 +0500
 @@ -131,7 +131,7 @@
  			return;
  		prof.logStart(EVENTS.class);
@@ -12,7 +12,7 @@ diff -ru -U2 a/game/events/EVENTS.java b/game/events/EVENTS.java
  	}
 diff -ru -U2 a/game/faction/FACTIONS.java b/game/faction/FACTIONS.java
 --- a/game/faction/FACTIONS.java	2026-03-25 10:31:18.000000000 +0500
-+++ b/game/faction/FACTIONS.java	2026-10-25 02:33:40.427222700 +0500
++++ b/game/faction/FACTIONS.java	2026-10-25 04:14:01.077228700 +0500
 @@ -41,7 +41,7 @@
  
  		@Override
@@ -108,7 +108,7 @@ diff -ru -U2 a/game/faction/FACTIONS.java b/game/faction/FACTIONS.java
  		}
 diff -ru -U2 a/game/faction/player/Player.java b/game/faction/player/Player.java
 --- a/game/faction/player/Player.java	2026-06-17 10:48:04.000000000 +0500
-+++ b/game/faction/player/Player.java	2026-10-25 02:33:40.423257900 +0500
++++ b/game/faction/player/Player.java	2026-10-25 04:14:01.080235600 +0500
 @@ -158,21 +158,22 @@
  	}
  	
@@ -155,21 +155,36 @@ diff -ru -U2 a/game/faction/player/Player.java b/game/faction/player/Player.java
  		
  		
  		
-@@ -324,7 +330,7 @@
+@@ -324,13 +330,13 @@
  	
  	@Override
  	public double boostableValue(BValue v) {
 -		return v.vGet(this);
-+		return sosdet.Hooks.reportRead() ? sosdet.Hooks.reportBoost(v) : v.vGet(this); // SOSDET: the world part reads the city's report (ADR 0005)
++		return sosdet.Hooks.reportRead() ? sosdet.Hooks.reportBoost(v, this) : v.vGet(this); // SOSDET: the world part reads the city's report (ADR 0005), this human's (ADR 0004)
  	}
  
  	@Override
-@@ -349,6 +355,8 @@
+ 	public double offensivePower() {
+ 		double p = AD.power().get(this);
+-		int creds = (int) FACTIONS.player().credits().getD();
++		int creds = (int) credits().getD(); // SOSDET: this human's treasury (SOS-46)
+ 		for (int i = 0; i < AD.mercenaries().max() && creds > 0; i++) {
+ 			WDivMercenary d = AD.mercenaries().get(i);
+ 			if (d.army() == null && !d.disbanded() ) {
+@@ -342,6 +348,7 @@
+ 			}
+ 		}
+ 	
++		if (capitolRegion() != null) // SOSDET: a human with no realm left (SOS-46)
+ 		p += RD.MILITARY().power.getD(this.capitolRegion())-SETT.INVADOR().invadingPower();
+ 	
+ 		return Math.max(p, 0);
+@@ -349,6 +356,8 @@
  
  	@Override
  	public int citizens(Race race) {
 +		if (sosdet.Hooks.reportRead()) // SOSDET: the world part reads the city's report (ADR 0005)
-+			return sosdet.Hooks.reportI(sosdet.report.Field.CITIZENS, race.index());
++			return (int) sosdet.Hooks.reportD(index(), sosdet.report.Field.CITIZENS, race.index()); // SOSDET: this human's report (ADR 0004)
  		return STATS.POP().POP.data(HCLASSES.CITIZEN()).get(race);
  	}
  	

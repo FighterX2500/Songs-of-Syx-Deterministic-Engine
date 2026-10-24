@@ -152,7 +152,7 @@ Status: **done** (hooked, with its command id), **to do**, or why it needs no co
 | city military | `game.battle.setting.DivSettings` `moppingSet(Z)V` | B | battle screen done (SOS-32, patch 95); no city screen calls it (only a developer tool) |
 | world | `world.entity.army.WArmy` `setDestination(II)V` | D | done: 7000 armyMove, patch 96-cmd-world (SOS-35) |
 | world | `world.entity.army.WArmy` `intercept(Lworld/entity/army/WArmy;)V` | D | done: 7001 armyIntercept, patch 96-cmd-world (SOS-35) |
-| world | `world.entity.army.WArmy` `besiege(Lworld/map/regions/Region;)V` | D | done: 7002 armyBesiege, patch 96-cmd-world (SOS-35); the step's "declare war and besiege?" question is 7950 stepPromptAnswer (patch 99-world-battles) |
+| world | `world.entity.army.WArmy` `besiege(Lworld/map/regions/Region;)V` | D | done: 7002 armyBesiege, patch 96-cmd-world (SOS-35); the step's "declare war and besiege?" question is 7951 stepPromptWorldAnswer since SOS-46 (a world command, applied as the human it asks; 7950 stepPromptAnswer is a city question's) (patch 99-world-battles) |
 | world | `world.entity.army.WArmy` `stop()V` | D | done: 7003 armyStop, patch 96-cmd-world (SOS-35) |
 | world | `world.entity.army.WArmy` `raid(Z)V` | D | done: 7004 armyRaid, patch 96-cmd-world (SOS-35) |
 | world | `world.entity.army.WArmy` `disband()V` | D | done: 7005 armyDisband, patch 96-cmd-world (SOS-35) |
@@ -174,6 +174,7 @@ Status: **done** (hooked, with its command id), **to do**, or why it needs no co
 | diplomacy | `game.faction.diplomacy.DipStance` `set(Lgame/faction/Faction;Lgame/faction/Faction;)V` | D | not needed: every UI caller now runs inside a command; the rest is the step or debug (SOS-35) |
 | diplomacy | `game.faction.diplomacy.DipStance` `set(Lgame/faction/npc/FactionNPC;)V` | D | not needed: every UI caller now runs inside a command; the rest is the step or debug (SOS-35) |
 | diplomacy | `game.faction.player.emmi.EmiType` `set(Ljava/lang/Object;I)V` | D | done: 8004 emissaries, patch 96-cmd-world (SOS-35) |
+| diplomacy | `game.faction.diplomacy.UpVassal$MOverlord` Accept | D | done: 8005 tributeAccept, patch 15-humans (SOS-46: the click paid at once, outside the step) |
 | diplomacy | `game.faction.npc.NPCRequest` `expire()V` | D | done: 8002 requestExpire, patch 96-cmd-world (SOS-35) |
 | diplomacy | `game.faction.npc.NPCRequest` `clear()V` | D | not needed: every UI caller now runs inside a command (SOS-35) |
 | diplomacy | `game.faction.royalty.opinion.OpsGifts` `makeDeal(Lgame/faction/npc/FactionNPC;D)V` | D | not needed: every UI caller now runs inside a command (SOS-35) |

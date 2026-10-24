@@ -9,6 +9,7 @@ import game.battle.setting.DivSettings;
 import game.faction.FACTIONS;
 import game.faction.Faction;
 import game.faction.diplomacy.DIP;
+import game.faction.player.Player;
 import game.raiding.Raider;
 import game.time.TIME;
 import settlement.entity.ENTITY;
@@ -112,8 +113,9 @@ public final class GameHash implements StateSource {
 
     /**
      * The world map: every army's slot, faction, tile, state and men; every world entity; every region's owner; every
-     * faction's credits and wars; every raider's power, defeat and raids, and the raider now raiding; the calendar. In
-     * own-city mode the player's credits are the city's and are left out (ADR 0005).
+     * faction's credits, overlord and stance with every other (war, peace, pact, ...); every raider's power, defeat and
+     * raids, and the raider now raiding; the calendar. In own-city mode the humans' credits are their cities' and are
+     * left out (ADR 0005, ADR 0004).
      * Public for the rig's per-step log of a follower run.
      */
     public static long worldHash() {
@@ -143,11 +145,13 @@ public final class GameHash implements StateSource {
         for (int i = 0; i < factions.size(); i++) {
             Faction f = factions.get(i);
             h = HashLog.mix(h, f.index());
-            if (!ownCity || f != FACTIONS.player()) {
+            if (!ownCity || !(f instanceof Player)) {
                 h = HashLog.mix(h, Double.doubleToLongBits(f.credits().getD()));
             }
+            Faction overlord = DIP.overlord(f);
+            h = HashLog.mix(h, overlord == null ? -1 : overlord.index());
             for (int k = i + 1; k < factions.size(); k++) {
-                h = HashLog.mix(h, DIP.WAR().is(f, factions.get(k)) ? 1 : 0);
+                h = HashLog.mix(h, DIP.get(f, factions.get(k)).index()); // every stance, not only war (SOS-46)
             }
         }
         LIST<Raider> raiders = GAME.raiders().ALL();
