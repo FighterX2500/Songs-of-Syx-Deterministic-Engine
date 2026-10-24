@@ -203,8 +203,10 @@ def remote_ps(script):
 
 def remote_task(name, path):
     """Runs a .cmd on the remote PC in the logged-on user's session (a game started over SSH would have no screen)."""
-    remote_ps('schtasks /create /tn %s /tr "%s" /sc once /st 23:59 /it /f | Out-Null; schtasks /run /tn %s | Out-Null'
-              % (name, path, name))
+    # no trigger: the task runs only when started here (a once-trigger fired again at its time, SOS-15)
+    remote_ps("Register-ScheduledTask -TaskName '%s' -Action (New-ScheduledTaskAction -Execute '%s')"
+              " -Principal (New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive) -Force | Out-Null;"
+              " Start-ScheduledTask -TaskName '%s'" % (name, path, name))
 
 
 class RemoteCopy(Copy):
