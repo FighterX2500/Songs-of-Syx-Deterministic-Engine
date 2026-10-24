@@ -21,7 +21,8 @@ public enum Shape {
     /** One per city battle division and training. */
     DIVISION_TRAINING(Count.DIVISIONS, false, Count.TRAININGS, false),
     BOOST(Count.BOOSTS, false, null, false),
-    VALUE(Count.VALUES, false, null, false);
+    VALUE(Count.VALUES, false, null, false),
+    UNLOCK(Count.UNLOCKS, false, null, false);
 
     /** The first list, or {@code null} for one value. */
     final Count first;

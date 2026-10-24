@@ -10,6 +10,7 @@ import game.faction.FACTIONS;
 import game.faction.Faction;
 import game.faction.diplomacy.DIP;
 import game.raiding.Raider;
+import game.time.TIME;
 import settlement.entity.ENTITY;
 import settlement.entity.humanoid.Humanoid;
 import settlement.main.SETT;
@@ -111,8 +112,8 @@ public final class GameHash implements StateSource {
 
     /**
      * The world map: every army's slot, faction, tile, state and men; every world entity; every region's owner; every
-     * faction's credits and wars; every raider's power, defeat and raids, and the raider now raiding. In own-city mode
-     * the player's credits are the city's and are left out (ADR 0005).
+     * faction's credits and wars; every raider's power, defeat and raids, and the raider now raiding; the calendar. In
+     * own-city mode the player's credits are the city's and are left out (ADR 0005).
      * Public for the rig's per-step log of a follower run.
      */
     public static long worldHash() {
@@ -158,6 +159,7 @@ public final class GameHash implements StateSource {
         }
         Raider current = GAME.raiders().current.current();
         h = HashLog.mix(h, current == null ? -1 : current.army.power);
+        h = HashLog.mix(h, Double.doubleToLongBits(TIME.currentSecond()));
         return h;
     }
 

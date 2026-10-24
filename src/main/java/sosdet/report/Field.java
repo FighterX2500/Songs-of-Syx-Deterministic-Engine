@@ -108,7 +108,12 @@ public enum Field {
     PROXIMITY_TOLL(Shape.ONE),
     // A8: data-driven values
     /** The player's value of each faction value: requirement locks and the world camps read them. */
-    VALUE(Shape.VALUE);
+    VALUE(Shape.VALUE),
+    /**
+     * Each unlock of a tech, level or title ({@code Lockers}) on the player, or on a player region: what a region
+     * building's requirements and the like read. They read the city's tech, level and titles (SOS-32).
+     */
+    UNLOCK(Shape.UNLOCK);
 
     public final Shape shape;
 

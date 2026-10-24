@@ -13,6 +13,7 @@ import init.type.CAUSE_LEAVE;
 import init.type.HCLASS_RACE;
 import init.trade.TRADABLE;
 import init.trade.TRADE_TYPE;
+import init.value.Locker;
 import init.value.Value;
 import settlement.trade.PBuyer;
 import settlement.entity.humanoid.Humanoid;
@@ -22,6 +23,7 @@ import snake2d.util.datatypes.COORDINATE;
 import snake2d.util.rnd.RND;
 import sosdet.ai.AiApplier;
 import sosdet.ai.AiMode;
+import sosdet.game.GameReport;
 import sosdet.game.StepParts;
 import sosdet.game.WorldStatics;
 import sosdet.game.cmd.PlanStash;
@@ -31,6 +33,7 @@ import sosdet.report.Field;
 import sosdet.report.Reports;
 import sosdet.txn.Txn;
 import sosdet.txn.TxnKind;
+import util.data.DOUBLE_O;
 import world.entity.army.WArmy;
 
 /**
@@ -296,6 +299,30 @@ public final class Hooks {
         return s != null && s.part == StepParts.WORLD_PART;
     }
 
+    /**
+     * {@code WDivStored}'s men, race and kit (B4): read from the city's report in the world part and in a world resync's
+     * load, which counts the soldiers away as the world part would (on a follower the live city is another city).
+     */
+    public static boolean divReport() {
+        Session s = Engine.session();
+        return s != null && (s.part == StepParts.WORLD_PART || s.worldLoading);
+    }
+
+    /** True on a follower: this PC's world reads another PC's city, whose world armies and soldiers they are (SOS-38). */
+    public static boolean follower() {
+        Session s = Engine.session();
+        return s != null && s.reportsFrom >= 0;
+    }
+
+    /**
+     * The world resyncs loaded so far (0 with no session): a game cache made from the world, with a window or a scale
+     * the load leaves standing, starts again when this changes, on every PC at the same step (SOS-32).
+     */
+    public static int worldLoads() {
+        Session s = Engine.session();
+        return s == null ? 0 : s.worldLoads;
+    }
+
     public static double reportD(Field f, int i) {
         return Engine.session().reports.value(f, i);
     }
@@ -355,6 +382,23 @@ public final class Hooks {
             s.reportMisses++;
         }
         return v.d.getD(t);
+    }
+
+    /**
+     * An unlock of a tech, level or title ({@code Lockers}) on something the player owns: the player's from the report
+     * in the world part, otherwise the game's own. It reads the city's tech, level and titles, which on another PC are
+     * that PC's (SOS-32). One without a slot (on a person) is read live and counted in {@link Stats#reportMisses}.
+     */
+    public static <T> double reportUnlock(Locker<T> l, DOUBLE_O<T> v, T t) {
+        if (reportRead() && GameReport.playerOwns(t)) {
+            Session s = Engine.session();
+            int i = s.city().indexOf(Field.UNLOCK, l);
+            if (i >= 0) {
+                return s.reports.current().get(Field.UNLOCK, i);
+            }
+            s.reportMisses++;
+        }
+        return v.getD(t);
     }
 
     // ------------------------------------------------------------ transactions (ADR 0005 §3, SOS-38)

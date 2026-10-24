@@ -66,7 +66,7 @@ class EngineTest {
     }
 
     /** One player faction, a small report layout, values that never change. */
-    private static final ReportLayout SMALL = new ReportLayout(1, 1, 1, 1, 1, 1, 1, 1, 1);
+    private static final ReportLayout SMALL = new ReportLayout(1, 1, 1, 1, 1, 1, 1, 1, 1, 1);
     private static final CitySource CITY = new CitySource() {
         @Override
         public ReportLayout layout() {

@@ -36,5 +36,28 @@ public enum TxnKind {
     /** C6: an invasion called off ({@code Invador.cancel}). */
     INVASION_CANCEL,
     /** C6: a war with the player ended; the city calls off that faction's invasions ({@code Invador}'s listener). */
-    WAR_ENDED
+    WAR_ENDED;
+
+    /**
+     * Whether a follower's city applies it (SOS-38: its world reads another PC's city). Not the ones that carry the
+     * source city's own people and divisions: soldiers home from its armies, their relations, supplies its divisions
+     * take, its garrison's battles. Trade, credits and invasions reach a follower's city too: there is one player
+     * faction in the world (ADR 0005).
+     */
+    public boolean followerApplies() {
+        switch (this) {
+        case SOLDIER_RETURNS:
+        case RETIREE:
+        case REL_SOLDIER:
+        case REL_DEATH:
+        case REL_HUMANOID:
+        case ARMY_SUPPLY_DIV:
+        case ARMY_SUPPLY_RECRUIT:
+        case GARRISON_RESOLVE:
+        case GARRISON_RESOLVE_PEOPLE:
+            return false;
+        default:
+            return true;
+        }
+    }
 }
