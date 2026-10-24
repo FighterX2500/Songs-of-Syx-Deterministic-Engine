@@ -15,11 +15,11 @@ Read [docs/architecture.md](docs/architecture.md) first: how a session runs, the
 - `docs/decisions/`: the engine's own ADRs, numbered `0001-short-name.md`. Each records context, the decision, the options rejected and why.
 - `docs/hooks.md`: every change to the game's own code, with the reason it exists.
 
-## Current phase: V0.1 and its session fixes
+## Current phase: V0.1 play sessions (SOS-32)
 
-- Built: the engine core, the AI log, the state hash, resync and battle orders (cards SOS-25 to SOS-32 under the epic SOS-22; SOS-31, the scenario suite, is still open); the city commands (SOS-34); the world lockstep and the V0.1 package (SOS-35).
-- Now: SOS-36, fixes from the owner's first V0.1 session (prompt deadlock, room copier and blueprints, messages).
-- Next: stage E of [plan 0002](docs/plan/0002-city-and-world-lockstep.md), the city↔world link. Engage (world battles on the battle map) comes after V0.1.
+- Built: the engine core, the AI log, the state hash, resync and battle orders (cards SOS-25 to SOS-32 under the epic SOS-22; SOS-31, the scenario suite, and SOS-32 are still open); the city commands (SOS-34); the world lockstep and the V0.1 package (SOS-35); the V0.1 session fixes (SOS-36, SOS-37); stage E of [plan 0002](docs/plan/0002-city-and-world-lockstep.md), the city↔world link, with own-city mode, the world resync and pacing (SOS-38).
+- Now: SOS-32, the owner's 30-minute session: camera and clicks, real-time battles started from the world map, and own-city followers from older saves (Mogus-40, Mogus-20), with draw tracing on. Read-only audits come first.
+- Engage (world battles on the battle map) is refused in a session until generated battles are ported.
 - Where the last session stopped: [docs/plan/HANDOFF.md](docs/plan/HANDOFF.md).
 
 Spikes for open questions go under `spikes/<name>/` and end with a report in `docs/plan/spikes/<name>.md`.

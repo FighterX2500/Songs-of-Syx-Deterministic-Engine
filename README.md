@@ -8,9 +8,9 @@ Deterministic simulation engine for Songs of Syx V71 (build 71.44). The same sav
 - **State hash:** taken every 30 steps and compared with the other PCs'; the first difference gives a desync report (SOS-29).
 - **Resync:** a battle can be saved at a step and reloaded there by every PC to recover from a desync (SOS-30).
 - **Players' battle orders and speed changes:** in the host's log, and the step length follows the agreed speed. The owner's 13-minute play session on the Mogus-72 city invasion stayed identical across three copies (SOS-32 M1).
-- **City and world lockstep:** the city's and the world map's player actions are commands, and the world runs in the step (SOS-34, SOS-35, [plan 0002](docs/plan/0002-city-and-world-lockstep.md)). The city↔world link comes after V0.1.
-- **V0.1:** [docs/release/V0.1.md](docs/release/V0.1.md): what works, what is blocked, and how to start the owner's session. `gradlew.bat releaseZip` packs it into `build
-elease\SOSDET-0.1.0.zip`.
+- **City and world lockstep:** the city's and the world map's player actions are commands, and the world runs in the step (SOS-34, SOS-35, [plan 0002](docs/plan/0002-city-and-world-lockstep.md)).
+- **City↔world link:** the world never reads a live city. It reads city reports, and changes a city only through transactions applied exactly once, so each PC can run its own city under one lockstep world. A PC whose world splits reloads the host's world and keeps its city, and the slowest PC caps the pace (SOS-38, plan 0002 stage E).
+- **V0.1:** [docs/release/V0.1.md](docs/release/V0.1.md): what works, what is blocked, and how to start the owner's session. `gradlew.bat releaseZip` packs it into `build\release\SOSDET-0.1.0.zip`.
 
 Until something starts an engine session, the game plays as vanilla.
 

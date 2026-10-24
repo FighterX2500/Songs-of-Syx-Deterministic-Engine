@@ -1,4 +1,4 @@
-# Handoff: next session starts here (updated 2026-10-23, during SOS-35)
+# Handoff: next session starts here (updated 2026-10-24, SOS-32)
 
 ## 1. Read these first, before doing anything
 
@@ -12,53 +12,25 @@
 ## 2. Where things stand
 
 **Repositories:**
-- **Engine:** `C:\ClaudeFolder\SOSDET`, GitHub `FighterX2500/Songs-of-Syx-Deterministic-Engine`, renamed from SOSDET. The local folder and the launcher mod name are still SOSDET; `gh` needs `--repo FighterX2500/Songs-of-Syx-Deterministic-Engine`.
-- **Mod:** `C:\ClaudeFolder\SOS`, GitHub `FighterX2500/SOSGSGMP`. The mod is still in planning; nothing changed there this session.
+- **Engine:** `C:\ClaudeFolder\SOSDET`, GitHub `FighterX2500/Songs-of-Syx-Deterministic-Engine` (public). The local folder and the launcher mod name are still SOSDET; `gh` needs `--repo FighterX2500/Songs-of-Syx-Deterministic-Engine`.
+- **Mod:** `C:\ClaudeFolder\SOS`, GitHub `FighterX2500/SOSGSGMP`, still in planning. PR #20 there dropped CI for a local check before merge (spec §14 to §16, `[CI]` tags became `[AT]`).
 
-**Merged into engine main:**
-- PR #9 SOS-32 M1: orders and speed in the host's log.
-- PR #10 SOS-32 M2a: city groundwork, static-draw check, requirements 0.2.
-- PR #11: the repo rename.
-- PR #12 SOS-34 part 1: 106 city commands, ADR 0002.
+**Done and merged into engine main:**
+- SOS-32 M1 (orders and speed in the host's log) and M2a (city groundwork).
+- SOS-34: 106 city commands and room planning (ADR 0002, ADR 0003).
+- SOS-35: world lockstep (plan 0002 stage D) and the V0.1 package (`docs/release/V0.1.md`).
+- SOS-36 and SOS-37: fixes from the owner's V0.1 sessions (prompt deadlock, copier and blueprints, the minimap's draws, path finding on path threads).
+- SOS-38 (PR #19, 2026-10-24): stage E, the city↔world link, in full: the step parts, the city report, the transactions, own-city mode, the world resync from a world-only save, raiders in the world hash, and pacing by the slowest PC. Results: `docs/plan/notes/stage-e-smoke-tests.md`.
 
-**Merged PR #13, branch `SOS-34-room-planning`:** SOS-34 part 2. It holds:
-- ADR 0003 and plan 0003;
-- milestone 1, area-room planning (6007 `roomBuild`);
-- milestone 2, refurnish (6008 `roomRefurnish`);
-- the V0.1 essentials:
-  - the game's own saves lift the room plan;
-  - number boxes keep the typed text;
-  - the copier, mass copier and saved blueprints are blocked in a session.
+**Now, SOS-32:** the owner's 30-minute session, which unifies the remaining checks (owner, 2026-10-24):
+- camera and clicks (render and UI state; the C1 split when the owner moved the camera is the biggest risk);
+- real-time battles started from the world map (never run in a multi-copy session; Engage is refused in a session today; own-city mode doesn't support city battles);
+- own-city followers from older saves (Mogus-40 and Mogus-20) under the host's Mogus-72 world;
+- draw tracing on (mean step 3.9 to 6.5 ms).
 
-Smoke run Q34H: 3 copies identical to step 14,000, with 8 commands applied on every copy.
+First three read-only audits (camera and clicks, battles from the map, older-save followers), then a fix plan for the owner's approval, then the session.
 
-**Current branch `SOS-35-world-lockstep`** (PR #14, main merged in): stage D of plan 0002, world lockstep, and the V0.1 package.
-- **Done here:**
-  - the wave brief (`docs/plan/notes/world-wave-brief.md`);
-  - the world-battle prompt as commands 7900 to 7902 (`cmd.WorldBattles`, patch `99-world-battles`): the world holds while a prompt is open, the city goes on, and Engage is refused with a notice;
-  - the rig no longer holds the world (`--hold-world` keeps the old runs);
-  - the rig's host player answers every prompt (`answerprompts`).
-- **Two agents, in worktrees under `C:\ClaudeFolder\SOSDET-wt\`:**
-  - `fixes` (branch `SOS-35-world-fixes`, patch `98-world-fixes`): the W3 world determinism items;
-  - `cmds` (branch `SOS-35-world-cmds`, patch `96-cmd-world`): the world, diplomacy and event commands, with rig script `rig/cmds/world.txt`.
-  - Both merged, with their `docs/hooks.md` and `docs/commands.md` rows.
-- **Smoke run D35B passed** (plan 0002 stage D, item 6), with the world now in the state hash.
-- **PR #14** (SOS-35) is open; SOS-34 is closed (PR #13 merged).
-- **V0.1 is packaged:** release notes `docs/release/V0.1.md`, `rig\play-v01.bat` starts the owner's session, `gradlew.bat releaseZip` makes `build
-elease\SOSDET-0.1.0.zip`.
-- **Next:** the owner's 30-minute session; then fix what it finds, then stage E.
-
-**After V0.1:**
-- stage E, the city↔world link;
-- room-planning milestone 3 (copier, mass copier, prints);
-- generated battles (Engage);
-- the resync-with-open-prompt gap (plan 0002, stage D).
-
-**Jira:**
-- SOS-32 is open (M2b and M3 left).
-- SOS-34 is done (PR #13 merged).
-- SOS-35, stage D and the V0.1 package, is in review (PR #14).
-- Cards close only after the owner says the PR is merged.
+**Still open elsewhere:** SOS-31 (the scenario suite as one local command); the V01B rig split at step 154,365; the resync-with-open-prompt gap (plan 0002, stage D); room-planning milestone 3; generated battles (Engage); several human factions (the mod's work).
 
 ## 3. How to work here
 
@@ -71,6 +43,7 @@ elease\SOSDET-0.1.0.zip`.
     ```
     The test copies run off-screen. Give it enough steps: about 300 per scripted action plus 6,000.
   - **Owner play session:** `--play` (copy 1 in a normal window at 1x; close the window to end). The owner plays the city and the world; room planning and refurnish work. Without `--play`, copy 1's player answers world-battle prompts by itself.
+  - **Own cities:** `--follow` runs every copy in own-city mode with copy 1 as the host; `--world-resync STEP` reloads the followers' worlds from the host's; `--pace-lead N` (default 60) caps how far the host runs past the slowest copy; `--remote K` runs copy K on the laptop over Radmin (`SOSDET_RIG_REMOTE`). See `rig/README.md`.
   - **Splits:** `--trace-draws 300` names the first differing draw. The desync report lists divisions and entities per step.
   - **Never rebuild while a rig run is live:** it swaps the jars under the running copies.
 - **Patches:** `python tools/mkpatch.py <patch> <edits.py>`. FILES lists every game file the patch covers; EDITS holds only the new edits. Each game file belongs to one patch. Every hook goes in `docs/hooks.md`; every command goes in `docs/commands.md`.
@@ -87,3 +60,6 @@ elease\SOSDET-0.1.0.zip`.
 - **Room planning:** plan locally, hidden from the step; Build is one command, using the stash approach.
 - **Refurnish:** the room keeps working until Build, and cancelling does nothing.
 - **Auto-compact:** set to 300k tokens in `~/.claude/settings.json`.
+- **No CI (owner, 2026-10-24):** a local check before merge instead; the scenario suite runs as one local command (SOS-31).
+- **Pacing (owner, 2026-10-24):** the slowest PC caps the pace; the lead is easy to change and belongs to the mod's speed voting later.
+- **Smoke tests:** test less; pace and catch-up checks are short smoke runs, not desync tests.
