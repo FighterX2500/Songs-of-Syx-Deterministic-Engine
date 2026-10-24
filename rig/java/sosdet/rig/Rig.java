@@ -219,6 +219,10 @@ public final class Rig implements SCRIPT {
         private long frameNanos;
         /** The limit the engine was last given, after pacing. */
         private long pacedLast = -1;
+        /** The slowest peer's measured pace (steps per second, -1 unknown), and its step and time when last measured. */
+        private double peerRate = -1;
+        private long peerRateStep = -1;
+        private long peerRateNanos;
         // the players' orders between peers and the host, through files (a peer's player acts too)
         private Path ordersOutFile;
         private final List<Path> ordersPeers = new ArrayList<>();
@@ -687,7 +691,12 @@ public final class Rig implements SCRIPT {
             applyLimit();
         }
 
-        /** The run's limit; on a paced host, no more than paceLead steps past the slowest peer's last hash. */
+        /**
+         * The run's limit; on a paced host, no more than paceLead steps past where the slowest peer is by now: its last
+         * hash's step plus what its measured pace has run since that hash came in, at most paceLead more (a peer that
+         * stopped holds the host within two leads of its last hash). The limit moves on every frame, so the host slows
+         * down evenly to the slowest peer's pace instead of running to the cap and standing still until the next hash.
+         */
         private void applyLimit() {
             long last = limit;
             if (paceLead > 0) {
@@ -696,7 +705,13 @@ public final class Rig implements SCRIPT {
                     slowest = Math.min(slowest, Engine.peerStep(hashPeerPcs.get(i)));
                 }
                 if (slowest != Long.MAX_VALUE) {
-                    last = Math.min(last, Math.max(Engine.step(), slowest + paceLead));
+                    long cap = slowest + paceLead;
+                    long now = System.nanoTime();
+                    trackPeerRate(slowest, now);
+                    if (peerRate > 0) {
+                        cap += Math.min(paceLead, (long) (peerRate * (now - peerRateNanos) / 1e9));
+                    }
+                    last = Math.min(last, Math.max(Engine.step(), cap));
                 }
             }
             pacedLast = last;
@@ -705,6 +720,28 @@ public final class Rig implements SCRIPT {
             } else {
                 Engine.runUntil(last);
             }
+        }
+
+        /**
+         * The slowest peer's steps per second, from the hashes it sends (one every hash interval): a moving average, so
+         * one late hash moves it a little. Reset when that peer's step goes back.
+         */
+        private void trackPeerRate(long slowest, long now) {
+            if (slowest < 0 || slowest < peerRateStep) {
+                peerRate = -1;
+                peerRateStep = slowest;
+                peerRateNanos = now;
+                return;
+            }
+            if (slowest == peerRateStep) {
+                return;
+            }
+            if (peerRateStep >= 0) {
+                double sample = (slowest - peerRateStep) / ((now - peerRateNanos) / 1e9);
+                peerRate = peerRate > 0 ? peerRate * 0.75 + sample * 0.25 : sample;
+            }
+            peerRateStep = slowest;
+            peerRateNanos = now;
         }
 
         /** Between frames of a paced run: the limit follows the peers, and a frame the peers held is counted. */
