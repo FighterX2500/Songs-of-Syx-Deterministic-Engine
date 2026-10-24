@@ -193,6 +193,8 @@ A value the report has no slot for is read live and counted in `Stats.reportMiss
 
 Why a world-only save, not the whole one (found in the S3 and S4 smoke runs, 2026-10-24): the game writes every section's objects (`FilePutter.object`) into one Java object stream for the whole file, and the stream's back-references count from its start. A load that skips the city's sections (rooms, events, messages write objects) misreads the next object. `RAIDING.load` reads its raiders with `object(true)`, which turns the error into `null`, and then makes 100 new raiders with each PC's own draws and army power scale. So after every world resync each PC had other raiders, with other powers, and the raider decision split some 96,000 steps later (M4, M4T, M4R, M4T2). In a world-only save the sections are written and read in one stream, with nothing skipped.
 
+**Pacing.** The host runs at most a lead of steps past the slowest PC, which it learns from that PC's state hashes (`Engine.peerStep`; the rig's `--pace-lead`, default 60). A follower runs at most one report window (under 60 steps) past the host. So a slow PC slows everyone (mod spec §4) by holding the host; a smooth drop of the agreed speed instead belongs to the mod's speed voting.
+
 **Known gaps:**
 - *An answer's draws.* A step prompt's answer runs at part −1, with the city stream, before the world reseed. A world prompt's answer that draws would differ between PCs. None found that draws.
 - *Prompt keys.* City and world prompts share the step prompts' keys.

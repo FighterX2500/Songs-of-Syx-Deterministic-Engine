@@ -89,6 +89,10 @@ If a follower's world differs from copy 1's, the world part read something from 
 - *S6* (the raiders in the world hash, format 5; 3 copies, 9,000 steps with the world resync at 3,000): **PASS**.
 - *W1R2* (W1 again with every fix; W1R loaded the broken world resync too): **PASS**. The laptop identical to copy 1 at every step to 60,000. The laptop compared all 2,000 of the host's engine hashes; the host compared 90 of the laptop's (1,672 came too late, because the laptop runs behind and the host doesn't wait in own-city mode). `reportMisses` 0 on both. The world resync: 625 KB saved in 152 ms, loaded in 115 ms here and 154 ms on the laptop.
 
+**Pacing (2026-10-24, owner):** W1R2 showed the host running thousands of steps ahead of the slower laptop; mod spec §4 says the slowest PC caps the speed. The host now runs at most `--pace-lead` steps (default 60) past the slowest copy, learnt from that copy's hashes (`Engine.peerStep`). The owner asked for smoke tests only (pace tests, not desync tests):
+- *P1L* (3 copies here at speeds 5, 7 and 7, 12,000 steps, world resync at 3,000): **PASS**. The copies stayed within 40 steps of each other; the host was held by the others in 44 frames, 0.4 s.
+- *P1W* (the laptop as follower, 12,000 steps, world resync at 3,000): **PASS**. The host stayed within about 25 steps of the laptop (W1R2: thousands), and compared 396 of the laptop's hashes with none missed (W1R2: 90 compared, 1,672 missed). The host was held by the laptop in 8,209 frames, 52 s of the run's 200 s.
+
 ## Two PCs and LLM players (2026-10-24)
 
 `rig.py --remote K` runs copy K on another PC (here the owner's laptop over Radmin, an AMD Ryzen 3 4300U against this PC). `rig/relay` mirrors the rig's files and hands over its commands across the link. Peers' orders now reach the host (`ordersout`, `ordersfrom`). `rig/play.py` lets an LLM agent play one copy: Sonnet 5.5 agents at medium effort read `state` and send `play` actions from `rig/cmds/*.txt`.

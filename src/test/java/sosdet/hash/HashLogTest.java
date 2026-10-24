@@ -77,6 +77,27 @@ class HashLogTest {
     }
 
     @Test
+    void aPeersStepIsItsLastHashThatArrived() {
+        HashLog a = new HashLog();
+        HashLog b = new HashLog();
+        FakeState sa = new FakeState();
+        FakeState sb = new FakeState();
+        assertEquals(-1, a.reached(2), "nothing from PC 2 yet");
+        run(b, sb, 1, 100);
+        a.in(2, b.out());
+        assertEquals(-1, a.reached(2), "read once a took its own first hash");
+        run(a, sa, 1, 30);
+        a.in(2, new byte[0]);
+        assertEquals(90, a.reached(2), "hashed at 30, 60 and 90; a is at 30, so the others wait to be compared");
+        assertEquals(1, a.compared());
+        run(a, sa, 31, 200);
+        run(b, sb, 101, 150);
+        a.in(2, b.out());
+        assertEquals(150, a.reached(2));
+        assertEquals(-1, a.reached(3), "another PC");
+    }
+
+    @Test
     void theSameStateGivesTheSameHashesAndNoDesync() {
         HashLog a = new HashLog();
         HashLog b = new HashLog();

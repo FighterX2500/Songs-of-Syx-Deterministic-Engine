@@ -243,6 +243,7 @@ public final class HashLog {
     private void drain(Remote r) {
         long[] rec;
         while ((rec = r.next()) != null) {
+            r.reached = Math.max(r.reached, rec[0]);
             if (rec[1] < epoch) {
                 continue; // taken before the last resync
             }
@@ -252,6 +253,16 @@ public final class HashLog {
                 compare(r.pc, rec);
             }
         }
+    }
+
+    /** The last step another PC's hashes have reached, or -1 before its first or before this PC's own first hash. */
+    public long reached(int pc) {
+        for (int i = 0; i < remotes.size(); i++) {
+            if (remotes.get(i).pc == pc) {
+                return remotes.get(i).reached;
+            }
+        }
+        return -1;
     }
 
     private Remote remote(int pc) {
@@ -306,6 +317,7 @@ public final class HashLog {
         boolean headerRead;
         int theirDivisions;
         final ArrayDeque<long[]> waiting = new ArrayDeque<>();
+        long reached = -1;
 
         Remote(int pc) {
             this.pc = pc;

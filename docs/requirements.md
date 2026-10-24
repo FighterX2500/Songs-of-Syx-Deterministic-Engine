@@ -22,6 +22,7 @@ Every PC that starts from the same save and seed (a battle, a city or the campai
 ## 3. What the mod can do through the API
 
 - Read the current step, and set the last step the engine may run. The engine never runs past it, and runs nothing while paused.
+- Read how far another PC has got (`Engine.peerStep`: the last step its state hashes reached). The host caps its own last step at the slowest PC's step plus a lead the mod chooses, so the slowest PC caps the speed (mod spec §4). The lead belongs to the mod (later, with speed voting); the rig's is `--pace-lead`.
 - Give an order to apply at a given step. It is applied at exactly that step on every PC, never on arrival.
 - Give a player's command (a city or world action, carrying the issuing PC) to apply at a given step. It is applied exactly once at that step on every PC; one that moves goods, soldiers or money carries a transaction ID.
 - Set the seed of the simulation random stream.

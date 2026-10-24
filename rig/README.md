@@ -75,6 +75,8 @@ python rig\rig.py city --tag F1 --no-invade --follow --world-resync 3000
 
 `--follow`: every copy runs in own-city mode (`Engine.ownCity`). Copy 1's city is the one the world reads: its reports go to a file (`reportsout`), and the other copies feed that file to their engines (`reportsfrom 0`) and run cities of their own, which differ from copy 1's at once. The per-step log holds the world hash (`GameHash.worldHash`) instead of the city's, so the copies are compared on the world only. Needs the AI on the host; refuses `--replay`, `--resync` and `--resync-on-desync`, which would reload the followers' cities. `--world-resync STEP`: copy 1 holds at that step and saves (`Engine.worldResyncSave`); every copy, copy 1 included, then loads only the world from it (`Engine.worldResyncLoad`) and runs on. `summary.txt` gives the save time and size, each copy's load time, and each copy's `reportsReceived`.
 
+`--pace-lead N` (default 60; 0 turns it off): copy 1, the host, runs at most N steps past the slowest copy, as the mod will (mod spec §4: the slowest PC caps the speed). It learns each copy's step from that copy's state hashes (`Engine.peerStep`), which come every 30 steps, so N is at least 30. A follower runs at most one report window (under 60 steps) past the host, so every copy stays within about N + 60 steps of the slowest. `summary.txt` gives how many frames and seconds the host was held by the others. Any run with more than one copy is paced.
+
 ## Playing a copy (SOS-32)
 
 ```

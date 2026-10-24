@@ -89,6 +89,8 @@ import view.main.VIEW;
  *   hashes &lt;file&gt;                      after the load: append this copy's state hashes to the file every frame
  *   hashpeer &lt;pc&gt; &lt;file&gt;               and read another copy's; on the first desync the engine finds, write
  *                                       &lt;tag&gt;-desync.txt (the engine's report) and a desync event
+ *   pace &lt;steps&gt;                        host: run at most that many steps past the slowest hashpeer (0: off);
+ *                                       the slowest PC caps the speed (mod spec §4)
  *   ordersout &lt;file&gt;                    peer: append its player's orders to the file every frame
  *   ordersfrom &lt;pc&gt; &lt;file&gt;             host: take in peer pc's orders from its file every frame
  *   state                               what a player sees: step, people, soldiers, credits, invasion, raider
@@ -206,6 +208,15 @@ public final class Rig implements SCRIPT {
         private long[] hashOffsets = new long[0];
         private boolean desyncReported;
         private long nudgeStep = -1;
+        // pacing (SOS-38): the host runs at most paceLead steps past its slowest peer, as the mod will (spec §4)
+        private long paceLead;
+        /** The last step the run may reach, before pacing. */
+        private long limit;
+        private long pacedFrames;
+        private long pacedNanos;
+        private long frameNanos;
+        /** The limit the engine was last given, after pacing. */
+        private long pacedLast = -1;
         // the players' orders between peers and the host, through files (a peer's player acts too)
         private Path ordersOutFile;
         private final List<Path> ordersPeers = new ArrayList<>();
@@ -297,6 +308,7 @@ public final class Rig implements SCRIPT {
             exchangeOrders();
             exchangeReports();
             exchangeHashes();
+            pace();
             if (traceFrom >= 0 && Engine.active() && Engine.step() >= traceFrom) {
                 Engine.traceDraws(traceSteps);
                 event("tracing", "\"step\":" + Engine.step());
@@ -649,11 +661,46 @@ public final class Rig implements SCRIPT {
 
         /** Lets the run go on to its last step, or freely. */
         private void runOn() {
-            if (lastStep == Long.MAX_VALUE) {
+            limit(lastStep);
+        }
+
+        /** The run may reach this step ({@code Long.MAX_VALUE}: no last step), and no further than pacing allows. */
+        private void limit(long last) {
+            limit = last;
+            applyLimit();
+        }
+
+        /** The run's limit; on a paced host, no more than paceLead steps past the slowest peer's last hash. */
+        private void applyLimit() {
+            long last = limit;
+            if (paceLead > 0) {
+                long slowest = Long.MAX_VALUE;
+                for (int i = 0; i < hashPeerPcs.size(); i++) {
+                    slowest = Math.min(slowest, Engine.peerStep(hashPeerPcs.get(i)));
+                }
+                if (slowest != Long.MAX_VALUE) {
+                    last = Math.min(last, Math.max(Engine.step(), slowest + paceLead));
+                }
+            }
+            pacedLast = last;
+            if (last == Long.MAX_VALUE) {
                 Engine.runFreely();
             } else {
-                Engine.runUntil(lastStep);
+                Engine.runUntil(last);
             }
+        }
+
+        /** Between frames of a paced run: the limit follows the peers, and a frame the peers held is counted. */
+        private void pace() {
+            long now = System.nanoTime();
+            if (running && !vanilla && paceLead > 0 && resyncLoadStarted == 0 && Engine.active()) {
+                if (pacedLast >= 0 && Engine.step() == pacedLast && pacedLast < limit && frameNanos != 0) {
+                    pacedFrames++;
+                    pacedNanos += now - frameNanos;
+                }
+                applyLimit();
+            }
+            frameNanos = now;
         }
 
         /** One line per frame: the previous frame's update time (patch 91) and the game time it advanced. */
@@ -855,6 +902,10 @@ public final class Rig implements SCRIPT {
             case "resyncload":
                 loadResync(Paths.get(c[1]), Files.readAllBytes(Paths.get(c[2])));
                 return;
+            case "pace":
+                paceLead = Long.parseLong(c[1]);
+                event("pace", "\"lead\":" + paceLead);
+                return;
             case "owncity":
                 Engine.ownCity();
                 ownCity = true;
@@ -910,7 +961,7 @@ public final class Rig implements SCRIPT {
                     throw new IllegalStateException("SOSDET rig: hold needs a run going");
                 }
                 lastStep = Engine.step();
-                Engine.runUntil(lastStep);
+                limit(lastStep);
                 finish();
                 return;
             case "hash":
@@ -964,14 +1015,16 @@ public final class Rig implements SCRIPT {
             openTiming();
             startStallSampler(dir.resolve(tag + "-stalls.txt"));
             Engine.resetStats();
+            pacedFrames = 0;
+            pacedNanos = 0;
             long from = Engine.step();
             lastStep = steps > 0 ? from + steps : Long.MAX_VALUE; // 0: until hold
             if (resyncStep >= 0) {
-                Engine.runUntil(Math.min(lastStep, resyncStep)); // held there for the resync save
+                limit(Math.min(lastStep, resyncStep)); // held there for the resync save
             } else if (worldStep >= 0) {
-                Engine.runUntil(Math.min(lastStep, worldStep)); // held there for the world save or load
+                limit(Math.min(lastStep, worldStep)); // held there for the world save or load
             } else if (wresyncStep >= 0) {
-                Engine.runUntil(Math.min(lastStep, wresyncStep)); // held there for the world resync
+                limit(Math.min(lastStep, wresyncStep)); // held there for the world resync
             } else {
                 runOn();
             }
@@ -1044,8 +1097,9 @@ public final class Rig implements SCRIPT {
                         (System.nanoTime() - started) / 1e9));
                 return;
             }
-            event("finished", String.format(Locale.ROOT, "\"tag\":\"%s\",\"endStep\":%d,\"endHash\":\"%s\",\"men\":%d,\"wallSeconds\":%.1f,\"stats\":%s",
-                    tag, Engine.step(), end, men(), (System.nanoTime() - started) / 1e9, Engine.stats().toJson()));
+            event("finished", String.format(Locale.ROOT, "\"tag\":\"%s\",\"endStep\":%d,\"endHash\":\"%s\",\"men\":%d,\"wallSeconds\":%.1f,"
+                    + "\"pacedFrames\":%d,\"pacedSeconds\":%.1f,\"stats\":%s", tag, Engine.step(), end, men(),
+                    (System.nanoTime() - started) / 1e9, pacedFrames, pacedNanos / 1e9, Engine.stats().toJson()));
         }
 
         /** Step 1: the debug panel's invasion. Step 2: its launch (the end of the warning): the army enters the city. */

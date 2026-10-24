@@ -391,6 +391,16 @@ public final class Engine {
         required().hashes.in(pc, bytes);
     }
 
+    /**
+     * How far another PC has got: the last step its hashes ({@link #hashIn}) have reached, or -1 before the first (and
+     * before this PC's own first hash, one hash interval in). The
+     * host paces the game by it (mod spec §4: the slowest PC caps the speed): it lets itself {@link #runUntil} the
+     * slowest PC's step plus a lead the mod chooses, at least one hash interval.
+     */
+    public static long peerStep(int pc) {
+        return required().hashes.reached(pc);
+    }
+
     /** The first desync found, or null. */
     public static Desync desync() {
         return required().hashes.desync();

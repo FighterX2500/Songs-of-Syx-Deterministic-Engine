@@ -720,6 +720,9 @@ def main():
     ap.add_argument("--play", action="store_true",
                     help="the owner plays copy 1 (the host) in a normal window from 1x, giving orders and changing speed;"
                          " the other copies replay its log at 25x; the run ends when the owner closes the window")
+    ap.add_argument("--pace-lead", type=int, default=60,
+                    help="copy 1 (the host) runs at most this many steps past the slowest copy, as the mod will (spec"
+                         " section 4: the slowest PC caps the speed); at least the hash interval (%d); 0: off" % HASH_EVERY)
     ap.add_argument("--remote", type=int, default=0,
                     help="this copy runs on the other PC (SOSDET_RIG_REMOTE=user@host, over SSH; its game folder under"
                          " --remote-root\\game); the relay mirrors its files over a direct TCP link")
@@ -757,6 +760,9 @@ def main():
                         or args.resync_on_desync):
         fail("--follow needs a city run with the AI on the host, without --replay or --resync (a whole-game resync"
              " would take the followers' cities; use --world-resync)")
+    if 0 < args.pace_lead < HASH_EVERY:
+        fail("--pace-lead %d: the host learns a copy's step from its hashes, every %d steps; use 0 or at least %d"
+             % (args.pace_lead, HASH_EVERY, HASH_EVERY))
     if args.world_resync and not args.follow:
         fail("--world-resync is for --follow runs; co-op runs use --resync")
     saves, autoload = scenario_saves(args)
@@ -860,6 +866,8 @@ def main():
                 c.send("hashpeer %d %s" % (o.k, o.rig / "hashes.bin"), "hashpeer")
         if c.k == nudged:
             c.send("nudge %d" % args.nudge, "nudge")
+        if c.k == 1 and len(copies) > 1 and args.pace_lead > 0:
+            c.send("pace %d" % args.pace_lead, "pace")
         if c.k == 1 and args.scenario == "city" and not args.play and not args.replay:
             c.send("answerprompts", "answerprompts")  # nobody clicks the world-battle prompt in a rig run
         if c.k == 1 and args.play:
@@ -989,6 +997,10 @@ def main():
         summary.append("copy %d at speed %.0f: start %s, end step %d, end %s, men %d, %.0f s wall, stats %s"
                        % (c.k, speeds[c.k - 1], starts[c.k]["battle" if args.scenario == "field" else "city"],
                           f["endStep"], f["endHash"], f["men"], f["wallSeconds"], json.dumps(f["stats"])))
+    if len(copies) > 1 and args.pace_lead > 0:
+        f = finished[1]
+        summary.append("pacing: copy 1 ran at most %d steps past the slowest copy; held by the others in %d frames, %.1f s"
+                       % (args.pace_lead, f.get("pacedFrames", 0), f.get("pacedSeconds", 0)))
     summary += lines
     desyncs = {c.k: c.find("desync", 0) for c in copies}
     for c in copies:
