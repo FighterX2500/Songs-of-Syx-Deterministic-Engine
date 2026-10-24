@@ -29,6 +29,7 @@ Spikes for open questions go under `spikes/<name>/` and end with a report in `do
 - Planning first: for anything larger than a small fix, propose a plan and wait for my approval before editing.
 - One Jira card at a time, on the SOS board (Jira project SOS). The branch is `SOS-N-short-name`, and the PR title starts with the key. Close a card only when I say its PR is merged.
 - Game runs one at a time on this PC, and one combined smoke run per stage (the owner's direction: speed up, test less). Never build while a rig run is live. Use parallel read-only subagents for audits and reviews; give any agent that edits files its own worktree.
+- Before each PR: `gradlew.bat build`, then `python rig\suite.py --short` (about 5 minutes; ask me before running it). A change meant to alter the simulation records the suite again (`--record`) and says so in the PR (SOS-31).
 - The timing rule (requirements §4) applies to any change that touches the step.
 - Write multi-line scripts with the Write and Edit tools, not shell heredocs.
 - Never print the keys in `.env` (SOSGSGMP holds the Jira and GitHub keys).
