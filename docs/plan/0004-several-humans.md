@@ -1,6 +1,6 @@
 # Plan 0004: several human factions on the world map (SOS-46)
 
-Status: proposed (2026-10-25). The owner chose option 1 and started milestone 1's spike (2026-10-25); the spike is done. Card: [SOS-46](https://fighterx2500.atlassian.net/browse/SOS-46). Branch: `SOS-46-several-humans` (local). The design is settled in an ADR (0004) in milestone 1.
+Status: in progress. The owner chose option 1 and accepted [ADR 0004](../decisions/0004-several-humans.md) (2026-10-25); milestone 1 started. Card: [SOS-46](https://fighterx2500.atlassian.net/browse/SOS-46). Branch: `SOS-46-several-humans` (local). The design is settled in an ADR (0004) in milestone 1.
 
 ## Goal
 

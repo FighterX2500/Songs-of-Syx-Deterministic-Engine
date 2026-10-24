@@ -1,6 +1,6 @@
 # 0004: Each human faction is a Player in its own slot, the same on every PC
 
-Status: Proposed (2026-10-25); the owner chose option 1 on 2026-10-25, before the spike · Card: [SOS-46](https://fighterx2500.atlassian.net/browse/SOS-46) · Builds on: [plan 0004](../plan/0004-several-humans.md), the [spike report](../plan/spikes/several-humans.md), SOSGSGMP [ADR 0005](https://github.com/FighterX2500/SOSGSGMP/blob/main/docs/decisions/0005-world-lockstep-and-city-world-link.md) (amendment of 2026-10-25)
+Status: Accepted (owner, 2026-10-25) · Card: [SOS-46](https://fighterx2500.atlassian.net/browse/SOS-46) · Builds on: [plan 0004](../plan/0004-several-humans.md), the [spike report](../plan/spikes/several-humans.md), SOSGSGMP [ADR 0005](https://github.com/FighterX2500/SOSGSGMP/blob/main/docs/decisions/0005-world-lockstep-and-city-world-link.md) (amendment of 2026-10-25)
 
 ## Context
 
