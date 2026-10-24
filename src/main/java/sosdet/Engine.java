@@ -3,11 +3,13 @@ package sosdet;
 import sosdet.ai.AiEntry;
 import sosdet.ai.AiLog;
 import sosdet.ai.AiMode;
+import sosdet.ai.Commanders;
 import java.nio.file.Path;
 
 import sosdet.game.GameAi;
 import sosdet.game.GameResync;
 import sosdet.game.GameWorldLoad;
+import sosdet.game.OwnArmy;
 import sosdet.report.CityReport;
 import sosdet.hash.Desync;
 import sosdet.report.Shape;
@@ -423,6 +425,52 @@ public final class Engine {
         Session s = required();
         s.followSpeed = true;
         s.pacer.govern(true);
+    }
+
+    /**
+     * This PC's player only watches (spec 0.12, watch-only viewing): a click that would give an order or a command
+     * changes nothing and sends nothing. Camera, windows and selection stay this PC's own. {@code false} lets the player
+     * act again; either takes effect at once, since a dropped order never reaches any log (SOS-15).
+     */
+    public static void watchOnly(boolean on) {
+        required().ai().watchOnly(on);
+    }
+
+    /** A battle division or artillery commanded by the host's AI general (SOS-15). */
+    public static final int AI = AiEntry.AI;
+
+    /**
+     * Host, between steps: who commands each battle division and each army's artillery from now on (SOS-15).
+     * {@code byDivision[i]} is the PC (the mod's numbering, the host 0) or {@link #AI} commanding battle division i,
+     * every division of both armies in the game's order; {@code artilleryByArmy[a]} commands army a's artillery. An
+     * order or a change of the general for a division or artillery its source doesn't command is skipped on every PC,
+     * and each PC's player can select only its own. Applied at the step the host stamps, on every PC; kept in the
+     * resync state and in the state hash. {@code null, null}: nothing is restricted again, as before the first table.
+     */
+    public static void commanders(int[] byDivision, int[] artilleryByArmy) {
+        Session s = required();
+        if (byDivision != null && (byDivision.length != OwnArmy.divisions() || artilleryByArmy == null
+                || artilleryByArmy.length != OwnArmy.armies())) {
+            throw new IllegalArgumentException("SOSDET: a commanders table for " + byDivision.length + " divisions and "
+                    + (artilleryByArmy == null ? "no" : String.valueOf(artilleryByArmy.length)) + " armies; the battle has "
+                    + OwnArmy.divisions() + " and " + OwnArmy.armies());
+        }
+        s.ai().captureCommanders(Commanders.payload(byDivision, artilleryByArmy));
+    }
+
+    /** Division {@code div}'s commander now, or {@link Commanders#UNSET} with no table. */
+    public static int commanderOf(int div) {
+        return required().ai().commanders().of(div);
+    }
+
+    /** Orders and changes of the general skipped because their source didn't command their division or artillery. */
+    public static long ordersNotCommanded() {
+        return required().ai().commanders().skipped();
+    }
+
+    /** The orders and commands this PC's player gave while only watching, all dropped. */
+    public static long watchedDropped() {
+        return required().ai().watchedDropped();
     }
 
     /** The speed line every PC shows while a slow PC holds the speed down, or null (SOS-42). */

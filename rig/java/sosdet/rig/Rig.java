@@ -46,6 +46,7 @@ import snake2d.util.file.FilePutter;
 import snake2d.util.misc.ACTION;
 import snake2d.util.rnd.RND;
 import snake2d.util.sets.KeyMap;
+import snake2d.util.sets.LIST;
 import sosdet.Engine;
 import sosdet.game.GameHash;
 import sosdet.game.GameResync;
@@ -94,6 +95,9 @@ import view.main.VIEW;
  *                                       the slowest PC caps the speed (mod spec §4; the engine's, since SOS-42)
  *   followspeed                         every copy: its game speed follows the agreed one, and the host's governor
  *                                       lowers that to what the slowest copy holds (SOS-42)
+ *   watchonly                           its player only watches: orders and commands clicked are dropped (SOS-15)
+ *   commanders &lt;army0&gt; &lt;army1&gt;          host: who commands each army: a PC, "ai", or "A/B" (the army's divisions
+ *                                       with men split in half, the first half A's; the artillery A's) (SOS-15)
  *   ordersout &lt;file&gt;                    peer: append its player's orders to the file every frame
  *   ordersfrom &lt;pc&gt; &lt;file&gt;             host: take in peer pc's orders from its file every frame
  *   state                               what a player sees: step, people, soldiers, credits, invasion, raider
@@ -228,6 +232,10 @@ public final class Rig implements SCRIPT {
         private String speedNoticeSeen;
         private double speedSeen = -1;
         private long speedLookedAt;
+        /** The watch-only drops last logged as an event. */
+        private long watchedSeen;
+        /** The entries skipped as not commanded by their source, last logged as an event. */
+        private long notCommandedSeen;
         // the players' orders between peers and the host, through files (a peer's player acts too)
         private Path ordersOutFile;
         private final List<Path> ordersPeers = new ArrayList<>();
@@ -720,6 +728,16 @@ public final class Rig implements SCRIPT {
                 return;
             }
             speedLookedAt = now;
+            long watched = Engine.watchedDropped();
+            if (watched != watchedSeen) {
+                watchedSeen = watched;
+                event("watched", "\"dropped\":" + watched + ",\"step\":" + Engine.step());
+            }
+            long notCommanded = Engine.ordersNotCommanded();
+            if (notCommanded != notCommandedSeen) {
+                notCommandedSeen = notCommanded;
+                event("notcommanded", "\"skipped\":" + notCommanded + ",\"step\":" + Engine.step());
+            }
             double agreed = Engine.stats().agreedSpeed;
             if (agreed != speedSeen) {
                 speedSeen = agreed;
@@ -947,6 +965,13 @@ public final class Rig implements SCRIPT {
                 Engine.pace(pcs, paceLead);
                 event("pace", "\"lead\":" + paceLead);
                 return;
+            case "commanders":
+                commanders(c[1], c[2]);
+                return;
+            case "watchonly":
+                Engine.watchOnly(true);
+                event("watchonly", "\"step\":" + Engine.step());
+                return;
             case "followspeed":
                 Engine.followAgreedSpeed();
                 event("followspeed", "\"step\":" + Engine.step());
@@ -1042,6 +1067,35 @@ public final class Rig implements SCRIPT {
         // ------------------------------------------------------------ runs
 
         /** The UI call behind one player action, queued to run after this frame's update, outside the step. */
+        /** The commanders command: each army's divisions and artillery to a PC, the AI, or split between two PCs. */
+        private void commanders(String army0, String army1) {
+            int[] byDivision = new int[GAME.ARMIES().divisions().size()];
+            int[] artillery = new int[GAME.ARMIES().armies().size()];
+            String[] specs = {army0, army1};
+            for (int a = 0; a < specs.length; a++) {
+                String[] pcs = specs[a].split("/");
+                int first = commander(pcs[0]);
+                int second = pcs.length > 1 ? commander(pcs[1]) : first;
+                LIST<game.battle.div.Div> divs = GAME.ARMIES().armies().get(a).divisions();
+                int withMen = 0;
+                for (int i = 0; i < divs.size(); i++) {
+                    withMen += divs.get(i).menNrOf() > 0 ? 1 : 0;
+                }
+                int seen = 0;
+                for (int i = 0; i < divs.size(); i++) {
+                    boolean manned = divs.get(i).menNrOf() > 0;
+                    byDivision[divs.get(i).index()] = manned && seen++ >= (withMen + 1) / 2 ? second : first;
+                }
+                artillery[a] = first;
+            }
+            Engine.commanders(byDivision, artillery);
+            event("commanders", "\"army0\":\"" + army0 + "\",\"army1\":\"" + army1 + "\",\"step\":" + Engine.step());
+        }
+
+        private static int commander(String pc) {
+            return pc.equals("ai") ? Engine.AI : Integer.parseInt(pc);
+        }
+
         /** The inbattle action, once its steps after the map battle's Start have passed. */
         private void inBattle() {
             BattleState b = VIEW.b().state();

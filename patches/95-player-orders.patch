@@ -1,21 +1,63 @@
 diff -ru -U2 a/view/battle/BattlePanel.java b/view/battle/BattlePanel.java
---- a/view/battle/BattlePanel.java	2026-01-07 09:44:06.000000000 +0500
-+++ b/view/battle/BattlePanel.java	2026-10-24 18:17:23.634550100 +0500
-@@ -141,11 +141,11 @@
+--- a/view/battle/BattlePanel.java	2026-10-24 23:39:03.497003000 +0500
++++ b/view/battle/BattlePanel.java	2026-10-24 23:39:28.202114900 +0500
+@@ -78,15 +78,16 @@
+ 		b = new UIPanelTop.Butt(SPRITES.icons().m.sword, 8) {
+ 			@Override
+ 			protected void clickA() {
+-				if (p.added(cards_player))
+-					p.remove(cards_player);
++				UIPanelUnitCards own = sosdet.game.OwnArmy.own() == GAME.ARMIES().player() ? cards_player : cards_enemy; // SOSDET: this PC's army (SOS-15)
++				if (p.added(own))
++					p.remove(own);
+ 				else
+-					p.add(cards_player, false, true);
++					p.add(own, false, true);
+ 				
+ 			};
+ 			@Override
+ 			protected void renAction() {
+-				selectedSet(p.added(cards_player));
++				selectedSet(p.added(sosdet.game.OwnArmy.own() == GAME.ARMIES().player() ? cards_player : cards_enemy));
+ 			}
+ 		};
+ 		b.hoverInfoSet(Dic.¤¤Army);
+@@ -140,12 +141,12 @@
+ 				
  				@Override
  				protected void clickA() {
- 					for (Div d : GAME.ARMIES().player().divisions())
+-					for (Div d : GAME.ARMIES().player().divisions())
 -						d.settings().musteringSet(shouldmuster);
-+						sosdet.game.AiHooks.muster(d, shouldmuster);
++					for (Div d : sosdet.game.OwnArmy.own().divisions())
++						if (sosdet.game.OwnArmy.selectable(d)) sosdet.game.AiHooks.muster(d, shouldmuster);
  					for (ROOM_ARTILLERY c : SETT.ROOMS().ARTILLERY) {
  						for (int i = 0; i < c.instancesSize(); i++) {
- 							if (c.getInstance(i).army() == GAME.ARMIES().player())
+-							if (c.getInstance(i).army() == GAME.ARMIES().player())
 -								c.getInstance(i).muster(shouldmuster);
++							if (c.getInstance(i).army() == sosdet.game.OwnArmy.own() && sosdet.game.OwnArmy.selectable(c.getInstance(i)))
 +								sosdet.game.AiHooks.artilleryMuster(c.getInstance(i), shouldmuster);
  							
  						}
  					}
-@@ -381,7 +381,8 @@
+@@ -154,7 +155,7 @@
+ 				protected void renAction() {
+ 					shouldmuster = false;
+ 					problem = false;
+-					for (Div d : GAME.ARMIES().player().divisions()) {
++					for (Div d : sosdet.game.OwnArmy.own().divisions()) {
+ 						
+ 						if (d.menNrOf() > 0) {
+ 							shouldmuster |= d.menNrOf() > 0 && !d.settings().mustering();
+@@ -169,7 +170,7 @@
+ 						
+ 					for (ROOM_ARTILLERY c : SETT.ROOMS().ARTILLERY) {
+ 						for (int i = 0; i < c.instancesSize(); i++) {
+-							shouldmuster |= c.getInstance(i).army() == GAME.ARMIES().player() && !c.getInstance(i).mustered();
++							shouldmuster |= c.getInstance(i).army() == sosdet.game.OwnArmy.own() && !c.getInstance(i).mustered();
+ 						}
+ 					}
+ 					selectedSet(!shouldmuster); 
+@@ -381,7 +382,8 @@
  					
  					@Override
  					public void exe() {
@@ -26,8 +68,17 @@ diff -ru -U2 a/view/battle/BattlePanel.java b/view/battle/BattlePanel.java
  				};
  				
 diff -ru -U2 a/view/battle/BattlePlacerAttack.java b/view/battle/BattlePlacerAttack.java
---- a/view/battle/BattlePlacerAttack.java	2026-04-15 11:52:00.000000000 +0500
-+++ b/view/battle/BattlePlacerAttack.java	2026-10-24 18:17:23.630517800 +0500
+--- a/view/battle/BattlePlacerAttack.java	2026-10-24 23:39:03.584625700 +0500
++++ b/view/battle/BattlePlacerAttack.java	2026-10-24 23:39:28.203099400 +0500
+@@ -168,7 +168,7 @@
+ 			ENTITY e = ENTITIES().getArroundPoint(w.pixel().x(), w.pixel().y());
+ 			if (e instanceof Humanoid) {
+ 				Div d = ((Humanoid) e).division();
+-				if (d != null && d.army() == GAME.ARMIES().enemy()) {
++				if (d != null && d.army() == sosdet.game.OwnArmy.other()) {
+ 					target = d;
+ 					s.hover(target);
+ 				}
 @@ -324,7 +324,7 @@
  			if (artillery) {
  				for (ArtilleryInstance ins : s.artillery.selection()) {
@@ -37,6 +88,15 @@ diff -ru -U2 a/view/battle/BattlePlacerAttack.java b/view/battle/BattlePlacerAtt
  				}
  			}
  			
+@@ -372,7 +372,7 @@
+ 		boolean set() {
+ 
+ 			if (melees || archers || artillery) {
+-				if (GAME.ARMIES().map.attackable.is(w.tile(), GAME.ARMIES().player())) {
++				if (GAME.ARMIES().map.attackable.is(w.tile(), sosdet.game.OwnArmy.own())) {
+ 					cx = w.tile().x()*C.TILE_SIZE + C.TILE_SIZEH;
+ 					cy = w.tile().y()*C.TILE_SIZE + C.TILE_SIZEH;
+ 					return true;
 @@ -406,7 +406,7 @@
  			if (artillery) {
  				for (ArtilleryInstance ins : s.artillery.selection()) {
@@ -56,8 +116,8 @@ diff -ru -U2 a/view/battle/BattlePlacerAttack.java b/view/battle/BattlePlacerAtt
  		}
  
 diff -ru -U2 a/view/battle/BattlePlacerPlace.java b/view/battle/BattlePlacerPlace.java
---- a/view/battle/BattlePlacerPlace.java	2025-11-24 10:07:00.000000000 +0500
-+++ b/view/battle/BattlePlacerPlace.java	2026-10-24 18:17:23.630517800 +0500
+--- a/view/battle/BattlePlacerPlace.java	2026-10-24 23:39:03.670719000 +0500
++++ b/view/battle/BattlePlacerPlace.java	2026-10-24 23:39:03.699510800 +0500
 @@ -48,7 +48,7 @@
  			GAME.ARMIES().placer.deploy(s.selection(), a.start.x(), w.pixel().x(), a.start.y(), w.pixel().y());
  			if (VIEW.b().state() != null && VIEW.b().state().deploying()) {
@@ -68,8 +128,8 @@ diff -ru -U2 a/view/battle/BattlePlacerPlace.java b/view/battle/BattlePlacerPlac
  
  			}
 diff -ru -U2 a/view/battle/BattlePlacerSpin.java b/view/battle/BattlePlacerSpin.java
---- a/view/battle/BattlePlacerSpin.java	2025-11-19 14:20:18.000000000 +0500
-+++ b/view/battle/BattlePlacerSpin.java	2026-10-24 18:17:23.631517800 +0500
+--- a/view/battle/BattlePlacerSpin.java	2026-10-24 23:39:03.755204500 +0500
++++ b/view/battle/BattlePlacerSpin.java	2026-10-24 23:39:28.203099400 +0500
 @@ -67,7 +67,7 @@
  			}
  			if (VIEW.b().state() != null && VIEW.b().state().deploying()) {
@@ -79,9 +139,18 @@ diff -ru -U2 a/view/battle/BattlePlacerSpin.java b/view/battle/BattlePlacerSpin.
  				
  			}
  
+@@ -110,7 +110,7 @@
+ 			int x = w.pixel().x();
+ 			int y = w.pixel().y();
+ 			{
+-				if (GAME.ARMIES().placer.isBlocked(x, y, C.TILE_SIZE, GAME.ARMIES().player()))
++				if (GAME.ARMIES().placer.isBlocked(x, y, C.TILE_SIZE, sosdet.game.OwnArmy.own()))
+ 					GCOLOR.MAP().BAD.bind();
+ 				else
+ 					GCOLOR.MAP().BATTLE_OK.bind();
 diff -ru -U2 a/view/battle/UISelection.java b/view/battle/UISelection.java
---- a/view/battle/UISelection.java	2026-06-22 09:50:20.000000000 +0500
-+++ b/view/battle/UISelection.java	2026-10-24 18:17:23.631517800 +0500
+--- a/view/battle/UISelection.java	2026-10-24 23:39:03.843777900 +0500
++++ b/view/battle/UISelection.java	2026-10-24 23:39:03.874319000 +0500
 @@ -262,28 +262,28 @@
  	
  	private void loose() {

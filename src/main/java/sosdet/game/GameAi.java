@@ -17,6 +17,7 @@ import snake2d.util.sets.ArrayList;
 import sosdet.Hooks;
 import sosdet.ai.AiApplier;
 import sosdet.ai.AiEntry;
+import sosdet.ai.Commanders;
 import sosdet.game.cmd.CommandParts;
 import sosdet.game.cmd.Commands;
 import sosdet.game.cmd.MapBattles;
@@ -110,8 +111,13 @@ public final class GameAi implements AiApplier {
             return;
         case AiEntry.TELEPORT:
             ArrayList<Div> divs = new ArrayList<>(e.ints());
+            Commanders c = Hooks.commanders();
             for (int i = 0; i < e.ints(); i++) {
-                divs.add(GAME.ARMIES().division((short) e.intAt(i)));
+                if (c.allows(e.pc, e.intAt(i))) {
+                    divs.add(GAME.ARMIES().division((short) e.intAt(i)));
+                } else {
+                    c.skip(); // placed by a PC that doesn't command it (SOS-15)
+                }
             }
             GAME.ARMIES().initAndTeleport(divs);
             return;
@@ -172,6 +178,11 @@ public final class GameAi implements AiApplier {
             return;
         }
         ArtilleryInstance a = (ArtilleryInstance) r;
+        Commanders c = Hooks.commanders();
+        if (!c.allowsArtillery(e.pc, a.army().index())) {
+            c.skip(); // its source doesn't command that army's artillery (SOS-15)
+            return;
+        }
         if (e.kind == AiEntry.ARTILLERY) {
             a.targetCooSet(e.intAt(2), e.intAt(3), e.intAt(4) != 0, e.intAt(5) != 0);
         } else if (e.kind == AiEntry.ARTILLERY_MUSTER) {

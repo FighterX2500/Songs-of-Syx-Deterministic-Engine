@@ -23,6 +23,7 @@ import snake2d.SPRITE_RENDERER;
 import snake2d.util.datatypes.COORDINATE;
 import snake2d.util.rnd.RND;
 import sosdet.ai.AiApplier;
+import sosdet.ai.Commanders;
 import sosdet.ai.AiMode;
 import sosdet.game.GameReport;
 import sosdet.game.StepParts;
@@ -207,6 +208,9 @@ public final class Hooks {
             // an own city's draws are its own: the world part's alone are counted (ADR 0005 §1)
             long draws = s.ownCity ? s.streams.worldDraws() : s.streams.drawsSinceLoad();
             long clock = HashLog.mix(HashLog.mix(HashLog.mix(HashLog.start(), step), draws), s.ai().applied());
+            if (s.ai().commanders().set()) {
+                clock = HashLog.mix(clock, s.ai().commanders().hash()); // left out until a table is set (SOS-15)
+            }
             CityReport r = s.reports.current();
             s.hashes.take(step, clock, r == null ? 0 : r.hash(), s.source());
         }
@@ -954,6 +958,12 @@ public final class Hooks {
     /** A player's order on this PC: into the host's log, through it on a peer. */
     public static void orderCapture(int kind, int div, byte[] payload) {
         Engine.session().ai().captureOrder(kind, div, payload);
+    }
+
+    /** Who commands each battle division (SOS-15); null without a session, and then nothing is restricted. */
+    public static Commanders commanders() {
+        Session s = Engine.session();
+        return s == null ? null : s.ai().commanders();
     }
 
     /** The session's game adapter for the AI (host or peer mode), which also encodes the general's orders. */
