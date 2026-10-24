@@ -96,7 +96,7 @@ public final class Engine {
 
     /**
      * The speed every PC agreed on at the start (1x by default). It sets the step length: 1/60 s at 1x or slower,
-     * 1/16 s above. Set it at step 0, the same on every PC; later the host's speed changes go through the log and
+     * 1/30 s below 2x, 1/16 s from 2x. Set it at step 0, the same on every PC; later the host's speed changes go through the log and
      * every PC switches at the stamped step. A PC's own game speed only sets its pace.
      */
     public static void speed(double agreed) {
@@ -106,6 +106,7 @@ public final class Engine {
         }
         s.clock.agreedSpeed(agreed);
         s.seenSpeed = agreed;
+        s.pacer.wanted(agreed, System.nanoTime()); // the host player's speed, for the governor (SOS-42)
     }
 
     /** From the next load on, loading runs on the simulation stream seeded with this; 0 = vanilla loading. */
@@ -398,12 +399,48 @@ public final class Engine {
 
     /**
      * How far another PC has got: the last step its hashes ({@link #hashIn}) have reached, or -1 before the first (and
-     * before this PC's own first hash, one hash interval in). The
-     * host paces the game by it (mod spec §4: the slowest PC caps the speed): it lets itself {@link #runUntil} the
-     * slowest PC's step plus a lead the mod chooses, at least one hash interval.
+     * before this PC's own first hash, one hash interval in). The host's pacing ({@link #pace}) reads it.
      */
     public static long peerStep(int pc) {
         return required().hashes.reached(pc);
+    }
+
+    /**
+     * Host: run at most {@code lead} steps past the slowest of these PCs, learnt from their hashes, on top of
+     * {@link #runUntil} (mod spec §4: the slowest PC caps the speed; SOS-42). The lead is at least one hash interval; 0
+     * turns pacing off.
+     */
+    public static void pace(int[] pcs, long lead) {
+        required().pacer.peers(pcs, lead);
+    }
+
+    /**
+     * Every PC: its game speed follows the agreed speed as each change applies, and on a paced host the governor lowers
+     * the agreed speed to what the slowest PC holds, and raises it back toward the host player's when it can (SOS-42).
+     * Off by default, so test copies can run at speeds of their own.
+     */
+    public static void followAgreedSpeed() {
+        Session s = required();
+        s.followSpeed = true;
+        s.pacer.govern(true);
+    }
+
+    /** The speed line every PC shows while a slow PC holds the speed down, or null (SOS-42). */
+    public static String speedNotice() {
+        return required().speedNoticeNow(System.nanoTime());
+    }
+
+    /** Host: frames the slowest PC held it in, their seconds, and the longest hold in seconds (SOS-42). */
+    public static long heldFrames() {
+        return required().pacer.heldFrames();
+    }
+
+    public static double heldSeconds() {
+        return required().pacer.heldSeconds();
+    }
+
+    public static double longestHoldSeconds() {
+        return required().pacer.longestHoldSeconds();
     }
 
     /** The first desync found, or null. */

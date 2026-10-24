@@ -1,0 +1,11 @@
+diff -ru -U2 a/view/ui/top/UIPanelTop.java b/view/ui/top/UIPanelTop.java
+--- a/view/ui/top/UIPanelTop.java	2026-06-15 10:05:38.000000000 +0500
++++ b/view/ui/top/UIPanelTop.java	2026-10-24 22:06:34.800014500 +0500
+@@ -129,6 +129,7 @@
+ 		//UI.PANEL().hollow.renderHorizontal(r, 0, C.WIDTH(), section.body().y2() - UI.PANEL().hollow.margin);
+ 		time.render(r, ds);
+ 		noti.render(r, ds);
++		sosdet.Hooks.renderSpeedLine(r, C.WIDTH() / 2, section.body().y2() + 4); // SOSDET: a slow PC holds the speed down (SOS-42)
+ 		return true;
+ 	}
+ 

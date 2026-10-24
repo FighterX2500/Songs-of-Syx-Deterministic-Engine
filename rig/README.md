@@ -79,6 +79,8 @@ python rig\rig.py city --tag F1 --no-invade --follow --world-resync 3000
 
 `--pace-lead N` (default 60; 0 turns it off): copy 1, the host, runs at most N steps past the slowest copy, as the mod will (mod spec §4: the slowest PC caps the speed). It learns each copy's step from that copy's state hashes (`Engine.peerStep`), which come every 30 steps, so N is at least 30. Between hashes the host counts the slowest copy on at its measured pace (at most N more steps), so it slows down evenly instead of reaching the cap and standing still until the next hash; on the laptop rig this cut copy 1's standstills of 30+ frames from 109 to 26 (runs LT1, LT2). A follower runs at most one report window (under 60 steps) past the host, so every copy stays within about N + 60 steps of the slowest. `summary.txt` gives how many frames and seconds the host was held by the others. Any run with more than one copy is paced.
 
+`--govern`: every copy starts at copy 1's speed and follows the agreed speed, and the host lowers it once a second when the slowest copy holds it back for over a tenth of that second, to the fastest speed that copy's steps per second allow; after 10 s unheld it tries a quarter faster (SOS-42). The summary lists each copy's agreed speed changes and speed lines, and the longest hold.
+
 ## Playing a copy (SOS-32)
 
 ```

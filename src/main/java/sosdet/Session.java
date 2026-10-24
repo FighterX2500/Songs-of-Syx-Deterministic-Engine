@@ -8,6 +8,7 @@ import sosdet.game.GameHash;
 import sosdet.game.GameInputs;
 import sosdet.game.GameReport;
 import sosdet.game.GameTxns;
+import sosdet.game.SpeedLine;
 import sosdet.game.cmd.BannerDraft;
 import sosdet.game.cmd.PlanStash;
 import sosdet.hash.HashLog;
@@ -65,6 +66,14 @@ final class Session {
 
     /** Host: the game speed last seen, so a change goes into the log once (B16). */
     double seenSpeed;
+    /** Host: the pacing by the slowest PC and the speed governor (SOS-42). */
+    final Pacer pacer = new Pacer(pc -> hashes.reached(pc));
+    /** Every PC's game speed follows the agreed one, and the host's governor runs (SOS-42). */
+    boolean followSpeed;
+    /** The speed line the top bar shows (null: none), and when it goes (0: while the speed is held down). */
+    volatile String speedNotice;
+    volatile long speedNoticeUntil;
+    private SpeedLine speedLine;
     /** The random stream is reseeded every step from this and the step (requirements §1); set at step 0. */
     int seed;
     /** A resync load in progress: applied when the load begins, then cleared. */
@@ -289,8 +298,59 @@ final class Session {
         if (log.mode() == AiMode.IN_STEP) {
             clock.agreedSpeed(speed);
         } else if (log.mode() == AiMode.HOST) {
-            log.captureOrder(AiEntry.SPEED, -1, AiEntry.ints((int) Math.round(speed * 1000)));
+            pacer.wanted(speed, System.nanoTime());
+            logSpeed(speed, speed, -1);
         }
+    }
+
+    /** Host, every frame outside the step: the cap the slowest PC sets, and the governor's speed change (SOS-42). */
+    void pace(long now) {
+        if (ai().mode() != AiMode.HOST) {
+            return;
+        }
+        clock.paceCap(pacer.frame(now, clock.step(), clock.lastStep()));
+        double speed = pacer.speed(now);
+        if (speed > 0) {
+            logSpeed(speed, pacer.wantedSpeed(), pacer.slowPc());
+        }
+    }
+
+    /** A speed change for every PC at its step: the agreed speed, the host player's, the PC that held it down or -1. */
+    private void logSpeed(double speed, double wanted, int slowPc) {
+        ai().captureOrder(AiEntry.SPEED, -1, AiEntry.ints((int) Math.round(speed * 1000),
+                (int) Math.round(wanted * 1000), slowPc));
+    }
+
+    /** Every PC, as a speed change applies: the line the top bar shows while a slow PC holds the speed down. */
+    void speedNotice(double speed, double wanted, int slowPc, long now) {
+        if (slowPc >= 0 && speed < wanted) {
+            speedNoticeUntil = 0;
+            speedNotice = "SOSDET: speed " + speedText(speed) + ", PC " + slowPc + " can't keep up (host set "
+                    + speedText(wanted) + ")";
+        } else if (speedNotice != null && speedNoticeUntil == 0) {
+            speedNoticeUntil = now + 5 * Pacer.SECOND;
+            speedNotice = "SOSDET: every PC keeps up again, speed " + speedText(speed);
+        }
+    }
+
+    /** The speed line to show now, or null. */
+    String speedNoticeNow(long now) {
+        String n = speedNotice;
+        long until = speedNoticeUntil;
+        return n == null || until != 0 && now > until ? null : n;
+    }
+
+    /** The top bar's speed line, made at first use (it needs the game's fonts). */
+    SpeedLine speedLine() {
+        if (speedLine == null) {
+            speedLine = new SpeedLine();
+        }
+        return speedLine;
+    }
+
+    private static String speedText(double speed) {
+        double r = Math.round(speed * 10) / 10.0;
+        return (r == Math.floor(r) ? String.valueOf((long) r) : String.valueOf(r)) + "x";
     }
 
     void ai(AiLog log) {
@@ -351,5 +411,6 @@ final class Session {
         reportsReceived = 0;
         txns.resetStats();
         java.util.Arrays.fill(jobs.nanos, 0);
+        pacer.resetCounts();
     }
 }

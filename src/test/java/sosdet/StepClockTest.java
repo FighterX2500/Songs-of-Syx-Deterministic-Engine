@@ -57,6 +57,24 @@ class StepClockTest {
     }
 
     @Test
+    void aFrameRunsItsRealTimeAtTheSpeedNotVanillasCappedTime() {
+        StepClock clock = new StepClock();
+        long frame = StepClock.MAX_FRAME_NANOS / 5; // 20 frames a second: vanilla gives each 1/32 s
+        long now = 1;
+        assertEquals(1, clock.stepsForFrame(now, 1.0 / 60, 1), "the first frame takes vanilla's game time");
+        int steps = 0;
+        for (int i = 0; i < 100; i++) { // 5 s of 20 fps frames at 1x
+            now += frame;
+            steps += clock.stepsForFrame(now, 1.0 / 32, 1);
+        }
+        assertTrue(Math.abs(steps - 300) <= 1, "5 s at 1x: " + steps);
+        now += frame;
+        assertEquals(0, clock.stepsForFrame(now, 0, 1), "a frame vanilla holds (a notice) stays held");
+        now += StepClock.MAX_FRAME_NANOS + 1;
+        assertEquals(0, clock.stepsForFrame(now, 0, 1), "after a long frame (a pause): vanilla's game time, not the gap");
+    }
+
+    @Test
     void aLoadRestartsAtStepZeroAndHolds() {
         StepClock clock = new StepClock();
         clock.runUntil(StepClock.NO_LIMIT);
