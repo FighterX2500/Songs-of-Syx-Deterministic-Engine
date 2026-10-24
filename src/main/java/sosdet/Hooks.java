@@ -73,6 +73,14 @@ public final class Hooks {
         return Engine.session() != null;
     }
 
+    /**
+     * Whether an open window pauses the game, as in vanilla. Not in a session (mod spec section 4): a click there is a
+     * command for a later step, which a pause would hold until the window closed (SOS-32).
+     */
+    public static boolean menusPause() {
+        return Engine.session() == null;
+    }
+
     /** No autosave during a session; saves at a step come through the API (SOS-30). */
     public static boolean autoSaveAllowed() {
         return Engine.session() == null;
