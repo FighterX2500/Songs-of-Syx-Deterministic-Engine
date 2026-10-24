@@ -91,7 +91,9 @@ import view.main.VIEW;
  *   hashpeer &lt;pc&gt; &lt;file&gt;               and read another copy's; on the first desync the engine finds, write
  *                                       &lt;tag&gt;-desync.txt (the engine's report) and a desync event
  *   pace &lt;steps&gt;                        host: run at most that many steps past the slowest hashpeer (0: off);
- *                                       the slowest PC caps the speed (mod spec §4)
+ *                                       the slowest PC caps the speed (mod spec §4; the engine's, since SOS-42)
+ *   followspeed                         every copy: its game speed follows the agreed one, and the host's governor
+ *                                       lowers that to what the slowest copy holds (SOS-42)
  *   ordersout &lt;file&gt;                    peer: append its player's orders to the file every frame
  *   ordersfrom &lt;pc&gt; &lt;file&gt;             host: take in peer pc's orders from its file every frame
  *   state                               what a player sees: step, people, soldiers, credits, invasion, raider
@@ -220,19 +222,12 @@ public final class Rig implements SCRIPT {
         private long[] hashOffsets = new long[0];
         private boolean desyncReported;
         private long nudgeStep = -1;
-        // pacing (SOS-38): the host runs at most paceLead steps past its slowest peer, as the mod will (spec §4)
+        // pacing (SOS-38, in the engine since SOS-42): the host runs at most that many steps past its slowest peer
         private long paceLead;
-        /** The last step the run may reach, before pacing. */
-        private long limit;
-        private long pacedFrames;
-        private long pacedNanos;
-        private long frameNanos;
-        /** The limit the engine was last given, after pacing. */
-        private long pacedLast = -1;
-        /** The slowest peer's measured pace (steps per second, -1 unknown), and its step and time when last measured. */
-        private double peerRate = -1;
-        private long peerRateStep = -1;
-        private long peerRateNanos;
+        /** The speed line and the agreed speed last logged as events, and when the speed was last looked at. */
+        private String speedNoticeSeen;
+        private double speedSeen = -1;
+        private long speedLookedAt;
         // the players' orders between peers and the host, through files (a peer's player acts too)
         private Path ordersOutFile;
         private final List<Path> ordersPeers = new ArrayList<>();
@@ -333,7 +328,7 @@ public final class Rig implements SCRIPT {
             exchangeOrders();
             exchangeReports();
             exchangeHashes();
-            pace();
+            speedEvents();
             if (traceFrom >= 0 && Engine.active() && Engine.step() >= traceFrom) {
                 Engine.traceDraws(traceSteps);
                 event("tracing", "\"step\":" + Engine.step());
@@ -701,36 +696,8 @@ public final class Rig implements SCRIPT {
             limit(lastStep);
         }
 
-        /** The run may reach this step ({@code Long.MAX_VALUE}: no last step), and no further than pacing allows. */
+        /** The run may reach this step ({@code Long.MAX_VALUE}: no last step); the engine's pacing caps it too. */
         private void limit(long last) {
-            limit = last;
-            applyLimit();
-        }
-
-        /**
-         * The run's limit; on a paced host, no more than paceLead steps past where the slowest peer is by now: its last
-         * hash's step plus what its measured pace has run since that hash came in, at most paceLead more (a peer that
-         * stopped holds the host within two leads of its last hash). The limit moves on every frame, so the host slows
-         * down evenly to the slowest peer's pace instead of running to the cap and standing still until the next hash.
-         */
-        private void applyLimit() {
-            long last = limit;
-            if (paceLead > 0) {
-                long slowest = Long.MAX_VALUE;
-                for (int i = 0; i < hashPeerPcs.size(); i++) {
-                    slowest = Math.min(slowest, Engine.peerStep(hashPeerPcs.get(i)));
-                }
-                if (slowest != Long.MAX_VALUE) {
-                    long cap = slowest + paceLead;
-                    long now = System.nanoTime();
-                    trackPeerRate(slowest, now);
-                    if (peerRate > 0) {
-                        cap += Math.min(paceLead, (long) (peerRate * (now - peerRateNanos) / 1e9));
-                    }
-                    last = Math.min(last, Math.max(Engine.step(), cap));
-                }
-            }
-            pacedLast = last;
             if (last == Long.MAX_VALUE) {
                 Engine.runFreely();
             } else {
@@ -738,39 +705,26 @@ public final class Rig implements SCRIPT {
             }
         }
 
-        /**
-         * The slowest peer's steps per second, from the hashes it sends (one every hash interval): a moving average, so
-         * one late hash moves it a little. Reset when that peer's step goes back.
-         */
-        private void trackPeerRate(long slowest, long now) {
-            if (slowest < 0 || slowest < peerRateStep) {
-                peerRate = -1;
-                peerRateStep = slowest;
-                peerRateNanos = now;
+        /** The speed line as it changes, and the agreed speed once a second, as events (SOS-42). */
+        private void speedEvents() {
+            if (vanilla || !Engine.active()) {
                 return;
             }
-            if (slowest == peerRateStep) {
-                return;
+            String notice = Engine.speedNotice();
+            if (notice != null && !notice.equals(speedNoticeSeen)) {
+                event("speednotice", "\"text\":\"" + clean(notice) + "\",\"step\":" + Engine.step());
             }
-            if (peerRateStep >= 0) {
-                double sample = (slowest - peerRateStep) / ((now - peerRateNanos) / 1e9);
-                peerRate = peerRate > 0 ? peerRate * 0.75 + sample * 0.25 : sample;
-            }
-            peerRateStep = slowest;
-            peerRateNanos = now;
-        }
-
-        /** Between frames of a paced run: the limit follows the peers, and a frame the peers held is counted. */
-        private void pace() {
+            speedNoticeSeen = notice;
             long now = System.nanoTime();
-            if (running && !vanilla && paceLead > 0 && resyncLoadStarted == 0 && Engine.active()) {
-                if (pacedLast >= 0 && Engine.step() == pacedLast && pacedLast < limit && frameNanos != 0) {
-                    pacedFrames++;
-                    pacedNanos += now - frameNanos;
-                }
-                applyLimit();
+            if (now - speedLookedAt < 1_000_000_000L) {
+                return;
             }
-            frameNanos = now;
+            speedLookedAt = now;
+            double agreed = Engine.stats().agreedSpeed;
+            if (agreed != speedSeen) {
+                speedSeen = agreed;
+                event("agreedspeed", String.format(Locale.ROOT, "\"agreed\":%.3f,\"step\":%d", agreed, Engine.step()));
+            }
         }
 
         /** One line per frame: the previous frame's update time (patch 91) and the game time it advanced. */
@@ -986,7 +940,16 @@ public final class Rig implements SCRIPT {
                 return;
             case "pace":
                 paceLead = Long.parseLong(c[1]);
+                int[] pcs = new int[hashPeerPcs.size()];
+                for (int i = 0; i < pcs.length; i++) {
+                    pcs[i] = hashPeerPcs.get(i);
+                }
+                Engine.pace(pcs, paceLead);
                 event("pace", "\"lead\":" + paceLead);
+                return;
+            case "followspeed":
+                Engine.followAgreedSpeed();
+                event("followspeed", "\"step\":" + Engine.step());
                 return;
             case "owncity":
                 Engine.ownCity();
@@ -1122,8 +1085,6 @@ public final class Rig implements SCRIPT {
             openTiming();
             startStallSampler(dir.resolve(tag + "-stalls.txt"));
             Engine.resetStats();
-            pacedFrames = 0;
-            pacedNanos = 0;
             long from = Engine.step();
             lastStep = steps > 0 ? from + steps : Long.MAX_VALUE; // 0: until hold
             if (resyncStep >= 0) {
@@ -1205,8 +1166,9 @@ public final class Rig implements SCRIPT {
                 return;
             }
             event("finished", String.format(Locale.ROOT, "\"tag\":\"%s\",\"endStep\":%d,\"endHash\":\"%s\",\"men\":%d,\"wallSeconds\":%.1f,"
-                    + "\"pacedFrames\":%d,\"pacedSeconds\":%.1f,\"stats\":%s", tag, Engine.step(), end, men(),
-                    (System.nanoTime() - started) / 1e9, pacedFrames, pacedNanos / 1e9, Engine.stats().toJson()));
+                    + "\"pacedFrames\":%d,\"pacedSeconds\":%.1f,\"longestHoldSeconds\":%.2f,\"stats\":%s", tag, Engine.step(),
+                    end, men(), (System.nanoTime() - started) / 1e9, Engine.heldFrames(), Engine.heldSeconds(),
+                    Engine.longestHoldSeconds(), Engine.stats().toJson()));
         }
 
         /** Step 1: the debug panel's invasion. Step 2: its launch (the end of the warning): the army enters the city. */

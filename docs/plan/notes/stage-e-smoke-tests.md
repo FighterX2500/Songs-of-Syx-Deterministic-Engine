@@ -128,6 +128,15 @@ The owner's 30-minute session runs followers on their own, older cities: the hos
 - *MB13* (MB12 with the minimap uploaded in one GL job, and `--restart 300`): **PASS**. Restart at step 12,246 and Start again at 12,277 on both copies, identical to 36,000; 9 commands applied per copy. The Engage step took 13.9 s: 11.0 s generating (the minimap 0.65 s, no GL waits left; the rest is the game's own generation: tile map 6.5 s, pathing 1.9 s, settlement 1.5 s, armies 0.6 s) and 2.5 s for the two saves, both kept (the end loads one, Restart the other).
 - *MB14* (MB12 with `--in-battle "100 warmyname 0 SOS41"`): **PASS**. Copy 1 renamed army 0 at step 12,002, inside the battle (Start 11,871, Retreat 12,802); the world command came up at step 12,033 and was skipped on both copies (`commandsSkipped` 1 each), with the notice on copy 1 only; identical to 36,000.
 
+## SOS-42: the speed governor (2026-10-24)
+
+All on this PC (i5-11600K, RTX 3060 Ti) as host and the laptop (Ryzen 3 4300U, 4 threads, integrated graphics, 7.4 GB) as copy 2: Mogus-72, no invasion, 12,000 steps, both copies started at 25x.
+
+- *G1* (the governor on, but given no target speed by a bug, so only the pacing ran): **PASS** on identity. The pair averaged 61 steps a second (about 3.8x at 1/16 s steps): the host was held by the laptop for 193 s of 196 s, the longest hold 14.9 s. Step time 3.9 ms here, 6.8 ms on the laptop.
+- *G2* (the target fixed): identical, but the speed swung between 0.3x and 2.4x and the run took 456 s. Each short hold lowered the speed by another tenth, and below 2x the steps cost more per second, so some drops were large (2.0x to 0.4x).
+- *G3* (lowering only when the slowest PC runs under 95% of the agreed speed's steps a second, not within 2 s of a change): identical, held at 0.3x to 0.6x, 516 s. **Cause:** vanilla's update loop gives a frame at most 1/32 s of game time and throttles the speed of a PC under 40 frames a second; the laptop draws about 25, so it ran below every speed it was given. Fix: in a session a frame's game time is its real time times the speed (`StepClock.stepsForFrame`; vanilla's only after a frame over 0.25 s, such as a pause).
+- *G4* (G3 with that clock): **PASS**. The agreed speed settled between 5.3x and 10.4x and ended at 7.2x; 12,000 steps in 104 s (7.2x on average). The speed line appeared on both copies at the same steps. Identical at every step to 12,000, 400 hashes compared per copy with none missed, and the end hash is G1's (the clock changes the pace, not the result). The longest hold was 7.0 s, as in G1 to G3 (5.7 to 14.9 s), so likely the laptop's later start; not checked. After G4, a frame vanilla gives no game time (a notice or message holds it) stays held under the new clock; unit-tested, not rerun.
+
 The rig's lock now also checks that the process it names is a `rig.py`: a runner stopped from outside left its lock, and Windows had given its process number to another program.
 
 Two points from the camera and clicks audit:

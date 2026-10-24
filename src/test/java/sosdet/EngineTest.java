@@ -295,11 +295,15 @@ class EngineTest {
     void theStepLengthFollowsTheAgreedSpeed() {
         begin();
         Engine.runFreely();
-        assertEquals(60, Hooks.stepsFor(1.0, 1), "1x: 1/60 s steps");
+        // frames a second apart: longer than a frame may be, so each takes the game time given (SOS-42)
+        assertEquals(60, Hooks.stepsFor(1.0, 1, Pacer.SECOND), "1x: 1/60 s steps");
         assertEquals(1.0 / 60, Hooks.stepSeconds());
-        assertEquals(16, Hooks.stepsFor(1.0, 5), "in-step, one PC: 5x is the agreed speed at once, 1/16 s steps");
+        assertEquals(16, Hooks.stepsFor(1.0, 5, 2 * Pacer.SECOND),
+                "in-step, one PC: 5x is the agreed speed at once, 1/16 s steps");
         assertEquals(1.0 / 16, Hooks.stepSeconds());
-        assertEquals(16, Hooks.stepsFor(1.0, 0), "paused: the length stays");
+        assertEquals(16, Hooks.stepsFor(1.0, 0, 3 * Pacer.SECOND), "paused: the length stays");
+        assertEquals(30, Hooks.stepsFor(1.0, 1.5, 4 * Pacer.SECOND), "1.5x: 1/30 s steps (SOS-42)");
+        assertEquals(1.0 / 30, Hooks.stepSeconds());
         Engine.end();
         begin();
         Engine.speed(25);

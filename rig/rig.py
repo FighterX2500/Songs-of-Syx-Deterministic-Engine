@@ -132,6 +132,13 @@ class Copy:
                 return e
         return None
 
+    def all_of(self, event):
+        """Every such event since the copy started."""
+        if not self.events.exists():
+            return []
+        return [e for e in (json.loads(line) for line in self.events.read_text(encoding="utf-8").splitlines()[self.base:])
+                if e["event"] == event]
+
     def alive(self):
         return copy_running(self.k)
 
@@ -738,6 +745,9 @@ def main():
     ap.add_argument("--play", action="store_true",
                     help="the owner plays copy 1 (the host) in a normal window from 1x, giving orders and changing speed;"
                          " the other copies replay its log at 25x; the run ends when the owner closes the window")
+    ap.add_argument("--govern", action="store_true",
+                    help="every copy follows the agreed speed, and the host lowers it to what the slowest copy holds"
+                         " (SOS-42); every copy starts at copy 1's speed")
     ap.add_argument("--pace-lead", type=int, default=60,
                     help="copy 1 (the host) runs at most this many steps past the slowest copy, as the mod will (spec"
                          " section 4: the slowest PC caps the speed); at least the hash interval (%d); 0: off" % HASH_EVERY)
@@ -767,6 +777,8 @@ def main():
     speeds = [float(s) for s in args.speeds.split(",")][:args.copies]
     if len(speeds) < args.copies:
         fail("need a speed per copy")
+    if args.govern:
+        speeds = [speeds[0]] * args.copies  # every copy runs at the agreed speed
     # The reference copy runs exactly --steps: the slowest, or the host. Its speed names the run ("5x baseline").
     ref = 1 if args.ai == "host" else 1 + speeds.index(min(speeds))
     baseline = "%gx baseline" % speeds[ref - 1] + (", AI on the host" if args.ai == "host" else "")
@@ -898,6 +910,8 @@ def main():
             c.send("nudge %d" % args.nudge, "nudge")
         if c.k == 1 and len(copies) > 1 and args.pace_lead > 0:
             c.send("pace %d" % args.pace_lead, "pace")
+        if args.govern:
+            c.send("followspeed", "followspeed")
         if c.k == 1 and args.scenario == "city" and not args.play and not args.replay:
             if args.engage >= 0:  # field battles on the battle map (SOS-32)
                 c.send("answerprompts engage %d%s" % (args.engage, " restart %d" % args.restart if args.restart else ""),
@@ -1039,8 +1053,15 @@ def main():
                           f["endStep"], f["endHash"], f["men"], f["wallSeconds"], json.dumps(f["stats"])))
     if len(copies) > 1 and args.pace_lead > 0:
         f = finished[1]
-        summary.append("pacing: copy 1 ran at most %d steps past the slowest copy; held by the others in %d frames, %.1f s"
-                       % (args.pace_lead, f.get("pacedFrames", 0), f.get("pacedSeconds", 0)))
+        summary.append("pacing: copy 1 ran at most %d steps past the slowest copy; held by the others in %d frames, %.1f s,"
+                       " the longest hold %.2f s" % (args.pace_lead, f.get("pacedFrames", 0), f.get("pacedSeconds", 0),
+                                                     f.get("longestHoldSeconds", 0)))
+    if args.govern:
+        for c in copies:
+            changes = ["%.2fx at %d" % (e["agreed"], e["step"]) for e in c.all_of("agreedspeed")]
+            notices = ["%d: %s" % (e["step"], e["text"]) for e in c.all_of("speednotice")]
+            summary.append("copy %d agreed speed: %s; speed lines: %s" % (c.k, ", ".join(changes) or "none",
+                                                                          " | ".join(notices) or "none"))
     summary += lines
     desyncs = {c.k: c.find("desync", 0) for c in copies}
     for c in copies:

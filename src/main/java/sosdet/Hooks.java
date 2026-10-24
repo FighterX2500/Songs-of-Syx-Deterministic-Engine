@@ -19,6 +19,7 @@ import settlement.trade.PBuyer;
 import settlement.entity.humanoid.Humanoid;
 import settlement.stats.Induvidual;
 import settlement.trade.PSeller;
+import snake2d.SPRITE_RENDERER;
 import snake2d.util.datatypes.COORDINATE;
 import snake2d.util.rnd.RND;
 import sosdet.ai.AiApplier;
@@ -113,18 +114,45 @@ public final class Hooks {
     }
 
     /**
-     * Whole steps this frame's game time completes. {@code setSpeed} is this PC's game speed as the player set it
-     * (never the throttled one): the host logs a change of it (B16).
+     * Whole steps this frame completes. {@code setSpeed} is this PC's game speed as the player set it (never the
+     * throttled one): the host logs a change of it (B16), and paces itself by the slowest PC (SOS-42). The frame's game
+     * time is the real time since the last frame at that speed; vanilla's {@code gameSeconds} only after a long frame.
      */
     public static int stepsFor(double gameSeconds, double setSpeed) {
-        Session s = Engine.session();
-        s.speedSeen(setSpeed);
-        return s.clock.stepsFor(gameSeconds);
+        return stepsFor(gameSeconds, setSpeed, System.nanoTime());
     }
 
-    /** A speed change from the log, at its step: the step length from the next step on. */
-    public static void agreedSpeed(double speed) {
-        Engine.session().clock.agreedSpeed(speed);
+    static int stepsFor(double gameSeconds, double setSpeed, long now) {
+        Session s = Engine.session();
+        s.speedSeen(setSpeed);
+        s.pace(now);
+        return s.clock.stepsForFrame(now, gameSeconds, setSpeed);
+    }
+
+    /**
+     * A speed change from the log, at its step: the step length from the next step on, the speed line (with the host
+     * player's speed and the PC that held it down, or -1), and, when every PC follows it, this PC's game speed.
+     */
+    public static void agreedSpeed(double speed, double wanted, int slowPc) {
+        Session s = Engine.session();
+        s.clock.agreedSpeed(speed);
+        s.speedNotice(speed, wanted, slowPc, System.nanoTime());
+        if (s.followSpeed) {
+            GAME.SPEED.speedSet(speed);
+            s.seenSpeed = speed; // not the host player's own change
+        }
+    }
+
+    /** The top bar, every frame: the engine's speed line under it, while there is one (SOS-42). */
+    public static void renderSpeedLine(SPRITE_RENDERER r, int cx, int y) {
+        Session s = Engine.session();
+        if (s == null) {
+            return;
+        }
+        String line = s.speedNoticeNow(System.nanoTime());
+        if (line != null) {
+            s.speedLine().render(r, line, cx, y);
+        }
     }
 
     /** Whole steps this frame's game time completes. */

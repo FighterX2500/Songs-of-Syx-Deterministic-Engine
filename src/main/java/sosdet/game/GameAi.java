@@ -100,7 +100,8 @@ public final class GameAi implements AiApplier {
             }
             return;
         case AiEntry.SPEED:
-            Hooks.agreedSpeed(e.intAt(0) / 1000.0);
+            // the agreed speed, then (since SOS-42) the host player's and the PC that held it down
+            Hooks.agreedSpeed(e.intAt(0) / 1000.0, e.intAt(e.ints() > 1 ? 1 : 0) / 1000.0, e.ints() > 2 ? e.intAt(2) : -1);
             return;
         case AiEntry.ARTILLERY:
         case AiEntry.ARTILLERY_MUSTER:

@@ -13,7 +13,7 @@ A short map for an AI agent (or a person) about to change SOSDET. Read it first,
 
 1. **The mod starts a session:** `Engine.begin()`, then `seed`, `aiHost` or `aiPeer`, `localPc`, `runFreely` or `runUntil`, and `speed`.
 2. **Every frame,** `GAME.update` (patch `10`) asks `Hooks.stepsFor(frame time × this PC's speed)` how many whole fixed steps to run; the rest carries over.
-   - A step is 1/60 s at an agreed speed of 1x or slower, and 1/16 s above (vanilla's longest sub-step). See [`StepClock`](../src/main/java/sosdet/StepClock.java).
+   - A step is 1/60 s at an agreed speed of 1x or slower, 1/30 s below 2x, and 1/16 s from 2x (vanilla's longest sub-step; the middle band since SOS-42). See [`StepClock`](../src/main/java/sosdet/StepClock.java).
    - A peer never runs past the host's last confirmed step + 30.
    - The host runs at most a lead of steps (the mod's choice) past the slowest PC, learnt from that PC's hashes (`Engine.peerStep`), so the slowest PC sets the pace.
    - Speed only sets how fast a PC runs. A paused PC runs no steps.
