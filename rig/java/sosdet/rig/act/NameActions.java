@@ -18,6 +18,7 @@ import settlement.room.main.RoomInstance;
 import settlement.stats.STATS;
 import settlement.tilemap.SettMarks.SettMark;
 import snake2d.util.color.ColorImp;
+import sosdet.Engine;
 import sosdet.game.cmd.Names;
 import sosdet.rig.Rig;
 
@@ -133,6 +134,20 @@ public final class NameActions {
             int type = Integer.parseInt(a[1]);
             Rig.later(() -> FACTIONS.player().banner().bannerTypeSet(type));
             return true;
+        case "banneraccept": // banneraccept: the profile's Accept under the banner colours
+            Rig.later(Names::bannerAccept);
+            return true;
+        case "bannercancel": // bannercancel: the profile's Cancel under the banner colours
+            Rig.later(Names::bannerCancel);
+            return true;
+        case "bannerprobe": // bannerprobe: a probe note of the player's banner and whether a draft is open
+            Rig.later(() -> {
+                FBanner b = FACTIONS.player().banner();
+                Rig.note("banner: type " + b.bannerType() + ", background " + rgb(b.colorBG()) + ", foreground "
+                        + rgb(b.colorFG()) + ", border " + rgb(b.colorBorder()) + ", pole " + rgb(b.colorPole())
+                        + ", draft " + (Names.bannerDrafting() ? "open" : "none") + " at step " + Engine.step());
+            });
+            return true;
         case "subjectname": // subjectname <name>: the subject screen's rename, on the first citizen
             String subjectName = a[1];
             Rig.later(() -> {
@@ -212,6 +227,10 @@ public final class NameActions {
 
     private static NobleOffice office(int i) {
         return i < 0 ? null : GAME.NOBLE().OFFICES.get(i);
+    }
+
+    private static String rgb(ColorImp c) {
+        return (c.red() & 0xFF) + "/" + (c.green() & 0xFF) + "/" + (c.blue() & 0xFF);
     }
 
     private static ColorImp colour(String[] owner) {

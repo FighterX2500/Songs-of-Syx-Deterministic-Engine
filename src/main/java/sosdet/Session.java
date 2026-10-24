@@ -8,6 +8,7 @@ import sosdet.game.GameHash;
 import sosdet.game.GameInputs;
 import sosdet.game.GameReport;
 import sosdet.game.GameTxns;
+import sosdet.game.cmd.BannerDraft;
 import sosdet.game.cmd.PlanStash;
 import sosdet.hash.HashLog;
 import sosdet.hash.StateSource;
@@ -47,6 +48,8 @@ final class Session {
     PlanStash plans;
     /** The game's saver that lifts the plan around its saves ({@link Hooks#frameUpdated}), registered once per game. */
     Object planSaver;
+    /** This PC's player's banner edit in the profile, until Accept or Cancel (SOS-32). */
+    final BannerDraft bannerDraft = new BannerDraft();
     /** The world-battle prompt open on this PC (and, opened by the step, on every PC): what it decides, and its close. */
     Object worldPrompt;
     Runnable worldPromptClose;
