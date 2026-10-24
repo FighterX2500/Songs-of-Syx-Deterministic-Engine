@@ -1,6 +1,6 @@
 diff -ru -U2 a/game/audio/AmbianceChannel.java b/game/audio/AmbianceChannel.java
 --- a/game/audio/AmbianceChannel.java	2024-10-04 07:04:10.000000000 +0500
-+++ b/game/audio/AmbianceChannel.java	2026-10-23 19:37:28.580810900 +0500
++++ b/game/audio/AmbianceChannel.java	2026-10-24 21:16:09.028766200 +0500
 @@ -42,7 +42,7 @@
  	
  	public void init(Ambiance c) {
@@ -12,7 +12,7 @@ diff -ru -U2 a/game/audio/AmbianceChannel.java b/game/audio/AmbianceChannel.java
  		stream.setGain(gain);
 diff -ru -U2 a/game/audio/AmbianceUpdater.java b/game/audio/AmbianceUpdater.java
 --- a/game/audio/AmbianceUpdater.java	2026-06-17 11:42:00.000000000 +0500
-+++ b/game/audio/AmbianceUpdater.java	2026-10-23 19:37:28.581811600 +0500
++++ b/game/audio/AmbianceUpdater.java	2026-10-24 21:16:09.029768400 +0500
 @@ -139,7 +139,7 @@
  		public void init(Ambiance c) {
  			c.channel = this;
@@ -24,7 +24,7 @@ diff -ru -U2 a/game/audio/AmbianceUpdater.java b/game/audio/AmbianceUpdater.java
  			stream.setGain(gain);
 diff -ru -U2 a/game/audio/Music.java b/game/audio/Music.java
 --- a/game/audio/Music.java	2026-04-06 08:55:54.000000000 +0500
-+++ b/game/audio/Music.java	2026-10-23 19:37:28.581811600 +0500
++++ b/game/audio/Music.java	2026-10-24 21:16:09.029768400 +0500
 @@ -8,7 +8,6 @@
  import snake2d.SoundStream;
  import snake2d.util.file.Json;
@@ -44,7 +44,7 @@ diff -ru -U2 a/game/audio/Music.java b/game/audio/Music.java
  				}
 diff -ru -U2 a/game/audio/Sound.java b/game/audio/Sound.java
 --- a/game/audio/Sound.java	2025-10-14 10:59:08.000000000 +0500
-+++ b/game/audio/Sound.java	2026-10-23 19:37:28.581811600 +0500
++++ b/game/audio/Sound.java	2026-10-24 21:16:09.030768500 +0500
 @@ -2,7 +2,6 @@
  
  import game.GAME;
@@ -82,7 +82,7 @@ diff -ru -U2 a/game/audio/Sound.java b/game/audio/Sound.java
  	
 diff -ru -U2 a/game/audio/SoundFile.java b/game/audio/SoundFile.java
 --- a/game/audio/SoundFile.java	2024-03-11 13:30:06.000000000 +0500
-+++ b/game/audio/SoundFile.java	2026-10-23 19:37:28.582812800 +0500
++++ b/game/audio/SoundFile.java	2026-10-24 21:16:09.031765600 +0500
 @@ -5,7 +5,6 @@
  import snake2d.CORE;
  import snake2d.SoundEffect;
@@ -111,7 +111,7 @@ diff -ru -U2 a/game/audio/SoundFile.java b/game/audio/SoundFile.java
  
 diff -ru -U2 a/game/audio/SoundRace.java b/game/audio/SoundRace.java
 --- a/game/audio/SoundRace.java	2026-04-09 18:55:02.000000000 +0500
-+++ b/game/audio/SoundRace.java	2026-10-23 19:37:28.582812800 +0500
++++ b/game/audio/SoundRace.java	2026-10-24 21:16:09.031765600 +0500
 @@ -6,7 +6,6 @@
  import settlement.entity.humanoid.Humanoid;
  import snake2d.SoundSimple;
@@ -144,7 +144,7 @@ diff -ru -U2 a/game/audio/SoundRace.java b/game/audio/SoundRace.java
  	public void rnd(RECTANGLE body,double gain) {
 diff -ru -U2 a/game/event/actions/_EARTHQUAKE.java b/game/event/actions/_EARTHQUAKE.java
 --- a/game/event/actions/_EARTHQUAKE.java	2025-04-03 09:13:04.000000000 +0500
-+++ b/game/event/actions/_EARTHQUAKE.java	2026-10-23 19:37:28.583812700 +0500
++++ b/game/event/actions/_EARTHQUAKE.java	2026-10-24 21:16:09.032764400 +0500
 @@ -43,9 +43,14 @@
  		@Override
  		public void update(Event event, EContext e, double ds, double second) {
@@ -165,7 +165,7 @@ diff -ru -U2 a/game/event/actions/_EARTHQUAKE.java b/game/event/actions/_EARTHQU
  			
 diff -ru -U2 a/game/time/Light.java b/game/time/Light.java
 --- a/game/time/Light.java	2023-09-27 09:20:56.000000000 +0500
-+++ b/game/time/Light.java	2026-10-23 19:37:28.583812700 +0500
++++ b/game/time/Light.java	2026-10-24 21:16:09.032764400 +0500
 @@ -134,7 +134,9 @@
  		}
  		
@@ -178,7 +178,7 @@ diff -ru -U2 a/game/time/Light.java b/game/time/Light.java
  	
 diff -ru -U2 a/init/resources/GrowableSprite.java b/init/resources/GrowableSprite.java
 --- a/init/resources/GrowableSprite.java	2026-06-17 18:46:32.000000000 +0500
-+++ b/init/resources/GrowableSprite.java	2026-10-23 19:37:28.583812700 +0500
++++ b/init/resources/GrowableSprite.java	2026-10-24 21:16:09.033768600 +0500
 @@ -32,7 +32,9 @@
  
  public final class GrowableSprite {
@@ -191,7 +191,7 @@ diff -ru -U2 a/init/resources/GrowableSprite.java b/init/resources/GrowableSprit
  	
 diff -ru -U2 a/settlement/room/service/hygine/well/Constructor.java b/settlement/room/service/hygine/well/Constructor.java
 --- a/settlement/room/service/hygine/well/Constructor.java	2026-06-17 18:45:58.000000000 +0500
-+++ b/settlement/room/service/hygine/well/Constructor.java	2026-10-23 19:37:28.584811800 +0500
++++ b/settlement/room/service/hygine/well/Constructor.java	2026-10-24 21:16:09.033768600 +0500
 @@ -34,7 +34,9 @@
  	private final ROOM_WELL blue;
  	
@@ -204,7 +204,7 @@ diff -ru -U2 a/settlement/room/service/hygine/well/Constructor.java b/settlement
  	protected Constructor(ROOM_WELL blue, RoomInitData init)
 diff -ru -U2 a/settlement/thing/ThingsCorpses.java b/settlement/thing/ThingsCorpses.java
 --- a/settlement/thing/ThingsCorpses.java	2026-06-18 21:14:04.000000000 +0500
-+++ b/settlement/thing/ThingsCorpses.java	2026-10-23 19:37:28.584811800 +0500
++++ b/settlement/thing/ThingsCorpses.java	2026-10-24 21:16:09.034764900 +0500
 @@ -195,7 +195,9 @@
  		return holder.getNext(corpse);
  	}
@@ -217,7 +217,7 @@ diff -ru -U2 a/settlement/thing/ThingsCorpses.java b/settlement/thing/ThingsCorp
  		
 diff -ru -U2 a/settlement/thing/pointlight/FireSparks.java b/settlement/thing/pointlight/FireSparks.java
 --- a/settlement/thing/pointlight/FireSparks.java	2025-09-12 16:12:40.000000000 +0500
-+++ b/settlement/thing/pointlight/FireSparks.java	2026-10-23 19:37:28.585815100 +0500
++++ b/settlement/thing/pointlight/FireSparks.java	2026-10-24 21:16:09.034764900 +0500
 @@ -8,7 +8,9 @@
  
  public class FireSparks {
@@ -230,7 +230,7 @@ diff -ru -U2 a/settlement/thing/pointlight/FireSparks.java b/settlement/thing/po
  	private final static double duration = 5;
 diff -ru -U2 a/settlement/thing/pointlight/LightModel.java b/settlement/thing/pointlight/LightModel.java
 --- a/settlement/thing/pointlight/LightModel.java	2025-09-12 16:12:40.000000000 +0500
-+++ b/settlement/thing/pointlight/LightModel.java	2026-10-23 19:37:28.585815100 +0500
++++ b/settlement/thing/pointlight/LightModel.java	2026-10-24 21:16:09.035763500 +0500
 @@ -17,6 +17,7 @@
  
  abstract class LightModel{
@@ -249,7 +249,7 @@ diff -ru -U2 a/settlement/thing/pointlight/LightModel.java b/settlement/thing/po
  		for (LightModel m : all)
 diff -ru -U2 a/settlement/tilemap/TileMap.java b/settlement/tilemap/TileMap.java
 --- a/settlement/tilemap/TileMap.java	2025-11-12 15:39:08.000000000 +0500
-+++ b/settlement/tilemap/TileMap.java	2026-10-23 19:37:28.586810700 +0500
++++ b/settlement/tilemap/TileMap.java	2026-10-24 21:16:09.035763500 +0500
 @@ -139,7 +139,12 @@
  	protected void afterTick() {
  		for (Resource r : Resource.resources)
@@ -266,7 +266,7 @@ diff -ru -U2 a/settlement/tilemap/TileMap.java b/settlement/tilemap/TileMap.java
  	public TerrainHotspots hotspots() {
 diff -ru -U2 a/settlement/tilemap/terrain/TForest.java b/settlement/tilemap/terrain/TForest.java
 --- a/settlement/tilemap/terrain/TForest.java	2026-06-17 18:46:32.000000000 +0500
-+++ b/settlement/tilemap/terrain/TForest.java	2026-10-23 19:37:28.586810700 +0500
++++ b/settlement/tilemap/terrain/TForest.java	2026-10-24 21:16:09.035763500 +0500
 @@ -119,7 +119,9 @@
  	}
  
@@ -279,8 +279,26 @@ diff -ru -U2 a/settlement/tilemap/terrain/TForest.java b/settlement/tilemap/terr
  	public static final int MAX_AMOUNT = 4;
 diff -ru -U2 a/util/rendering/Minimap.java b/util/rendering/Minimap.java
 --- a/util/rendering/Minimap.java	2026-06-17 18:46:32.000000000 +0500
-+++ b/util/rendering/Minimap.java	2026-10-23 19:37:28.589779700 +0500
-@@ -82,7 +82,10 @@
++++ b/util/rendering/Minimap.java	2026-10-24 21:16:09.042287800 +0500
+@@ -59,6 +59,8 @@
+ 		int s = TILESIZE*TILESIZE;
+ 		byte[] tmp = Alloc.bb(s*4);
+ 		
++		GAME.texture().sosdetBatchesBegin(); // SOSDET: every tile in one GL job, not one each (SOS-41)
++		try {
+ 		for (int py = 0; py < DIM_PIXEL; py+=TILESIZE) {
+ 			for (int px = 0; px < DIM_PIXEL; px+=TILESIZE) {
+ 				int tile = px/TILESIZE + (py/TILESIZE)*DIM_TILES;
+@@ -76,13 +78,19 @@
+ 				GAME.texture().putPixelBatch(c.x1, c.y1, TILESIZE, tmp);
+ 			}
+ 		}
++		} finally {
++			GAME.texture().sosdetBatchesEnd();
++		}
+ 		
+ 	}
+ 	
  	public static byte getC(byte c) {
  		int res = Byte.toUnsignedInt((byte) (c*2));
  		int gmax = (int) (res * grit);
@@ -293,7 +311,7 @@ diff -ru -U2 a/util/rendering/Minimap.java b/util/rendering/Minimap.java
  			res = 255;
 diff -ru -U2 a/world/map/regions/centre/Sparks.java b/world/map/regions/centre/Sparks.java
 --- a/world/map/regions/centre/Sparks.java	2025-09-12 16:12:40.000000000 +0500
-+++ b/world/map/regions/centre/Sparks.java	2026-10-23 19:37:28.587810800 +0500
++++ b/world/map/regions/centre/Sparks.java	2026-10-24 21:16:09.037763700 +0500
 @@ -10,7 +10,9 @@
  
  class Sparks {

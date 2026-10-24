@@ -22,21 +22,26 @@ import world.battle.spec.WBattleSpec;
  *
  * <p>With {@code engage}, a field battle is fought on the battle map instead (SOS-32): Engage, then Start as soon as it
  * deploys, then Retreat {@code retreatAfter} steps later (0: fight on), and Close on the victory or defeat panel. A siege
- * waits instead of being resolved, so the region's defenders march on the besieging army.
+ * waits instead of being resolved, so the region's defenders march on the besieging army. With {@code restartAfter}, the
+ * battle panel's restart {@code restartAfter} steps after Start, once (SOS-41); the battle deploys again, and Start and
+ * the retreat count begin again.
  */
 public final class PromptAnswers {
 
     private final boolean engage;
     private final long retreatAfter;
+    private final long restartAfter;
     /** The battle map's progress: the step Start applied at (-1: not yet), and what has been asked for. */
     private long battleFrom = -1;
     private boolean startAsked;
     private boolean retreatAsked;
     private boolean closeAsked;
+    private boolean restartAsked;
 
-    public PromptAnswers(boolean engage, long retreatAfter) {
+    public PromptAnswers(boolean engage, long retreatAfter, long restartAfter) {
         this.engage = engage;
         this.retreatAfter = retreatAfter;
+        this.restartAfter = restartAfter;
     }
 
     /** The prompt last answered: its decision applies some steps later, until then it stays open. */
@@ -51,7 +56,7 @@ public final class PromptAnswers {
             return battle(battle);
         }
         battleFrom = -1;
-        startAsked = retreatAsked = closeAsked = false;
+        startAsked = retreatAsked = closeAsked = restartAsked = false;
         long question = Hooks.stepPromptOldest();
         if (question >= 0 && question != answeredQuestion) {
             answeredQuestion = question;
@@ -100,6 +105,10 @@ public final class PromptAnswers {
     /** On the battle map: Start, then Retreat after the set steps, and Close once the battle is won or lost. */
     private String battle(BattleState battle) {
         if (battle.deploying()) {
+            if (battleFrom >= 0) { // restarted: it deploys again
+                battleFrom = -1;
+                startAsked = false;
+            }
             if (startAsked) {
                 return null;
             }
@@ -114,6 +123,11 @@ public final class PromptAnswers {
             closeAsked = true;
             MapBattles.conclude();
             return "battle close";
+        }
+        if (restartAfter > 0 && !restartAsked && !closeAsked && Engine.step() - battleFrom >= restartAfter) {
+            restartAsked = true;
+            battle.reloadBattle(); // as the battle panel's restart, once confirmed: the hook makes it a command
+            return "battle restart";
         }
         if (retreatAfter > 0 && !retreatAsked && !closeAsked && Engine.step() - battleFrom >= retreatAfter) {
             retreatAsked = true;

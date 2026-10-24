@@ -15,15 +15,18 @@ import view.main.VIEW;
  * battle on the simulation's stream, the same everywhere, and opens it at deployment. Nothing in the battle moves until
  * Start (vanilla pauses it), and Start is a command. Retreat and the victory or defeat panel's Close end the battle inside
  * the step; every PC then loads the game saved before it, the session going on at that step, and the result prompt
- * opens alike. Restarting a battle is refused in a session.
+ * opens alike. Restart is a command too: every PC loads the battle as generated, at deployment, the session going on
+ * at that step (SOS-41). A world command whose step falls in the battle is skipped, as the battle's end would undo it.
  */
 public final class MapBattles {
 
     static final int DEPLOY = 7960;
     static final int RETREAT = 7961;
     static final int CONCLUDE = 7962;
+    static final int RESTART = 7963;
 
-    static final String RESTART_NOTICE = "SOSDET: restarting a battle doesn't work in a multiplayer session.";
+    static final String WORLD_COMMAND_NOTICE = "SOSDET: a world map action came in during the battle and was not done."
+            + " Do it again after the battle.";
 
     static final List<Command> ALL = List.of(
             new Command(DEPLOY, "battleDeploy", r -> {
@@ -48,6 +51,15 @@ public final class MapBattles {
                     return false;
                 }
                 close.run();
+                return true;
+            }),
+            new Command(RESTART, "battleRestart", r -> {
+                BattleState b = VIEW.b().state();
+                if (b == null || Hooks.battleOver()) {
+                    return false;
+                }
+                Hooks.battleLeaving(); // the steps hold until the load, which goes on at this step
+                b.reloadBattle();
                 return true;
             }));
 
@@ -83,12 +95,30 @@ public final class MapBattles {
         return true;
     }
 
-    /** Hook in {@code BattleState.reloadBattle}: in a session (true) refused with a notice. */
-    public static boolean restartRefused() {
+    /**
+     * Hook in {@code BattleState.reloadBattle} (the battle panel's restart, once confirmed, and the result panel's): in
+     * a session (true) a command. Applied inside the step, it runs the reload.
+     */
+    public static boolean restart() {
         if (!Commands.capturing()) {
             return false;
         }
-        VIEW.inters().fullScreen.activate(RESTART_NOTICE, COLOR.WHITE100, null);
+        Commands.capture(new CmdWriter(RESTART));
+        return true;
+    }
+
+    /**
+     * Inside the step, a world command at its world part: true while a battle is on the battle map, the same on every
+     * PC. The battle's end loads the game saved before it, which would undo the command, so it is skipped; the PC that
+     * gave it gets a notice (SOS-41).
+     */
+    public static boolean worldCommandSkipped(int pc) {
+        if (!VIEW.b().isActive()) {
+            return false;
+        }
+        if (Hooks.localPc(pc)) {
+            VIEW.inters().fullScreen.activate(WORLD_COMMAND_NOTICE, COLOR.WHITE100, null);
+        }
         return true;
     }
 

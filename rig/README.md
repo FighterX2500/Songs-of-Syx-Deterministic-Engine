@@ -99,6 +99,12 @@ python rig\rig.py city --tag MB10 --save Mogus-72-19f86f1e048-47002c-0-121c.save
 
 `--engage N` (default -1: off): copy 1 answers a field battle's prompt with Engage instead of auto-resolve, so the battle is fought on the battle map on every copy. It clicks Start as soon as the battle deploys, Retreat N steps later (0: fights on to the end), and Close on the victory or defeat panel; every copy then loads the game saved before the battle and goes on at the same step. A siege waits instead of being resolved, so the region's defenders come out and fight in the field.
 
+`--restart K` (with `--engage`): copy 1 restarts the battle once, K steps after Start, through the battle panel's restart; every copy loads the battle as generated and goes on at the same step, and copy 1 clicks Start again (SOS-41).
+
+`--in-battle "STEPS ACTION..."` (with `--engage`): copy 1 does the player action once, STEPS steps after the battle's Start, for example `--in-battle "100 warmyname 0 Renamed"`. A world command whose step falls in a map battle is skipped on every copy, and the copy that gave it shows a notice, which the rig closes (`notice` event); the summary's `commandsSkipped` counts it (SOS-41).
+
+`--stall-profile`: during a step over 100 ms every copy records its stack every 50 ms instead of once (`<tag>-stalls.txt`), so the samples show where a long step's time goes, such as the Engage step (SOS-41).
+
 A field battle needs an enemy that stands: a weaker NPC army withdraws without a prompt, and a chase after a marching army stalls (the game's intercept re-paths only once the target has moved a tenth of the path away). `wbesiegenear 0 stronger` besieges the nearest settlement of a faction with at least twice the army's power, whose defenders then attack it. `wwarnear`, `winterceptnear` (with `stronger` and `still`) and the `warmystate` probe are there for other setups.
 
 ## The timing rule

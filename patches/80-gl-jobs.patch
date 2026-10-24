@@ -1,6 +1,6 @@
 diff -ru -U2 a/snake2d/CORE.java b/snake2d/CORE.java
---- a/snake2d/CORE.java	2026-10-22 16:10:18.300528500 +0500
-+++ b/snake2d/CORE.java	2026-10-22 16:10:18.328613800 +0500
+--- a/snake2d/CORE.java	2025-11-07 12:09:00.000000000 +0500
++++ b/snake2d/CORE.java	2026-10-24 21:16:09.383627700 +0500
 @@ -150,7 +150,7 @@
  		newState = null;
  		while (running && !swapping) {
@@ -50,3 +50,49 @@ diff -ru -U2 a/snake2d/CORE.java b/snake2d/CORE.java
  				glJob = this;
  				while (glJob != null && running)
  					sleep(1);
+diff -ru -U2 a/snake2d/TextureHolder.java b/snake2d/TextureHolder.java
+--- a/snake2d/TextureHolder.java	2024-10-24 18:12:02.000000000 +0500
++++ b/snake2d/TextureHolder.java	2026-10-24 21:16:09.386621700 +0500
+@@ -126,6 +126,11 @@
+ 			drawBuff.put(b);
+ 		}
+ 		drawBuff.flip();
++		if (sosdetBatches != null) { // SOSDET: gathered for one GL job (SOS-41)
++			int h = pixels.length/(width*4);
++			sosdetBatches.add(() -> texture.uploadPixels(x1, width, y1, h, drawBuff));
++			return;
++		}
+ 		new CORE.GlJob() {
+ 			@Override
+ 			public void doJob() {
+@@ -135,6 +140,30 @@
+ 		
+ 	}
+ 	
++	private java.util.ArrayList<Runnable> sosdetBatches;
++	
++	/**
++	 * SOSDET: from here to {@link #sosdetBatchesEnd} the pixel batches upload in one GL job. Off the GL thread (the
++	 * simulation's, in a session) each job waits for the GL thread's turn, and a battle's minimap made thousands (SOS-41).
++	 */
++	public void sosdetBatchesBegin() {
++		sosdetBatches = new java.util.ArrayList<>();
++	}
++	
++	public void sosdetBatchesEnd() {
++		java.util.ArrayList<Runnable> jobs = sosdetBatches;
++		sosdetBatches = null;
++		if (jobs.isEmpty())
++			return;
++		new CORE.GlJob() {
++			@Override
++			public void doJob() {
++				for (Runnable r : jobs)
++					r.run();
++			}
++		}.perform();
++	}
++	
+ 	public void addChunk(int x1, int y1, int width, int am, TextureHolderChunk chunk) {
+ 		chunk.x1 = x1;
+ 		chunk.y1 = y1;
