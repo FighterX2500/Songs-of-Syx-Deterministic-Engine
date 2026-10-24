@@ -6,10 +6,14 @@ import init.trade.TR;
 import game.battle.state.BattleState;
 import sosdet.Engine;
 import sosdet.Hooks;
+import sosdet.game.BattleArmies;
 import sosdet.game.cmd.MapBattles;
 import sosdet.game.cmd.StepPrompts;
 import sosdet.game.cmd.WorldBattles;
 import view.main.VIEW;
+import world.WORLD;
+import world.entity.army.WArmy;
+import world.entity.army.WArmyConstructor;
 import world.battle.spec.BATTLE_RESULT;
 import world.battle.spec.WBattleResult;
 import world.battle.spec.WBattleSiege;
@@ -25,6 +29,10 @@ import world.battle.spec.WBattleSpec;
  * waits instead of being resolved, so the region's defenders march on the besieging army. With {@code restartAfter}, the
  * battle panel's restart {@code restartAfter} steps after Start, once (SOS-41); the battle deploys again, and Start and
  * the retreat count begin again.
+ *
+ * <p>With {@code waitOut} (SOS-45), nobody answers a world-battle prompt, so its time runs out and every PC gives the
+ * default answer; each prompt's opening and closing is reported, with how many of its armies, and of the others, moved
+ * while it was open. The simulation's yes/no questions are still answered.
  */
 public final class PromptAnswers {
 
@@ -38,11 +46,22 @@ public final class PromptAnswers {
     private boolean closeAsked;
     private boolean restartAsked;
 
-    public PromptAnswers(boolean engage, long retreatAfter, long restartAfter) {
+    public PromptAnswers(boolean engage, long retreatAfter, long restartAfter, boolean waitOut) {
         this.engage = engage;
         this.retreatAfter = retreatAfter;
         this.restartAfter = restartAfter;
+        this.waitOut = waitOut;
     }
+
+    private final boolean waitOut;
+    /** waitOut: the prompt watched, the step it opened at, its armies, and every army's position then. */
+    private Object watched;
+    private long openedAt;
+    private int[] held = new int[0];
+    private final int[] openX = new int[WArmyConstructor.MAX]; // at least the game's armies.max()
+    private final int[] openY = new int[WArmyConstructor.MAX]; // at least the game's armies.max()
+    /** waitOut: what had moved since the prompt opened, at the last frame it was still open (the release step moves them). */
+    private String movedWhileOpen = "";
 
     /** The prompt last answered: its decision applies some steps later, until then it stays open. */
     private Object answered;
@@ -67,6 +86,9 @@ public final class PromptAnswers {
             return "question yes";
         }
         Object open = Hooks.worldPrompt();
+        if (waitOut) {
+            return watch(open);
+        }
         if (open == null) {
             answered = null; // the game reuses its battle prompt's object for the next battle
             return null;
@@ -100,6 +122,57 @@ public final class PromptAnswers {
             return "siege occupy";
         }
         throw new IllegalStateException("SOSDET rig: unknown world prompt " + open.getClass().getName());
+    }
+
+    /** waitOut: reports a prompt as it opens and as it closes, unanswered. */
+    private String watch(Object open) {
+        if (open == watched) {
+            if (open != null) {
+                movedWhileOpen = moved();
+            }
+            return null;
+        }
+        String out = watched == null ? null : "closed after " + (Engine.step() - openedAt) + " steps; while it was open "
+                + movedWhileOpen;
+        watched = open;
+        if (open == null) {
+            return out;
+        }
+        openedAt = Engine.step();
+        held = BattleArmies.of(open);
+        for (int i = 0; i < WORLD.ENTITIES().armies.max(); i++) {
+            WArmy a = WORLD.ENTITIES().armies.get(i);
+            openX[i] = a != null && a.added() ? a.body().x1() : Integer.MIN_VALUE;
+            openY[i] = a != null && a.added() ? a.body().y1() : Integer.MIN_VALUE;
+        }
+        movedWhileOpen = moved();
+        return (out == null ? "" : out + "; ") + "open " + open.getClass().getName() + ", armies held " + held.length;
+    }
+
+    /** How many held armies, and how many others, stand elsewhere than when the prompt opened. */
+    private String moved() {
+        int heldMoved = 0;
+        int others = 0;
+        int othersMoved = 0;
+        for (int i = 0; i < WORLD.ENTITIES().armies.max(); i++) {
+            WArmy a = WORLD.ENTITIES().armies.get(i);
+            if (a == null || !a.added() || openX[i] == Integer.MIN_VALUE) {
+                continue;
+            }
+            boolean moved = a.body().x1() != openX[i] || a.body().y1() != openY[i];
+            boolean isHeld = false;
+            for (int h : held) {
+                isHeld |= h == i;
+            }
+            if (isHeld) {
+                heldMoved += moved ? 1 : 0;
+            } else {
+                others++;
+                othersMoved += moved ? 1 : 0;
+            }
+        }
+        return "held armies moved " + heldMoved + " of " + held.length + ", other armies moved " + othersMoved + " of "
+                + others;
     }
 
     /** On the battle map: Start, then Retreat after the set steps, and Close once the battle is won or lost. */

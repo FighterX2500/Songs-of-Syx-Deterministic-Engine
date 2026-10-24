@@ -221,14 +221,35 @@ public final class Hooks {
     }
 
     /**
-     * True when the world map must not update in the city view: a session holding the world still, or a world-battle
-     * prompt open (owner's decision, plan 0002: the world holds for everyone while a player decides). The prompt opens
-     * and closes inside the step on every PC alike, so every PC holds the same steps; the steps go on, so the decision
-     * command applies.
+     * True when the world map must not update in the city view: a session holding the world still. An open world-battle
+     * prompt no longer holds it (spec §4, SOS-45): only the battle's armies wait ({@link #armyHeld}).
      */
     public static boolean worldHeld() {
         Session s = Engine.session();
-        return s != null && (s.worldHeld || s.worldPrompt != null);
+        return s != null && s.worldHeld;
+    }
+
+    /**
+     * True for an army in the open world-battle prompt, either side: it waits in place until the prompt is answered or
+     * its time runs out (spec §16, owner 2026-10-25, SOS-45). The prompt opens and closes inside the step on every PC
+     * alike, so every PC holds the same armies at the same steps. Per army and world update: no allocation.
+     */
+    public static boolean armyHeld(WArmy a) {
+        Session s = Engine.session();
+        if (s == null) {
+            return false;
+        }
+        int[] held = s.worldPromptArmies;
+        if (held.length == 0) {
+            return false;
+        }
+        int index = a.armyIndex();
+        for (int h : held) {
+            if (h == index) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** True with a session: the battle state updates inside the step, not from the battle view's frame. */
@@ -262,6 +283,10 @@ public final class Hooks {
                 throw new IllegalStateException("SOSDET: no city report from PC " + s.reportsFrom + " for step " + step);
             }
             s.ai().worldPart();
+            // after the world's commands: an answer given at this step comes first (SOS-45)
+            if (s.promptTimer.step(s.clock.stepSeconds(), s.clock.agreedSpeed()) && s.worldPromptTimeout != null) {
+                s.worldPromptTimeout.run();
+            }
             return;
         }
         s.part = part;
@@ -1015,6 +1040,9 @@ public final class Hooks {
         s.plans().discard();
         s.worldPrompt = null; // a load builds a new view: no prompt is open
         s.worldPromptClose = null;
+        s.worldPromptTimeout = null;
+        s.worldPromptArmies = Session.NO_ARMIES;
+        s.promptTimer.close();
         s.stepPrompts.clear(); // the load's questions are not asked again
         s.stepPromptShown = -1;
         if (s.plans().inGame()) { // unit tests have no game to reset
@@ -1152,13 +1180,17 @@ public final class Hooks {
 
     /**
      * The world step opened the world-battle prompt: {@code decides} is the battle, siege or result it decides, and
-     * {@code close} hides it. Kept for the decision command (SOS-35, {@code cmd.WorldBattles}).
+     * {@code close} hides it. Kept for the decision command (SOS-35, {@code cmd.WorldBattles}). {@code timeout} is the
+     * answer given when nobody answers in time, and {@code armies} wait in place until then (SOS-45).
      */
-    public static void worldPromptOpened(Object decides, Runnable close) {
+    public static void worldPromptOpened(Object decides, Runnable close, Runnable timeout, int[] armies) {
         Session s = Engine.session();
         if (s != null) {
             s.worldPrompt = decides;
             s.worldPromptClose = close;
+            s.worldPromptTimeout = timeout;
+            s.worldPromptArmies = armies;
+            s.promptTimer.open();
         }
     }
 
@@ -1295,6 +1327,9 @@ public final class Hooks {
         Runnable close = s.worldPromptClose;
         s.worldPrompt = null;
         s.worldPromptClose = null;
+        s.worldPromptTimeout = null;
+        s.worldPromptArmies = Session.NO_ARMIES;
+        s.promptTimer.close();
         close.run();
     }
 

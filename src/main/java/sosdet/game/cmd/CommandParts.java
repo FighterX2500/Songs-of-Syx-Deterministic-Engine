@@ -12,7 +12,7 @@ public final class CommandParts {
      * True for a command that acts on the world: the army, region and diplomacy commands, the world-battle prompt's
      * decisions, paying raiders and calling an ally. They apply at the start of the world part, so they read the city
      * through the report and change it through transactions; a decision there closes the prompt before the world's
-     * resources update, so the world holds the same steps as before. The yes/no questions (a world one and a city one
+     * resources update, so the battle's armies wait the same steps as before (SOS-45). The yes/no questions (a world one and a city one
      * share the command), the choices on event messages and the killer's suspect stay at the step's start.
      */
     public static boolean world(byte[] payload) {

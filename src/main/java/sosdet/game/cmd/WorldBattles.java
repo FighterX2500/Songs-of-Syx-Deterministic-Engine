@@ -3,14 +3,19 @@ package sosdet.game.cmd;
 import java.util.List;
 
 import game.faction.FACTIONS;
+import init.race.RACES;
+import init.resources.RESOURCES;
+import init.trade.TR;
 import snake2d.util.color.COLOR;
 import snake2d.util.misc.ACTION;
 import sosdet.Engine;
 import sosdet.Hooks;
 import sosdet.ai.CmdReader;
 import sosdet.ai.CmdWriter;
+import sosdet.game.BattleArmies;
 import view.main.VIEW;
 import world.army.AD;
+import world.battle.spec.BATTLE_RESULT;
 import world.battle.spec.WBattleResult;
 import world.battle.spec.WBattleSiege;
 import world.battle.spec.WBattleSpec;
@@ -20,8 +25,9 @@ import world.battle.spec.WBattleSpec;
  * simulation calls {@code UIWBattlePrompt} from {@code WBattles.poll}); a button press becomes a command, and the
  * command closes the prompt and decides, inside the step on every PC. So the prompt being open, which gates the world's
  * battle polling ({@code WBattles.canPoll}), is the same on every PC at every step. In a session the prompt doesn't
- * pause the game, as a pause would hold the step the decision applies at; the world holds instead while it is open
- * ({@code Hooks.worldHeld}), and the city goes on.
+ * pause or hold the game (spec §4): the city and the world go on, and only the battle's armies wait in place while it
+ * is open ({@code Hooks.armyHeld}). When nobody answers within 30 s at the agreed speed, every PC gives the default
+ * answer at the same step ({@link #timedOut}; spec §16, owner 2026-10-25, SOS-45).
  *
  * <p>Engage fights the battle on the battle map on every PC ({@link MapBattles}); in own-city mode it is refused with
  * a notice, as the battle would replace each PC's own city.
@@ -49,42 +55,11 @@ public final class WorldBattles {
             + "cities yet. Choose auto-resolve or retreat.";
 
     static final List<Command> ALL = List.of(
-            new Command(DECIDE, "worldBattleDecide", r -> {
-                int choice = r.i();
-                Object open = Hooks.worldPrompt();
-                if (!(open instanceof WBattleSpec)) {
-                    return false;
-                }
-                WBattleSpec spec = (WBattleSpec) open;
-                Hooks.worldPromptClose();
-                if (choice == AUTO) {
-                    spec.auto();
-                } else if (choice == RETREAT) {
-                    spec.retreat();
-                } else if (choice == ENGAGE) {
-                    if (Hooks.ownCity()) {
-                        throw new IllegalStateException("SOSDET: Engage in own-city mode");
-                    }
-                    spec.engage(); // saves the game, generates the battle on the step's stream and opens it (MapBattles)
-                } else if (choice != WAIT) {
-                    throw new IllegalStateException("SOSDET: world battle choice " + choice);
-                }
-                return true;
-            }),
+            new Command(DECIDE, "worldBattleDecide", r -> applyDecide(r.i())),
             new Command(RESULT_ACCEPT, "worldBattleAccept", r -> {
                 int[] slaves = ints(r);
                 int[] spoils = ints(r);
-                double mercy = r.d();
-                Object open = Hooks.worldPrompt();
-                if (!(open instanceof WBattleResult)) {
-                    return false;
-                }
-                Hooks.worldPromptClose();
-                if (slaves != null) {
-                    AD.stats().mercy().incD(FACTIONS.player(), mercy);
-                }
-                ((WBattleResult) open).accept(slaves, spoils);
-                return true;
+                return applyAccept(slaves, spoils, r.d());
             }),
             new Command(SIEGE_RESULT, "worldSiegeResult", r -> {
                 int choice = r.i();
@@ -92,38 +67,102 @@ public final class WorldBattles {
                 double death = r.d();
                 int[] slaves = ints(r);
                 int[] spoils = ints(r);
-                double mercy = r.d();
-                Object open = Hooks.worldPrompt();
-                if (!(open instanceof WBattleSiege.Result)) {
-                    return false;
-                }
-                WBattleSiege.Result result = (WBattleSiege.Result) open;
-                Hooks.worldPromptClose();
-                AD.stats().mercy().incD(FACTIONS.player(), mercy);
-                if (choice == OCCUPY) {
-                    result.occupy(devastation, death, slaves, spoils);
-                } else if (choice == ABANDON) {
-                    result.abandon(devastation, death, slaves, spoils);
-                } else if (choice == PUPPET) {
-                    result.puppet(devastation, death, slaves, spoils);
-                } else {
-                    throw new IllegalStateException("SOSDET: siege result choice " + choice);
-                }
-                return true;
+                return applySiegeResult(choice, devastation, death, slaves, spoils, r.d());
             }));
 
     private WorldBattles() {
+    }
+
+    // ------------------------------------------------------------------ decisions (inside the step, on every PC)
+
+    /** A battle or siege prompt's choice; false when no such prompt is open (an answer already applied). */
+    private static boolean applyDecide(int choice) {
+        Object open = Hooks.worldPrompt();
+        if (!(open instanceof WBattleSpec)) {
+            return false;
+        }
+        WBattleSpec spec = (WBattleSpec) open;
+        Hooks.worldPromptClose();
+        if (choice == AUTO) {
+            spec.auto();
+        } else if (choice == RETREAT) {
+            spec.retreat();
+        } else if (choice == ENGAGE) {
+            if (Hooks.ownCity()) {
+                throw new IllegalStateException("SOSDET: Engage in own-city mode");
+            }
+            spec.engage(); // saves the game, generates the battle on the step's stream and opens it (MapBattles)
+        } else if (choice != WAIT) {
+            throw new IllegalStateException("SOSDET: world battle choice " + choice);
+        }
+        return true;
+    }
+
+    private static boolean applyAccept(int[] slaves, int[] spoils, double mercy) {
+        Object open = Hooks.worldPrompt();
+        if (!(open instanceof WBattleResult)) {
+            return false;
+        }
+        Hooks.worldPromptClose();
+        if (slaves != null) {
+            AD.stats().mercy().incD(FACTIONS.player(), mercy);
+        }
+        ((WBattleResult) open).accept(slaves, spoils);
+        return true;
+    }
+
+    private static boolean applySiegeResult(int choice, double devastation, double death, int[] slaves, int[] spoils,
+            double mercy) {
+        Object open = Hooks.worldPrompt();
+        if (!(open instanceof WBattleSiege.Result)) {
+            return false;
+        }
+        WBattleSiege.Result result = (WBattleSiege.Result) open;
+        Hooks.worldPromptClose();
+        AD.stats().mercy().incD(FACTIONS.player(), mercy);
+        if (choice == OCCUPY) {
+            result.occupy(devastation, death, slaves, spoils);
+        } else if (choice == ABANDON) {
+            result.abandon(devastation, death, slaves, spoils);
+        } else if (choice == PUPPET) {
+            result.puppet(devastation, death, slaves, spoils);
+        } else {
+            throw new IllegalStateException("SOSDET: siege result choice " + choice);
+        }
+        return true;
+    }
+
+    /**
+     * Nobody answered the open prompt in time (SOS-45): the default answer, at the same step on every PC. A battle is
+     * auto-resolved, a siege waits (it goes on), a captured settlement is occupied with nothing extra chosen (vanilla's
+     * Occupy with no enslaving, looting or razing), and a battle's result is accepted with no captives or spoils. The
+     * result prompt's own defaults would ship every captive and price the mercy by this PC's city, which differs per
+     * PC in own-city mode.
+     */
+    static void timedOut() {
+        Object open = Hooks.worldPrompt();
+        if (open instanceof WBattleSiege) {
+            applyDecide(WAIT);
+        } else if (open instanceof WBattleSpec) {
+            applyDecide(AUTO);
+        } else if (open instanceof WBattleResult) {
+            boolean victory = ((WBattleResult) open).result == BATTLE_RESULT.VICTORY;
+            applyAccept(victory ? new int[RACES.all().size()] : null, victory ? new int[RESOURCES.ALL().size()] : null, 0);
+        } else if (open instanceof WBattleSiege.Result) {
+            applySiegeResult(OCCUPY, 0.1, 0.1, new int[RACES.all().size()], new int[TR.ALL().size()], 0);
+        }
     }
 
     // ------------------------------------------------------------------ hooks (this PC's player, outside the step)
 
     /**
      * Hook in {@code UIWBattlePrompt}, as the world step opens the prompt: what it decides, and the prompt's own close.
-     * Every PC opens it at the same step, so the decision command finds the same one everywhere.
+     * Every PC opens it at the same step, so the decision command finds the same one everywhere, and the same armies
+     * wait while it is open.
      */
     public static void opened(Object decides, ACTION close) {
         if (Engine.active()) {
-            Hooks.worldPromptOpened(decides, close::exe);
+            Hooks.worldPromptOpened(decides, close::exe, WorldBattles::timedOut, BattleArmies.of(decides));
         }
     }
 

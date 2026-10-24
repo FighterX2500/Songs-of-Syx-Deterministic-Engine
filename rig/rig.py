@@ -732,6 +732,8 @@ def main():
     ap.add_argument("--agreed-speed", type=float, default=0,
                     help="the speed every copy agrees on at the start, which sets the step length (1/60 s at 1x or"
                          " slower, 1/16 s above); default: copy 1's speed")
+    ap.add_argument("--unanswered", action="store_true",
+                    help="copy 1 leaves world-battle prompts unanswered, so their time runs out; reports each (SOS-45)")
     ap.add_argument("--engage", type=int, default=-1,
                     help="city: copy 1 fights field battles on the battle map, retreating this many steps after Start "
                          "(0: fights on to the end); default: auto-resolve (SOS-32)")
@@ -948,6 +950,8 @@ def main():
                        "answerprompts")
                 if args.in_battle:
                     c.send("inbattle " + args.in_battle, "inbattlearmed")
+            elif args.unanswered:  # nobody answers: each world-battle prompt's time runs out (SOS-45)
+                c.send("answerprompts wait", "answerprompts")
             else:
                 c.send("answerprompts", "answerprompts")  # nobody clicks the world-battle prompt in a rig run
         if c.k == 1 and args.play:

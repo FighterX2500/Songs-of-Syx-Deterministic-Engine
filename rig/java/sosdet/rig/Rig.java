@@ -103,6 +103,7 @@ import view.main.VIEW;
  *   state                               what a player sees: step, people, soldiers, credits, invasion, raider
  *   play &lt;action...&gt;                   as cmd, but a failed action is a "refused" event, not an error (LLM players)
  *   answerprompts                       the host's player answers every world-battle prompt (auto-resolve, occupy)
+ *   answerprompts wait                  nobody answers a world-battle prompt: its time runs out (SOS-45)
  *   answerprompts engage &lt;steps&gt;        the same, but a field battle is fought on the battle map: Start, and Retreat
  *                                       that many steps after it (0: fight on), Close at its end (SOS-32)
  *   answerprompts engage &lt;steps&gt; restart &lt;steps&gt;  as above, and restart the battle once, that many steps after
@@ -1018,9 +1019,10 @@ public final class Rig implements SCRIPT {
                 showMessages = true;
                 event("showmessages", "");
                 return;
-            case "answerprompts": // answerprompts [engage <retreat after steps> [restart <steps>]]
+            case "answerprompts": // answerprompts [engage <retreat after steps> [restart <steps>]] | answerprompts wait
+                boolean waitOut = c.length > 1 && c[1].equals("wait");
                 prompts = new PromptAnswers(c.length > 2 && c[1].equals("engage"), c.length > 2 ? Long.parseLong(c[2]) : 0,
-                        c.length > 4 && c[3].equals("restart") ? Long.parseLong(c[4]) : 0);
+                        c.length > 4 && c[3].equals("restart") ? Long.parseLong(c[4]) : 0, waitOut);
                 event("answerprompts", "");
                 return;
             case "nudge":
