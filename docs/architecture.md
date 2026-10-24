@@ -15,16 +15,19 @@ A short map for an AI agent (or a person) about to change SOSDET. Read it first,
 2. **Every frame,** `GAME.update` (patch `10`) asks `Hooks.stepsFor(frame time × this PC's speed)` how many whole fixed steps to run; the rest carries over.
    - A step is 1/60 s at an agreed speed of 1x or slower, and 1/16 s above (vanilla's longest sub-step). See [`StepClock`](../src/main/java/sosdet/StepClock.java).
    - A peer never runs past the host's last confirmed step + 30.
+   - The host runs at most a lead of steps (the mod's choice) past the slowest PC, learnt from that PC's hashes (`Engine.peerStep`), so the slowest PC sets the pace.
    - Speed only sets how fast a PC runs. A paused PC runs no steps.
 3. **`Hooks.stepBegin`:**
    - lifts this PC's unbuilt room plans out of the simulation;
    - enters the simulation random stream, reseeded from the seed and the step number;
    - applies the log entries due at this step: orders, commands, speed changes and the AI general's settings.
-4. **The step itself:** the game's resources update by the step length (city; world unless held; battle).
+4. **The step itself:** the city part, then the world part (patch `12`), each updating the game's resources by the step length; or the battle.
+   - The world part never reads a live city: it reads the city report (patches `13`, `14`, `98`; `GameReport`) and changes the city only through transactions applied exactly once (`sosdet/txn`, `GameTxns`).
+   - In own-city mode (`Engine.ownCity`) each PC runs its own city, and the world reads the host's reports only (one player faction, [requirements](requirements.md) §2).
    - Battle jobs run inside the step, not on their threads (patch `30`).
    - Path jobs queued in the step run at its end, before the hash: share 0 on the simulation thread, shares 1 and 2 on path threads, job i always on share i % 3 (patch `35`, `PathWorkers`).
    - The host's AI general keeps its own thread, but writes only to the log (patch `90`).
-5. **`Hooks.stepEnd`:** every 30 steps the state hash ([`GameHash`](../src/main/java/sosdet/game/GameHash.java), [`HashLog`](../src/main/java/sosdet/hash/HashLog.java)). It has seven sections: clock, soldiers, divisions, projectiles, entities, world (armies, every world entity, region owners, credits, wars) and report (the city report the world part reads, ADR 0005). Rooms, stock and stats are not hashed, so a split there shows up in the entities a few steps later.
+5. **`Hooks.stepEnd`:** every 30 steps the state hash ([`GameHash`](../src/main/java/sosdet/game/GameHash.java), [`HashLog`](../src/main/java/sosdet/hash/HashLog.java)). It has seven sections: clock, soldiers, divisions, projectiles, entities, world (armies, every world entity, region owners, credits, wars, raiders) and report (the city report the world part reads, ADR 0005). Rooms, stock and stats are not hashed, so a split there shows up in the entities a few steps later.
 6. **Between steps** come the UI and rendering. They draw from the cosmetic stream and must never write simulation state (patches `65`, `67`, `98`).
 
 ## Player input: commands
@@ -66,7 +69,8 @@ A player's action never changes state on the PC where it was clicked. It becomes
 | `sosdet/Hooks.java` | Every call the patches make into the engine |
 | `sosdet/Session.java`, `StepClock`, `Streams` | One session's state, the fixed step, the simulation and cosmetic random streams |
 | `sosdet/ai/` | The log: `AiLog` (host and peer, stamping, confirmations, the 30-step delay), `AiEntry`, `CmdWriter`/`CmdReader` |
-| `sosdet/game/` | Everything that touches game classes: `GameAi` (applies log entries), `GameHash`, `GameResync`, `AiHooks`, world fixes |
+| `sosdet/game/` | Everything that touches game classes: `GameAi` (applies log entries), `GameHash`, `GameResync`, `AiHooks`, world fixes; the city↔world link: `StepParts`, `GameReport`, `GameTxns`, `GameSoldiers`, `GameWorldLoad` (the world resync) |
+| `sosdet/txn/` | Transactions: the world's changes to a city, each applied exactly once |
 | `sosdet/game/cmd/` | Commands per area, room-plan records (`Plan*`) |
 | `sosdet/hash/` | The hash log and the desync report |
 | `patches/` | The game files the engine changes, one patch per topic; [docs/hooks.md](hooks.md) has one row per hook with the reason |
@@ -94,6 +98,8 @@ Each line is a class of cause found in practice. The patch named holds the fix; 
 | | Caches filled by whoever calls first; caches keyed on the render frame (`VIEW.RI()`) | `67`, `98` |
 | | Drafts the UI refills every frame and the step reads (`DIP.TMP`, `RDLevelsTmp`) | `98` |
 | | A formation's unused tail carrying this PC's move preview | `66` |
+| **The world reading a live city** | Trade stock, credits, population, the garrison, army power, opinion and trust read from this PC's city in the world step; own cities differ per PC | `12`, `13`, `14`, `98`: the city report and transactions (ADR 0005) |
+| **Loading part of a save** | The world resync loaded only the world's sections of a whole save; the game writes one object stream for the whole file, so the skipped city sections broke its back-references, the raiders misread and were regenerated per PC | `GameWorldLoad.save` writes a world-only save (no patch) |
 | **Tick order** | Commands applied before the tick counted up, so they read a tick-keyed cache only this PC's UI had filled | `10` |
 | **Static state surviving a load** | Garrison supply sums, a static world generator, static tick keys (race target, employee list) | `98` (`WorldStatics`) |
 | **A player action applied at once on one PC** | Every UI setter, tool and dialog | commands: `95`, `96-*`, `97`, `99` |

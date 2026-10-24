@@ -115,6 +115,7 @@ Each stage is one card (or a card's milestone) with its own PR, in this order.
 3. **World → city:** the world's changes to a city (about 8 kinds: deliveries, credits, invasions and raid demands, immigrants, returning soldiers, garrison casualties, supply withdrawals when a division is sent out, event triggers) become stamped transactions with IDs. Army supply from depots flows the other way, in the report. The scan: [notes/city-world-link-scan.md](notes/city-world-link-scan.md); the plan: [notes/city-world-link.md](notes/city-world-link.md). SOS-38 builds the whole link, own-capitol invasions and scripted events included (owner, 2026-10-23).
 4. **Engine API:** the mod runs the world plus its own city, and feeds in the other cities' inputs.
 5. **Verification:** record one copy's city inputs, then replay them into a copy that runs the world only, and get the same world.
+6. *As built (SOS-38, PR #19):* the step parts (patch `12`), the city report (`13`, `14`, `98`), the transactions (`sosdet/txn`), own-city mode in the API, the world resync from a world-only save, and pacing by the slowest PC. Verified with own-city runs instead of the replay: followers run their own cities and their worlds read only the host's reports ([notes/stage-e-smoke-tests.md](notes/stage-e-smoke-tests.md): M4R2, 3 copies, 108,000 steps; W1R2 with a second PC as the follower).
 
 ## Outside this plan: the mod's own work (SOSGSGMP)
 
