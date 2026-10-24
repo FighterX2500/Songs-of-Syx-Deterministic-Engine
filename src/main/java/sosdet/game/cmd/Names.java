@@ -13,6 +13,7 @@ import game.faction.Faction;
 import game.nobility.NOBLES;
 import game.nobility.Noble;
 import game.nobility.NobleOffice;
+import init.sprite.BitmapSprite;
 import init.type.HCLASS_RACE;
 import settlement.entity.humanoid.Humanoid;
 import settlement.main.SETT;
@@ -52,11 +53,14 @@ public final class Names {
     static final int NOBLE_RANK = 5013;
     static final int NOBLE_REPLACE = 5014;
     static final int BANNER = 5015;
+    static final int PLAYER_BANNER = 5016;
+    static final int DIVISION_BANNER = 5017;
 
     /**
-     * A colour's owner: a division banner (part 0 symbol, 1 background), the player's banner (parts 0-3), a mark. The
-     * player's banner is now sent whole ({@link #BANNER}); its colour commands, and {@link #BANNER_TYPE}, still apply
-     * from logs recorded before that.
+     * A colour's owner: a division banner (part 0 symbol, 1 background), the player's banner (parts 0-3), a mark. Both
+     * banners are now sent whole ({@link #PLAYER_BANNER}, {@link #DIVISION_BANNER}); their colour commands,
+     * {@link #BANNER_TYPE} and {@link #BANNER} (the player's banner without its pixels) still apply from logs recorded
+     * before that.
      */
     private static final int DIV_BANNER = 0;
     private static final int FACTION_BANNER = 1;
@@ -150,15 +154,13 @@ public final class Names {
                 FACTIONS.player().banner().bannerTypeSet(r.i());
                 return true;
             }),
-            new Command(BANNER, "banner", r -> {
-                int[] v = new int[BannerDraft.VALUES];
-                for (int i = 0; i < v.length; i++) {
-                    v[i] = r.i();
-                }
-                Hooks.bannerDraft().drop(); // on the PC that accepted, the draft has ended; elsewhere this one wins
-                BannerDraft.write(FACTIONS.player().banner(), v);
-                minimapRedraw();
-                return true;
+            new Command(BANNER, "banner", r -> bannerApply(BannerDraft.FACTION, values(r, BannerDraft.FACTION_VALUES))),
+            new Command(PLAYER_BANNER, "playerBanner",
+                    r -> bannerApply(BannerDraft.FACTION, values(r, BannerDraft.size(BannerDraft.FACTION)))),
+            new Command(DIVISION_BANNER, "divisionBanner", r -> {
+                int i = r.i();
+                int[] v = values(r, BannerDraft.size(Math.max(i, 0)));
+                return i >= 0 && i < GAME.ARMIES().banners.size() && bannerApply(i, v);
             }),
             new Command(SUBJECT_NAME, "subjectName", r -> {
                 Humanoid h = Args.humanoid(r);
@@ -322,22 +324,20 @@ public final class Names {
     // ------------------------------------------------------------ colours and banners
 
     /**
-     * Hook in {@code GColorPicker}'s three sliders ({@code channel} 0 red, 1 green, 2 blue). Division banners and map
-     * marks become commands. The player's banner is a draft ({@link BannerDraft}): the slider sets it on this PC only,
-     * and Accept sends it. Any other picker's colour (the profile's colour masks, debug tools) stays local, as before.
-     * A slider held down sets its value every frame; the log drops an exact repeat of this PC's last command until it
-     * applies, so a drag sends one command per new value.
+     * Hook in {@code GColorPicker}'s three sliders ({@code channel} 0 red, 1 green, 2 blue). Map marks become commands.
+     * The player's banner and the division banners are drafts ({@link BannerDraft}): the slider sets them on this PC
+     * only, and Accept sends them. Any other picker's colour (the profile's colour masks, debug tools) stays local, as
+     * before. A slider held down sets its value every frame; the log drops an exact repeat of this PC's last command
+     * until it applies, so a drag sends one command per new value.
      */
     public static boolean colour(ColorImp c, int channel, int value) {
         if (!Commands.capturing()) {
             return false;
         }
-        FBanner f = FACTIONS.player().banner();
-        for (ColorImp part : BannerDraft.parts(f)) {
-            if (c == part) {
-                Hooks.bannerDraft().keep(f);
-                return false;
-            }
+        int banner = BannerDraft.owner(c);
+        if (banner != BannerDraft.NONE) {
+            draft(banner);
+            return false;
         }
         CmdWriter w = new CmdWriter(COLOUR);
         if (!owner(w, c)) {
@@ -350,38 +350,93 @@ public final class Names {
     /** Hook in {@code FBanner.bannerTypeSet}: the profile's arrows change the player's banner shape in the draft. */
     public static boolean bannerType(FBanner banner, int type) {
         if (Commands.capturing() && banner == FACTIONS.player().banner()) {
-            Hooks.bannerDraft().keep(banner);
+            draft(BannerDraft.FACTION);
         }
         return false;
     }
 
-    /** Hook in the profile's banner editor: its Accept and Cancel show only in a session. */
+    /** Hook in {@code BitmapSpriteEditor}, before it sets a pixel: a banner's pixels change in the draft. */
+    public static void bannerPixel(BitmapSprite sprite) {
+        if (!Commands.capturing()) {
+            return;
+        }
+        int banner = BannerDraft.owner(sprite);
+        if (banner != BannerDraft.NONE) {
+            draft(banner);
+        }
+    }
+
+    /** Hook in the banner editors: their Accept and Cancel show only in a session. */
     public static boolean bannerDraftShown() {
         return Engine.active();
     }
 
-    /** Hook in the profile's banner editor: true while this PC's player has a banner draft to accept or cancel. */
+    /** Hook in the banner editors: true while this PC's player has a banner draft to accept or cancel. */
     public static boolean bannerDrafting() {
         return Commands.capturing() && Hooks.bannerDraft().open();
     }
 
-    /** Hook in the profile's Accept: the drafted banner, whole, is one command. */
+    /** Hook in the banner editors' Accept: the drafted banner, whole with its pixels, is one command. */
     public static void bannerAccept() {
         if (!bannerDrafting()) {
             return;
         }
-        CmdWriter w = new CmdWriter(BANNER);
-        for (int v : Hooks.bannerDraft().take(FACTIONS.player().banner())) {
+        BannerDraft d = Hooks.bannerDraft();
+        int banner = d.target();
+        CmdWriter w = banner == BannerDraft.FACTION ? new CmdWriter(PLAYER_BANNER) : new CmdWriter(DIVISION_BANNER).i(banner);
+        for (int v : d.take()) {
             w.i(v);
         }
         Commands.capture(w);
     }
 
-    /** Hook in the profile's Cancel, and where the full-screen windows close: the banner goes back as it was. */
+    /** Hook in the banner editors' Cancel, and where the full-screen windows close: the banner goes back as it was. */
     public static void bannerCancel() {
-        if (Commands.capturing() && Hooks.bannerDraft().cancel(FACTIONS.player().banner())) {
+        if (!Commands.capturing()) {
+            return;
+        }
+        BannerDraft d = Hooks.bannerDraft();
+        boolean player = d.target() == BannerDraft.FACTION;
+        if (d.cancel() && player) {
             minimapRedraw();
         }
+    }
+
+    /**
+     * Hook in {@code IPopup}, where the popup's content changes or it closes: a division banner still in its draft goes
+     * back as it was, as with Cancel. The player's banner is edited in a window, not a popup, so its draft stays.
+     */
+    public static void bannerPopupLeft() {
+        if (Commands.capturing() && Hooks.bannerDraft().target() >= 0) {
+            Hooks.bannerDraft().cancel();
+        }
+    }
+
+    /** A change to {@code banner} is about to be made: a draft of another banner is sent first, then this one opens. */
+    private static void draft(int banner) {
+        BannerDraft d = Hooks.bannerDraft();
+        if (d.open() && d.target() != banner) {
+            bannerAccept();
+        }
+        d.keep(banner);
+    }
+
+    /** A banner command: its values replace the banner, and this PC's draft of it ends (the command wins). */
+    private static boolean bannerApply(int banner, int[] v) {
+        Hooks.bannerDraft().drop(banner); // on the PC that accepted, the draft has already ended
+        BannerDraft.write(banner, v);
+        if (banner == BannerDraft.FACTION) {
+            minimapRedraw();
+        }
+        return true;
+    }
+
+    private static int[] values(CmdReader r, int n) {
+        int[] v = new int[n];
+        for (int i = 0; i < n; i++) {
+            v[i] = r.i();
+        }
+        return v;
     }
 
     /** The banner editor's own follow-up to a colour change: the world map redraws the player's realm. */
@@ -470,15 +525,8 @@ public final class Names {
         return i < 0 ? null : GAME.NOBLE().OFFICES.get(i);
     }
 
-    /** Writes a shared colour's owner (kind, index, part); false for a colour only this PC has (or the banner draft). */
+    /** Writes a shared colour's owner (kind, index, part); false for a colour only this PC has (or a banner's draft). */
     private static boolean owner(CmdWriter w, ColorImp c) {
-        for (int i = 0; i < GAME.ARMIES().banners.size(); i++) {
-            DivisionBanner b = GAME.ARMIES().banners.get(i);
-            if (c == b.col || c == b.bg) {
-                w.i(DIV_BANNER).i(i).i(c == b.col ? 0 : 1);
-                return true;
-            }
-        }
         LIST<SettMark> marks = SETT.TILE_MAP().marks.all;
         for (int i = 0; i < marks.size(); i++) {
             if (c == marks.get(i).color) {

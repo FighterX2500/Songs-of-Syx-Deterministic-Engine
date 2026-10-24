@@ -8,6 +8,7 @@ import game.battle.div.DivInfo;
 import game.faction.FACTIONS;
 import game.faction.FBanner;
 import game.nobility.NobleOffice;
+import init.sprite.BitmapSprite;
 import init.type.HCLASSES;
 import settlement.entity.ENTITY;
 import settlement.entity.humanoid.Humanoid;
@@ -134,18 +135,42 @@ public final class NameActions {
             int type = Integer.parseInt(a[1]);
             Rig.later(() -> FACTIONS.player().banner().bannerTypeSet(type));
             return true;
+        case "pixel": // pixel banner | divbanner <i>, then <x> <y> <0|1>: the banner pixel editor, one pixel
+            int pn = a.length;
+            int px = Integer.parseInt(a[pn - 3]);
+            int py = Integer.parseInt(a[pn - 2]);
+            boolean on = a[pn - 1].equals("1");
+            boolean division = a[1].equals("divbanner");
+            int pi = division ? Integer.parseInt(a[2]) : 0;
+            Rig.later(() -> {
+                BitmapSprite sprite = division ? GAME.ARMIES().banners.get(pi).sprite : FACTIONS.player().banner().sprite;
+                Names.bannerPixel(sprite);
+                sprite.set(px, py, on);
+            });
+            return true;
+        case "bannerpopupleft": // bannerpopupleft: the popup's content changes or it closes, as after the banner popup
+            Rig.later(Names::bannerPopupLeft);
+            return true;
         case "banneraccept": // banneraccept: the profile's Accept under the banner colours
             Rig.later(Names::bannerAccept);
             return true;
         case "bannercancel": // bannercancel: the profile's Cancel under the banner colours
             Rig.later(Names::bannerCancel);
             return true;
-        case "bannerprobe": // bannerprobe: a probe note of the player's banner and whether a draft is open
+        case "bannerprobe": // bannerprobe [<division banner>]: a probe note of a banner and whether a draft is open
+            int probe = a.length > 1 ? Integer.parseInt(a[1]) : -1;
             Rig.later(() -> {
+                String draft = ", draft " + (Names.bannerDrafting() ? "open" : "none") + " at step " + Engine.step();
+                if (probe >= 0) {
+                    DivisionBanner d = GAME.ARMIES().banners.get(probe);
+                    Rig.note("division banner " + probe + ": symbol " + rgb(d.col) + ", background " + rgb(d.bg)
+                            + ", pixels " + pixels(d.sprite) + draft);
+                    return;
+                }
                 FBanner b = FACTIONS.player().banner();
                 Rig.note("banner: type " + b.bannerType() + ", background " + rgb(b.colorBG()) + ", foreground "
                         + rgb(b.colorFG()) + ", border " + rgb(b.colorBorder()) + ", pole " + rgb(b.colorPole())
-                        + ", draft " + (Names.bannerDrafting() ? "open" : "none") + " at step " + Engine.step());
+                        + ", pixels " + pixels(b.sprite) + draft);
             });
             return true;
         case "subjectname": // subjectname <name>: the subject screen's rename, on the first citizen
@@ -227,6 +252,19 @@ public final class NameActions {
 
     private static NobleOffice office(int i) {
         return i < 0 ? null : GAME.NOBLE().OFFICES.get(i);
+    }
+
+    /** The pixels drawn, by their places: how many, and the sum of their places. */
+    private static String pixels(BitmapSprite s) {
+        int n = 0;
+        int sum = 0;
+        for (int p = 0; p < BitmapSprite.AREA; p++) {
+            if (s.is(p)) {
+                n++;
+                sum += p;
+            }
+        }
+        return n + " (sum " + sum + ")";
     }
 
     private static String rgb(ColorImp c) {
