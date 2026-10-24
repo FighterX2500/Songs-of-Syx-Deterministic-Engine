@@ -91,6 +91,16 @@ python rig\rig.py field --tag P1 --play --copies 3
 
 `--trace-draws N` adds the call site of every simulation draw for the last N steps, dumped around a desync; it slows the copies by roughly half.
 
+## Map battles (SOS-32)
+
+```
+python rigig.py city --tag MB10 --save Mogus-72-19f86f1e048-47002c-0-121c.save --no-invade --engage 900 --cmds "wbesiegenear 0 stronger"
+```
+
+`--engage N` (default -1: off): copy 1 answers a field battle's prompt with Engage instead of auto-resolve, so the battle is fought on the battle map on every copy. It clicks Start as soon as the battle deploys, Retreat N steps later (0: fights on to the end), and Close on the victory or defeat panel; every copy then loads the game saved before the battle and goes on at the same step. A siege waits instead of being resolved, so the region's defenders come out and fight in the field.
+
+A field battle needs an enemy that stands: a weaker NPC army withdraws without a prompt, and a chase after a marching army stalls (the game's intercept re-paths only once the target has moved a tenth of the path away). `wbesiegenear 0 stronger` besieges the nearest settlement of a faction with at least twice the army's power, whose defenders then attack it. `wwarnear`, `winterceptnear` (with `stronger` and `still`) and the `warmystate` probe are there for other setups.
+
 ## The timing rule
 
 ```

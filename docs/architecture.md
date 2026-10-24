@@ -54,6 +54,7 @@ A player's action never changes state on the PC where it was clicked. It becomes
 | 7000s | `World` | armies, recruiting, regions |
 | 7900s | `WorldBattles` | world-battle prompt decisions |
 | 7950 | `StepPrompts` | yes/no questions the step asks |
+| 7960s | `MapBattles` | a battle fought on the battle map: Start, Retreat, the victory or defeat panel's Close |
 | 8000s | `Diplomacy` | deals, emissaries |
 | 9000s | `Events` | event choices, raiders |
 

@@ -1,6 +1,6 @@
 diff -ru -U2 a/view/battle/BattlePanel.java b/view/battle/BattlePanel.java
 --- a/view/battle/BattlePanel.java	2026-01-07 09:44:06.000000000 +0500
-+++ b/view/battle/BattlePanel.java	2026-10-22 23:51:07.166868300 +0500
++++ b/view/battle/BattlePanel.java	2026-10-24 18:17:23.634550100 +0500
 @@ -141,11 +141,11 @@
  				@Override
  				protected void clickA() {
@@ -15,9 +15,19 @@ diff -ru -U2 a/view/battle/BattlePanel.java b/view/battle/BattlePanel.java
  							
  						}
  					}
+@@ -381,7 +381,8 @@
+ 					
+ 					@Override
+ 					public void exe() {
+-						VIEW.b().state().liveRetreat();
++						if (!sosdet.game.cmd.MapBattles.retreat()) // SOSDET: a command in a session; every PC leaves the battle at its step (SOS-32)
++							VIEW.b().state().liveRetreat();
+ 					}
+ 				};
+ 				
 diff -ru -U2 a/view/battle/BattlePlacerAttack.java b/view/battle/BattlePlacerAttack.java
 --- a/view/battle/BattlePlacerAttack.java	2026-04-15 11:52:00.000000000 +0500
-+++ b/view/battle/BattlePlacerAttack.java	2026-10-22 23:51:07.168866500 +0500
++++ b/view/battle/BattlePlacerAttack.java	2026-10-24 18:17:23.630517800 +0500
 @@ -324,7 +324,7 @@
  			if (artillery) {
  				for (ArtilleryInstance ins : s.artillery.selection()) {
@@ -47,7 +57,7 @@ diff -ru -U2 a/view/battle/BattlePlacerAttack.java b/view/battle/BattlePlacerAtt
  
 diff -ru -U2 a/view/battle/BattlePlacerPlace.java b/view/battle/BattlePlacerPlace.java
 --- a/view/battle/BattlePlacerPlace.java	2025-11-24 10:07:00.000000000 +0500
-+++ b/view/battle/BattlePlacerPlace.java	2026-10-22 23:51:07.170866600 +0500
++++ b/view/battle/BattlePlacerPlace.java	2026-10-24 18:17:23.630517800 +0500
 @@ -48,7 +48,7 @@
  			GAME.ARMIES().placer.deploy(s.selection(), a.start.x(), w.pixel().x(), a.start.y(), w.pixel().y());
  			if (VIEW.b().state() != null && VIEW.b().state().deploying()) {
@@ -59,7 +69,7 @@ diff -ru -U2 a/view/battle/BattlePlacerPlace.java b/view/battle/BattlePlacerPlac
  			}
 diff -ru -U2 a/view/battle/BattlePlacerSpin.java b/view/battle/BattlePlacerSpin.java
 --- a/view/battle/BattlePlacerSpin.java	2025-11-19 14:20:18.000000000 +0500
-+++ b/view/battle/BattlePlacerSpin.java	2026-10-22 23:51:07.171864200 +0500
++++ b/view/battle/BattlePlacerSpin.java	2026-10-24 18:17:23.631517800 +0500
 @@ -67,7 +67,7 @@
  			}
  			if (VIEW.b().state() != null && VIEW.b().state().deploying()) {
@@ -71,7 +81,7 @@ diff -ru -U2 a/view/battle/BattlePlacerSpin.java b/view/battle/BattlePlacerSpin.
  
 diff -ru -U2 a/view/battle/UISelection.java b/view/battle/UISelection.java
 --- a/view/battle/UISelection.java	2026-06-22 09:50:20.000000000 +0500
-+++ b/view/battle/UISelection.java	2026-10-22 23:51:07.163864000 +0500
++++ b/view/battle/UISelection.java	2026-10-24 18:17:23.631517800 +0500
 @@ -262,28 +262,28 @@
  	
  	private void loose() {

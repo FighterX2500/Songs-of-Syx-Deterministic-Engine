@@ -705,6 +705,9 @@ def main():
     ap.add_argument("--agreed-speed", type=float, default=0,
                     help="the speed every copy agrees on at the start, which sets the step length (1/60 s at 1x or"
                          " slower, 1/16 s above); default: copy 1's speed")
+    ap.add_argument("--engage", type=int, default=-1,
+                    help="city: copy 1 fights field battles on the battle map, retreating this many steps after Start "
+                         "(0: fights on to the end); default: auto-resolve (SOS-32)")
     ap.add_argument("--no-invade", action="store_true", help="city: no invasion, the city as it is")
     ap.add_argument("--hold-world", action="store_true",
                     help="city: hold the world map still, as before SOS-35 (the world runs in the step by default)")
@@ -888,7 +891,10 @@ def main():
         if c.k == 1 and len(copies) > 1 and args.pace_lead > 0:
             c.send("pace %d" % args.pace_lead, "pace")
         if c.k == 1 and args.scenario == "city" and not args.play and not args.replay:
-            c.send("answerprompts", "answerprompts")  # nobody clicks the world-battle prompt in a rig run
+            if args.engage >= 0:  # field battles on the battle map (SOS-32)
+                c.send("answerprompts engage %d" % args.engage, "answerprompts")
+            else:
+                c.send("answerprompts", "answerprompts")  # nobody clicks the world-battle prompt in a rig run
         if c.k == 1 and args.play:
             c.send("showmessages", "showmessages")  # the owner reads the messages in the played window
         if c.k == 1 and args.resync:

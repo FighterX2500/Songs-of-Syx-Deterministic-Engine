@@ -22,6 +22,7 @@ import world.army.AD;
 import world.army.ADDiv;
 import world.army.WDivRegional;
 import world.entity.army.WArmy;
+import world.entity.army.WArmyState;
 import world.map.regions.Region;
 import world.region.RD;
 import world.region.building.RDBuilding;
@@ -67,20 +68,105 @@ public final class WorldActions {
             Rig.later(() -> army(army).intercept(army(other)));
             return true;
         }
+        case "warmystate": { // warmystate <army>: notes the army's state, tile, path and target (a probe for the run log)
+            int army = Integer.parseInt(a[1]);
+            Rig.later(() -> {
+                WArmy w = army(army);
+                WArmy t = w.intercepting();
+                Rig.note("army " + w.armyIndex() + " " + w.state().name(w) + " at " + w.ctx() + "," + w.cty() + " path "
+                        + (w.path().isValid() ? w.path().destX() + "," + w.path().destY() + " left " + w.path().remaining() : "none")
+                        + (t == null ? "" : " target " + t.armyIndex() + " at " + t.ctx() + "," + t.cty() + " " + t.state().name(t)));
+            });
+            return true;
+        }
+        case "wwarnear": { // wwarnear <army> [stronger] [still]: war declared on the faction of the nearest NPC army (stronger
+            // and still as for winterceptnear), by the attack tool on its capital (SOS-32)
+            int army = Integer.parseInt(a[1]);
+            java.util.List<String> flags = java.util.Arrays.asList(a).subList(2, a.length);
+            boolean stronger = flags.contains("stronger");
+            boolean still = flags.contains("still");
+            Rig.later(() -> {
+                WArmy w = army(army);
+                WArmy best = null;
+                long bestD = Long.MAX_VALUE;
+                for (int i = 0; i < WORLD.ENTITIES().armies.max(); i++) {
+                    WArmy e = WORLD.ENTITIES().armies.tryGet(i);
+                    if (e == null || !(e.faction() instanceof FactionNPC) || AD.men(null).get(e) == 0
+                            || ((FactionNPC) e.faction()).capitolRegion() == null
+                            || (stronger && AD.power().get(e) <= AD.power().get(w))
+                            || (still && e.state() != WArmyState.fortified && e.state() != WArmyState.fortifying)) {
+                        continue;
+                    }
+                    long dx = e.ctx() - w.ctx();
+                    long dy = e.cty() - w.cty();
+                    if (dx * dx + dy * dy < bestD) {
+                        bestD = dx * dx + dy * dy;
+                        best = e;
+                    }
+                }
+                if (best == null) {
+                    throw new IllegalStateException("no NPC army");
+                }
+                Rig.note("war on faction " + best.faction().index() + ", whose army " + best.armyIndex() + " is at distance "
+                        + (long) Math.sqrt(bestD));
+                if (!World.regionAttack(best.faction().capitolRegion(), w, true)) {
+                    throw new IllegalStateException("no session");
+                }
+            });
+            return true;
+        }
+        case "winterceptnear": { // winterceptnear <army> [stronger] [still]: wintercept on the nearest army at war with the
+            // player (a field battle, SOS-32); stronger: only an army of more power, which fights instead of withdrawing; still:
+            // only a fortified or fortifying army (a chase after a marching army re-paths and never closes)
+            int army = Integer.parseInt(a[1]);
+            java.util.List<String> flags = java.util.Arrays.asList(a).subList(2, a.length);
+            boolean stronger = flags.contains("stronger");
+            boolean still = flags.contains("still");
+            Rig.later(() -> {
+                WArmy w = army(army);
+                WArmy best = null;
+                long bestD = Long.MAX_VALUE;
+                for (int i = 0; i < WORLD.ENTITIES().armies.max(); i++) {
+                    WArmy e = WORLD.ENTITIES().armies.tryGet(i);
+                    if (e == null || e.faction() == FACTIONS.player() || AD.men(null).get(e) == 0
+                            || (e.faction() != null && !DIP.WAR().is(e.faction(), FACTIONS.player()))
+                            || (stronger && AD.power().get(e) <= AD.power().get(w))
+                            || (still && e.state() != WArmyState.fortified && e.state() != WArmyState.fortifying)) {
+                        continue;
+                    }
+                    long dx = e.ctx() - w.ctx();
+                    long dy = e.cty() - w.cty();
+                    if (dx * dx + dy * dy < bestD) {
+                        bestD = dx * dx + dy * dy;
+                        best = e;
+                    }
+                }
+                if (best == null) {
+                    throw new IllegalStateException("no army at war with the player");
+                }
+                Rig.note("intercepting army " + best.armyIndex() + " at distance " + (long) Math.sqrt(bestD) + ", power "
+                        + AD.power().get(best) + " against " + AD.power().get(w));
+                w.intercept(best);
+            });
+            return true;
+        }
         case "wbesiege": { // wbesiege <army> <region index>: the army tool on a settlement (starts a siege)
             int army = Integer.parseInt(a[1]);
             int reg = Integer.parseInt(a[2]);
             Rig.later(() -> army(army).besiege(WORLD.REGIONS().getByIndex(reg)));
             return true;
         }
-        case "wbesiegenear": { // wbesiegenear <army>: wbesiege on the nearest other faction's settlement, one at peace first
+        case "wbesiegenear": { // wbesiegenear <army> [stronger]: wbesiege on the nearest other faction's settlement, one at peace
+            // first; stronger: only a faction of more power than the army, whose defenders stand and fight (SOS-32)
             int army = Integer.parseInt(a[1]);
+            boolean stronger = a.length > 2 && a[2].equals("stronger");
             Rig.later(() -> {
                 WArmy w = army(army);
                 Region best = null;
                 long bestD = Long.MAX_VALUE;
                 for (Region r : WORLD.REGIONS().active()) {
-                    if (r.faction() == null || r.faction() == FACTIONS.player()) {
+                    if (r.faction() == null || r.faction() == FACTIONS.player()
+                            || (stronger && AD.power().get(r.faction()) <= 2 * AD.power().get(w))) {
                         continue;
                     }
                     long dx = r.cx() - w.ctx();
@@ -95,6 +181,8 @@ public final class WorldActions {
                 if (best == null) {
                     throw new IllegalStateException("no other faction's settlement");
                 }
+                Rig.note("besieging region " + best.index() + " of faction " + best.faction().index() + ", power "
+                        + AD.power().get(best.faction()) + " against " + AD.power().get(w));
                 w.besiege(best);
             });
             return true;

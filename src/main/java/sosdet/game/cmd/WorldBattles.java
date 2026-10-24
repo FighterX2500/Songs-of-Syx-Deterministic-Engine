@@ -23,8 +23,8 @@ import world.battle.spec.WBattleSpec;
  * pause the game, as a pause would hold the step the decision applies at; the world holds instead while it is open
  * ({@code Hooks.worldHeld}), and the city goes on.
  *
- * <p>Fighting the battle on the battle map (Engage) is refused in a session with a notice: a generated battle is not
- * in lockstep yet (after V0.1). Auto-resolve and retreat work.
+ * <p>Engage fights the battle on the battle map on every PC ({@link MapBattles}); in own-city mode it is refused with
+ * a notice, as the battle would replace each PC's own city.
  */
 public final class WorldBattles {
 
@@ -37,14 +37,16 @@ public final class WorldBattles {
     public static final int RETREAT = 2;
     /** The siege prompt's Wait: closes it, the siege goes on. */
     public static final int WAIT = 3;
+    /** Engage: the battle is fought on the battle map, on every PC (co-op only; {@link MapBattles}, SOS-32). */
+    public static final int ENGAGE = 4;
 
     /** {@link #siegeResult} choices. */
     public static final int OCCUPY = 1;
     public static final int ABANDON = 2;
     public static final int PUPPET = 3;
 
-    static final String ENGAGE_NOTICE = "SOSDET: fighting a world battle on the battle map doesn't work in a "
-            + "multiplayer session yet. Choose auto-resolve or retreat.";
+    static final String ENGAGE_NOTICE = "SOSDET: fighting a world battle on the battle map doesn't work with own "
+            + "cities yet. Choose auto-resolve or retreat.";
 
     static final List<Command> ALL = List.of(
             new Command(DECIDE, "worldBattleDecide", r -> {
@@ -59,6 +61,11 @@ public final class WorldBattles {
                     spec.auto();
                 } else if (choice == RETREAT) {
                     spec.retreat();
+                } else if (choice == ENGAGE) {
+                    if (Hooks.ownCity()) {
+                        throw new IllegalStateException("SOSDET: Engage in own-city mode");
+                    }
+                    spec.engage(); // saves the game, generates the battle on the step's stream and opens it (MapBattles)
                 } else if (choice != WAIT) {
                     throw new IllegalStateException("SOSDET: world battle choice " + choice);
                 }
@@ -129,12 +136,19 @@ public final class WorldBattles {
         return true;
     }
 
-    /** Hook in the prompt's Engage buttons: in a session (true) refused with a notice; the prompt stays open. */
-    public static boolean engageRefused() {
+    /**
+     * Hook in the prompt's Engage buttons: in a session (true) a command, which fights the battle on every PC; in own-city
+     * mode refused with a notice, and the prompt stays open (the battle would replace each PC's own city).
+     */
+    public static boolean engage() {
         if (!Commands.capturing()) {
             return false;
         }
-        VIEW.inters().fullScreen.activate(ENGAGE_NOTICE, COLOR.WHITE100, null);
+        if (Hooks.ownCity()) {
+            VIEW.inters().fullScreen.activate(ENGAGE_NOTICE, COLOR.WHITE100, null);
+            return true;
+        }
+        Commands.capture(new CmdWriter(DECIDE).i(ENGAGE));
         return true;
     }
 

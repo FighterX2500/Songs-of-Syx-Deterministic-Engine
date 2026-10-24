@@ -24,13 +24,13 @@
 
 **Now, SOS-32:** the owner's 30-minute session, which unifies the remaining checks (owner, 2026-10-24):
 - camera and clicks (render and UI state; the C1 split when the owner moved the camera is the biggest risk);
-- real-time battles started from the world map (never run in a multi-copy session; Engage is refused in a session today; own-city mode doesn't support city battles);
+- real-time battles started from the world map (SOS-32: Engage works in co-op and ran identical on three copies through a retreat; own-city mode refuses it and doesn't support city battles);
 - own-city followers from older saves (Mogus-40 and Mogus-20) under the host's Mogus-72 world;
 - draw tracing on (mean step 3.9 to 6.5 ms).
 
 First three read-only audits (camera and clicks, battles from the map, older-save followers), then a fix plan for the owner's approval, then the session.
 
-**Still open elsewhere:** SOS-31 (the scenario suite as one local command); the V01B rig split at step 154,365; the resync-with-open-prompt gap (plan 0002, stage D); room-planning milestone 3; generated battles (Engage); several human factions (the mod's work).
+**Still open elsewhere:** SOS-31 (the scenario suite as one local command); the V01B rig split at step 154,365; the resync-with-open-prompt gap (plan 0002, stage D); room-planning milestone 3; Engage with own cities; several human factions (the mod's work).
 
 ## 3. How to work here
 

@@ -96,6 +96,8 @@ import view.main.VIEW;
  *   state                               what a player sees: step, people, soldiers, credits, invasion, raider
  *   play &lt;action...&gt;                   as cmd, but a failed action is a "refused" event, not an error (LLM players)
  *   answerprompts                       the host's player answers every world-battle prompt (auto-resolve, occupy)
+ *   answerprompts engage &lt;steps&gt;        the same, but a field battle is fought on the battle map: Start, and Retreat
+ *                                       that many steps after it (0: fight on), Close at its end (SOS-32)
  *   showmessages                        the city's messages stay open (the played copy of --play)
  *   nudge &lt;step&gt;                        forced desync: at that step, inside it, one soldier gets fatal injuries
  *   resyncat &lt;step&gt; &lt;save&gt; &lt;state&gt;     host: hold the run at that step, save the resync there and load it
@@ -228,6 +230,9 @@ public final class Rig implements SCRIPT {
         private Path resyncSave;
         private Path resyncState;
         private long resyncLoadStarted;
+        /** A game is attached (the first one), and one was loaded since the last frame (a map battle's end, SOS-32). */
+        private boolean attached;
+        private boolean reloaded;
         // world-only load (SOS-38 spike): copy 1 saves at worldStep, the loading copies load only worldKeys from it
         private long worldStep = -1;
         private boolean worldSaver;
@@ -260,6 +265,8 @@ public final class Rig implements SCRIPT {
 
         /** Every game, the first and each one loaded after it, calls back after each update. */
         void attach() {
+            reloaded = attached;
+            attached = true;
             GAME.addAfterUpdate(new ACTION() {
                 @Override
                 public void exe() {
@@ -303,7 +310,10 @@ public final class Rig implements SCRIPT {
         private void afterFrame() {
             if (resyncLoadStarted != 0) {
                 resynced();
+            } else if (reloaded && running) {
+                battleReturned();
             }
+            reloaded = false;
             exchangeAiLog();
             exchangeOrders();
             exchangeReports();
@@ -636,6 +646,13 @@ public final class Rig implements SCRIPT {
             return loaded.append('}').toString();
         }
 
+        /** The first frame of the game loaded at a map battle's end (SOS-32): the run goes on at the same step. */
+        private void battleReturned() {
+            VIEW.inters().load.deactivate();
+            GAME.SPEED.speedSet(speed);
+            event("battlereturned", "\"step\":" + Engine.step());
+        }
+
         /** Peer: the first frame of the game loaded for a resync. */
         private void resynced() {
             double seconds = (System.nanoTime() - resyncLoadStarted) / 1e9;
@@ -942,8 +959,8 @@ public final class Rig implements SCRIPT {
                 showMessages = true;
                 event("showmessages", "");
                 return;
-            case "answerprompts":
-                prompts = new PromptAnswers();
+            case "answerprompts": // answerprompts [engage <retreat after steps>]
+                prompts = new PromptAnswers(c.length > 2 && c[1].equals("engage"), c.length > 2 ? Long.parseLong(c[2]) : 0);
                 event("answerprompts", "");
                 return;
             case "nudge":
