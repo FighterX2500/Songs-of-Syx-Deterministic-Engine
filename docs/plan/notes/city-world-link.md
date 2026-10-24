@@ -197,7 +197,7 @@ Why a world-only save, not the whole one (found in the S3 and S4 smoke runs, 202
 - the calendar is the host's: the follower's city jumps forward to it (ages, seasons and the like follow);
 - caches made from the world before the load start again on every PC at once (`Hooks.worldLoads`: the war windows, the power scale, the raiders' map);
 - the soldiers away are counted from the report, as the world part reads them (`Hooks.divReport`);
-- the stored divisions' training and experience are summed afresh from the soldiers loaded (the game's own load added them to the last save's totals);
+- the stored divisions' training and experience are summed afresh from the soldiers loaded (the game's own load added them to the last save's totals); an army's supply targets are filled by the world part only, and a stored division's kit and men in them come from the report (on a follower the live division is another city's);
 - the unlocks of the city's tech, level and titles are read from the report (`UNLOCK`), so the host's region buildings work as on the host;
 - a message about a raider from before the load (pay, ally help) is refused on every PC, since the load replaced the raiders.
 
