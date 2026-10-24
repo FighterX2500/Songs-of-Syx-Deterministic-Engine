@@ -83,6 +83,14 @@ Each milestone is a PR on SOS-46, rig-checked before the next one starts.
 - **Rig:**
   - `makehuman <faction>` (setup) and a save with 3 humans;
   - `--humans`: each copy runs a different human's city in own-city mode.
+- **The casts (owner, 2026-10-25):** a game with several humans crashes in its first frame at the `(FactionNPC)` casts and the `instanceof FactionNPC` branches (85 sites). M1 guards each one so the game runs: there a human is skipped or treated as a faction that is not an NPC. What each human should get at those sites stays M2's work.
+- **Until M2 to M5 are done,** the world part's current human outside a per-human loop is the first human, not *none*: with one human the game runs exactly as today. The rule that `player()` throws there comes in once the last site is converted.
+- **Work order**, each step built and checked before the next:
+  1. Humans in the game: spares, the save section, the slot swap, `active()`, `activate`, and `BoostCompound` and `PCredits` reading the `Player` asked; the rig's `makehuman`. Check: a 3-human save and load round trip, without frames.
+  2. The current human: the `FACTIONS.player()` hook, this PC's human, the per-human world half of `Player`'s update, the city half for this PC's human only.
+  3. Reports per human: a report store per human, the feed in and out by faction, pacing that waits for every human, the chokepoints reading the faction asked, transactions with their owner, the hash over every human.
+  4. The cast guards.
+  5. World commands for their issuing faction, the rig's `--humans`, and the smoke.
 
 ### M2. "Any human", each one's empire, goods and money (G1, G3, G4)
 

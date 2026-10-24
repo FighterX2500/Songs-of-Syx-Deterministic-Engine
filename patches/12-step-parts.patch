@@ -1,6 +1,6 @@
 diff -ru -U2 a/game/events/EVENTS.java b/game/events/EVENTS.java
 --- a/game/events/EVENTS.java	2026-02-17 17:15:30.000000000 +0500
-+++ b/game/events/EVENTS.java	2026-10-23 22:06:46.889249400 +0500
++++ b/game/events/EVENTS.java	2026-10-25 02:21:53.216847000 +0500
 @@ -131,7 +131,7 @@
  			return;
  		prof.logStart(EVENTS.class);
@@ -12,7 +12,7 @@ diff -ru -U2 a/game/events/EVENTS.java b/game/events/EVENTS.java
  	}
 diff -ru -U2 a/game/faction/FACTIONS.java b/game/faction/FACTIONS.java
 --- a/game/faction/FACTIONS.java	2026-03-25 10:31:18.000000000 +0500
-+++ b/game/faction/FACTIONS.java	2026-10-23 22:06:46.890250700 +0500
++++ b/game/faction/FACTIONS.java	2026-10-25 02:21:53.223240000 +0500
 @@ -41,7 +41,7 @@
  
  		@Override
@@ -22,7 +22,30 @@ diff -ru -U2 a/game/faction/FACTIONS.java b/game/faction/FACTIONS.java
  				all.get(i).update(timeSinceLast);
  			}
  			
-@@ -161,6 +161,14 @@
+@@ -61,6 +61,7 @@
+ 	private final ResourcePrices prices;
+ 	private final FWorth worth = new FWorth();
+ 	private DIP dip;
++	private final sosdet.game.GameHumans sosdetHumans; // SOSDET: the human slots and their spare Players (ADR 0004)
+ 
+ 	private static CharSequence ¤¤sim = "Simulating factions";
+ 	private static CharSequence ¤¤factionDestroyed = "The faction of {0} has been completely destroyed.";
+@@ -105,12 +106,13 @@
+ 		});
+ 		
+ 		prices = new ResourcePrices();
++		sosdetHumans = new sosdet.game.GameHumans(all, npcs); // SOSDET: built with the game, as Players must be (ADR 0004)
+ 		
+ 
+ 	}
+ 	
+ 	private void activate(Faction f) {
+-		if (f == null || f == player)
++		if (f == null || f instanceof Player) // SOSDET: every human, not only slot 0's (ADR 0004)
+ 			return;
+ 		boolean a = f.isActive();
+ 		if (f.wasActive != a) {
+@@ -161,6 +163,14 @@
  
  	@Override
  	protected void update(double ds, Profiler prof) {
@@ -37,9 +60,30 @@ diff -ru -U2 a/game/faction/FACTIONS.java b/game/faction/FACTIONS.java
  		
  		prof.logStart(updater.getClass());
  		updater.update(ds);
+@@ -286,13 +296,15 @@
+ 	public static LIST<Faction> active(){
+ 		if (self.dirty) {
+ 			self.active.clearSloppy();
+-			self.active.add(self.player);
+ 			self.npcsActive.clearSloppy();
+ 			self.dirty = false;
+-			for (int i = 0; i < self.npcs.size(); i++) {
+-				if (self.npcs.get(i).realm().capitol() != null) {
+-					self.npcsActive.add(self.npcs.get(i));
+-					self.active.add(self.npcs.get(i));
++			for (int i = 0; i < self.all.size(); i++) { // SOSDET: every human, in slot order with the NPCs; one human: vanilla's order (ADR 0004)
++				Faction f = self.all.get(i);
++				if (f instanceof Player) {
++					self.active.add(f);
++				}else if (f.realm().capitol() != null) {
++					self.npcsActive.add((FactionNPC) f);
++					self.active.add(f);
+ 				}
+ 			}
+ 		}
 diff -ru -U2 a/game/faction/player/Player.java b/game/faction/player/Player.java
 --- a/game/faction/player/Player.java	2026-06-17 10:48:04.000000000 +0500
-+++ b/game/faction/player/Player.java	2026-10-23 22:06:46.901748600 +0500
++++ b/game/faction/player/Player.java	2026-10-25 02:21:53.217846700 +0500
 @@ -158,21 +158,22 @@
  	}
  	

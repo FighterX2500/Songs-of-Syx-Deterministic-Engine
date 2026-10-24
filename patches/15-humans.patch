@@ -1,0 +1,86 @@
+diff -ru -U2 a/game/faction/player/BoostCompound.java b/game/faction/player/BoostCompound.java
+--- a/game/faction/player/BoostCompound.java	2026-06-12 10:41:16.000000000 +0500
++++ b/game/faction/player/BoostCompound.java	2026-10-25 02:22:40.897515900 +0500
+@@ -37,6 +37,24 @@
+ 		return ((FactionNPC)f).bonus.getD(bo);
+ 	}
+ 	
++	/** SOSDET: the compound of the human asked; only slot 0's Player connects boosters, and each Player has its own state (ADR 0004). */
++	protected BoostCompound<T> of(Player f) {
++		return this;
++	}
++	
++	/** SOSDET: a booster's value from this compound's own state, as Boo's cached value is made (ADR 0004). */
++	private double sosdetValue(LIST<Value> vs, boolean isMul) {
++		double v = 0;
++		if (isMul) {
++			for (Value x : vs)
++				v += (x.bo.booster.getValue(getValue(all.get(x.ti)))-1);
++			return Math.max(0, v + 1);
++		}
++		for (Value x : vs)
++			v += x.bo.booster.getValue(getValue(all.get(x.ti)));
++		return v;
++	}
++	
+ 	public void clearChache() {
+ 		for (Boo b : boos)
+ 			b.cacheI = GAME.updateI()-100;
+@@ -47,7 +65,8 @@
+ 		
+ 		KeyMap<LinkedList<Value>> map = new KeyMap<LinkedList<Value>>();
+ 		
+-		for (T t : all) {
++		for (int ti = 0; ti < all.size(); ti++) { // SOSDET: each value keeps its index, for another human's own (ADR 0004)
++			T t = all.get(ti);
+ 			
+ 			BoostSpecs bos = bos(t);
+ 			
+@@ -57,7 +76,7 @@
+ 				if (!map.containsKey(k)) {
+ 					map.put(k, new LinkedList<>());
+ 				}
+-				map.get(k).add(new Value(t, s));
++				map.get(k).add(new Value(t, s, ti));
+ 			}
+ 		}
+ 		
+@@ -114,6 +133,9 @@
+ 				
+ 				@Override
+ 				public double vGet(Player f) {
++					BoostCompound<T> c = of(f);
++					if (c != BoostCompound.this) // SOSDET: another human's own tech, level or titles (ADR 0004)
++						return c.sosdetValue(all, isMul);
+ 					int ci = GAME.updateI();
+ 					if (ci != cacheI) {
+ 						cacheI = GAME.updateI();
+@@ -169,10 +191,12 @@
+ 		
+ 		public final T t;
+ 		public final BoostSpec bo;
++		final int ti;
+ 		
+-		Value(T t, BoostSpec bo){
++		Value(T t, BoostSpec bo, int ti){
+ 			this.t = t;
+ 			this.bo = bo;
++			this.ti = ti;
+ 		}
+ 	}
+ 	
+diff -ru -U2 a/game/faction/player/PLevels.java b/game/faction/player/PLevels.java
+--- a/game/faction/player/PLevels.java	2026-06-29 08:30:04.000000000 +0500
++++ b/game/faction/player/PLevels.java	2026-10-25 02:22:40.898514300 +0500
+@@ -96,6 +96,11 @@
+ 		bos = new BoostCompound<PLevels.Level>(boosters, levels) {
+ 			
+ 			@Override
++			protected BoostCompound<Level> of(Player f) {
++				return f.level().bos; // SOSDET: each human's own level (ADR 0004)
++			}
++			
++			@Override
+ 			protected double getValue(Level t) {
+ 				return current.index >= t.index ? 1 : 0;
+ 			}

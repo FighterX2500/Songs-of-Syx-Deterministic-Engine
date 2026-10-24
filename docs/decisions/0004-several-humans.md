@@ -37,7 +37,7 @@ Status: Accepted (owner, 2026-10-25) · Card: [SOS-46](https://fighterx2500.atla
 
 ## Consequences
 
-- **Patched files** (milestone 1): `FACTIONS` (spares, `active()`, the current human, the save section), `Player` and its parts `PCredits`, `PBonusSetting`, `PLevels`, `PTitles`, `PTech` (register once, read the faction asked), and `BoostCompound`. Five are already engine-owned (`FACTIONS` and `Player` by patch 12, `PCredits` by 14, `PTech` by 96, `PTitles` by 98), so their changes go into those patches.
+- **Patched files** (milestone 1): `FACTIONS` (spares, `active()`, the current human), `BoostCompound` with `PLevels`, `PTech` and `PTitles` (each booster reads the human asked), `PCredits` and `BValue` (the values read the human asked). Registering once needs no patch to `Player`'s parts: the engine (`GameHumans`) sets the game-wide registries aside by reflection while it builds each spare, as the spike did, so `PBonusSetting` stays unpatched. The save section is the engine's own special saver. `FACTIONS` is engine-owned by patch 12, `PCredits` and `BValue` by 14, `PTech` by 96, `PTitles` by 98; `BoostCompound` and `PLevels` are in the new patch 15.
 - **The spare count is part of the texture cache.** Changing it rebuilds the cache once on every PC. It sets the most humans a game can have.
 - **Per-human state** that vanilla keeps once (opinion, `DipWarPlayer`, events' timers, raids) becomes per human in milestones 3 and 4, through the current human.
 - **`PlayerColors.saver`** is static, so every human saves the same colours until it gets a per-slot saver.

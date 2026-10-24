@@ -117,6 +117,10 @@ import view.main.VIEW;
  *   resyncload &lt;save&gt; &lt;state&gt;          peer: load the host's resync and run on from its step
  *   hold                                end a run at the current step
  *   hash                                the current battle and city hashes
+ *   makehuman &lt;auto n|k,k&gt;              setup: NPC slots become humans (SOS-46); then save and load
+ *   humans                              the human slots and their state
+ *   savegame &lt;file&gt;                     save to the run folder
+ *   roundtrip &lt;from&gt; &lt;to&gt;              load from, save to right after the load (no frame), compare the two
  * </pre>
  */
 public final class Rig implements SCRIPT {
@@ -1043,12 +1047,40 @@ public final class Rig implements SCRIPT {
                 limit(lastStep);
                 finish();
                 return;
+            case "makehuman":
+                event("makehuman", RigHumans.make(rest(c)));
+                return;
+            case "humans":
+                event("humans", RigHumans.state());
+                return;
+            case "savegame":
+                event("savegame", RigHumans.save(dir.resolve(c[1])));
+                return;
+            case "roundtrip":
+                roundTrip(dir.resolve(c[1]), dir.resolve(c[2]));
+                return;
             case "hash":
                 event("hash", String.format(Locale.ROOT, "\"battle\":\"%016x\",\"city\":\"%016x\"", battleHash(), cityHash()));
                 return;
             default:
                 event("error", "\"message\":\"unknown command: " + clean(String.join(" ", c)) + "\"");
             }
+        }
+
+        /** Loads {@code from}, then saves to {@code to} before any frame runs, and compares the two (SOS-46). */
+        private void roundTrip(Path from, Path to) {
+            event("loading", "\"save\":\"" + clean(from.getFileName().toString()) + "\"");
+            new GameLoader(from) {
+                @Override
+                public void doAfterSet() {
+                    GAME.SPEED.speedSet(0);
+                    try {
+                        event("roundtrip", RigHumans.save(to) + "," + RigHumans.compare(from, to));
+                    } catch (IOException | RuntimeException e) {
+                        event("error", "\"command\":\"roundtrip\",\"message\":\"" + clean(e.toString()) + "\"");
+                    }
+                }
+            }.set();
         }
 
         /** What a player sees, read between frames as the UI reads it: never changes the game. */
