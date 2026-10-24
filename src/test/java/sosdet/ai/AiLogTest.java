@@ -297,6 +297,27 @@ class AiLogTest {
     }
 
     @Test
+    void aWatchingPlayersOrdersAreDroppedBeforeAnyLog() {
+        ByPc hr = new ByPc();
+        AiLog host = AiLog.host(START, hr);
+        AiLog peer = AiLog.peer(START, new ByPc());
+        peer.watchOnly(true);
+        peer.captureOrder(AiEntry.HOLD_FIRE, 7, AiEntry.ints(1));
+        host.watchOnly(true);
+        host.captureOrder(AiEntry.MUSTER, 4, AiEntry.ints(1));
+        assertEquals(1, peer.watchedDropped());
+        assertEquals(1, host.watchedDropped());
+        peer.watchOnly(false); // acting again: its next order is its first, so the host misses none
+        peer.captureOrder(AiEntry.AMMO, 7, AiEntry.ints(2));
+        host.ordersIn(2, peer.ordersOut());
+        runStep(host, new Recorder(), 1);
+        for (long s = 2; s <= 31; s++) {
+            host.stepBegin(s);
+        }
+        assertEquals(List.of("31:0:9:7:2"), hr.applied);
+    }
+
+    @Test
     void aMissingOrderOrAnotherStartIsRefused() {
         AiLog peer = AiLog.peer(START, new ByPc());
         peer.captureOrder(AiEntry.GUARD, 1, AiEntry.ints(1));

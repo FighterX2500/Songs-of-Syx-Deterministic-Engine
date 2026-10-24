@@ -425,6 +425,20 @@ public final class Engine {
         s.pacer.govern(true);
     }
 
+    /**
+     * This PC's player only watches (spec 0.12, watch-only viewing): a click that would give an order or a command
+     * changes nothing and sends nothing. Camera, windows and selection stay this PC's own. {@code false} lets the player
+     * act again; either takes effect at once, since a dropped order never reaches any log (SOS-15).
+     */
+    public static void watchOnly(boolean on) {
+        required().ai().watchOnly(on);
+    }
+
+    /** The orders and commands this PC's player gave while only watching, all dropped. */
+    public static long watchedDropped() {
+        return required().ai().watchedDropped();
+    }
+
     /** The speed line every PC shows while a slow PC holds the speed down, or null (SOS-42). */
     public static String speedNotice() {
         return required().speedNoticeNow(System.nanoTime());

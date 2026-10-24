@@ -142,3 +142,10 @@ The rig's lock now also checks that the process it names is a `rig.py`: a runner
 Two points from the camera and clicks audit:
 - A5 needs no code: sprite timers and corpse dirtiness change outside the step but feed neither the step nor the hash.
 - A2 (patch 67): between steps the supply room's resource set (`ROOM_SUPPLY.has`) is read, never refilled, under `outsideStep()`, not `worldCacheClosed()`. The city part fills that set itself, and `worldCacheClosed()` is true in the city part too.
+
+## SOS-15: a battle on two PCs, the owner playing (2026-10-24)
+
+This PC as host, the laptop as copy 2 in a 1600×900 window on its own screen, the SOS-11 field battle (2,000 v 2,000, seed 12345), `--govern`, `--trace-draws 600`.
+
+- *V0* (stage 1 smoke: nobody at either, the laptop only watching, 3,000 steps at 1x): **PASS**, identical at every step to 3,000; held 1.5 s in all. The battle save copy 1 generates is now also sent to the laptop (`RemoteCopy.put_save`); before, only copies on this PC got it.
+- *V1* (stage 1: the owner played the host, the laptop only watching, `--watch 2`): **PASS**. The owner fought the battle to a win and closed the window at step 14,242; both copies identical at every step to there (compared from the per-step logs, see below). The owner set 5x several times; each time the governor brought it down to 2.1x to 3.3x (4,000 men on the laptop), with the speed line on both copies, and back at 1x the laptop kept up. No clicks were dropped on the laptop (nobody clicked there). The rig hung after the window closed: its closed-window check counted the relay's Java, whose arguments name copy 1's folder, as the host's game. Fixed (`copy_running` skips the relay).

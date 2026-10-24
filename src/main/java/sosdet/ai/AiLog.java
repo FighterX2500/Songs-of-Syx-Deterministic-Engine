@@ -61,6 +61,9 @@ public final class AiLog {
     /** This PC's last captured command until it applies, and how many repeats of it were dropped. */
     private byte[] lastCommand;
     private long repeatsDropped;
+    /** This PC's player only watches: its orders and commands are dropped, and how many were (SOS-15). */
+    private volatile boolean watchOnly;
+    private long watchedDropped;
     private static final int NOT_APPLYING = Integer.MIN_VALUE;
     private long appliedOrders;
     private final long[] appliedByKind = new long[AiEntry.KINDS];
@@ -151,6 +154,10 @@ public final class AiLog {
      * to the host through {@link #ordersOut}. Either way it is applied at the step the host stamps.
      */
     public void captureOrder(int kind, int div, byte[] payload) {
+        if (watchOnly) {
+            watchedDropped++;
+            return;
+        }
         if (kind == AiEntry.COMMAND) {
             // A slider dragged or a button held repeats the same command every frame until it applies; once is enough.
             if (Arrays.equals(payload, lastCommand)) {
@@ -466,6 +473,16 @@ public final class AiLog {
         synchronized (aiBatch) {
             return coalesced;
         }
+    }
+
+    /** This PC's player only watches (true) or acts again (false); any time, outside the step. */
+    public void watchOnly(boolean on) {
+        watchOnly = on;
+    }
+
+    /** Orders and commands this PC's player gave while only watching, all dropped. */
+    public long watchedDropped() {
+        return watchedDropped;
     }
 
     /** This PC's commands dropped as repeats of the one it gave last, before that one applied. */

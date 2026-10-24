@@ -44,6 +44,7 @@ HASH_EVERY = 30  # the engine's default hash interval (steps)
 REMOTE = os.environ.get("SOSDET_RIG_REMOTE", "")
 REMOTE_KEY = os.environ.get("SOSDET_RIG_REMOTE_KEY", str(pathlib.Path.home() / ".ssh" / "sosdet_laptop"))
 SSH = ["ssh", "-i", REMOTE_KEY, "-o", "BatchMode=yes", "-o", "ConnectTimeout=20", "-o", "LogLevel=ERROR"]
+REMOTE_WINDOW = (1600, 900)  # a watched remote copy's window (the laptop: 1920x1080)
 RELAY, RELAY_SRC, RELAY_PORT = BUILD / "rig" / "relay", ROOT / "rig" / "relay" / "Relay.java", 47710
 # what a remote copy reads from the copies on this PC; everything else stays here
 SHARED = "hashes.bin,ai-host.log,reports.bin,resync.save,resync.state,wresync.save,wresync.state,wresync.state.done"
@@ -70,7 +71,7 @@ class Copy:
         self.events = self.rig / "events.jsonl"
         self.base = 0  # events before this line belong to a warm-up game, not to the run
 
-    def prepare(self, saves, window=False):
+    def prepare(self, saves, window=False, size=None):
         shutil.rmtree(self.appdata, ignore_errors=True)
         (self.data / "settings").mkdir(parents=True)
         (self.data / "saves" / "saves").mkdir(parents=True)
@@ -83,8 +84,11 @@ class Copy:
         for target, src in saves.items():
             shutil.copy2(src, self.data / "saves" / "saves" / target)
         settings = (REAL / "settings" / "LauncherSettings.txt").read_bytes().decode("utf-8")
-        # Windowed and tiny, muted, never minimised, both mods on; with window=True, the user's own screen and sound.
+        # Windowed and tiny, muted, never minimised, both mods on; with window=True, the user's own screen and sound;
+        # with a size, a window of that size with sound (another PC's screen)
         tiny = () if window else (("SCREEN_MODE", "2"), ("WINDOW_WIDTH", "10"), ("WIDOW_HEIGHT", "10"), ("VOLUME_MASTER", "0"))
+        if size:
+            tiny = (("SCREEN_MODE", "2"), ("WINDOW_WIDTH", str(size[0])), ("WIDOW_HEIGHT", str(size[1])))
         for key, value in tiny + (("WIN_AUTO_ICONIFY", "0"),):
             settings, n = re.subn(r"(?m)^" + key + r": [^,\r\n]*,", key + ": " + value + ",", settings)
             if n != 1:
@@ -93,6 +97,10 @@ class Copy:
         if n != 1:
             fail("LauncherSettings.txt has no MODS list")
         (self.data / "settings" / "LauncherSettings.txt").write_bytes(settings.encode("utf-8"))
+
+    def put_save(self, src, name):
+        """A save into this copy's saves folder, under that name."""
+        shutil.copy2(src, self.data / "saves" / "saves" / name)
 
     def start(self, autoload):
         """Starts the game the way the launcher does after Play (init.Main), with this copy's data folder."""
@@ -210,8 +218,9 @@ class RemoteCopy(Copy):
         self.remote_appdata = "%s\\inst\\%d" % (root, k)
         self.remote_rig = self.remote_appdata + "\\songsofsyx\\sosdet-rig"
 
-    def prepare(self, saves, window=False):
-        super().prepare(saves, False)
+    def prepare(self, saves, window=False, size=None):
+        # watched there: a window that fits the remote PC's screen, not this PC's screen settings
+        super().prepare(saves, False, REMOTE_WINDOW if window else None)
         # the remote copy's last data folder goes, but its cache stays (the first run there sends it)
         cached = remote_ps("$d = '%s\\songsofsyx'; New-Item -ItemType Directory -Force $d | Out-Null;"
                            " Get-ChildItem $d -Exclude cache | Remove-Item -Recurse -Force; Test-Path $d\\cache\\*"
@@ -226,6 +235,11 @@ class RemoteCopy(Copy):
             fail("copy %d: sending its data folder to %s failed: %s" % (self.k, REMOTE, unpack.stderr.strip()))
         for f in self.rig.iterdir():
             f.unlink()  # the mirror fills it from the remote copy's rig folder
+
+    def put_save(self, src, name):
+        super().put_save(src, name)
+        subprocess.run(["scp"] + SSH[1:] + ["-q", str(src), "%s:%s/songsofsyx/saves/saves/%s"
+                                           % (REMOTE, self.remote_appdata.replace("\\", "/"), name)], check=True)
 
     def alive(self):
         # the copy's game is the remote game's Java that isn't the relay (one remote copy at most)
@@ -283,10 +297,11 @@ def stop_remote(root):
 
 
 def copy_running(k):
-    """Whether copy k's game process is still running."""
+    """Whether copy k's game process is still running (not the relay, whose arguments name the copies' folders)."""
     marker = (str(INST / str(k)) + "\\").replace("'", "''")
     out = subprocess.run(["powershell", "-NoProfile", "-Command",
-                          "@(Get-CimInstance Win32_Process -Filter \"Name='java.exe'\" | Where-Object { $_.CommandLine -like '*%s*' }).Count"
+                          "@(Get-CimInstance Win32_Process -Filter \"Name='java.exe'\" | Where-Object { $_.CommandLine -like '*%s*'"
+                          " -and $_.CommandLine -notlike '*Relay*' }).Count"
                           % marker], capture_output=True, text=True).stdout.strip()
     return out not in ("", "0")
 
@@ -745,6 +760,8 @@ def main():
     ap.add_argument("--play", action="store_true",
                     help="the owner plays copy 1 (the host) in a normal window from 1x, giving orders and changing speed;"
                          " the other copies replay its log at 25x; the run ends when the owner closes the window")
+    ap.add_argument("--watch", default="",
+                    help="K[,K]: those copies' players only watch: their clicked orders and commands are dropped (SOS-15)")
     ap.add_argument("--govern", action="store_true",
                     help="every copy follows the agreed speed, and the host lowers it to what the slowest copy holds"
                          " (SOS-42); every copy starts at copy 1's speed")
@@ -808,8 +825,11 @@ def main():
                 fail("no save %s" % (REAL / "saves" / "saves" / s))
     saves, autoload = scenario_saves(args)
 
-    if args.remote and (not REMOTE or not 1 < args.remote <= args.copies or args.play):
-        fail("--remote needs SOSDET_RIG_REMOTE=user@host and a copy other than copy 1 (the host), not --play")
+    if args.remote and (not REMOTE or not 1 < args.remote <= args.copies):
+        fail("--remote needs SOSDET_RIG_REMOTE=user@host and a copy other than copy 1 (the host)")
+    watched = [int(k) for k in args.watch.split(",") if k]
+    if any(not 1 < k <= args.copies for k in watched):
+        fail("--watch: copies 2 to %d (the host is played or scripted)" % args.copies)
     stop_copies()
     if args.remote:
         stop_remote(args.remote_root)
@@ -817,7 +837,8 @@ def main():
               for k in range(1, args.copies + 1)]
     for c in copies:
         own = {"sosdet-city.save": REAL / "saves" / "saves" / follower_saves[c.k - 2]} if follower_saves and c.k > 1 else saves
-        c.prepare(own, args.window or (args.play and c.k == 1))
+        # a played host gets this PC's screen; a remote copy, with --play or --watch, a window on its own screen
+        c.prepare(own, args.window or (args.play and c.k == 1) or (c.k == args.remote and (args.play or c.k in watched)))
     if args.remote:
         start_relays(copies)
     for c in copies:
@@ -837,7 +858,7 @@ def main():
         battle = copies[0].data / "saves" / "saves" / "__battle.save"
         shutil.copy2(battle, run_dir / "battle.save")
         for c in copies:
-            shutil.copy2(battle, c.data / "saves" / "saves" / "sosdet-battle.save")
+            c.put_save(battle, "sosdet-battle.save")
 
     starts = {}
     start_save = run_dir / "battle.save" if args.scenario == "field" else saves["sosdet-city.save"]
@@ -912,6 +933,8 @@ def main():
             c.send("pace %d" % args.pace_lead, "pace")
         if args.govern:
             c.send("followspeed", "followspeed")
+        if c.k in watched:
+            c.send("watchonly", "watchonly")
         if c.k == 1 and args.scenario == "city" and not args.play and not args.replay:
             if args.engage >= 0:  # field battles on the battle map (SOS-32)
                 c.send("answerprompts engage %d%s" % (args.engage, " restart %d" % args.restart if args.restart else ""),
@@ -1062,6 +1085,9 @@ def main():
             notices = ["%d: %s" % (e["step"], e["text"]) for e in c.all_of("speednotice")]
             summary.append("copy %d agreed speed: %s; speed lines: %s" % (c.k, ", ".join(changes) or "none",
                                                                           " | ".join(notices) or "none"))
+    for k in watched:
+        w = copies[k - 1].all_of("watched")
+        summary.append("copy %d only watched: %d clicked orders and commands dropped" % (k, w[-1]["dropped"] if w else 0))
     summary += lines
     desyncs = {c.k: c.find("desync", 0) for c in copies}
     for c in copies:

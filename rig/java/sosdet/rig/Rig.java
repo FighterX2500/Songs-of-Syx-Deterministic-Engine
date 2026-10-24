@@ -94,6 +94,7 @@ import view.main.VIEW;
  *                                       the slowest PC caps the speed (mod spec §4; the engine's, since SOS-42)
  *   followspeed                         every copy: its game speed follows the agreed one, and the host's governor
  *                                       lowers that to what the slowest copy holds (SOS-42)
+ *   watchonly                           its player only watches: orders and commands clicked are dropped (SOS-15)
  *   ordersout &lt;file&gt;                    peer: append its player's orders to the file every frame
  *   ordersfrom &lt;pc&gt; &lt;file&gt;             host: take in peer pc's orders from its file every frame
  *   state                               what a player sees: step, people, soldiers, credits, invasion, raider
@@ -228,6 +229,8 @@ public final class Rig implements SCRIPT {
         private String speedNoticeSeen;
         private double speedSeen = -1;
         private long speedLookedAt;
+        /** The watch-only drops last logged as an event. */
+        private long watchedSeen;
         // the players' orders between peers and the host, through files (a peer's player acts too)
         private Path ordersOutFile;
         private final List<Path> ordersPeers = new ArrayList<>();
@@ -720,6 +723,11 @@ public final class Rig implements SCRIPT {
                 return;
             }
             speedLookedAt = now;
+            long watched = Engine.watchedDropped();
+            if (watched != watchedSeen) {
+                watchedSeen = watched;
+                event("watched", "\"dropped\":" + watched + ",\"step\":" + Engine.step());
+            }
             double agreed = Engine.stats().agreedSpeed;
             if (agreed != speedSeen) {
                 speedSeen = agreed;
@@ -946,6 +954,10 @@ public final class Rig implements SCRIPT {
                 }
                 Engine.pace(pcs, paceLead);
                 event("pace", "\"lead\":" + paceLead);
+                return;
+            case "watchonly":
+                Engine.watchOnly(true);
+                event("watchonly", "\"step\":" + Engine.step());
                 return;
             case "followspeed":
                 Engine.followAgreedSpeed();

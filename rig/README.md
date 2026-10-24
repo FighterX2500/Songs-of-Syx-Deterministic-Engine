@@ -89,6 +89,12 @@ python rig\rig.py field --tag P1 --play --copies 3
 
 `--play`: copy 1 opens in a normal window with your own settings, as the host, at 1x. Give orders and change the speed as you like; every order and speed change goes into the host's log and the other copies (small, at 25x so they never lag) replay it at the same steps. The step length follows the agreed speed (1/60 s at 1x, 1/16 s above). At the first difference every copy is held, your window included, and each copy writes the engine's desync report. Close your window to end the run: the others are held and compared up to the last step yours reached. Don't retreat or leave the battle (that loads another save). In a city run the city and the world map are commands (SOS-34, SOS-35); `rig\play-v01.bat` starts the V0.1 session ([docs/release/V0.1.md](../docs/release/V0.1.md)). Without `--play`, copy 1's player answers world-battle prompts and the simulation's yes/no questions by itself (`answerprompts`).
 
+`--play` with `--remote K` (SOS-15): copy K runs on the other PC in a 1600×900 window with sound, to watch there; add `--govern` so it runs at the agreed speed. `--watch K[,K]`: those copies' players only watch (`Engine.watchOnly`): orders and commands clicked there are dropped, and the summary counts them. Without it, a peer's clicks go to the host and apply on every copy.
+
+```
+python rigig.py field --tag V1 --play --copies 2 --remote 2 --watch 2 --govern --trace-draws 600
+```
+
 `--warm K[,K]`: those copies play the autoloaded game normally for 30 game seconds before the session, so their session game is not the first one their process ran (the competing mod's first-game desync; SOS-32 found none).
 
 `--trace-draws N` adds the call site of every simulation draw for the last N steps, dumped around a desync; it slows the copies by roughly half.
