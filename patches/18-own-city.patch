@@ -1,0 +1,19 @@
+diff -ru -U2 a/settlement/main/SETT.java b/settlement/main/SETT.java
+--- a/settlement/main/SETT.java	2026-06-19 10:20:16.000000000 +0500
++++ b/settlement/main/SETT.java	2026-10-25 18:41:19.254733900 +0500
+@@ -344,6 +344,7 @@
+ 	
+ 	public void CreateFromWorldMap(int wx1, int wy1, boolean isBattle){
+ 		D.gInit(getClass());
++		sosdet.Hooks.cityGenerateBegin(isBattle); // SOSDET: a city's generation keeps the world's state (SOS-56)
+ 		this.worldArea.init(wx1, wy1, isBattle);
+ 		
+ 		SPRITES.loader().init();
+@@ -386,6 +387,7 @@
+ 			a.exe();
+ 		for (Div d : GAME.ARMIES().player().divisions())
+ 			d.info.raceSet(GAME.player().race());
++		sosdet.Hooks.cityGenerateEnd(); // SOSDET
+ 		
+ 		
+ 		

@@ -7,7 +7,9 @@ import sosdet.ai.Commanders;
 import java.nio.file.Path;
 
 import sosdet.game.GameAi;
+import sosdet.game.GameHash;
 import sosdet.game.GameHumans;
+import sosdet.game.GameOwnCity;
 import sosdet.game.GameResync;
 import sosdet.game.GameWorldLoad;
 import sosdet.game.GameWorldSetup;
@@ -397,6 +399,35 @@ public final class Engine {
     /** Setup: this PC's player's banner, as {@link HumanStart} carries it to the PC that builds the world. */
     public static byte[] bannerBytes() {
         return GameWorldSetup.bannerBytes();
+    }
+
+    /**
+     * The world hash now, as the hash log's world section takes it ({@code GameHash.worldHash}): the world map, every
+     * faction's shared state, the raiders and the calendar; in own-city mode the humans' cities are left out. The mod
+     * compares it on every PC after the setup's load, at step 0, before any hash is logged (mod SOS-56). Outside the
+     * step only; with or without a session.
+     */
+    /**
+     * Setup, on a PC whose human isn't slot 0, after the setup's save loads: makes this PC's city at its human's capital,
+     * centre {@code tx, ty} (the location it picked), as vanilla's finish stage makes the player's; the save holds slot
+     * 0's city. Own-city mode, at step 0, between steps. The NPCs' production boosts, which the city's generation would
+     * re-roll on this PC only, stay as loaded (mod SOS-56).
+     */
+    public static void ownCityAt(int tx, int ty) {
+        Session s = required();
+        if (!s.ownCity || s.clock.step() != 0 || s.streams.isSimulationThread()) {
+            throw new IllegalStateException("SOSDET: an own city is made in own-city mode, at step 0, between steps (own city "
+                    + s.ownCity + ", step " + s.clock.step() + ")");
+        }
+        GameOwnCity.make(tx, ty);
+    }
+
+    public static long worldHash() {
+        Session s = session;
+        if (s != null && s.streams.isSimulationThread()) {
+            throw new IllegalStateException("SOSDET: the world hash is read between steps");
+        }
+        return GameHash.worldHash();
     }
 
     /**

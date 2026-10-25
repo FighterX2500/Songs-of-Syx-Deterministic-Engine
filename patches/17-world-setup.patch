@@ -66,6 +66,16 @@ diff -ru -U2 a/world/map/regions/GenPlayer.java b/world/map/regions/GenPlayer.ja
  
  		WORLD.REGIONS().player.info.name().clear().add(FACTIONS.player().name);
  		return true;
+diff -ru -U2 a/world/map/regions/GenValidator.java b/world/map/regions/GenValidator.java
+--- a/world/map/regions/GenValidator.java	2025-11-20 16:45:34.000000000 +0500
++++ b/world/map/regions/GenValidator.java	2026-10-25 20:03:35.000000000 +0500
+@@ -70,5 +70,5 @@
+ 			}
+ 			
+-			if (WorldCentrePlacablity.regionC(reg.cx(), reg.cy()) != null && reg != WORLD.REGIONS().player) {
++			if (WorldCentrePlacablity.regionC(reg.cx(), reg.cy()) != null && reg != WORLD.REGIONS().player && !WORLD.GEN().sosdetHuman(reg.index())) { // SOSDET: a human's capital is checked as the player's (two-PC test T6)
+ 				if (error != null) {
+ 					error.problem = "Region problem: " + WorldCentrePlacablity.regionC(reg.cx(), reg.cy());
 diff -ru -U2 a/world/region/Gen.java b/world/region/Gen.java
 --- a/world/region/Gen.java	2025-09-12 10:35:58.000000000 +0500
 +++ b/world/region/Gen.java	2026-10-25 16:40:36.289625900 +0500

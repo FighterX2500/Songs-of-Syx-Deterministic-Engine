@@ -175,6 +175,8 @@ final class Session {
      * seeded apart from every other PC's, and the hash compares the world only. Off: co-op, every PC runs one city.
      */
     boolean ownCity;
+    /** The NPCs' production boosts while a city generates (hook 18), put back after it; null otherwise (SOS-56). */
+    double[] keptBoosts;
     /** Whose city the world part reads: -1 this PC's own; otherwise the PC whose reports come in (SOS-38's follower). */
     int reportsFrom = -1;
     /** Own-city mode: this PC's reports going out. */

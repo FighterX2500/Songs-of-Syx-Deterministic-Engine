@@ -587,8 +587,16 @@ diff -ru -U2 a/game/faction/player/BoostCompound.java b/game/faction/player/Boos
  	
 diff -ru -U2 a/game/faction/player/PBonusSetting.java b/game/faction/player/PBonusSetting.java
 --- a/game/faction/player/PBonusSetting.java	2026-06-18 20:59:32.000000000 +0500
-+++ b/game/faction/player/PBonusSetting.java	2026-10-25 09:53:29.809747900 +0500
-@@ -103,11 +103,13 @@
++++ b/game/faction/player/PBonusSetting.java	2026-10-25 18:41:18.991091000 +0500
+@@ -42,6 +42,7 @@
+ 	private static CharSequence ¤¤name = "¤Setting";
+ 	private static CharSequence ¤¤mode = "¤Mode:";
+ 	private final ArrayListGrower<ParseValue> boosts = new ArrayListGrower<>();
++	private final ArrayListGrower<game.boosting.BoostSpec> sosdetSpecs = new ArrayListGrower<>(); // SOSDET: every booster this registered (SOS-56)
+ 	
+ 	public final StockpileImp startResources = new StockpileImp();
+ 	public int startLevel = 0;
+@@ -103,11 +104,13 @@
  				
  				@Override
  				public double vGet(Player f) {
@@ -603,6 +611,27 @@ diff -ru -U2 a/game/faction/player/PBonusSetting.java b/game/faction/player/PBon
  					if (b == BOOSTABLES.BEHAVIOUR().HAPPI) {
  						if (t.cl == HCLASSES.CITIZEN() && STATS.POP().POP.data(HCLASSES.CITIZEN()).get(t.race) == 0)
  							return 0;
+@@ -120,7 +123,7 @@
+ 			
+ 			Booster bo = new BoosterValue(v, new BSourceInfo(¤¤name, UI.icons().s.alert), am, isMul);
+ 			
+-			bo.add(b);
++			sosdetSpecs.add(bo.add(b)); // SOSDET: kept, so a load takes it off again (SOS-56)
+ 			
+ 		}
+ 		return true;
+@@ -143,6 +146,11 @@
+ 
+ 	@Override
+ 	public void load(FileGetter file) throws IOException {
++		// SOSDET: a load into a running game (the engine's world resync) added every booster again on top of the old
++		// ones, so the difficulty compounded with each resync; the old ones come off first (SOS-56)
++		for (game.boosting.BoostSpec s : sosdetSpecs)
++			s.boostable.removeFactor(s);
++		sosdetSpecs.clear();
+ 		boosts.clear();
+ 		int am = file.i();
+ 		
 diff -ru -U2 a/game/faction/player/PLevels.java b/game/faction/player/PLevels.java
 --- a/game/faction/player/PLevels.java	2026-06-29 08:30:04.000000000 +0500
 +++ b/game/faction/player/PLevels.java	2026-10-25 09:53:29.810748100 +0500
