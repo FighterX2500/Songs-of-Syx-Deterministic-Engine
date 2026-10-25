@@ -27,10 +27,10 @@ public final class AiLog {
     /** Steps between the host taking a change and every PC applying it: 0.5 s at 1x. */
     public static final int DELAY_STEPS = 30;
     /**
-     * 5: the hold entry (SOS-53). 4: the commanders entry (SOS-15). A format 3 or 4 log is a format 5 log without the
-     * newer entries, so it is read too.
+     * 6: the remove entry (SOS-66). 5: the hold entry (SOS-53). 4: the commanders entry (SOS-15). A format 3 to 5 log
+     * is a format 6 log without the newer entries, so it is read too.
      */
-    static final int FORMAT_VERSION = 5;
+    static final int FORMAT_VERSION = 6;
     static final int OLDEST_FORMAT = 3;
     static final int MAGIC = 0x53444149; // "SDAI"
     static final int HEADER_BYTES = 4 + 4 + 4 + 8;
@@ -46,6 +46,10 @@ public final class AiLog {
     private final AiApplier applier;
 
     private final ConcurrentLinkedQueue<AiEntry> captured = new ConcurrentLinkedQueue<>();
+    /** Peer: removal entries read from the host's log, until the engine takes them (SOS-66). */
+    private final java.util.ArrayDeque<AiEntry> removalsIn = new java.util.ArrayDeque<>();
+    /** Host: the PCs whose humans were removed: their orders are dropped (SOS-66). */
+    private final java.util.Set<Integer> gonePcs = new java.util.HashSet<>();
     /**
      * Host: the general's changes since the last step, one per order slot (kind and division), in the order each slot
      * was first changed. The general's loop can write one slot thousands of times a step; only the last value is
@@ -204,6 +208,17 @@ public final class AiLog {
         captured.add(new AiEntry(-1, -1, AiEntry.HOLD, -1, 0, payload.clone()));
     }
 
+    /**
+     * Host: a human's removal ({@link AiEntry#REMOVE}) into the log, applied at the step it stamps on every PC. It comes
+     * from the mod, not a player, so watch-only never drops it (SOS-66).
+     */
+    public void captureRemove(byte[] payload) {
+        if (mode != AiMode.HOST) {
+            throw new IllegalStateException("SOSDET: only the host removes a human (mode " + mode + ")");
+        }
+        captured.add(new AiEntry(-1, -1, AiEntry.REMOVE, -1, 0, payload.clone()));
+    }
+
     public Commanders commanders() {
         return commanders;
     }
@@ -223,6 +238,9 @@ public final class AiLog {
         }
         if (pc <= 0) {
             throw new IllegalArgumentException("SOSDET: orders from PC " + pc + " (the host's own player is 0)");
+        }
+        if (gonePcs.contains(pc)) {
+            return; // its human is removed (SOS-66)
         }
         orders.in(pc, bytes, captured);
     }
@@ -252,6 +270,38 @@ public final class AiLog {
             }
         }
         return false;
+    }
+
+    /**
+     * Peer: the next removal entry that came in with the host's log since the last call, or null. Its payload is the
+     * slot, then the step of the last report every PC reads. The engine takes each one as soon as it arrives, before
+     * this PC may run another step, so no later report of that human is read here (SOS-66).
+     */
+    public AiEntry takeRemoval() {
+        return removalsIn.poll();
+    }
+
+    /**
+     * Whether a player's command from {@code pc} that passes {@code test} is in the log, not yet applied, or (on the
+     * host) captured and not yet stamped. Between steps only (SOS-66).
+     */
+    public boolean commandPendingFrom(int pc, java.util.function.Predicate<byte[]> test) {
+        for (AiEntry e : pending) {
+            if (e.kind == AiEntry.COMMAND && e.pc == pc && test.test(e.payload())) {
+                return true;
+            }
+        }
+        for (AiEntry e : captured) {
+            if (e.kind == AiEntry.COMMAND && e.pc == pc && test.test(e.payload())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Host: PC {@code pc} is gone, its human removed (SOS-66): no more of its orders go into the log. */
+    public void pcGone(int pc) {
+        gonePcs.add(pc);
     }
 
     /** Start of a step: the host stamps what was captured; every PC applies the entries due now. */
@@ -303,7 +353,8 @@ public final class AiLog {
             (due.pc == AiEntry.AI ? recentAi : recentOrders).add(due);
             applied++;
             appliedByKind[due.kind]++;
-            if (due.pc != AiEntry.AI && !skipped && due.kind != AiEntry.COMMANDERS && due.kind != AiEntry.HOLD) { // the mod's or the engine's, no order
+            if (due.pc != AiEntry.AI && !skipped && due.kind != AiEntry.COMMANDERS && due.kind != AiEntry.HOLD
+                    && due.kind != AiEntry.REMOVE) { // the mod's or the engine's, no order
                 appliedOrders++;
             }
             if (mode == AiMode.PEER) {
@@ -407,6 +458,9 @@ public final class AiLog {
         }
         nextSeq++;
         pending.add(e);
+        if (e.kind == AiEntry.REMOVE) {
+            removalsIn.add(e);
+        }
     }
 
     private void writeEntry(AiEntry e) {
@@ -508,6 +562,11 @@ public final class AiLog {
         due.sort((x, y) -> Integer.compare(x.seq, y.seq));
         pending.clear();
         pending.addAll(due);
+        for (AiEntry e : due) {
+            if (e.kind == AiEntry.REMOVE) {
+                removalsIn.add(e); // taken again; the engine ignores a removal it already knows (SOS-66)
+            }
+        }
         history.clear();
         nextSeq = Math.max(nextSeq, hostNextSeq);
     }

@@ -99,6 +99,11 @@ public final class Reports {
         ledger.fromBytes(bytes);
     }
 
+    /** The human is being removed (SOS-66): no report taken after {@code takenAt} applies. */
+    public void dropTakenAfter(long takenAt) {
+        pending.removeIf(r -> r.takenAt > takenAt);
+    }
+
     /** A load or resync: the city's reports start again. */
     public void clear() {
         current = null;

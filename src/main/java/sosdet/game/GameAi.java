@@ -78,7 +78,12 @@ public final class GameAi implements AiApplier {
     public void worldPart() {
         WorldCommand c;
         while ((c = worldCommands.poll()) != null) {
-            Hooks.currentHuman(Hooks.humanOf(c.pc)); // it acts for its PC's human (ADR 0004)
+            int human = Hooks.humanOf(c.pc);
+            if (Hooks.retired(human)) {
+                commandsSkipped++; // given before its human was removed, due after: nothing acts for a removed human (SOS-66)
+                continue;
+            }
+            Hooks.currentHuman(human); // it acts for its PC's human (ADR 0004)
             try {
                 if (MapBattles.worldCommandSkipped(c.pc) || !Commands.apply(c.payload)) {
                     commandsSkipped++;
@@ -116,6 +121,9 @@ public final class GameAi implements AiApplier {
             return;
         case AiEntry.HOLD:
             Hooks.desyncHold(e.step, e.intAt(0), ((long) e.intAt(1) << 32) | (e.intAt(2) & 0xFFFFFFFFL)); // SOS-53
+            return;
+        case AiEntry.REMOVE:
+            Hooks.humanRemoved(e.intAt(0)); // SOS-66
             return;
         case AiEntry.TELEPORT:
             ArrayList<Div> divs = new ArrayList<>(e.ints());

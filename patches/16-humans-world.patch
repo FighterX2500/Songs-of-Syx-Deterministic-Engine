@@ -1,6 +1,6 @@
 diff -ru -U2 a/game/events/faction/EventFactionExpand.java b/game/events/faction/EventFactionExpand.java
 --- a/game/events/faction/EventFactionExpand.java	2026-01-12 09:17:34.000000000 +0500
-+++ b/game/events/faction/EventFactionExpand.java	2026-10-25 12:48:43.460270100 +0500
++++ b/game/events/faction/EventFactionExpand.java	2026-10-26 04:19:07.992504100 +0500
 @@ -23,7 +23,7 @@
  
  public class EventFactionExpand extends EventResource{
@@ -34,7 +34,7 @@ diff -ru -U2 a/game/events/faction/EventFactionExpand.java b/game/events/faction
  			v /= d.distance;
 diff -ru -U2 a/game/events/faction/player/EventDiplomacy.java b/game/events/faction/player/EventDiplomacy.java
 --- a/game/events/faction/player/EventDiplomacy.java	2026-06-25 10:49:14.000000000 +0500
-+++ b/game/events/faction/player/EventDiplomacy.java	2026-10-25 12:48:43.461256000 +0500
++++ b/game/events/faction/player/EventDiplomacy.java	2026-10-26 04:19:08.006517800 +0500
 @@ -28,11 +28,20 @@
  	private final Stance stance = new Stance();
  
@@ -87,7 +87,7 @@ diff -ru -U2 a/game/events/faction/player/EventDiplomacy.java b/game/events/fact
  			}
  		};
  		
-@@ -71,13 +88,22 @@
+@@ -71,13 +88,24 @@
  		timer -= ds*dTime*FACTIONS.NPCs().size();
  		while(timer < 0) {
  			timer ++;
@@ -97,6 +97,7 @@ diff -ru -U2 a/game/events/faction/player/EventDiplomacy.java b/game/events/fact
 -				war.updateAll(TIME.secondsPerDay());
 -				peace.update();
 +				for (int sosdetK = 0; sosdetK < sosdetHs.length; sosdetK++) {
++					if (sosdet.Hooks.retired(sosdetHs[sosdetK])) continue; // SOSDET: a removed human runs nothing (SOS-66)
 +					int sosdetBefore = sosdet.Hooks.currentHumanSwap(sosdetHs[sosdetK]);
 +					war.updateAll(TIME.secondsPerDay());
 +					peace.update();
@@ -106,6 +107,7 @@ diff -ru -U2 a/game/events/faction/player/EventDiplomacy.java b/game/events/fact
  			FactionNPC fa = FACTIONS.NPCs().get(ii);
 -			process(fa);
 +			for (int sosdetK = 0; sosdetK < sosdetHs.length; sosdetK++) {
++				if (sosdet.Hooks.retired(sosdetHs[sosdetK])) continue; // SOSDET: a removed human runs nothing (SOS-66)
 +				int sosdetBefore = sosdet.Hooks.currentHumanSwap(sosdetHs[sosdetK]);
 +				process(fa);
 +				sosdet.Hooks.currentHumanSwap(sosdetBefore);
@@ -113,7 +115,7 @@ diff -ru -U2 a/game/events/faction/player/EventDiplomacy.java b/game/events/fact
  			ii++;
  		}
  		
-@@ -98,7 +124,7 @@
+@@ -98,7 +126,7 @@
  			return;
  		}
  		
@@ -122,7 +124,7 @@ diff -ru -U2 a/game/events/faction/player/EventDiplomacy.java b/game/events/fact
  		Induvidual king = fa.court().king().roy().induvidual;
  		
  		if (stance.process(fa, king, data))
-@@ -135,15 +161,38 @@
+@@ -135,15 +163,38 @@
  	protected void clear() {
  		ii = 0;
  		timer = 0;
@@ -167,7 +169,7 @@ diff -ru -U2 a/game/events/faction/player/EventDiplomacy.java b/game/events/fact
  	static class EData implements SAVABLE{
 diff -ru -U2 a/game/events/world/EventWorldRebellion.java b/game/events/world/EventWorldRebellion.java
 --- a/game/events/world/EventWorldRebellion.java	2025-12-18 13:27:26.000000000 +0500
-+++ b/game/events/world/EventWorldRebellion.java	2026-10-25 12:48:43.461256000 +0500
++++ b/game/events/world/EventWorldRebellion.java	2026-10-26 04:19:08.007517900 +0500
 @@ -41,9 +41,15 @@
  	private static CharSequence ¤¤RebellionArmy = "¤In fact they hate you so much that they have raised an army against you. You better deal with this problem before it spreads.";
  	
@@ -201,7 +203,7 @@ diff -ru -U2 a/game/events/world/EventWorldRebellion.java b/game/events/world/Ev
  				}
  			}
  		};
-@@ -77,54 +84,84 @@
+@@ -77,54 +84,85 @@
  	
  	@Override
  	protected void save(FilePutter file) {
@@ -259,6 +261,7 @@ diff -ru -U2 a/game/events/world/EventWorldRebellion.java b/game/events/world/Ev
  	protected void update(double ds) {
 +		int[] sosdetHs = sosdet.Hooks.humanSlots(); // SOSDET: each human's, with that human current (SOS-46 M4)
 +		for (int sosdetK = 0; sosdetK < sosdetHs.length; sosdetK++) {
++			if (sosdet.Hooks.retired(sosdetHs[sosdetK])) continue; // SOSDET: a removed human runs nothing (SOS-66)
 +			int sosdetBefore = sosdet.Hooks.currentHumanSwap(sosdetHs[sosdetK]);
 +			sosdetUpdate(sosdetK, ds);
 +			sosdet.Hooks.currentHumanSwap(sosdetBefore);
@@ -309,7 +312,7 @@ diff -ru -U2 a/game/events/world/EventWorldRebellion.java b/game/events/world/Ev
  	}
 diff -ru -U2 a/game/faction/npc/FactionNPC.java b/game/faction/npc/FactionNPC.java
 --- a/game/faction/npc/FactionNPC.java	2026-06-01 14:10:18.000000000 +0500
-+++ b/game/faction/npc/FactionNPC.java	2026-10-25 12:48:43.462255400 +0500
++++ b/game/faction/npc/FactionNPC.java	2026-10-26 04:19:07.994504900 +0500
 @@ -170,7 +170,7 @@
  				s.clear();
  		}
@@ -321,7 +324,7 @@ diff -ru -U2 a/game/faction/npc/FactionNPC.java b/game/faction/npc/FactionNPC.ja
  	}
 diff -ru -U2 a/game/faction/royalty/Royalty.java b/game/faction/royalty/Royalty.java
 --- a/game/faction/royalty/Royalty.java	2026-03-26 10:56:52.000000000 +0500
-+++ b/game/faction/royalty/Royalty.java	2026-10-25 12:48:43.463252400 +0500
++++ b/game/faction/royalty/Royalty.java	2026-10-26 04:19:08.007517900 +0500
 @@ -28,6 +28,22 @@
  	public short eventMark;
  	
@@ -345,13 +348,14 @@ diff -ru -U2 a/game/faction/royalty/Royalty.java b/game/faction/royalty/Royalty.
  	
  	private static CharSequence ¤¤Ruler = "¤Ruler of {0}";
  	private static CharSequence ¤¤Heir = "¤First Heir of {0}";
-@@ -81,7 +97,12 @@
+@@ -81,7 +97,13 @@
  	}
  	
  	public void update(double seconds) {
 -		ROPINION.BOOST().update(this, seconds);
 +		int[] hs = sosdet.Hooks.humanSlots(); // SOSDET: the opinion of each human, with that human current (SOS-46 M3)
 +		for (int k = 0; k < hs.length; k++) {
++			if (sosdet.Hooks.retired(hs[k])) continue; // SOSDET: a removed human runs nothing (SOS-66)
 +			int before = sosdet.Hooks.currentHumanSwap(hs[k]);
 +			ROPINION.BOOST().update(this, seconds);
 +			sosdet.Hooks.currentHumanSwap(before);
@@ -359,7 +363,7 @@ diff -ru -U2 a/game/faction/royalty/Royalty.java b/game/faction/royalty/Royalty.
  	}
  	
  	void save(FilePutter file) {
-@@ -138,7 +159,7 @@
+@@ -138,7 +160,7 @@
  
  	@Override
  	public SuperData boostingData() {
@@ -370,7 +374,7 @@ diff -ru -U2 a/game/faction/royalty/Royalty.java b/game/faction/royalty/Royalty.
  }
 diff -ru -U2 a/game/raiding/RAIDING.java b/game/raiding/RAIDING.java
 --- a/game/raiding/RAIDING.java	2026-05-28 12:01:02.000000000 +0500
-+++ b/game/raiding/RAIDING.java	2026-10-25 12:48:43.463252400 +0500
++++ b/game/raiding/RAIDING.java	2026-10-26 04:19:08.008516600 +0500
 @@ -32,13 +32,28 @@
  	public final int AMOUNT = 100;
  	
@@ -422,13 +426,14 @@ diff -ru -U2 a/game/raiding/RAIDING.java b/game/raiding/RAIDING.java
  		updater.load(file);
  		
  		if (fucked)
-@@ -231,12 +248,62 @@
+@@ -231,12 +248,68 @@
  	@Override
  	protected void update(double ds, Profiler prof) {
  		prof.logStart(this);
 -		current.update(ds, prof);
 +		int[] sosdetHs = sosdet.Hooks.humanSlots(); // SOSDET: each human's raid, with that human current (SOS-46 M4)
 +		for (int sosdetK = 0; sosdetK < sosdetHs.length; sosdetK++) {
++			if (sosdet.Hooks.retired(sosdetHs[sosdetK])) continue; // SOSDET: a removed human runs nothing (SOS-66)
 +			int sosdetBefore = sosdet.Hooks.currentHumanSwap(sosdetHs[sosdetK]);
 +			sosdetCurrents[sosdetK].update(ds, prof);
 +			sosdet.Hooks.currentHumanSwap(sosdetBefore);
@@ -468,6 +473,11 @@ diff -ru -U2 a/game/raiding/RAIDING.java b/game/raiding/RAIDING.java
 +	}
 +	
 +	/** SOSDET: the raid and raid timer of the human of slice {@code human}, for the engine's own section (SOS-46 M4). */
++	/** SOSDET: the human of slice {@code human} is removed: its raid ends in the world, and no city is told (SOS-66). */
++	public void sosdetRetire(int human) {
++		sosdetCurrents[human].sosdetDrop();
++	}
++	
 +	public void sosdetSave(int human, FilePutter file) {
 +		sosdetCurrents[human].sosdetSave(file);
 +		file.d(updater.sosdetTimer(human));
@@ -486,7 +496,7 @@ diff -ru -U2 a/game/raiding/RAIDING.java b/game/raiding/RAIDING.java
  	public LIST<Raider> ALL(){
  		return all;
  	}
-@@ -247,7 +314,7 @@
+@@ -247,7 +320,7 @@
  	}
  	
  	public LIST<Raider> active(){
@@ -495,7 +505,7 @@ diff -ru -U2 a/game/raiding/RAIDING.java b/game/raiding/RAIDING.java
  	}
  	
  	public void reset() {
-@@ -258,7 +325,7 @@
+@@ -258,7 +331,7 @@
  		if (active().size() > 0) {
  			Raider r = active().rnd();
  			r.text.set(r, r.raids == 0);
@@ -506,7 +516,7 @@ diff -ru -U2 a/game/raiding/RAIDING.java b/game/raiding/RAIDING.java
  	
 diff -ru -U2 a/game/raiding/RaidingCurrent.java b/game/raiding/RaidingCurrent.java
 --- a/game/raiding/RaidingCurrent.java	2026-06-24 16:32:06.000000000 +0500
-+++ b/game/raiding/RaidingCurrent.java	2026-10-25 12:48:43.464252300 +0500
++++ b/game/raiding/RaidingCurrent.java	2026-10-26 04:19:08.009519200 +0500
 @@ -76,7 +76,10 @@
  
  	}
@@ -578,7 +588,25 @@ diff -ru -U2 a/game/raiding/RaidingCurrent.java b/game/raiding/RaidingCurrent.ja
  	public Raider current() {
  		return raider;
  	}
-@@ -206,7 +254,7 @@
+@@ -203,10 +251,25 @@
+ 		currentArmy = -1;
+ 	}
+ 
++	/**
++	 * SOSDET: the raided human is removed (SOS-66): its raider army leaves, as in clear(), but an invasion of its city is
++	 * not cancelled: that city is the removed human's own PC's, and on every other PC SETT is another city.
++	 */
++	void sosdetDrop() {
++		if (raider != null) {
++			WArmy a = army();
++			if (a != null)
++				a.disband();
++		}
++		raider = null;
++		timer = 0;
++		currentArmy = -1;
++	}
++
  	public void raid(Raider raider) {
  		clear();
  		
@@ -587,7 +615,7 @@ diff -ru -U2 a/game/raiding/RaidingCurrent.java b/game/raiding/RaidingCurrent.ja
  		if (c == null) {
  			LOG.ln("no spots");
  			return;
-@@ -229,7 +277,7 @@
+@@ -229,7 +292,7 @@
  	public void raid(Raider raider, CharSequence text) {
  		clear();
  		
@@ -596,7 +624,7 @@ diff -ru -U2 a/game/raiding/RaidingCurrent.java b/game/raiding/RaidingCurrent.ja
  		appearCoo.set(c);
  		
  		set(raider, STATE.WARNING_REJECTED, null);
-@@ -239,7 +287,7 @@
+@@ -239,7 +302,7 @@
  
  	boolean appear(Raider raider) {
  		
@@ -605,7 +633,7 @@ diff -ru -U2 a/game/raiding/RaidingCurrent.java b/game/raiding/RaidingCurrent.ja
  		if (c == null)
  			return false;
  
-@@ -300,7 +348,7 @@
+@@ -300,7 +363,7 @@
  				if (f == null) {
  					set(raider, STATE.WARNING_REJECTED, null);
  					new MessDemandRejected(raider).send();
@@ -616,7 +644,7 @@ diff -ru -U2 a/game/raiding/RaidingCurrent.java b/game/raiding/RaidingCurrent.ja
  				}else {
 diff -ru -U2 a/game/raiding/Updater.java b/game/raiding/Updater.java
 --- a/game/raiding/Updater.java	2025-09-22 07:59:34.000000000 +0500
-+++ b/game/raiding/Updater.java	2026-10-25 12:48:43.464252300 +0500
++++ b/game/raiding/Updater.java	2026-10-26 04:19:08.009519200 +0500
 @@ -10,8 +10,9 @@
  
  class Updater extends IUpdater{
@@ -629,13 +657,14 @@ diff -ru -U2 a/game/raiding/Updater.java b/game/raiding/Updater.java
  	
  	public Updater(RAIDING r) {
  		super(r.AMOUNT, TIME.secondsPerDay());
-@@ -19,37 +20,54 @@
+@@ -19,37 +20,55 @@
  
  	@Override
  	protected void update(int i, double timeSinceLast) {
 -		if (GAME.raiders().current.current() != null)
 +		int[] sosdetHs = sosdet.Hooks.humanSlots(); // SOSDET: each human's raid, with that human current (SOS-46 M4)
 +		for (int sosdetK = 0; sosdetK < sosdetHs.length; sosdetK++) {
++			if (sosdet.Hooks.retired(sosdetHs[sosdetK])) continue; // SOSDET: a removed human runs nothing (SOS-66)
 +			int sosdetBefore = sosdet.Hooks.currentHumanSwap(sosdetHs[sosdetK]);
 +			sosdetUpdate(sosdetK, i, timeSinceLast);
 +			sosdet.Hooks.currentHumanSwap(sosdetBefore);
@@ -695,7 +724,7 @@ diff -ru -U2 a/game/raiding/Updater.java b/game/raiding/Updater.java
  	
 diff -ru -U2 a/game/raiding/UpdaterRegions.java b/game/raiding/UpdaterRegions.java
 --- a/game/raiding/UpdaterRegions.java	2026-06-11 09:04:28.000000000 +0500
-+++ b/game/raiding/UpdaterRegions.java	2026-10-25 12:48:43.465256400 +0500
++++ b/game/raiding/UpdaterRegions.java	2026-10-26 04:19:07.997505100 +0500
 @@ -56,8 +56,8 @@
  			
  			@Override
@@ -742,7 +771,7 @@ diff -ru -U2 a/game/raiding/UpdaterRegions.java b/game/raiding/UpdaterRegions.ja
  		
 diff -ru -U2 a/view/ui/raider/Current.java b/view/ui/raider/Current.java
 --- a/view/ui/raider/Current.java	2025-11-18 07:32:38.000000000 +0500
-+++ b/view/ui/raider/Current.java	2026-10-25 12:48:43.465256400 +0500
++++ b/view/ui/raider/Current.java	2026-10-26 04:19:07.997505100 +0500
 @@ -69,7 +69,7 @@
  			public void update(GText text) {
  				text.setMaxWidth(700);
@@ -754,7 +783,7 @@ diff -ru -U2 a/view/ui/raider/Current.java b/view/ui/raider/Current.java
  					Str.TMP.clear();
 diff -ru -U2 a/view/ui/raider/Info.java b/view/ui/raider/Info.java
 --- a/view/ui/raider/Info.java	2026-01-31 09:04:10.000000000 +0500
-+++ b/view/ui/raider/Info.java	2026-10-25 12:48:43.466255100 +0500
++++ b/view/ui/raider/Info.java	2026-10-26 04:19:07.998503700 +0500
 @@ -52,7 +52,7 @@
  			
  			@Override
@@ -808,7 +837,7 @@ diff -ru -U2 a/view/ui/raider/Info.java b/view/ui/raider/Info.java
  			@Override
 diff -ru -U2 a/view/ui/raider/List.java b/view/ui/raider/List.java
 --- a/view/ui/raider/List.java	2025-09-12 16:09:02.000000000 +0500
-+++ b/view/ui/raider/List.java	2026-10-25 12:48:43.466255100 +0500
++++ b/view/ui/raider/List.java	2026-10-26 04:19:07.999502800 +0500
 @@ -136,7 +136,7 @@
  			COLOR c = COLOR.WHITE100;
  			Str.TMP.clear();
@@ -820,7 +849,7 @@ diff -ru -U2 a/view/ui/raider/List.java b/view/ui/raider/List.java
  			}else if (rr.defeated) {
 diff -ru -U2 a/view/world/ui/army/Hoverer.java b/view/world/ui/army/Hoverer.java
 --- a/view/world/ui/army/Hoverer.java	2025-10-21 12:33:42.000000000 +0500
-+++ b/view/world/ui/army/Hoverer.java	2026-10-25 12:48:43.467254300 +0500
++++ b/view/world/ui/army/Hoverer.java	2026-10-26 04:19:07.999502800 +0500
 @@ -41,8 +41,8 @@
  					text.add(a.get().faction().name);
  				}else {
@@ -845,7 +874,7 @@ diff -ru -U2 a/view/world/ui/army/Hoverer.java b/view/world/ui/army/Hoverer.java
  				}
 diff -ru -U2 a/view/world/ui/region/ListPlayer.java b/view/world/ui/region/ListPlayer.java
 --- a/view/world/ui/region/ListPlayer.java	2026-06-16 11:04:52.000000000 +0500
-+++ b/view/world/ui/region/ListPlayer.java	2026-10-25 12:48:43.467254300 +0500
++++ b/view/world/ui/region/ListPlayer.java	2026-10-26 04:19:08.000504300 +0500
 @@ -136,7 +136,7 @@
  					
  					@Override
@@ -857,7 +886,7 @@ diff -ru -U2 a/view/world/ui/region/ListPlayer.java b/view/world/ui/region/ListP
  					@Override
 diff -ru -U2 a/world/army/ai/Chiller.java b/world/army/ai/Chiller.java
 --- a/world/army/ai/Chiller.java	2024-12-26 16:43:54.000000000 +0500
-+++ b/world/army/ai/Chiller.java	2026-10-25 12:48:43.468252500 +0500
++++ b/world/army/ai/Chiller.java	2026-10-26 04:19:08.000504300 +0500
 @@ -1,6 +1,5 @@
  package world.army.ai;
  
@@ -883,7 +912,7 @@ diff -ru -U2 a/world/army/ai/Chiller.java b/world/army/ai/Chiller.java
  				RegDist d = l.rnd();
 diff -ru -U2 a/world/overlay/OverlayRegAbs.java b/world/overlay/OverlayRegAbs.java
 --- a/world/overlay/OverlayRegAbs.java	2026-06-10 09:44:08.000000000 +0500
-+++ b/world/overlay/OverlayRegAbs.java	2026-10-25 12:48:43.468252500 +0500
++++ b/world/overlay/OverlayRegAbs.java	2026-10-26 04:19:08.001523500 +0500
 @@ -54,7 +54,7 @@
  		COLOR.WHITE2WHITE.bind();
  		
@@ -895,7 +924,7 @@ diff -ru -U2 a/world/overlay/OverlayRegAbs.java b/world/overlay/OverlayRegAbs.ja
  			
 diff -ru -U2 a/world/overlay/WorldOverlays.java b/world/overlay/WorldOverlays.java
 --- a/world/overlay/WorldOverlays.java	2026-06-10 10:26:48.000000000 +0500
-+++ b/world/overlay/WorldOverlays.java	2026-10-25 12:48:43.469252000 +0500
++++ b/world/overlay/WorldOverlays.java	2026-10-26 04:19:08.001523500 +0500
 @@ -51,7 +51,7 @@
  		
  		@Override
@@ -916,7 +945,7 @@ diff -ru -U2 a/world/overlay/WorldOverlays.java b/world/overlay/WorldOverlays.ja
  				
 diff -ru -U2 a/world/region/RDOwner.java b/world/region/RDOwner.java
 --- a/world/region/RDOwner.java	2026-03-24 16:15:46.000000000 +0500
-+++ b/world/region/RDOwner.java	2026-10-25 12:48:43.473252800 +0500
++++ b/world/region/RDOwner.java	2026-10-26 04:19:08.010518200 +0500
 @@ -24,15 +24,17 @@
  		D.ts(RDOwner.class);
  	}
@@ -948,17 +977,18 @@ diff -ru -U2 a/world/region/RDOwner.java b/world/region/RDOwner.java
  						return 1;
  					}
  				
-@@ -65,6 +67,9 @@
+@@ -65,6 +67,10 @@
  
  	@Override
  	public void update(Region reg, double time) {
 +		int[] sosdetHs = sosdet.Hooks.humanSlots(); // SOSDET: each human's support, with that human current (SOS-46 M3)
 +		for (int sosdetK = 0; sosdetK < sosdetHs.length; sosdetK++) {
++		if (sosdet.Hooks.retired(sosdetHs[sosdetK])) continue; // SOSDET: a removed human runs nothing (SOS-66)
 +		int sosdetBefore = sosdet.Hooks.currentHumanSwap(sosdetHs[sosdetK]);
  		int tar = 255;
  		double d = 255.0*time*dTime;
  		if (reg.faction() == FACTIONS.player()) {
-@@ -78,6 +83,8 @@
+@@ -78,6 +84,8 @@
  				affiliation.moveTo(reg, 255*time*dTime*dd, 255);
  			
  		}
@@ -967,7 +997,7 @@ diff -ru -U2 a/world/region/RDOwner.java b/world/region/RDOwner.java
  		
  		
  		if (prevOwner(reg) == null) {
-@@ -97,12 +104,76 @@
+@@ -97,12 +105,76 @@
  		
  	}
  	

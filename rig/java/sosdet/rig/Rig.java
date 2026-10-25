@@ -275,6 +275,8 @@ public final class Rig implements SCRIPT {
         private long battleLoadedAt = -1;
         // the hold before a battle (SOS-70): each copy saves its game there, as the mod's campaign save will, then goes on
         private boolean battleHold;
+        // a removed human (SOS-66): each slot's retirement, logged once with what it still owns
+        private final boolean[] retiredSeen = new boolean[64];
         // world resync (SOS-38): copy 1 saves at wresyncStep; every copy, copy 1 too, loads only the world from it
         private long wresyncStep = -1;
         private boolean wresyncSaver;
@@ -352,6 +354,7 @@ public final class Rig implements SCRIPT {
             exchangeOrders();
             exchangeReports();
             exchangeBattle();
+            retirements();
             exchangeHashes();
             speedEvents();
             if (traceFrom >= 0 && Engine.active() && Engine.step() >= traceFrom) {
@@ -472,6 +475,22 @@ public final class Rig implements SCRIPT {
          * the Engage step to {@code battle.done}; every copy, that one too, loads it once the marker names this battle's
          * step. Fixed names, so the relay mirrors them to a copy on another PC. Between frames.
          */
+        /** A human retired since the last frame (SOS-66): the step, and what it still owns, which should be nothing. */
+        private void retirements() {
+            if (!ownCity || !Engine.active()) {
+                return;
+            }
+            for (int slot : sosdet.game.GameHumans.get().slots()) {
+                if (!retiredSeen[slot] && Engine.retired(slot)) {
+                    retiredSeen[slot] = true;
+                    Faction f = FACTIONS.getByIndex(slot);
+                    event("humanretired", String.format(Locale.ROOT, "\"slot\":%d,\"step\":%d,\"regions\":%d,\"armies\":%d,"
+                            + "\"active\":%b", slot, Engine.step(), f.realm().regions(), f.armies().all().size(),
+                            FACTIONS.active().contains(f)));
+                }
+            }
+        }
+
         private void exchangeBattle() {
             if (!Engine.active() || battleDirs.isEmpty()) {
                 return;
@@ -1164,6 +1183,10 @@ public final class Rig implements SCRIPT {
             case "pchuman": // pchuman <pc> <slot>
                 Engine.pcHuman(Integer.parseInt(c[1]), Integer.parseInt(c[2]));
                 event("pchuman", "\"pc\":" + c[1] + ",\"slot\":" + c[2]);
+                return;
+            case "removehuman": // removehuman <slot>: the host removes a human whose copy was held (SOS-66)
+                Engine.removeHuman(Integer.parseInt(c[1]));
+                event("removehuman", "\"slot\":" + c[1] + ",\"step\":" + Engine.step());
                 return;
             case "savegame":
                 event("savegame", RigHumans.save(dir.resolve(c[1])));

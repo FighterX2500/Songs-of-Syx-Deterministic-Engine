@@ -11,6 +11,11 @@ public interface CitySource {
     /** The game's human slots, in slot order (ADR 0004): the factions with a city report. */
     int[] humans();
 
+    /** True for a human slot whose human was removed (SOS-66): it sends no report and nothing runs for it. */
+    default boolean retired(int slot) {
+        return false;
+    }
+
     /** Writes every field's values, in the layout's slots. */
     void fill(double[] values);
 

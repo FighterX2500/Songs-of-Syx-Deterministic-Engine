@@ -161,6 +161,20 @@ final class Session {
     private final Reports[] reports = new Reports[SLOTS];
     /** The game's human slots in slot order, read from the city at first use after a load. */
     private int[] humans;
+    /** By slot, read with {@link #humans}: a removed human, retired on every PC from its removal's step (SOS-66). */
+    private boolean[] retired;
+    /**
+     * By slot: a removal in the host's log, not yet applied (SOS-66). This PC waits for no report of that human taken
+     * after {@link #removeCutoff}, the last one every PC reads: the host's when it logged the removal (-1: none).
+     */
+    final boolean[] removing = new boolean[SLOTS];
+    final long[] removeCutoff = none();
+    /** By slot: a removal that applied, its realm freed at the start of a world part once no battle runs (SOS-66). */
+    final boolean[] removeDue = new boolean[SLOTS];
+    /** By slot: a load in the session cleared the reports, and none has come in since (SOS-66). */
+    private final boolean[] reportsLost = new boolean[SLOTS];
+    /** What retires a human in the game: the game, made at first use; tests put in their own. */
+    java.util.function.IntConsumer remover;
     /** Where the reports come from: the game, made at the first report; tests put in their own. */
     CitySource city;
     long reportsTaken;
@@ -234,9 +248,123 @@ final class Session {
     /** The game's human slots, in slot order. */
     int[] humans() {
         if (humans == null) {
-            humans = city().humans();
+            int[] hs = city().humans();
+            boolean[] r = new boolean[SLOTS];
+            for (int h : hs) {
+                r[h] = city().retired(h);
+            }
+            retired = r;
+            humans = hs;
         }
         return humans;
+    }
+
+    /** True for a human slot whose human was removed (SOS-66). */
+    boolean retired(int slot) {
+        humans();
+        return retired[slot];
+    }
+
+    /**
+     * Peer, before each step it may run: each removal entry that came in with the host's log. From now this PC reads no
+     * report of that human taken after the host's last one (SOS-66). After a load in the session (a battle's end, a
+     * resync) no PC holds any report of that human, so none waits for one.
+     */
+    void takeRemovals() {
+        if (ai().mode() != AiMode.PEER) {
+            return;
+        }
+        AiEntry e;
+        while ((e = ai().takeRemoval()) != null) {
+            int slot = e.intAt(0);
+            if (removing[slot] || retired(slot)) {
+                continue;
+            }
+            removing[slot] = true;
+            long cutoff = ((long) e.intAt(1) << 32) | (e.intAt(2) & 0xFFFFFFFFL);
+            removeCutoff[slot] = reportsLost[slot] ? -1 : cutoff;
+            dropReportsAfter(slot, cutoff);
+        }
+    }
+
+    /** No report of the human in {@code slot} taken after {@code takenAt} is read on any PC (SOS-66). */
+    private void dropReportsAfter(int slot, long takenAt) {
+        reports(slot).dropTakenAfter(takenAt);
+        receivedTakenAt[slot] = Math.min(receivedTakenAt[slot], takenAt);
+    }
+
+    /** Every PC, as a removal entry applies: its realm is freed in the next world part with no battle running. */
+    void humanRemoved(int slot) {
+        if (!isHuman(slot) || slot == 0) {
+            throw new IllegalStateException("SOSDET: a removal of slot " + slot + ", no human but the host's");
+        }
+        if (retired(slot)) {
+            return; // retired already, after a load before its step (dueWithoutReports)
+        }
+        removing[slot] = true;
+        removeDue[slot] = true;
+    }
+
+    /**
+     * Start of a world part (SOS-66): a human being removed whose reports a load in the session cleared (a battle's
+     * end, a resync, before the removal's step) retires now. No PC has a report of it then, and a PC runs this step only
+     * once it knows of the removal, so every PC that runs it retires that human here alike.
+     */
+    void dueWithoutReports() {
+        for (int slot = 1; slot < SLOTS; slot++) {
+            if (removing[slot] && !removeDue[slot] && !retired(slot) && reports(slot).current() == null
+                    && !reports(slot).pending()) {
+                removeDue[slot] = true;
+            }
+        }
+    }
+
+    /**
+     * Start of a world part with no battle running (SOS-66): each removal due retires its human on every PC. A
+     * world-battle prompt or question asking that human closes unanswered, so nothing of it applies.
+     */
+    void retireDue() {
+        for (int slot = 1; slot < SLOTS; slot++) {
+            if (!removeDue[slot]) {
+                continue;
+            }
+            if (worldPrompt != null && (worldPromptHuman == slot || promptHoldsArmyOf(slot))) {
+                Hooks.worldPromptClose(); // its sides would name armies that are disbanded now
+            }
+            int asked = slot;
+            stepPrompts.values().removeIf(p -> (Integer) p[2] == asked);
+            remover().accept(slot);
+            retired[slot] = true;
+            removeDue[slot] = false;
+            removing[slot] = false;
+            reports(slot).clear();
+        }
+    }
+
+    private boolean promptHoldsArmyOf(int slot) {
+        for (int army : worldPromptArmies) {
+            if (armyOwner().applyAsInt(army) == slot) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** The slot of a world army's faction, by its index (-1: none): the game, made at first use; tests put in their own. */
+    java.util.function.IntUnaryOperator armyOwner;
+
+    java.util.function.IntUnaryOperator armyOwner() {
+        if (armyOwner == null) {
+            armyOwner = sosdet.game.GameHumans::armyOwner;
+        }
+        return armyOwner;
+    }
+
+    java.util.function.IntConsumer remover() {
+        if (remover == null) {
+            remover = slot -> sosdet.game.GameHumans.get().retire(slot);
+        }
+        return remover;
     }
 
     /**
@@ -377,11 +505,19 @@ final class Session {
             f.clear();
         }
         java.util.Arrays.fill(receivedTakenAt, -1);
+        for (int slot = 0; slot < SLOTS; slot++) {
+            if (removing[slot]) {
+                removeCutoff[slot] = -1; // a human being removed sends no load report: no PC waits for one (SOS-66)
+            }
+        }
         txns.dropQueued();
         cityInputs.clear(); // the loaded world has the city's state as saved
         sentSupplies.clear();
         eventMarks.clear();
         battleConclude = null;
+        if (battleLeaving || resync != null) {
+            java.util.Arrays.fill(reportsLost, true); // a load in the session: no PC holds an earlier report (SOS-66)
+        }
         if (battleLeaving) {
             // every PC left the battle at this step: the step, the hashes and the AI log go on (SOS-32)
             battleLeaving = false;
@@ -437,7 +573,12 @@ final class Session {
             return true; // co-op: every PC takes the same reports itself; in a battle the world stands still
         }
         for (int h : humans()) {
-            if (remote(h) && (receivedTakenAt[h] < 0 || step > Reports.lastReadableStep(receivedTakenAt[h]))) {
+            if (!remote(h) || retired(h)
+                    || receivedTakenAt[h] >= 0 && step <= Reports.lastReadableStep(receivedTakenAt[h])) {
+                continue;
+            }
+            // a human being removed is waited for only until its last report every PC reads is in (SOS-66)
+            if (!removing[h] || receivedTakenAt[h] < removeCutoff[h]) {
                 return false;
             }
         }
@@ -453,8 +594,12 @@ final class Session {
         if (r.takenAt <= receivedTakenAt[r.faction]) {
             return; // a repeat changes nothing
         }
+        if (retired(r.faction) || removing[r.faction] && r.takenAt > removeCutoff[r.faction]) {
+            return; // past its human's last report every PC reads (SOS-66)
+        }
         reports(r.faction).stamp(r);
         receivedTakenAt[r.faction] = r.takenAt;
+        reportsLost[r.faction] = false;
         reportsReceived++;
     }
 
@@ -524,6 +669,9 @@ final class Session {
             return;
         }
         for (int h : hs) {
+            if (retired(h) || removing[h]) {
+                continue; // a removed human has no PC (SOS-66)
+            }
             int pcs = 0;
             for (int pc : pcHumans) {
                 if (pc == h) {

@@ -31,14 +31,20 @@ public final class AiEntry {
      * desync's step as two ints (high, low); not a battle change.
      */
     public static final int HOLD = 18;
-    static final int KINDS = 19;
+    /**
+     * The host removes a human (SOS-66): from this entry's step that human is retired on every PC. The payload is the
+     * human's slot, then the step its last report every PC reads was taken at, as two ints (high, low); not a battle
+     * change.
+     */
+    public static final int REMOVE = 19;
+    static final int KINDS = 20;
     public static String kindName(int kind) {
         return KIND_NAMES[kind];
     }
 
     private static final String[] KIND_NAMES = {"path", "dest", "task", "guard", "running", "fireAtWill", "formation",
         "artillery", "holdFire", "ammo", "muster", "mopUp", "artilleryMuster", "artilleryFire", "teleport", "speed",
-        "command", "commanders", "hold"};
+        "command", "commanders", "hold", "remove"};
 
     /** The general, as opposed to a player's PC. */
     public static final int AI = -1;

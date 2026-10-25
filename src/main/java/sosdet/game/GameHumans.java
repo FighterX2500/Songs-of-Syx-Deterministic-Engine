@@ -39,7 +39,8 @@ public final class GameHumans extends Savable {
     /** Spare Players, so a game holds at most this many humans plus the one in slot 0 (spec: 2 to 16 humans). */
     public static final int SPARES = 15;
     static final String KEY = "SOSDET_HUMANS";
-    private static final int VERSION = 1;
+    /** 2: each slot's retired flag (SOS-66). A version 1 section is read too: none of its humans is retired. */
+    private static final int VERSION = 2;
     private static final String GAME_VERSION = " (SOSDET supports Songs of Syx V71, build 71.44)";
 
     private static final Field SELF = field(FACTIONS.class, "self");
@@ -52,6 +53,9 @@ public final class GameHumans extends Savable {
     private static final Field LOCKS = field(GValueCat.Locks.class, "map");
     private static final Field LOCK_INITS = field(GValueCat.Locks.class, "inits");
     private static final Field BOOSTERS = field(Boostable.class, "all");
+    /** {@code RAIDING.sosdetRetire(int)}, added by patch 16 (SOS-66). */
+    private static final java.lang.reflect.Method RAID_RETIRE = GameRelations.method(game.raiding.RAIDING.class,
+            "sosdetRetire", int.class);
 
     private final ArrayList<Faction> all;
     private final ArrayList<FactionNPC> npcs;
@@ -60,6 +64,11 @@ public final class GameHumans extends Savable {
     private int sparesUsed;
     /** Each slot's id for the mod (its player), 0 until the mod sets one; saved with the slots. */
     private final long[] ids = new long[FACTIONS.MAX()];
+    /**
+     * Each slot's removed human (SOS-66): it keeps its slot, so every other human keeps its place and its slices, but
+     * it owns nothing and nothing runs for it. Saved with the slots; a slot is never used again once retired.
+     */
+    private final boolean[] retired = new boolean[FACTIONS.MAX()];
 
     /** {@code FACTIONS}'s constructor, at its end: {@code all} and {@code npcs} are its own lists. */
     public GameHumans(ArrayList<Faction> all, ArrayList<FactionNPC> npcs) throws IOException {
@@ -113,6 +122,46 @@ public final class GameHumans extends Savable {
     public void id(int slot, long id) {
         human(slot);
         ids[slot] = id;
+    }
+
+    /** The slot of the faction of the world army {@code index}, or -1 for none or a gone army (SOS-66). */
+    public static int armyOwner(int index) {
+        world.entity.army.WArmy a = world.WORLD.ENTITIES().armies.tryGet(index);
+        Faction f = a == null ? null : a.faction();
+        return f == null ? -1 : f.index();
+    }
+
+    /** True for the slot of a human that was removed ({@link #retire}); false for any other slot. */
+    public boolean retired(int slot) {
+        return retired[slot];
+    }
+
+    /**
+     * Inside the step's world part, on every PC (SOS-66): the human in {@code slot} leaves the game as vanilla destroys
+     * a faction. Its armies are disbanded and every region it held is freed. It stays in its slot, retired.
+     */
+    public void retire(int slot) {
+        human(slot);
+        if (slot == 0) {
+            throw new IllegalArgumentException("SOSDET: slot 0 is the host's human, which is never removed");
+        }
+        retired[slot] = true;
+        Faction f = all.get(slot);
+        try {
+            RAID_RETIRE.invoke(GAME.raiders(), sosdet.Hooks.humanIndex(f)); // its raider leaves; its other slices stand still
+        } catch (IllegalAccessException | java.lang.reflect.InvocationTargetException e) {
+            throw new IllegalStateException("SOSDET: cannot end the raid of slot " + slot + GAME_VERSION, e);
+        }
+        while (f.realm().regions() > 0) {
+            world.region.RD.setFaction(f.realm().region(0), null, true);
+        }
+        // after the regions: an army disbanded near its capital would ship its supplies home, a city that is gone
+        f.armies().disbandAll();
+        try {
+            DIRTY.setBoolean(SELF.get(null), true); // FACTIONS.active() leaves it out from now
+        } catch (IllegalAccessException e) {
+            throw new IllegalStateException("SOSDET: cannot mark the factions changed" + GAME_VERSION, e);
+        }
     }
 
     /**
@@ -198,14 +247,15 @@ public final class GameHumans extends Savable {
         for (int slot : s) {
             file.i(slot);
             file.l(ids[slot]);
+            file.bool(retired[slot]);
         }
     }
 
     @Override
     protected void load(FileGetter file) throws IOException {
         int version = file.i();
-        if (version != VERSION) {
-            throw new IOException("SOSDET: a humans section of version " + version + ", this engine reads " + VERSION);
+        if (version < 1 || version > VERSION) {
+            throw new IOException("SOSDET: a humans section of version " + version + ", this engine reads 1 to " + VERSION);
         }
         int n = file.i();
         int last = -1;
@@ -218,6 +268,7 @@ public final class GameHumans extends Savable {
                 put(slot); // a fresh game: FACTIONS loads the slot into the Player next
             }
             ids[slot] = file.l();
+            retired[slot] = version >= 2 && file.bool();
             last = slot;
         }
     }

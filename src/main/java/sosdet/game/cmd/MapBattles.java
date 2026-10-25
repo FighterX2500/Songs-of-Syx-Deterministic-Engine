@@ -75,6 +75,29 @@ public final class MapBattles {
     private MapBattles() {
     }
 
+    /**
+     * Every PC, at a step's start while the battle's human is being removed (SOS-66): one move toward the battle's end,
+     * as the battle commands would make it. Start while it deploys, then Retreat; a battle already won or lost closes
+     * its victory panel. Either way every PC then loads its own city, and the removal closes the result prompt
+     * unanswered, so the battle changes no army.
+     */
+    public static void endForRemoval() {
+        BattleState b = VIEW.b().state();
+        if (b == null || Hooks.battleOver()) {
+            return;
+        }
+        if (b.deploying()) {
+            b.deploy();
+            return;
+        }
+        Runnable close = Hooks.battleConcludeTake();
+        if (close != null) {
+            close.run();
+            return;
+        }
+        b.liveRetreat();
+    }
+
     // ------------------------------------------------------------------ hooks (this PC's player, outside the step)
 
     /** Hook in the deploy panel's Start: in a session (true) a command; the panel hides once it applies. */

@@ -82,6 +82,19 @@ final class Pacer {
         cap = StepClock.NO_LIMIT;
     }
 
+    /** PC {@code pc} is gone, its human removed (SOS-66): the pace no longer waits for it. */
+    void drop(int pc) {
+        int n = 0;
+        int[] kept = new int[peers.length];
+        for (int p : peers) {
+            if (p != pc) {
+                kept[n++] = p;
+            }
+        }
+        peers = java.util.Arrays.copyOf(kept, n);
+        cap = StepClock.NO_LIMIT;
+    }
+
     void govern(boolean on) {
         govern = on;
     }
