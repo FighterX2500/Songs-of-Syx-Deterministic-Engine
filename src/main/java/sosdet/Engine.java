@@ -7,6 +7,7 @@ import sosdet.ai.Commanders;
 import java.nio.file.Path;
 
 import sosdet.game.GameAi;
+import sosdet.game.GameHash;
 import sosdet.game.GameHumans;
 import sosdet.game.GameResync;
 import sosdet.game.GameWorldLoad;
@@ -397,6 +398,20 @@ public final class Engine {
     /** Setup: this PC's player's banner, as {@link HumanStart} carries it to the PC that builds the world. */
     public static byte[] bannerBytes() {
         return GameWorldSetup.bannerBytes();
+    }
+
+    /**
+     * The world hash now, as the hash log's world section takes it ({@code GameHash.worldHash}): the world map, every
+     * faction's shared state, the raiders and the calendar; in own-city mode the humans' cities are left out. The mod
+     * compares it on every PC after the setup's load, at step 0, before any hash is logged (mod SOS-56). Outside the
+     * step only; with or without a session.
+     */
+    public static long worldHash() {
+        Session s = session;
+        if (s != null && s.streams.isSimulationThread()) {
+            throw new IllegalStateException("SOSDET: the world hash is read between steps");
+        }
+        return GameHash.worldHash();
     }
 
     /**
