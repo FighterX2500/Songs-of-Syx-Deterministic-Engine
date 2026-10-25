@@ -1,6 +1,6 @@
 # Plan 0004: several human factions on the world map (SOS-46)
 
-Status: in progress. The owner chose option 1 and accepted [ADR 0004](../decisions/0004-several-humans.md) (2026-10-25); milestone 1 started. Card: [SOS-46](https://fighterx2500.atlassian.net/browse/SOS-46). Branch: `SOS-46-several-humans` (local). The design is settled in an ADR (0004) in milestone 1.
+Status: done, in review (2026-10-25). The owner chose option 1 and accepted [ADR 0004](../decisions/0004-several-humans.md) (2026-10-25); milestone 1 started. Card: [SOS-46](https://fighterx2500.atlassian.net/browse/SOS-46). Branch: `SOS-46-several-humans` (local). The design is settled in an ADR (0004) in milestone 1.
 
 ## Goal
 
@@ -134,6 +134,14 @@ Replaces the card's 30-minute run. Every run uses `--trace-draws`.
   - an event timer runs per human;
   - an old single-player save loads as one human.
 - **Docs:** requirements, HANDOFF, determinism rules, and plan 0002's decision 4 and "Outside this plan" line.
+- **Result, 2026-10-25.**
+  - Final smoke S46FIN: 3 humans, 33,000 steps (about 2.9 game days, 8.4 min wall), draw tracing on, every human acting: a new army, moves, gifts, two wars and a peace. All copies identical to step 33,000, engine hashes agree (2,199 to 2,201 compared, 0 missed), 8 commands applied on every copy and none skipped, 0 report misses, 0 foreign draws. Step mean 6.6 to 7.3 ms, p99 18.5 to 19.8 ms.
+  - One human's command changes nothing for another: A's new army left B's and C's armies as they were, and only C's army moved on C's move.
+  - Opinion and stance stay apart: NPC 12 went to war with B, then with C, and stayed A's overlord; each human's opinion entries (war declaration, aggression, betrayal) are its own.
+  - The war timer runs per human: across a game day, A's rose from 8,223 to 9,389 and C's from 1,257 to 3,769, while B's held (B was at war, as vanilla stops it then). The raid timers started per human. All of it the same on every copy.
+  - B's war with 12 was back at the end of S46FIN. A targeted run (S46PEACE) showed the peace itself holds: 12 left B's wars at once, B paid, and 12 stayed out for 40 s. In S46FIN, C's war on 12 came right after, while B was still at war with 12's allies, so vanilla's joining rule can bring 12 back. It was the same on every copy.
+  - An old single-player save loads as one human: Mogus-72 lists slot 0 alone, and `wrelations` and `wevents` read the same before and after a save round trip. The first resave of the vanilla-written file changes 7 vanilla sections, the same on the pre-M3 build (52e034a). A second round trip changes only `SETT` and `COUNTS`, as in the spike, and `SOSDET_RELATIONS` and `SOSDET_EVENTS` are byte-stable. A 3-human save made on 52e034a loads; humans B and C start with no stored opinion and a zero war timer.
+  - One human keeps vanilla: a 3,000-step one-human run gives the same world hash at every step on 52e034a and on this branch.
 
 ## Outside this card
 
