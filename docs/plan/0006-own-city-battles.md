@@ -1,5 +1,7 @@
 # Plan 0006: battles with own cities (SOS-61)
 
+Status: M1 merged (SOS-61, PR #37); M2 and M3 open.
+
 Mod spec §8 (Military) and §4 (battles pause the world; every player watches). The engine half of the mod's SOS-62.
 
 ## Decision (owner, 2026-10-25)

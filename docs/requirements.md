@@ -35,7 +35,7 @@ Every PC that starts from the same save and seed (a battle, a city or the campai
 - Resync the world with several humans (SOS-52): the world resync carries every human's ledger and loads every human's world sections (city divisions, relations, events), each PC keeping its own city. Every PC also resets every world army's movement remainder, which vanilla doesn't save, so a resync repairs a difference there too.
 - Build a new world around the players at setup (SOS-55): on the confirmed terrain, `Engine.buildWorld` gives each human a capital at its picked location, in slots 0 to N-1 with the lobby's race, name and banner, then NPC countries and routes as vanilla makes them, with vanilla's small NPC states around every human. `Engine.locationProblem` tells every PC's location picker why a location can't be picked (the terrain, or closer than 6 tiles to another human's). One PC builds the world and every PC loads its save (owner, 2026-10-25).
 - Switch a PC from peer to host mid-battle: after a host change, the new host starts its own general (ADR 0003).
-- With several humans (SOS-46): say which human slot is this PC's (`Engine.localHuman`) and which is each PC's (`Engine.pcHuman`), so each PC's commands act for its own human and its city's reports feed that human. `Engine.asHuman` reads the game as another human between steps only (for the rig's probes). Making a human is still setup through the adapter (`GameHumans.add`, the rig's `makehuman`); the `addHuman` call of [ADR 0004](decisions/0004-several-humans.md) is not built yet.
+- With several humans (SOS-46): say which human slot is this PC's (`Engine.localHuman`) and which is each PC's (`Engine.pcHuman`), so each PC's commands act for its own human and its city's reports feed that human. `Engine.asHuman` reads the game as another human between steps only (for the rig's probes). Making a human is still setup through the adapter (`GameHumans.add`, the rig's `makehuman`); the `addHuman` call of [ADR 0004](decisions/0004-several-humans.md) is built as `Engine.buildWorld` (SOS-55, above).
 - Every data format crossing the API (orders, AI log entries, engine save data) carries a format version.
 
 ## 4. Targets
@@ -52,7 +52,7 @@ On the reference PC (Intel Core i5-11600K, 16 GB RAM; mod spec §13) unless a li
 | Determinism, city | Several game copies stay identical through a 30-minute session in the Mogus-72 city with the owner giving city commands (plan 0002, stage C) |
 | Determinism, world | Several game copies running the world and a city stay identical for 30 minutes with the AI host (plan 0002, stage D) |
 | Desync report | Every desync can produce a report: the step, which part of the state differs, recent orders, commands and AI log |
-| Resync | Saving and loading at a step leaves room for the mod to recover within 10 s (mod spec §13). Not met yet with several humans: the world resync refuses several humans, and a report miss throws (SOS-46; an open question for the owner) |
+| Resync | Saving and loading at a step leaves room for the mod to recover within 10 s (mod spec §13). Met with several humans since SOS-52: the world resync carries every human's sections. A report miss still throws with several humans |
 | AI log delay | Entries are applied 30 steps (0.5 s) after the host's general writes them, inside the 1 s order latency (mod spec §13) |
 
 ## 5. Verification
