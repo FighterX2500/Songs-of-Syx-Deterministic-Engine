@@ -120,7 +120,7 @@ Each stage is one card (or a card's milestone) with its own PR, in this order.
 ## Outside this plan: the mod's own work (SOSGSGMP)
 
 - **ADR 0005 (world lockstep and lockstep city viewing):** changes spec §4, §10 and §13 and the world row in `architecture.md`. This is a docs PR, allowed in the mod's planning phase.
-- **Several human factions:** each player's own faction in one world. Vanilla has a single player faction, referenced 343 times in world code. This is the mod's "single-player assumptions" task, and the biggest open item for multiplayer. The engine keeps one player faction per save and never lets a PC's local player into the step.
+- **Several human factions:** each player's own faction in one world. Vanilla has a single player faction, referenced 343 times in world code. *Moved to the engine (owner, 2026-10-25, SOS-46, [plan 0004](0004-several-humans.md)):* the mod chooses the humans and their slots; the engine runs them. A PC's local player still never enters the step.
 
 ## Parallel agents
 
@@ -136,6 +136,7 @@ Each stage is one card (or a card's milestone) with its own PR, in this order.
    - *Changed (owner, 2026-10-25, SOS-45):* prompts never hold the world (spec §4). Only the battle's armies wait in place while it is open, and with no answer within 30 s (real time at the agreed speed) every PC gives the default answer at the same step: auto-resolve, wait for a siege, accept a result with no captives or spoils, occupy a captured settlement. *Known gap, left to playtests (owner, 2026-10-25):* the hold only skips an army's own movement. The world AI can still teleport, re-route or disband a held army (`War.java`, for one), which vanilla never meets because its prompt pauses the world. A smoke run (P45D) saw one held army move during an "enemy withdraws" result. It stays the same on every PC, so sync holds; an army disbanded while its prompt is open would be the case to watch for.
 3. **Hook placement:** command hooks go in the declaring method where that's safe. When the class crashes the menu or the method is on a hot path, the hook goes at the UI call site instead.
 4. **Several human factions:** that stays the mod's work. The engine keeps the save's single player faction identical on every PC.
+   - *Changed (owner, 2026-10-25, [ADR 0004](../decisions/0004-several-humans.md), SOS-46):* the engine holds several humans, each a `Player` in its own slot, the same on every PC, and runs each one's world half as the step's current human ([plan 0004](0004-several-humans.md)). Which player gets which slot, and the lobby, stay the mod's.
 5. **Room placement (SOS-34):** the player plans an area room (drag, items, rotation, refurnish, copier, saved blueprints) on their own PC, hidden from the simulation, which also works while paused. Build sends the whole plan as one command, applied at its step on every PC. The owner chose this over sending every planning step as a command.
 6. **SOSDET V0.1 (owner, 2026-10-23, during SOS-34 milestone 2):** fewer tests, then a full product the owner tests for 30 minutes.
    - **Order now:** finish B (SOS-34) with the essentials only, then D (world lockstep), then package V0.1. Stage C's 30-minute session is the V0.1 acceptance test, played with city and world in lockstep so trade works. E (the city↔world link) comes after V0.1.

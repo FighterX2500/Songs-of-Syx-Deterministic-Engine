@@ -75,10 +75,13 @@ public final class WorldBattles {
 
     // ------------------------------------------------------------------ decisions (inside the step, on every PC)
 
-    /** A battle or siege prompt's choice; false when no such prompt is open (an answer already applied). */
+    /**
+     * A battle or siege prompt's choice; false when no such prompt is open (an answer already applied) or it asks
+     * another human (SOS-46).
+     */
     private static boolean applyDecide(int choice) {
         Object open = Hooks.worldPrompt();
-        if (!(open instanceof WBattleSpec)) {
+        if (!(open instanceof WBattleSpec) || !Hooks.worldPromptAnswerer()) {
             return false;
         }
         WBattleSpec spec = (WBattleSpec) open;
@@ -100,7 +103,7 @@ public final class WorldBattles {
 
     private static boolean applyAccept(int[] slaves, int[] spoils, double mercy) {
         Object open = Hooks.worldPrompt();
-        if (!(open instanceof WBattleResult)) {
+        if (!(open instanceof WBattleResult) || !Hooks.worldPromptAnswerer()) {
             return false;
         }
         Hooks.worldPromptClose();
@@ -114,7 +117,7 @@ public final class WorldBattles {
     private static boolean applySiegeResult(int choice, double devastation, double death, int[] slaves, int[] spoils,
             double mercy) {
         Object open = Hooks.worldPrompt();
-        if (!(open instanceof WBattleSiege.Result)) {
+        if (!(open instanceof WBattleSiege.Result) || !Hooks.worldPromptAnswerer()) {
             return false;
         }
         WBattleSiege.Result result = (WBattleSiege.Result) open;
@@ -158,12 +161,18 @@ public final class WorldBattles {
     /**
      * Hook in {@code UIWBattlePrompt}, as the world step opens the prompt: what it decides, and the prompt's own close.
      * Every PC opens it at the same step, so the decision command finds the same one everywhere, and the same armies
-     * wait while it is open.
+     * wait while it is open. True when this PC shows it: only the PC of the human it asks does (SOS-46).
      */
-    public static void opened(Object decides, ACTION close) {
-        if (Engine.active()) {
-            Hooks.worldPromptOpened(decides, close::exe, WorldBattles::timedOut, BattleArmies.of(decides));
+    public static boolean opened(Object decides, ACTION close) {
+        if (!Engine.active()) {
+            return true;
         }
+        return Hooks.worldPromptOpened(decides, close::exe, WorldBattles::timedOut, BattleArmies.of(decides));
+    }
+
+    /** Hook in {@code UIWBattlePrompt}'s "a prompt is open" test: the engine's, the same on every PC (SOS-46). */
+    public static boolean blocked(boolean dialogOpen) {
+        return Hooks.worldPromptBlocked(dialogOpen);
     }
 
     /** Hook in the prompt's auto-resolve, retreat and wait buttons: in a session (true) the choice is a command. */

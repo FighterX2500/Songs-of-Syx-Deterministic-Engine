@@ -27,4 +27,10 @@ public interface StateSource {
      * the section's running hash after each), if kept. The first line two PCs disagree on names the entity.
      */
     String describeEntities(long step);
+
+    /**
+     * The world as the world section hashed it at {@code step}: the running hash after each part, and each army's
+     * row, if kept. The first part and army two PCs disagree on name what went differently (SOS-46 playtests).
+     */
+    String describeWorld(long step);
 }

@@ -217,7 +217,7 @@ public final class GameInputs implements Consumer<CityReport> {
                 int kills = t.getInt();
                 int ref = t.getInt();
                 try {
-                    tell.invoke(null, in.arg, lossed, kills, ref);
+                    tell.invoke(null, in.arg, lossed, kills, sosdet.Hooks.worldInvasionRef(ref)); // C14 (SOS-46)
                 } catch (IllegalAccessException | InvocationTargetException e) {
                     throw new IllegalStateException("SOSDET: invasion " + ref + "'s listeners failed", e);
                 }

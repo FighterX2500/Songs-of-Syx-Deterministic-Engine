@@ -10,6 +10,7 @@ import game.faction.FCredits.CTYPE;
 import game.faction.Faction;
 import game.faction.diplomacy.DIP;
 import game.faction.npc.FactionNPC;
+import game.faction.player.Player;
 import game.faction.royalty.opinion.ROPINION;
 import init.constant.Config;
 import init.race.Race;
@@ -73,7 +74,7 @@ public final class World {
 
     static final List<Command> ALL = List.of(
             new Command(ARMY_MOVE, "armyMove", r -> {
-                WArmy a = Args.army(r);
+                WArmy a = Args.ownArmy(r);
                 int tx = r.i();
                 int ty = r.i();
                 if (a == null) {
@@ -83,7 +84,7 @@ public final class World {
                 return true;
             }),
             new Command(ARMY_INTERCEPT, "armyIntercept", r -> {
-                WArmy a = Args.army(r);
+                WArmy a = Args.ownArmy(r);
                 WArmy other = Args.army(r);
                 if (a == null || other == null) {
                     return false;
@@ -92,16 +93,16 @@ public final class World {
                 return true;
             }),
             new Command(ARMY_BESIEGE, "armyBesiege", r -> {
-                WArmy a = Args.army(r);
+                WArmy a = Args.ownArmy(r);
                 Region reg = Args.region(r);
-                if (a == null || reg == null) {
+                if (a == null || reg == null || otherHumans(reg, a)) {
                     return false;
                 }
                 a.besiege(reg);
                 return true;
             }),
             new Command(ARMY_STOP, "armyStop", r -> {
-                WArmy a = Args.army(r);
+                WArmy a = Args.ownArmy(r);
                 if (a == null) {
                     return false;
                 }
@@ -109,7 +110,7 @@ public final class World {
                 return true;
             }),
             new Command(ARMY_RAID, "armyRaid", r -> {
-                WArmy a = Args.army(r);
+                WArmy a = Args.ownArmy(r);
                 boolean raid = r.b();
                 if (a == null) {
                     return false;
@@ -118,7 +119,7 @@ public final class World {
                 return true;
             }),
             new Command(ARMY_DISBAND, "armyDisband", r -> {
-                WArmy a = Args.army(r);
+                WArmy a = Args.ownArmy(r);
                 if (a == null) {
                     return false;
                 }
@@ -126,7 +127,7 @@ public final class World {
                 return true;
             }),
             new Command(ARMY_NAME, "armyName", r -> {
-                WArmy a = Args.army(r);
+                WArmy a = Args.ownArmy(r);
                 String name = r.s();
                 if (a == null) {
                     return false;
@@ -136,7 +137,7 @@ public final class World {
             }),
             new Command(DIVS_REASSIGN, "divsReassign", r -> {
                 boolean toArmy = r.b();
-                WArmy to = Args.army(r);
+                WArmy to = Args.ownArmy(r);
                 ADDiv[] divs = divs(r);
                 if (toArmy && to == null) {
                     return false;
@@ -169,7 +170,7 @@ public final class World {
                 return true;
             }),
             new Command(DIV_ORDER, "divOrder", r -> {
-                WArmy a = Args.army(r);
+                WArmy a = Args.ownArmy(r);
                 int after = r.i();
                 int insert = r.i();
                 if (a == null || after < 0 || insert < 0 || after >= a.divs().size()
@@ -228,7 +229,7 @@ public final class World {
             }),
             new Command(ARTILLERY, "artillery", r -> {
                 ADArtillery art = AD.supplies().arts().get(r.i());
-                WArmy a = Args.army(r);
+                WArmy a = Args.ownArmy(r);
                 int value = r.i();
                 if (a == null) {
                     return false;
@@ -237,7 +238,7 @@ public final class World {
                 return true;
             }),
             new Command(RECRUIT, "recruit", r -> {
-                WArmy a = Args.army(r);
+                WArmy a = Args.ownArmy(r);
                 Race race = Args.race(r);
                 int men = r.i();
                 int banner = r.i();
@@ -249,7 +250,7 @@ public final class World {
                 return recruit(a, race, men, banner, training, equip);
             }),
             new Command(MERC_HIRE, "mercHire", r -> {
-                WArmy a = Args.army(r);
+                WArmy a = Args.ownArmy(r);
                 int merc = r.i();
                 if (a == null || merc < 0 || merc >= AD.mercenaries().size()) {
                     return false;
@@ -263,7 +264,7 @@ public final class World {
             }),
             new Command(CITY_DIV_ATTACH, "cityDivAttach", r -> {
                 boolean toArmy = r.b();
-                WArmy a = Args.army(r);
+                WArmy a = Args.ownArmy(r);
                 Div div = Args.div(r);
                 if (toArmy) {
                     if (a == null || !a.divs().canAdd() || AD.cityDivs().attachedArmy(div) != null) {
@@ -342,9 +343,10 @@ public final class World {
             }),
             new Command(REGION_ATTACK, "regionAttack", r -> {
                 Region reg = Args.region(r);
-                WArmy a = Args.army(r);
+                WArmy a = Args.army(r); // the intruder its garrison attacks: not the issuer's army
                 boolean declareWar = r.b();
-                if (reg == null || a == null) {
+                // the issuer's own region, and never another human's army: battles between humans are outside SOS-46
+                if (reg == null || a == null || reg.faction() != FACTIONS.player() || a.faction() instanceof Player) {
                     return false;
                 }
                 if (declareWar) {
@@ -355,6 +357,14 @@ public final class World {
             }));
 
     private World() {
+    }
+
+    /**
+     * True for a region of another human: battles and sieges between humans are not this engine's yet (plan 0004,
+     * "Outside this card"), and a human's lost capitol would leave it without one (audit B1 to B4).
+     */
+    private static boolean otherHumans(Region reg, WArmy a) {
+        return reg.faction() instanceof Player && reg.faction() != a.faction();
     }
 
     // ---------------------------------------------------------------- capture (hooks)
@@ -625,7 +635,7 @@ public final class World {
         return true;
     }
 
-    /** Hook in the attack tool ({@code PlayToolAttack}): an army attacks a region, declaring war first if asked. */
+    /** Hook in the attack tool ({@code PlayToolAttack}): the region's garrison attacks a foreign army in it, declaring war first if asked. */
     public static boolean regionAttack(Region reg, WArmy a, boolean declareWar) {
         if (!Commands.capturing()) {
             return false;
@@ -762,14 +772,15 @@ public final class World {
     private static ADDiv[] divs(CmdReader r) {
         ADDiv[] divs = new ADDiv[r.i()];
         for (int i = 0; i < divs.length; i++) {
-            divs[i] = Args.worldDiv(r);
+            ADDiv d = Args.worldDiv(r);
+            divs[i] = d != null && d.army() != null && d.faction() != FACTIONS.player() ? null : d; // own only (SOS-46)
         }
         return divs;
     }
 
     private static WDivRegional regional(CmdReader r) {
         ADDiv d = Args.worldDiv(r);
-        return d instanceof WDivRegional ? (WDivRegional) d : null;
+        return d instanceof WDivRegional && (d.army() == null || d.faction() == FACTIONS.player()) ? (WDivRegional) d : null; // own only (SOS-46)
     }
 
     private static double[] doubles(CmdReader r) {

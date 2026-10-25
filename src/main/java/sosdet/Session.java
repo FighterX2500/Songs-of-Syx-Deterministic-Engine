@@ -8,6 +8,7 @@ import sosdet.game.GameHash;
 import sosdet.game.GameInputs;
 import sosdet.game.GameReport;
 import sosdet.game.GameTxns;
+import sosdet.game.StepParts;
 import sosdet.game.SpeedLine;
 import sosdet.game.cmd.BannerDraft;
 import sosdet.game.cmd.PlanStash;
@@ -56,16 +57,25 @@ final class Session {
     /** The world-battle prompt open on this PC (and, opened by the step, on every PC): what it decides, and its close. */
     Object worldPrompt;
     Runnable worldPromptClose;
+    /** The human it asks: only that human's PC shows it, and only that human's answer applies (SOS-46). */
+    int worldPromptHuman;
     /** Its default answer when its time runs out, the time it has waited, and the armies waiting while it is open (SOS-45). */
     Runnable worldPromptTimeout;
     final PromptTimer promptTimer = new PromptTimer();
     int[] worldPromptArmies = NO_ARMIES;
     static final int[] NO_ARMIES = new int[0];
-    /** The simulation's yes/no questions not yet answered ({@code cmd.StepPrompts}): key, then the yes and no actions. */
+    /**
+     * The simulation's yes/no questions not yet answered ({@code cmd.StepPrompts}): key, then the yes and no actions and
+     * the human asked.
+     */
     final java.util.Map<Long, Object[]> stepPrompts = new java.util.HashMap<>();
-    /** The step the last question opened at, and how many opened in it: the next question's key. */
+    /**
+     * The step the last question opened at, and how many world and city questions opened in it: the next question's
+     * key. A city question opens on one PC only, so it never shifts a world question's key (SOS-46).
+     */
     long stepPromptStep = -1;
     int stepPromptsInStep;
+    int stepCityPromptsInStep;
     /** The kept question this PC's yes/no dialog shows, or -1: answered here, or by another PC's answer. */
     long stepPromptShown = -1;
 
@@ -112,10 +122,28 @@ final class Session {
     PathQueue pathQueue;
     /** The part of the step running: 0 the city part, 1 the world part, -1 outside them (ADR 0005). */
     int part = -1;
+    /** This PC's human: the slot of its faction (ADR 0004); slot 0 until the mod sets another. */
+    int localHuman;
+    /**
+     * The world part's current human, the one the world is working on: each human in turn for its own world half, the
+     * first human (slot 0, always a human) otherwise, for now (plan 0004, M1).
+     */
+    int currentHuman;
+    /** Each PC's human, by PC: the same table on every PC (ADR 0004); slot 0 for a PC the mod hasn't set. */
+    final int[] pcHumans = unset(new int[SLOTS]);
+    /**
+     * Outside the step only: the human this PC reads the game as ({@code Engine.asHuman}, the rig's probes), -1 for its
+     * own. Never read in the step (SOS-46).
+     */
+    int viewHuman = -1;
     /** Game time since the player's own faction update last ran in the city part; 0 after every load. */
     double playerUpdateAcc;
-    /** The player's city reports, which the world part reads instead of the live city (ADR 0005 §2). */
-    final Reports reports = new Reports();
+    /** The slots a game has ({@code FACTIONS.MAX()}). */
+    static final int SLOTS = 64;
+    /** Each human's city reports, by slot, which the world part reads instead of the live city (ADR 0005 §2, ADR 0004). */
+    private final Reports[] reports = new Reports[SLOTS];
+    /** The game's human slots in slot order, read from the city at first use after a load. */
+    private int[] humans;
     /** Where the reports come from: the game, made at the first report; tests put in their own. */
     CitySource city;
     long reportsTaken;
@@ -144,15 +172,122 @@ final class Session {
     boolean ownCity;
     /** Whose city the world part reads: -1 this PC's own; otherwise the PC whose reports come in (SOS-38's follower). */
     int reportsFrom = -1;
-    /** Own-city mode: this PC's reports going out, and the source PC's coming in. */
+    /** Own-city mode: this PC's reports going out. */
     final sosdet.report.ReportFeed reportFeed = new sosdet.report.ReportFeed();
-    /** The step the last report from {@link #reportsFrom} was taken at (-1: none since the load). */
-    long receivedTakenAt = -1;
+    /** Own-city mode: each other PC's reports coming in, by PC. */
+    private final java.util.Map<Integer, sosdet.report.ReportFeed> feedsIn = new java.util.HashMap<>();
+    /** By human slot: the step the last report from another PC was taken at (-1: none since the load). */
+    final long[] receivedTakenAt = none();
     long reportsReceived;
     /** A world resync's load is running: its resets of the world never reach the city (SOS-38). */
     boolean worldLoading;
     /** The world resyncs loaded: a game cache made from the world before one starts again after it (SOS-32). */
     int worldLoads;
+
+    /** The city tail applies the transactions of this PC's human only: every other human's city is its own PC's. */
+    final java.util.function.Consumer<Txn> ownTxns = t -> {
+        if (t.human == localHuman) {
+            txnApplier().accept(t);
+        }
+    };
+
+    private static long[] none() {
+        long[] l = new long[SLOTS];
+        java.util.Arrays.fill(l, -1);
+        return l;
+    }
+
+    /** The reports of the human in {@code slot}. */
+    Reports reports(int slot) {
+        Reports r = reports[slot];
+        if (r == null) {
+            r = new Reports();
+            reports[slot] = r;
+        }
+        return r;
+    }
+
+    /** The reports read now: in the world part the current human's, elsewhere this PC's human's. */
+    Reports reports() {
+        return reports(part == StepParts.WORLD_PART ? currentHuman : localHuman);
+    }
+
+    /** The game's human slots, in slot order. */
+    int[] humans() {
+        if (humans == null) {
+            humans = city().humans();
+        }
+        return humans;
+    }
+
+    /**
+     * The slot {@code FACTIONS.player()} is now: in the world part the current human, elsewhere this PC's human (or the
+     * one it reads as outside the step).
+     */
+    int humanNow() {
+        if (part == StepParts.WORLD_PART) {
+            return currentHuman;
+        }
+        return viewHuman >= 0 ? viewHuman : localHuman;
+    }
+
+    /** The ordinal of the human in {@code slot} among the human slots; 0 for slot 0 and while a game loads (SOS-46). */
+    int ordinal(int slot) {
+        if (slot == 0 || loading) {
+            return 0;
+        }
+        int[] hs = humans();
+        for (int i = 0; i < hs.length; i++) {
+            if (hs[i] == slot) {
+                return i;
+            }
+        }
+        throw new IllegalStateException("SOSDET: slot " + slot + " is no human (ADR 0004)");
+    }
+
+    /** True when a human's city reports come from another PC: every human but this PC's, and this PC's on a follower. */
+    boolean remote(int slot) {
+        return slot != localHuman || reportsFrom >= 0;
+    }
+
+    boolean isHuman(int slot) {
+        for (int h : humans()) {
+            if (h == slot) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Another PC's report stream. */
+    sosdet.report.ReportFeed feedIn(int pc) {
+        return feedsIn.computeIfAbsent(pc, k -> new sosdet.report.ReportFeed());
+    }
+
+    /**
+     * The reports the world part reads now, as one hash: none 0, one its own hash (as with a single human), several
+     * each with its slot, mixed in slot order.
+     */
+    long reportsHash() {
+        CityReport one = null;
+        int n = 0;
+        for (Reports r : reports) {
+            if (r != null && r.current() != null) {
+                one = r.current();
+                n++;
+            }
+        }
+        if (n <= 1) {
+            return one == null ? 0 : one.hash();
+        }
+        long h = HashLog.start();
+        for (int slot = 0; slot < SLOTS; slot++) {
+            if (reports[slot] != null && reports[slot].current() != null) {
+                h = HashLog.mix(HashLog.mix(h, slot), reports[slot].current().hash());
+            }
+        }
+        return h;
+    }
 
     /** The seed of the random stream at a step: the same on every PC, whatever happened before. */
     int stepSeed(long step) {
@@ -191,9 +326,19 @@ final class Session {
      */
     void afterLoad() {
         playerUpdateAcc = 0;
-        reports.clear(); // every PC reloads, so every PC takes its load report from the loaded city
+        viewHuman = -1; // a read as another human never outlives a load (SOS-46)
+        for (Reports r : reports) {
+            if (r != null) {
+                r.clear(); // every PC reloads, so every PC takes its load report from the loaded city
+            }
+        }
+        humans = null;
+        currentHuman = 0;
         reportFeed.clear();
-        receivedTakenAt = -1;
+        for (sosdet.report.ReportFeed f : feedsIn.values()) {
+            f.clear();
+        }
+        java.util.Arrays.fill(receivedTakenAt, -1);
         txns.dropQueued();
         cityInputs.clear(); // the loaded world has the city's state as saved
         sentSupplies.clear();
@@ -226,22 +371,33 @@ final class Session {
         hashes.worldOnly(ownCity);
     }
 
-    /** Whether the world part of this step may run: a follower waits for the source's report it reads (ADR 0005 §4). */
+    /**
+     * Whether the world part of this step may run: it waits for each report it reads from another PC, every other
+     * human's and, on a follower, the source's (ADR 0005 §4, ADR 0004).
+     */
     boolean worldMayRun(long step) {
-        return reportsFrom < 0 || (receivedTakenAt >= 0 && step <= Reports.lastReadableStep(receivedTakenAt));
+        if (!ownCity) {
+            return true; // co-op: every PC takes the same reports itself
+        }
+        for (int h : humans()) {
+            if (remote(h) && (receivedTakenAt[h] < 0 || step > Reports.lastReadableStep(receivedTakenAt[h]))) {
+                return false;
+            }
+        }
+        return true;
     }
 
-    /** A report from {@link #reportsFrom}: it applies at its step as this PC's own would have. */
+    /** A report from another PC, of a human it runs: it applies at its step as this PC's own would have. */
     void reportReceived(CityReport r) {
-        if (r.faction != city().faction()) {
-            throw new IllegalArgumentException("SOSDET: a city report of faction " + r.faction + ", the world reads "
-                    + city().faction() + "'s");
+        if (r.faction < 0 || r.faction >= SLOTS || !isHuman(r.faction) || !remote(r.faction)) {
+            throw new IllegalArgumentException("SOSDET: a city report of faction " + r.faction + ", not a human whose city"
+                    + " the world reads from another PC");
         }
-        if (r.takenAt <= receivedTakenAt) {
+        if (r.takenAt <= receivedTakenAt[r.faction]) {
             return; // a repeat changes nothing
         }
-        reports.stamp(r);
-        receivedTakenAt = r.takenAt;
+        reports(r.faction).stamp(r);
+        receivedTakenAt[r.faction] = r.takenAt;
         reportsReceived++;
     }
 
@@ -264,7 +420,7 @@ final class Session {
             reportFeed.write(bytes);
         }
         if (reportsFrom < 0) {
-            reports.stamp(r); // a follower's world reads the source's report instead
+            reports(c.faction()).stamp(r); // a follower's world reads the source's report instead
         }
         reportsTaken++;
         reportNanos += System.nanoTime() - start;
@@ -275,6 +431,62 @@ final class Session {
             city = new GameReport();
         }
         return city;
+    }
+
+    /**
+     * A world-part read the report has no slot for, read live instead: counted, and refused with several humans,
+     * where the live value is another human's on each PC (SOS-46).
+     */
+    void reportMiss(Object what) {
+        reportMisses++;
+        if (humans().length > 1) {
+            throw new IllegalStateException("SOSDET: the world part read " + what + " live; with several humans every"
+                    + " city value it reads needs a report slot (ADR 0004)");
+        }
+    }
+
+    /**
+     * A load builds a new game: the report's lookups, the inputs and the transactions' applier were made from the old
+     * one's values, boosts and locks, and would miss every one of the new game's (SOS-46). Made again at first use.
+     */
+    void dropGameObjects() {
+        city = null;
+        humans = null;
+        inputs = null;
+        inputApplier = null;
+        txnApplier = null;
+    }
+
+    /**
+     * Before the run (step 0), with several humans: each human has exactly one PC, and this PC's is its own human
+     * (ADR 0004). A PC without a human, or two PCs on one, would act for the wrong human everywhere.
+     */
+    void checkPcHumans() {
+        int[] hs = humans();
+        if (hs.length < 2) {
+            return;
+        }
+        for (int h : hs) {
+            int pcs = 0;
+            for (int pc : pcHumans) {
+                if (pc == h) {
+                    pcs++;
+                }
+            }
+            if (pcs != 1) {
+                throw new IllegalStateException("SOSDET: the human in slot " + h + " has " + pcs + " PCs; give each human"
+                        + " one PC with pcHuman before the run");
+            }
+        }
+        if (pcHumans[ai().localPc()] != localHuman) {
+            throw new IllegalStateException("SOSDET: this PC (" + ai().localPc() + ") is slot " + pcHumans[ai().localPc()]
+                    + "'s, its local human is slot " + localHuman);
+        }
+    }
+
+    private static int[] unset(int[] a) {
+        java.util.Arrays.fill(a, -1);
+        return a;
     }
 
     AiLog ai() {
@@ -374,7 +586,7 @@ final class Session {
     /** Makes the city's inputs and applies them in the world part: the game, made at first use. */
     GameInputs inputs() {
         if (inputs == null) {
-            inputs = new GameInputs(sentSupplies, eventMarks, () -> reportsFrom < 0);
+            inputs = new GameInputs(sentSupplies, eventMarks, () -> reportsFrom < 0 && currentHuman == localHuman);
         }
         return inputs;
     }

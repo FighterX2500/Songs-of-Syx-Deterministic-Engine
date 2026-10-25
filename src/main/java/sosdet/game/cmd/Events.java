@@ -15,6 +15,7 @@ import game.event.engine.Event;
 import game.events.killer.EventKiller;
 import game.faction.FACTIONS;
 import game.faction.FCredits.CTYPE;
+import game.raiding.RAIDING;
 import game.raiding.Raider;
 import game.raiding.RaidingCurrent;
 import init.trade.TR;
@@ -46,6 +47,7 @@ public final class Events {
     private static final Method CHOICE_SELECT = method(EVENT_HANDLER.class, "choiceSelect", Event.class, int.class);
     private static final Method RAIDER_CAN_PAY = method(RaidingCurrent.class, "canPay", int.class);
     private static final Method RAIDER_SET_ALLY_FIGHT = method(RaidingCurrent.class, "setAllyFight");
+    private static final Method RAIDS_CURRENT = method(RAIDING.class, "current"); // patch-added (SOS-46 M4)
     private static final Constructor<?> RAIDER_THANKS = constructor(type("game.raiding.MessDemandTY"), Raider.class);
 
     static final List<Command> ALL = List.of(
@@ -73,7 +75,7 @@ public final class Events {
                 if (raider == null) {
                     return false;
                 }
-                invoke(RAIDER_SET_ALLY_FIGHT, GAME.raiders().current);
+                invoke(RAIDER_SET_ALLY_FIGHT, current());
                 return true;
             }),
             new Command(KILLER_SUSPECT, "killerSuspect", r -> {
@@ -175,7 +177,7 @@ public final class Events {
 
     /** {@code MessDemand}'s pay button: the demand's checks, the tribute, the raider gone, its thanks sent. */
     private static boolean pay(Raider raider, int credits, int[] res) {
-        RaidingCurrent current = GAME.raiders().current;
+        RaidingCurrent current = current();
         if (current.current() != raider || !(Boolean) invoke(RAIDER_CAN_PAY, current, 0)) {
             return false; // canPay ignores its argument
         }
@@ -207,13 +209,18 @@ public final class Events {
         return -1; // a message from before a world resync, whose raiders it replaced: refused on every PC (SOS-32)
     }
 
-    /** The raider at an index, while it is still the current one. */
+    /** The raider at an index, while it still raids the human the command acts for. */
     private static Raider raider(int index) {
         if (index < 0 || index >= GAME.raiders().ALL().size()) {
             return null;
         }
         Raider raider = GAME.raiders().ALL().get(index);
-        return GAME.raiders().current.current() == raider ? raider : null;
+        return current().current() == raider ? raider : null;
+    }
+
+    /** The raid of the human the command acts for: each human has its own (the patched {@code RAIDING.current()}, SOS-46 M4). */
+    private static RaidingCurrent current() {
+        return (RaidingCurrent) invoke(RAIDS_CURRENT, GAME.raiders());
     }
 
     // ---------------------------------------------------------------- reflection (class load and command calls only)

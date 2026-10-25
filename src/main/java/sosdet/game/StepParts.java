@@ -3,6 +3,7 @@ package sosdet.game;
 import game.GAME.GameResource;
 import game.events.EVENTS;
 import game.faction.FACTIONS;
+import game.faction.player.Player;
 import game.raiding.RAIDING;
 import world.WORLD;
 
@@ -60,8 +61,8 @@ public final class StepParts {
         }
     }
 
-    /** The player's own faction update is city work; the world part's faction updater skips it. */
+    /** Every human's own faction update is city work; the world part's faction updater skips it. */
     public static boolean worldUpdatesFaction(Object faction) {
-        return faction != FACTIONS.player();
+        return !(faction instanceof Player); // each human's runs in its own PC's city part (ADR 0004)
     }
 }

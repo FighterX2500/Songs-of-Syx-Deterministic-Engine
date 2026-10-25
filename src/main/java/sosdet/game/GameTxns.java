@@ -118,6 +118,9 @@ public final class GameTxns implements Consumer<Txn> {
             Object[] w = (Object[]) t.b;
             ((DIP.DipActivityListener) t.a).change((Faction) w[0], (Faction) w[1], (DipStance) w[2], (DipStance) w[3]);
             break;
+        case IMMIGRANTS_HIGHER:
+            SETT.ENTRY().immi().setHigher((Race) t.a, t.i); // the city tail is the city part: the hook lets it through
+            break;
         default:
             throw new IllegalStateException("SOSDET: no applier for transaction kind " + t.kind);
         }

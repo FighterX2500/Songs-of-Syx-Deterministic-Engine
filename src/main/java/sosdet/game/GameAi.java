@@ -78,8 +78,13 @@ public final class GameAi implements AiApplier {
     public void worldPart() {
         WorldCommand c;
         while ((c = worldCommands.poll()) != null) {
-            if (MapBattles.worldCommandSkipped(c.pc) || !Commands.apply(c.payload)) {
-                commandsSkipped++;
+            Hooks.currentHuman(Hooks.humanOf(c.pc)); // it acts for its PC's human (ADR 0004)
+            try {
+                if (MapBattles.worldCommandSkipped(c.pc) || !Commands.apply(c.payload)) {
+                    commandsSkipped++;
+                }
+            } finally {
+                Hooks.currentHuman(0);
             }
         }
     }

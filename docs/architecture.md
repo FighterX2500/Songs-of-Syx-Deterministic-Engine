@@ -23,7 +23,7 @@ A short map for an AI agent (or a person) about to change SOSDET. Read it first,
    - applies the log entries due at this step: orders, commands, speed changes and the AI general's settings.
 4. **The step itself:** the city part, then the world part (patch `12`), each updating the game's resources by the step length; or the battle.
    - The world part never reads a live city: it reads the city report (patches `13`, `14`, `98`; `GameReport`) and changes the city only through transactions applied exactly once (`sosdet/txn`, `GameTxns`).
-   - In own-city mode (`Engine.ownCity`) each PC runs its own city, and the world reads the host's reports only (one player faction, [requirements](requirements.md) §2).
+   - In own-city mode (`Engine.ownCity`) each PC runs its own human's city, and the world reads each human's reports from that human's PC. The world part runs each human's world half in slot order, with that human as `FACTIONS.player()` (several humans, [ADR 0004](decisions/0004-several-humans.md), [requirements](requirements.md) §2).
    - Battle jobs run inside the step, not on their threads (patch `30`).
    - Path jobs queued in the step run at its end, before the hash: share 0 on the simulation thread, shares 1 and 2 on path threads, job i always on share i % 3 (patch `35`, `PathWorkers`).
    - The host's AI general keeps its own thread, but writes only to the log (patch `90`).
@@ -53,9 +53,9 @@ A player's action never changes state on the PC where it was clicked. It becomes
 | 6000s | `Tools` | placing tools; area-room Build and refurnish, whose plans the `Plan*` classes hold ([ADR 0003](decisions/0003-room-planning.md)); 6100s: copier and blueprints |
 | 7000s | `World` | armies, recruiting, regions |
 | 7900s | `WorldBattles` | world-battle prompt decisions |
-| 7950 | `StepPrompts` | yes/no questions the step asks |
+| 7950, 7951 | `StepPrompts` | yes/no questions the step asks: 7950 a city's, 7951 a world one, answered by the human asked (SOS-46) |
 | 7960s | `MapBattles` | a battle fought on the battle map: Start, Retreat, the victory or defeat panel's Close, Restart (SOS-41). A world command whose step falls in the battle is skipped, with a notice to its PC: the battle's end loads the game saved before it, which would undo it |
-| 8000s | `Diplomacy` | deals, emissaries |
+| 8000s | `Diplomacy` | deals, emissaries, an overlord's tribute (8005) |
 | 9000s | `Events` | event choices, raiders |
 
 [docs/commands.md](commands.md) lists every player entry point in the game and its status.

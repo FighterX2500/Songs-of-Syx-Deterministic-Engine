@@ -9,6 +9,7 @@ import game.battle.setting.DivSettings;
 import game.faction.FACTIONS;
 import game.faction.Faction;
 import game.faction.diplomacy.DIP;
+import game.faction.player.Player;
 import game.raiding.Raider;
 import game.time.TIME;
 import settlement.entity.ENTITY;
@@ -51,6 +52,8 @@ public final class GameHash implements StateSource {
     private long[][] entHash;
     private Class<?>[][] entClass;
     private final int[] entCount = new int[KEPT];
+    /** The world of the same hashes: each part's running hash and each army's row, for the desync report. */
+    private final WorldKept[] world = new WorldKept[KEPT];
 
     @Override
     public int divisions() {
@@ -107,49 +110,81 @@ public final class GameHash implements StateSource {
         sections[HashLog.ENTITIES] = others;
         sections[HashLog.DIVISIONS] = divisionsHash();
         sections[HashLog.PROJECTILES] = projectilesHash();
-        sections[HashLog.WORLD] = worldHash();
+        if (world[es] == null) {
+            world[es] = new WorldKept(WORLD.ENTITIES().armies.max());
+        }
+        sections[HashLog.WORLD] = worldHash(world[es]);
     }
 
     /**
      * The world map: every army's slot, faction, tile, state and men; every world entity; every region's owner; every
-     * faction's credits and wars; every raider's power, defeat and raids, and the raider now raiding; the calendar. In
-     * own-city mode the player's credits are the city's and are left out (ADR 0005).
+     * faction's credits, overlord and stance with every other (war, peace, pact, ...); every NPC king's opinion of
+     * every human but slot 0's (SOS-46 M3); every raider's power, defeat and
+     * raids, and the raider now raiding (and each other human's, with its war and rebellion timers: SOS-46 M4); the calendar. In own-city mode the humans' credits are their cities' and are
+     * left out (ADR 0005, ADR 0004).
      * Public for the rig's per-step log of a follower run.
      */
     public static long worldHash() {
+        return worldHash(null);
+    }
+
+    /** The world hash; with {@code w}, also each part's running hash and each army's row (no allocation). */
+    private static long worldHash(WorldKept w) {
         long h = HashLog.start();
+        int n = 0;
         for (int i = 0; i < WORLD.ENTITIES().armies.max(); i++) {
             WArmy a = WORLD.ENTITIES().armies.get(i);
             if (a == null || !a.added()) {
                 continue;
             }
+            int faction = a.faction() == null ? -1 : a.faction().index();
+            int men = AD.men(null).get(a);
             h = HashLog.mix(h, i);
             h = HashLog.mix(h, a.iteration());
-            h = HashLog.mix(h, a.faction() == null ? -1 : a.faction().index());
+            h = HashLog.mix(h, faction);
             h = HashLog.mix(h, a.body().x1());
             h = HashLog.mix(h, a.body().y1());
             h = HashLog.mix(h, a.state().index());
-            h = HashLog.mix(h, AD.men(null).get(a));
+            h = HashLog.mix(h, men);
+            if (w != null && n < w.armyHash.length) {
+                int o = n * WorldKept.ARMY_FIELDS;
+                w.army[o] = i;
+                w.army[o + 1] = faction;
+                w.army[o + 2] = a.body().x1();
+                w.army[o + 3] = a.body().y1();
+                w.army[o + 4] = a.state().index();
+                w.army[o + 5] = men;
+                w.armyHash[n++] = h;
+            }
+        }
+        if (w != null) {
+            w.armies = n;
+            w.parts[0] = h;
         }
         h = entitiesHash(h, WORLD.ENTITIES().allFast());
-        h = entitiesHash(h, WORLD.ENTITIES().allSlow());
+        h = part(w, 1, entitiesHash(h, WORLD.ENTITIES().allSlow()));
         LIST<Region> regions = WORLD.REGIONS().all();
         for (int i = 0; i < regions.size(); i++) {
             Faction f = regions.get(i).faction();
             h = HashLog.mix(h, f == null ? -1 : f.index());
         }
+        h = part(w, 2, h);
         LIST<Faction> factions = FACTIONS.active();
         boolean ownCity = Hooks.ownCity();
         for (int i = 0; i < factions.size(); i++) {
             Faction f = factions.get(i);
             h = HashLog.mix(h, f.index());
-            if (!ownCity || f != FACTIONS.player()) {
+            if (!ownCity || !(f instanceof Player)) {
                 h = HashLog.mix(h, Double.doubleToLongBits(f.credits().getD()));
             }
+            Faction overlord = DIP.overlord(f);
+            h = HashLog.mix(h, overlord == null ? -1 : overlord.index());
             for (int k = i + 1; k < factions.size(); k++) {
-                h = HashLog.mix(h, DIP.WAR().is(f, factions.get(k)) ? 1 : 0);
+                h = HashLog.mix(h, DIP.get(f, factions.get(k)).index()); // every stance, not only war (SOS-46)
             }
         }
+        h = part(w, 3, h);
+        h = part(w, 4, GameRelations.hash(h));
         LIST<Raider> raiders = GAME.raiders().ALL();
         for (int i = 0; i < raiders.size(); i++) {
             Raider r = raiders.get(i);
@@ -158,9 +193,55 @@ public final class GameHash implements StateSource {
             h = HashLog.mix(h, r.raids);
         }
         Raider current = GAME.raiders().current.current();
-        h = HashLog.mix(h, current == null ? -1 : current.army.power);
-        h = HashLog.mix(h, Double.doubleToLongBits(TIME.currentSecond()));
+        h = part(w, 5, HashLog.mix(h, current == null ? -1 : current.army.power));
+        h = part(w, 6, GameEvents.hash(h));
+        if (w != null) {
+            w.eventHumans = GameEvents.keep(w.events);
+        }
+        return part(w, 7, HashLog.mix(h, Double.doubleToLongBits(TIME.currentSecond())));
+    }
+
+    private static long part(WorldKept w, int part, long h) {
+        if (w != null) {
+            w.parts[part] = h;
+        }
         return h;
+    }
+
+    /** One hashed step's world, kept for the desync report. */
+    private static final class WorldKept {
+        static final int ARMY_FIELDS = 6;
+        static final String[] PARTS = {"armies", "entities", "region owners", "factions and stances",
+            "NPC relations per human", "raiders", "events per human", "calendar"};
+        final long[] parts = new long[PARTS.length];
+        final int[] army;
+        final long[] armyHash;
+        int armies;
+        /** From the second human on: war timer, rebellion timer, current raider's power. */
+        final double[] events = new double[3 * (Hooks.HUMANS_MAX - 1)];
+        int eventHumans;
+
+        WorldKept(int maxArmies) {
+            army = new int[maxArmies * ARMY_FIELDS];
+            armyHash = new long[maxArmies];
+        }
+
+        String describe() {
+            StringBuilder b = new StringBuilder();
+            for (int i = 0; i < PARTS.length; i++) {
+                b.append(String.format(Locale.ROOT, "  after %-24s %016x%n", PARTS[i], parts[i]));
+            }
+            for (int k = 0; k < armies; k++) {
+                int o = k * ARMY_FIELDS;
+                b.append(String.format(Locale.ROOT, "  army %d: faction %d at %d,%d, state %d, men %d, running hash %016x%n",
+                        army[o], army[o + 1], army[o + 2], army[o + 3], army[o + 4], army[o + 5], armyHash[k]));
+            }
+            for (int k = 0; k < eventHumans; k++) {
+                b.append(String.format(Locale.ROOT, "  human %d: war timer %s, rebellion timer %s, raider power %s%n",
+                        k + 1, events[3 * k], events[3 * k + 1], events[3 * k + 2]));
+            }
+            return b.toString();
+        }
     }
 
     /** Every world entity, caravans and camps too: its slot, kind, tile and faction (SOS-38). */
@@ -240,6 +321,16 @@ public final class GameHash implements StateSource {
                             entY[slot][k], entHash[slot][k]));
                 }
                 return b.toString();
+            }
+        }
+        return "  (not kept)" + System.lineSeparator();
+    }
+
+    @Override
+    public String describeWorld(long step) {
+        for (int slot = 0; kept != null && slot < KEPT; slot++) {
+            if (keptCount > slot && keptStep[slot] == step && world[slot] != null) {
+                return world[slot].describe();
             }
         }
         return "  (not kept)" + System.lineSeparator();

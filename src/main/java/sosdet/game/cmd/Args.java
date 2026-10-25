@@ -136,6 +136,15 @@ public final class Args {
         return army(index, iteration);
     }
 
+    /**
+     * The army {@link #army(CmdWriter, WArmy)} wrote, when it is the issuing human's own (inside a world command, the
+     * current human); null when it is gone or another faction's: a human orders only its own armies (SOS-46).
+     */
+    public static WArmy ownArmy(CmdReader r) {
+        WArmy a = army(r);
+        return a != null && a.faction() == FACTIONS.player() ? a : null;
+    }
+
     /** The army with this index and iteration; null when it is gone or disbanded since. */
     public static WArmy army(int index, int iteration) {
         if (index < 0 || index >= WORLD.ENTITIES().armies.max()) {
@@ -162,8 +171,12 @@ public final class Args {
 
     /** The NPC faction {@link #faction(CmdWriter, Faction)} wrote; null when it is gone, re-founded or the player. */
     public static FactionNPC npc(CmdReader r) {
-        Faction f = FACTIONS.getByIndex(r.i());
+        int i = r.i();
         int iteration = r.i();
+        if (i < 0 || i >= FACTIONS.MAX()) {
+            return null; // not a faction slot (-1 for none): refused, as a stale NPC is
+        }
+        Faction f = FACTIONS.getByIndex(i);
         if (!(f instanceof FactionNPC) || !f.isActive() || ((FactionNPC) f).iteration() != iteration) {
             return null;
         }

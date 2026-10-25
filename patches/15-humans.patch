@@ -1,0 +1,1396 @@
+diff -ru -U2 a/game/events/faction/EventFactionPeace.java b/game/events/faction/EventFactionPeace.java
+--- a/game/events/faction/EventFactionPeace.java	2025-09-22 07:59:34.000000000 +0500
++++ b/game/events/faction/EventFactionPeace.java	2026-10-25 09:53:29.805748400 +0500
+@@ -60,16 +60,25 @@
+ 
+ 	}
+ 	
++	/** SOSDET: true when {@code s} holds between {@code f} and any human; with one human, {@code s.is(f)} (SOS-46 M4). */
++	private static boolean sosdetAnyHuman(DipStance s, FactionNPC f) {
++		int[] hs = sosdet.Hooks.humanSlots();
++		for (int k = 0; k < hs.length; k++)
++			if (s.is(f, FACTIONS.getByIndex(hs[k])))
++				return true;
++		return false;
++	}
++	
+ 	private void up(FactionNPC f) {
+ 		
+ 		if (DIP.WAR().all(f).size() == 0)
+ 			return;
+ 		
+-		if (DIP.WAR().is(f)) {
++		if (sosdetAnyHuman(DIP.WAR(), f)) { // SOSDET: at war with any human (SOS-46 M4)
+ 			return;
+ 		}
+ 		
+-		if (DIP.ALLY().is(f))
++		if (sosdetAnyHuman(DIP.ALLY(), f)) // SOSDET: allied to any human (SOS-46 M4)
+ 			return;
+ 		
+ 		if (TIME.playedGame() > secondWhenWarEnds[f.index()]) {
+@@ -78,7 +87,7 @@
+ 			if (e == null)
+ 				return;
+ 			
+-			if (e == FACTIONS.player())
++			if (!(e instanceof FactionNPC)) // SOSDET: a human that is not this one is no NPC (ADR 0004)
+ 				return;
+ 			
+ 			if (DIP.WAR().is((FactionNPC) e) && DIP.ALLY().is(f)) {
+diff -ru -U2 a/game/events/faction/EventFactionWar.java b/game/events/faction/EventFactionWar.java
+--- a/game/events/faction/EventFactionWar.java	2025-09-22 07:59:34.000000000 +0500
++++ b/game/events/faction/EventFactionWar.java	2026-10-25 09:53:29.806748200 +0500
+@@ -22,7 +22,7 @@
+ public class EventFactionWar extends EventResource{
+ 
+ 	
+-	private static final double dtime = TIME.secondsPerDay()*16;
++	private final double dtime = TIME.secondsPerDay()*16; // SOSDET: per instance, so the menu's script scan can load the shipped class (SOS-46)
+ 	private double timer = dtime;
+ 	private int nextFaction;
+ 	
+@@ -32,6 +32,12 @@
+ 	
+ 	@Override
+ 	protected void update(double ds) {
++		int sosdetBefore = sosdet.Hooks.currentHumanSwap(sosdet.Hooks.largestHuman()); // SOSDET: measured from the largest human realm (SOS-46 M4)
++		sosdetUpdate(ds);
++		sosdet.Hooks.currentHumanSwap(sosdetBefore);
++	}
++	
++	private void sosdetUpdate(double ds) {
+ 		
+ 		timer -= ds*CLAMP.d(FACTIONS.player().realm().regions()/8.0, 0, 1);
+ 		if (timer > 0)
+@@ -59,9 +65,9 @@
+ 			for (RegDist d : WORLD.PATH().regFinder.all(f, Treaty.FACTION_BORDERS, WRegSel.CAPITOLS())) {
+ 				if (d.reg.faction() == null)
+ 					continue;
+-				if (d.reg.faction() == f || d.reg.faction() == FACTIONS.player())
++				if (d.reg.faction() == f || !(d.reg.faction() instanceof FactionNPC)) // SOSDET: a human that is not this one is no NPC (ADR 0004)
+ 					continue;
+-				if (FACTIONS.player().realm().regions() < 3 && RD.DIST().reachable(d.reg))
++				if (RD.DIST().sosdetHumanReaches(d.reg, 0, 2)) // SOSDET: any human of fewer than 3 regions that reaches it is spared (SOS-46 M4)
+ 					continue;
+ 				FactionNPC ff = (FactionNPC) d.reg.faction();
+ 				if (DIP.get(ff).ally)
+diff -ru -U2 a/game/events/faction/player/War.java b/game/events/faction/player/War.java
+--- a/game/events/faction/player/War.java	2026-06-08 07:29:28.000000000 +0500
++++ b/game/events/faction/player/War.java	2026-10-25 09:53:29.806748200 +0500
+@@ -34,9 +34,11 @@
+ class War {
+ 
+ 	private final double WAR_INTERVAL = 16*TIME.secondsPerDay();
+-	private double warCount = 0;
+-	private FactionNPC warner = null;
+-	private double teachings = 0;
++	// SOSDET: each human's war timer, warner and teachings (SOS-46 M4): [0] slot 0's, saved as vanilla saves them (teachings
++	// is not saved, as in vanilla); the others in the engine's section. Hooks.humanIndex() picks the slice.
++	private final double[] warCount = new double[sosdet.Hooks.HUMANS_MAX];
++	private final FactionNPC[] warner = new FactionNPC[sosdet.Hooks.HUMANS_MAX];
++	private final double[] teachings = new double[sosdet.Hooks.HUMANS_MAX];
+ 	
+ 	War() {
+ 		BValue v = new BValue.BValuePlayerOnly() {
+@@ -48,7 +50,7 @@
+ 			
+ 			@Override
+ 			public double vGet(Player f) {
+-				return teachings;
++				return teachings[sosdet.Hooks.humanIndex(f)]; // SOSDET: each human's own (SOS-46 M4)
+ 			}
+ 		};
+ 		
+@@ -60,28 +62,46 @@
+ 	}
+ 	
+ 	public void save(FilePutter file) {
+-		file.d(warCount);
+-		file.i(warner == null ? -1 : warner.index());
++		sosdetSave(0, file); // SOSDET: slot 0's, as vanilla saves it (SOS-46 M4)
++	}
++	
++	/** SOSDET: the war timer and warner of the human of slice {@code sosdetH}, in vanilla's layout (SOS-46 M4). */
++	public void sosdetSave(int sosdetH, FilePutter file) {
++		file.d(warCount[sosdetH]);
++		file.i(warner[sosdetH] == null ? -1 : warner[sosdetH].index());
+ 	}
+ 
+ 	public void load(FileGetter file) throws IOException {
+-		warCount = file.d();
++		sosdetLoad(0, file); // SOSDET: slot 0's, as vanilla loads it (SOS-46 M4)
++	}
++	
++	public void sosdetLoad(int sosdetH, FileGetter file) throws IOException {
++		warCount[sosdetH] = file.d();
+ 		int fi = file.i();
+-		warner = fi >= 0 ? (FactionNPC) FACTIONS.all().get(fi) : null;
++		warner[sosdetH] = fi >= 0 && FACTIONS.all().get(fi) instanceof FactionNPC ? (FactionNPC) FACTIONS.all().get(fi) : null; // SOSDET: a human that is not this one is no NPC (ADR 0004)
+ 	}
+ 
+ 	public void clear() {
+-		warCount = 0;
+-		warner = null;
++		java.util.Arrays.fill(warCount, 0); // SOSDET: every human's (SOS-46 M4)
++		java.util.Arrays.fill(warner, null);
++	}
++	
++	double sosdetWarCount(int h) {
++		return warCount[h];
++	}
++	
++	int sosdetWarner(int h) {
++		return warner[h] == null ? -1 : warner[h].index();
+ 	}
+ 	
+ 	void updateAll(double ds) {
++		int sosdetH = sosdet.Hooks.humanIndex(); // SOSDET: the current human's (SOS-46 M4)
+ 		
+ 		
+ 		
+-		teachings -= ds/(16.0*TIME.secondsPerDay());
+-		if (teachings < 0)
+-			teachings = 0;
++		teachings[sosdetH] -= ds/(16.0*TIME.secondsPerDay());
++		if (teachings[sosdetH] < 0)
++			teachings[sosdetH] = 0;
+ 		
+ 		if (SETT.INVADOR().invading())
+ 			return;
+@@ -89,26 +109,26 @@
+ 			return;
+ 		
+ 		if (DIP.WAR().any(FACTIONS.player())) {
+-			warner = null;
++			warner[sosdetH] = null;
+ 			return;
+ 		}
+ 		
+ 		DipWarPlayer w = DIP.WAR_PLAYER();
+ 		
+-		if (warner != null) {
+-			if (!warner.isActive()) {
+-				warner = null;
++		if (warner[sosdetH] != null) {
++			if (!warner[sosdetH].isActive()) {
++				warner[sosdetH] = null;
+ 				return;
+ 			}
+-			if (warner.request.has())
++			if (warner[sosdetH].request.has())
+ 				return;
+-			if (!w.potential(warner)) {
+-				warner = null;
+-				warCount = -WAR_INTERVAL;
++			if (!w.potential(warner[sosdetH])) {
++				warner[sosdetH] = null;
++				warCount[sosdetH] = -WAR_INTERVAL;
+ 				return;
+ 			}
+-			start(warner); 
+-			warner = null;
++			start(warner[sosdetH]); 
++			warner[sosdetH] = null;
+ 		}
+ 		
+ 		double attack = 0;
+@@ -117,14 +137,14 @@
+ 			attack += Math.max(1-ROPINION.trust().get(f), 0);
+ 		}
+ 		
+-		warCount += attack*ds;
++		warCount[sosdetH] += attack*ds;
+ 		
+ 		//warCount = WAR_INTERVAL;
+ 		
+-		if (warCount < WAR_INTERVAL)
++		if (warCount[sosdetH] < WAR_INTERVAL)
+ 			return;
+ 
+-		warCount -= WAR_INTERVAL;
++		warCount[sosdetH] -= WAR_INTERVAL;
+ 		
+ 		attack *= RND.rFloat();
+ 		
+@@ -133,7 +153,7 @@
+ 			
+ 			if (attack <= 0) {
+ 
+-				warner = f;
++				warner[sosdetH] = f;
+ 				WarMessages.warn(f);
+ 				return;
+ 			}
+@@ -177,7 +197,7 @@
+ 		LIST<RegDist> proxies = WORLD.PATH().regFinder.all(f, Treaty.FACTION_REACHABLE_NPC_TRADE, WRegSel.DUMMY());
+ 		int am = 0;
+ 		for (RegDist d : proxies) {
+-			if (d.reg.faction() != null && d.reg.faction() != f && DIP.WAR().is(FACTIONS.player(), d.reg.faction())) {
++			if (d.reg.faction() instanceof FactionNPC && d.reg.faction() != f && DIP.WAR().is(FACTIONS.player(), d.reg.faction())) { // SOSDET: a human that is not this one is no NPC (ADR 0004)
+ 				am++;
+ 			}
+ 		}
+@@ -185,7 +205,7 @@
+ 			return false;
+ 		am = RND.rInt(am);
+ 		for (RegDist d : proxies) {
+-			if (d.reg.faction() != null && d.reg.faction() != f && DIP.WAR().is(FACTIONS.player(), d.reg.faction())) {
++			if (d.reg.faction() instanceof FactionNPC && d.reg.faction() != f && DIP.WAR().is(FACTIONS.player(), d.reg.faction())) { // SOSDET: a human that is not this one is no NPC (ADR 0004)
+ 				am--;
+ 				if (am <= 0) {
+ 					int a = proxyMove(f, (FactionNPC) d.reg.faction());
+@@ -246,11 +266,12 @@
+ 
+ 	
+ 	private void start(FactionNPC f) {
++		int sosdetH = sosdet.Hooks.humanIndex(); // SOSDET: the current human's (SOS-46 M4)
+ 		DipWarPlayer w = DIP.WAR_PLAYER();
+-		if (w.willing(warner)) {
++		if (w.willing(warner[sosdetH])) {
+ 			DIP.WAR().set(f);
+ 			WarMessages.start(f);
+-		}else if (w.potential(warner)){
++		}else if (w.potential(warner[sosdetH])){
+ 			
+ 			DIP.secondSincestartInc(f, FACTIONS.player(), -0.5);
+ 			
+@@ -286,7 +307,7 @@
+ 			}
+ 
+ 			
+-			teachings = 1;
++			teachings[sosdetH] = 1;
+ 			WarMessages.teachings(f);
+ 			
+ 		}
+diff -ru -U2 a/game/faction/Faction.java b/game/faction/Faction.java
+--- a/game/faction/Faction.java	2026-03-31 07:18:58.000000000 +0500
++++ b/game/faction/Faction.java	2026-10-25 09:53:29.807748400 +0500
+@@ -145,6 +145,7 @@
+ 		
+ 		public abstract void remove(FactionNPC f);
+ 		public abstract void add(FactionNPC f);
++		public void sosdetHumanGone(Faction f) {} // SOSDET: a human lost its capitol; only diplomacy cares (B5, SOS-46)
+ 	}
+ 	
+ 	@Override
+diff -ru -U2 a/game/faction/diplomacy/DIP.java b/game/faction/diplomacy/DIP.java
+--- a/game/faction/diplomacy/DIP.java	2026-06-25 10:47:44.000000000 +0500
++++ b/game/faction/diplomacy/DIP.java	2026-10-25 09:53:29.807748400 +0500
+@@ -39,7 +39,27 @@
+ 	public final DipStance allied;
+ 	public final DipStance vassal;
+ 	public final DipStance overlord;
+-	public final DipWarPlayer warPlayer = new DipWarPlayer();
++	public final DipWarPlayer warPlayer = new DipWarPlayer(0);
++	private final DipWarPlayer[] sosdetWarPlayers = sosdetWarPlayers(warPlayer); // SOSDET: one per human, [0] the game's own (SOS-46 M3)
++	
++	private static DipWarPlayer[] sosdetWarPlayers(DipWarPlayer first) {
++		DipWarPlayer[] w = new DipWarPlayer[sosdet.Hooks.HUMANS_MAX];
++		w[0] = first;
++		for (int h = 1; h < w.length; h++)
++			w[h] = new DipWarPlayer(h);
++		return w;
++	}
++	
++	/** SOSDET: the war and coalition names of the human of slice {@code h}, for the engine's save section (SOS-46 M3). */
++	public static void sosdetSave(int h, FilePutter file) {
++		s.sosdetWarPlayers[h].teamName.save(file);
++		s.sosdetWarPlayers[h].warName.save(file);
++	}
++	
++	public static void sosdetLoad(int h, FileGetter file) throws IOException {
++		s.sosdetWarPlayers[h].teamName.load(file);
++		s.sosdetWarPlayers[h].warName.load(file);
++	}
+ 	
+ 	private final UpVassal uv = new UpVassal();
+ 	private final Deal dealTmp;	
+@@ -134,6 +154,11 @@
+ 			}
+ 
+ 			@Override
++			public void sosdetHumanGone(Faction f) { // SOSDET: (B5, SOS-46)
++				clear(f);
++			}
++
++			@Override
+ 			public void add(FactionNPC f) {
+ 				clear(f);
+ 			}
+@@ -320,7 +345,7 @@
+ 			}
+ 		}
+ 		
+-		if (f == FACTIONS.player() && old == enemies) {
++		if (f instanceof game.faction.player.Player && old == enemies) { // SOSDET: any human's peace (SOS-46 M3)
+ 			
+ 			for (int ai = 0; ai < FACTIONS.MAX(); ai++) {
+ 				Faction f2 = FACTIONS.all().get(ai);
+@@ -400,7 +425,7 @@
+ 	}
+ 	
+ 	public static DipWarPlayer WAR_PLAYER() {
+-		return s.warPlayer;
++		return s.sosdetWarPlayers[sosdet.Hooks.humanIndex()]; // SOSDET: the human FACTIONS.player() is (SOS-46 M3)
+ 	}
+ 	
+ 	public static abstract class DipActivityListener {
+@@ -426,6 +451,7 @@
+ 
+ 	private final ArrayList<FactionNPC> tmp = new ArrayList<FactionNPC>(FACTIONS.MAX());
+ 	private int ffi =-1;
++	private final ArrayList<FactionNPC> sosdetTraders = new ArrayList<FactionNPC>(FACTIONS.MAX()); // SOSDET: traders() outside the world part (SOS-46 PT1)
+ 	
+ 	private static final ACTION increase = new ACTION() {
+ 		
+@@ -437,6 +463,15 @@
+ 	};
+ 	
+ 	public static LIST<FactionNPC> traders (){
++		if (sosdet.Hooks.worldCacheClosed()) { // SOSDET: outside the world part a fresh list, no stamp, no shared iterator (SOS-46 PT1, as DipStance.List.all)
++			s.sosdetTraders.clearSloppy();
++			for (int i = 0; i < FACTIONS.NPCs().size(); i++) {
++				FactionNPC f = FACTIONS.NPCs().get(i);
++				if (f.isActive() && get(f).trades)
++					s.sosdetTraders.add(f);
++			}
++			return s.sosdetTraders;
++		}
+ 		if (GAME.updateI() == s.ffi)
+ 			return s.tmp;
+ 		
+diff -ru -U2 a/game/faction/diplomacy/DipStance.java b/game/faction/diplomacy/DipStance.java
+--- a/game/faction/diplomacy/DipStance.java	2026-06-17 10:48:06.000000000 +0500
++++ b/game/faction/diplomacy/DipStance.java	2026-10-25 09:53:29.808748400 +0500
+@@ -82,12 +82,25 @@
+ 		private int[] state = Alloc.ii(FACTIONS.MAX());
+ 		private Faction cf;
+ 		private final ArrayList<Faction> tmp = new ArrayList<Faction>(FACTIONS.MAX());
+-		private final ArrayList<FactionNPC> player = new ArrayList<FactionNPC>(FACTIONS.MAX());
++		// SOSDET: the player list once per human, each with its own stamp: FACTIONS.player() is this PC's human in the
++		// city part and the current one in the world part, which per-human loops change in turn (SOS-46, M3)
++		private final ArrayList<ArrayList<FactionNPC>> players = new ArrayList<>(sosdet.Hooks.HUMANS_MAX);
++		private final int[] playerState = new int[sosdet.Hooks.HUMANS_MAX];
++		{
++			for (int h = 0; h < sosdet.Hooks.HUMANS_MAX; h++) {
++				players.add(new ArrayList<FactionNPC>(FACTIONS.MAX()));
++				playerState[h] = Integer.MIN_VALUE;
++			}
++		}
+ 		
+ 		public LIST<? extends Faction> all(Faction f){
++			if (sosdet.Hooks.worldCacheClosed()) // SOSDET: outside the world part a fresh list, no stamp, no shared iterator (SOS-46 PT1)
++				return sosdetFresh(f);
+ 			if (f == FACTIONS.player()) {
+-				if (state[f.index()] != DIP.s.stateI) {
+-					state[f.index()] = DIP.s.stateI;
++				int sosdetH = sosdet.Hooks.humanIndex();
++				ArrayList<FactionNPC> player = players.get(sosdetH); // SOSDET: this human's list (SOS-46 M3)
++				if (playerState[sosdetH] != DIP.s.stateI) {
++					playerState[sosdetH] = DIP.s.stateI;
+ 					player.clearSloppy();
+ 					for (FactionNPC o : FACTIONS.NPCs()) {
+ 						if (f != o && is(o, f))
+@@ -109,9 +122,41 @@
+ 			return tmp;
+ 		}
+ 		
++		/**
++		 * SOSDET: the list a refresh would build, into a scratch list, for callers outside the world part: the UI, the
++		 * rig and the city part differ per PC, so they may neither advance a stamp (the world part would then rebuild at
++		 * other calls on other PCs) nor run a for-each over FACTIONS.NPCs() or FACTIONS.active(), whose one shared
++		 * iterator a rebuild resets under a loop around it (SOS-46 PT1).
++		 */
++		private LIST<? extends Faction> sosdetFresh(Faction f) {
++			if (f == FACTIONS.player()) {
++				sosdetNpcs.clearSloppy();
++				for (int i = 0; i < FACTIONS.NPCs().size(); i++) {
++					FactionNPC o = FACTIONS.NPCs().get(i);
++					if (f != o && is(o, f))
++						sosdetNpcs.add(o);
++				}
++				return sosdetNpcs;
++			}
++			sosdetActive.clearSloppy();
++			for (int i = 0; i < FACTIONS.active().size(); i++) {
++				Faction o = FACTIONS.active().get(i);
++				if (f != o && is(o, f))
++					sosdetActive.add(o);
++			}
++			return sosdetActive;
++		}
++		
++		private final ArrayList<FactionNPC> sosdetNpcs = new ArrayList<FactionNPC>(FACTIONS.MAX());
++		private final ArrayList<Faction> sosdetActive = new ArrayList<Faction>(FACTIONS.MAX());
++		
+ 		public LIST<FactionNPC> player(){
++			if (sosdet.Hooks.worldCacheClosed()) { // SOSDET: as all(), outside the world part (SOS-46 PT1)
++				sosdetFresh(FACTIONS.player());
++				return sosdetNpcs;
++			}
+ 			all(FACTIONS.player());
+-			return player;
++			return players.get(sosdet.Hooks.humanIndex()); // SOSDET: this human's (SOS-46 M3)
+ 		}
+ 	}
+ 
+diff -ru -U2 a/game/faction/diplomacy/UpVassal.java b/game/faction/diplomacy/UpVassal.java
+--- a/game/faction/diplomacy/UpVassal.java	2026-06-17 10:48:04.000000000 +0500
++++ b/game/faction/diplomacy/UpVassal.java	2026-10-25 09:53:29.808748400 +0500
+@@ -66,6 +66,9 @@
+ 			return;
+ 		year = TIME.years().bitsSinceStart();
+ 		
++		int[] sosdetHs = sosdet.Hooks.humanSlots(); // SOSDET: each human's tribute, with that human current (SOS-46 M3)
++		for (int sosdetK = 0; sosdetK < sosdetHs.length; sosdetK++) {
++		int sosdetBefore = sosdet.Hooks.currentHumanSwap(sosdetHs[sosdetK]);
+ 		if (DIP.overlord(FACTIONS.player()) != null) {
+ 			new MVassal(DIP.overlord(FACTIONS.player())).send();
+ 		}
+@@ -76,6 +79,8 @@
+ 			new MOverlord(DIP.VASSAL().all(FACTIONS.player())).send();
+ 			
+ 		}
++		sosdet.Hooks.currentHumanSwap(sosdetBefore);
++		}
+ 		
+ 	}
+ 	
+@@ -94,7 +99,8 @@
+ 			
+ 			int credits = (int) FACTIONS.WORTH().faction();
+ 			credits*= 0.1;
+-			credits = Math.max(credits, FACTIONS.player().credits().worth.get(0)-FACTIONS.player().credits().worth.get(1));
++			credits = Math.max(credits, sosdet.Hooks.reportRead() ? sosdet.Hooks.reportI(sosdet.report.Field.WORTH_SEASON, 0) // SOSDET: the world part reads the city's report: only the
++					: FACTIONS.player().credits().worth.get(0)-FACTIONS.player().credits().worth.get(1));                 // human's own PC updates its worth (SOS-46)
+ 			if (credits < 0)
+ 				credits = 100;
+ 			
+@@ -153,6 +159,10 @@
+ 			aa = new boolean[all.size()];
+ 			Arrays.fill(aa, true);
+ 			for (int i = 0; i < all.size(); i++) {
++				if (!(all.get(i) instanceof FactionNPC)) { // SOSDET: a human that is not this one is no NPC (ADR 0004)
++					fi[i] = -1;
++					continue;
++				}
+ 				FactionNPC f = (FactionNPC) all.get(i);
+ 				fi[i] = f.index();
+ 				fii[i] = f.iteration();
+@@ -235,6 +245,7 @@
+ 				protected void clickA() {
+ 					if (!accepted && TIME.days().bitsSinceStart()-day < 4) {
+ 						accepted = true;
++						if (!sosdet.game.cmd.Diplomacy.tributeAccept(fi, fii, creds, aa)) // SOSDET: in a session a command, applied in the step (SOS-46)
+ 						for (int i = 0; i < creds.length; i++) {
+ 							if (f(i) != null) {
+ 								if (aa[i]) {
+@@ -261,7 +272,7 @@
+ 		}
+ 		
+ 		private FactionNPC f(int i) {
+-			FactionNPC f = (FactionNPC) FACTIONS.getByIndex(fi[i]);
++			FactionNPC f = fi[i] < 0 ? null : (FactionNPC) FACTIONS.getByIndex(fi[i]); // SOSDET: a human that is not this one is no NPC (ADR 0004)
+ 			if (f != null &&f.isActive() &&  f.iteration() == fii[i] && DIP.overlord(f) == FACTIONS.player()) {
+ 				return f;
+ 			}
+diff -ru -U2 a/game/faction/player/BoostCompound.java b/game/faction/player/BoostCompound.java
+--- a/game/faction/player/BoostCompound.java	2026-06-12 10:41:16.000000000 +0500
++++ b/game/faction/player/BoostCompound.java	2026-10-25 09:53:29.828363100 +0500
+@@ -37,9 +37,27 @@
+ 		return ((FactionNPC)f).bonus.getD(bo);
+ 	}
+ 	
++	/** SOSDET: the compound of the human asked; only slot 0's Player connects boosters, and each Player has its own state (ADR 0004). */
++	protected BoostCompound<T> of(Player f) {
++		return this;
++	}
++	
++	/** SOSDET: a booster's value from this compound's own state, as Boo's cached value is made (ADR 0004). */
++	private double sosdetValue(LIST<Value> vs, boolean isMul) {
++		double v = 0;
++		if (isMul) {
++			for (Value x : vs)
++				v += (x.bo.booster.getValue(getValue(all.get(x.ti)))-1);
++			return Math.max(0, v + 1);
++		}
++		for (Value x : vs)
++			v += x.bo.booster.getValue(getValue(all.get(x.ti)));
++		return v;
++	}
++	
+ 	public void clearChache() {
+ 		for (Boo b : boos)
+-			b.cacheI = GAME.updateI()-100;
++			b.cacheI = Integer.MIN_VALUE; // SOSDET: never a part key
+ 	}
+ 	
+ 	@Override
+@@ -47,7 +65,8 @@
+ 		
+ 		KeyMap<LinkedList<Value>> map = new KeyMap<LinkedList<Value>>();
+ 		
+-		for (T t : all) {
++		for (int ti = 0; ti < all.size(); ti++) { // SOSDET: each value keeps its index, for another human's own (ADR 0004)
++			T t = all.get(ti);
+ 			
+ 			BoostSpecs bos = bos(t);
+ 			
+@@ -57,7 +76,7 @@
+ 				if (!map.containsKey(k)) {
+ 					map.put(k, new LinkedList<>());
+ 				}
+-				map.get(k).add(new Value(t, s));
++				map.get(k).add(new Value(t, s, ti));
+ 			}
+ 		}
+ 		
+@@ -74,7 +93,7 @@
+ 	private class Boo extends Booster {
+ 
+ 		final Boostable bo;
+-		private int cacheI = -1000;
++		private int cacheI = Integer.MIN_VALUE; // SOSDET: never a part key
+ 		private double cache;
+ 		private final BValue value;
+ 		private final double from;
+@@ -114,9 +133,12 @@
+ 				
+ 				@Override
+ 				public double vGet(Player f) {
+-					int ci = GAME.updateI();
++					BoostCompound<T> c = of(f);
++					if (c != BoostCompound.this) // SOSDET: another human's own tech, level or titles (ADR 0004)
++						return c.sosdetValue(all, isMul);
++					int ci = sosdet.Hooks.partKey(GAME.updateI()); // SOSDET: one value per part: on slot 0's PC the city part's sum never reaches the world part (SOS-46)
+ 					if (ci != cacheI) {
+-						cacheI = GAME.updateI();
++						cacheI = ci;
+ 						cache = 0;
+ 						if (isMul) {
+ 							for (Value v : all) {
+@@ -169,10 +191,12 @@
+ 		
+ 		public final T t;
+ 		public final BoostSpec bo;
++		final int ti;
+ 		
+-		Value(T t, BoostSpec bo){
++		Value(T t, BoostSpec bo, int ti){
+ 			this.t = t;
+ 			this.bo = bo;
++			this.ti = ti;
+ 		}
+ 	}
+ 	
+diff -ru -U2 a/game/faction/player/PBonusSetting.java b/game/faction/player/PBonusSetting.java
+--- a/game/faction/player/PBonusSetting.java	2026-06-18 20:59:32.000000000 +0500
++++ b/game/faction/player/PBonusSetting.java	2026-10-25 09:53:29.809747900 +0500
+@@ -103,11 +103,13 @@
+ 				
+ 				@Override
+ 				public double vGet(Player f) {
+-					return 1.0;
++					return f.bonusesCustom == PBonusSetting.this ? 1.0 : 0; // SOSDET: each human's own bonuses (SOS-46)
+ 				}
+ 				
+ 				@Override
+ 				public double vGet(HCLASS_RACE t) {
++					if (FACTIONS.player().bonusesCustom != PBonusSetting.this) // SOSDET: the city's own human's bonuses only (SOS-46)
++						return 0;
+ 					if (b == BOOSTABLES.BEHAVIOUR().HAPPI) {
+ 						if (t.cl == HCLASSES.CITIZEN() && STATS.POP().POP.data(HCLASSES.CITIZEN()).get(t.race) == 0)
+ 							return 0;
+diff -ru -U2 a/game/faction/player/PLevels.java b/game/faction/player/PLevels.java
+--- a/game/faction/player/PLevels.java	2026-06-29 08:30:04.000000000 +0500
++++ b/game/faction/player/PLevels.java	2026-10-25 09:53:29.810748100 +0500
+@@ -96,6 +96,11 @@
+ 		bos = new BoostCompound<PLevels.Level>(boosters, levels) {
+ 			
+ 			@Override
++			protected BoostCompound<Level> of(Player f) {
++				return f.level().bos; // SOSDET: each human's own level (ADR 0004)
++			}
++			
++			@Override
+ 			protected double getValue(Level t) {
+ 				return current.index >= t.index ? 1 : 0;
+ 			}
+diff -ru -U2 a/game/faction/trade/TradeSorter.java b/game/faction/trade/TradeSorter.java
+--- a/game/faction/trade/TradeSorter.java	2026-06-25 10:27:14.000000000 +0500
++++ b/game/faction/trade/TradeSorter.java	2026-10-25 09:53:29.811749900 +0500
+@@ -194,6 +194,8 @@
+ 	}
+ 	
+ 	private int sellPriceItemPlayer(TRADABLE res, int am, Faction buyer, double distance) {
++		if (!(buyer instanceof FactionNPC)) // SOSDET: a human that is not this one is no NPC (ADR 0004)
++			return -1;
+ 		FactionNPC f = (FactionNPC) buyer;
+ 		int price = f.res(res).priceAt(am);
+ 		double toll = TradeManager.totalFee(FACTIONS.player(), buyer, distance, res, am)/(double)am;
+@@ -226,7 +228,7 @@
+ 				if (seller.faction() == buyer)
+ 					continue;
+ 				
+-				if (seller.faction() == FACTIONS.player())
++				if (seller.faction() instanceof Player) // SOSDET: a human sells only in its own sales round, as itself (SOS-46)
+ 					continue;
+ 				
+ 				if (seller.faction().seller(resource).removeMax() <= batch)
+diff -ru -U2 a/util/colors/COLOR_MAP.java b/util/colors/COLOR_MAP.java
+--- a/util/colors/COLOR_MAP.java	2026-04-06 08:53:34.000000000 +0500
++++ b/util/colors/COLOR_MAP.java	2026-10-25 09:53:29.811749900 +0500
+@@ -47,7 +47,7 @@
+ 			return F_REBEL;
+ 		if (f == FACTIONS.player())
+ 			return F_PLAYER;
+-		if (DIP.get((FactionNPC)f).ally)
++		if (f instanceof FactionNPC && DIP.get((FactionNPC)f).ally) // SOSDET: a human that is not this one is no NPC (ADR 0004)
+ 			return F_ALLY;
+ 		if (!DIP.WAR().is(FACTIONS.player(), f))
+ 			return F_NEAUTRAL;
+diff -ru -U2 a/util/text/InsertFaction.java b/util/text/InsertFaction.java
+--- a/util/text/InsertFaction.java	2025-09-12 16:09:04.000000000 +0500
++++ b/util/text/InsertFaction.java	2026-10-25 09:53:29.812750800 +0500
+@@ -31,8 +31,8 @@
+ 
+ 			@Override
+ 			public void set(Faction t, Str str) {
+-				if (t == FACTIONS.player())
+-					str.add(FACTIONS.player().rulerName());
++				if (!(t instanceof FactionNPC)) // SOSDET: a human that is not this one is no NPC (ADR 0004)
++					str.add(((game.faction.player.Player) t).rulerName());
+ 				else {
+ 					str.add(((FactionNPC)t).court().king().name);
+ 				}
+@@ -59,7 +59,7 @@
+ 
+ 			@Override
+ 			public void set(Faction f, Str str) {
+-				if (f == FACTIONS.player()) {
++				if (!(f instanceof FactionNPC)) { // SOSDET: a human that is not this one is no NPC (ADR 0004)
+ 					str.add(RD.RACE(f.race()).names.rIntro.get(0));
+ 				}else {
+ 					str.add(((FactionNPC)f).nameIntro);
+@@ -73,8 +73,8 @@
+ 
+ 			@Override
+ 			public void set(Faction ff, Str str) {
+-				if (ff == FACTIONS.player()) {
+-					for (PTitle t : FACTIONS.player().titles.all()) {
++				if (!(ff instanceof FactionNPC)) { // SOSDET: a human that is not this one is no NPC (ADR 0004)
++					for (PTitle t : ((game.faction.player.Player) ff).titles.all()) {
+ 						if (t.selected()) {
+ 							str.add(t.name);
+ 							str.add(',').s();
+diff -ru -U2 a/view/world/ui/region/OtherHov.java b/view/world/ui/region/OtherHov.java
+--- a/view/world/ui/region/OtherHov.java	2026-05-23 10:49:42.000000000 +0500
++++ b/view/world/ui/region/OtherHov.java	2026-10-25 09:53:29.812750800 +0500
+@@ -46,7 +46,7 @@
+ 			
+ 		}else {
+ 			
+-			FactionNPC f = (FactionNPC) reg.faction();
++			game.faction.Faction f = reg.faction(); // SOSDET: a human that is not this one is no NPC (ADR 0004)
+ 			if (reg.capitol()) {
+ 				b.add(UI.icons().s.crown);
+ 			}
+@@ -74,10 +74,10 @@
+ 		
+ 		if (reg.faction() != null) {
+ 			b.tab(9);
+-			FactionNPC f = (FactionNPC) reg.faction();
++			FactionNPC f = reg.faction() instanceof FactionNPC ? (FactionNPC) reg.faction() : null; // SOSDET: a human that is not this one is no NPC (ADR 0004)
+ 			if (DIP.WAR().is(FACTIONS.player(), reg.faction()))
+ 				b.error(Dic.¤¤AtWar);
+-			else {
++			else if (f != null) {
+ 				b.add(UI.icons().s.heart);
+ 				b.add(GFORMAT.perc(b.text(), ROPINION.get(f.court().king().roy())));
+ 			}
+@@ -93,7 +93,8 @@
+ 			b.add(b.text().add(2).s().add(RD.DIST().reachable(reg)));
+ 			b.NL();
+ 			if (reg.faction() != null) {
+-				b.add(b.text().add(3).s().add(((FactionNPC)reg.faction()).sanctified));
++				if (reg.faction() instanceof FactionNPC) // SOSDET: a human that is not this one is no NPC (ADR 0004)
++					b.add(b.text().add(3).s().add(((FactionNPC)reg.faction()).sanctified));
+ 			}	
+ 			
+ 			box.NL();
+diff -ru -U2 a/view/world/ui/region/PlayDebug.java b/view/world/ui/region/PlayDebug.java
+--- a/view/world/ui/region/PlayDebug.java	2026-02-16 13:37:58.000000000 +0500
++++ b/view/world/ui/region/PlayDebug.java	2026-10-25 09:53:29.813749600 +0500
+@@ -63,7 +63,8 @@
+ 			@Override
+ 			protected void clickA() {
+ 				if (reg.capitol()) {
+-					FACTIONS.remove((FactionNPC) reg.faction(), true);
++					if (reg.faction() instanceof FactionNPC) // SOSDET: a human that is not this one is no NPC (ADR 0004)
++							FACTIONS.remove((FactionNPC) reg.faction(), true);
+ 				}
+ 				
+ 				RD.setFaction(reg, selectedIs() ? null : FACTIONS.player(), true);
+diff -ru -U2 a/world/army/ADConscripts.java b/world/army/ADConscripts.java
+--- a/world/army/ADConscripts.java	2026-04-15 09:23:32.000000000 +0500
++++ b/world/army/ADConscripts.java	2026-10-25 09:53:29.813749600 +0500
+@@ -52,13 +52,18 @@
+ 	public boolean canTrain(Race race, Faction f) {
+ 		if (f == null)
+ 			return true;
+-		return AD.men(race).faction(f) - AD.cityDivs().total(race) < total(race).get(f);
++		return AD.men(race).faction(f) - sosdetCityMen(race, f) < total(race).get(f);
+ 	}
+ 	
+ 	public int canTrainI(Race race, Faction f) {
+ 		if (f == null)
+ 			return 100000;
+-		return  total(race).get(f)-AD.men(race).faction(f)+ AD.cityDivs().total(race);
++		return  total(race).get(f)-AD.men(race).faction(f)+ sosdetCityMen(race, f);
++	}
++	
++	/** SOSDET: a human's own stored city soldiers; for an NPC the first human's, as vanilla's one player (SOS-46) */
++	private static int sosdetCityMen(Race race, Faction f) {
++		return AD.cityDivs(f instanceof game.faction.player.Player ? f.index() : 0).total(race);
+ 	}
+ 	
+ 	public void kill(Race race, Faction f, int men) {
+@@ -73,7 +78,7 @@
+ 				@Override
+ 				public int get(Faction t) {
+ 					if (r.population().max <= 0) {
+-						if (t == FACTIONS.player()) {
++						if (t instanceof game.faction.player.Player) { // SOSDET: every human (SOS-46)
+ 							return 0;
+ 						}
+ 					}
+diff -ru -U2 a/world/army/ADUpdaterDiv.java b/world/army/ADUpdaterDiv.java
+--- a/world/army/ADUpdaterDiv.java	2026-01-12 14:13:12.000000000 +0500
++++ b/world/army/ADUpdaterDiv.java	2026-10-25 09:53:29.814751400 +0500
+@@ -2,6 +2,7 @@
+ 
+ import game.faction.FACTIONS;
+ import game.faction.Faction;
++import game.faction.player.Player;
+ import game.time.TIME;
+ import snake2d.util.rnd.RND;
+ import snake2d.util.sprite.text.Str;
+@@ -28,10 +29,11 @@
+ 		
+ 		Faction f = i == 0 ? null : FACTIONS.getByIndex(i-1);
+ 		
++		int sosdetH = sosdet.Hooks.currentHumanSwap(f); // SOSDET: a human's divisions train, age and desert as that human, so its report and city are read and written (SOS-46)
+ 		ADArmies as = AD.army(f);
+ 		for (int ai = 0; ai < as.all().size(); ai++) {
+ 			WArmy a = as.all().get(ai);
+-			if (a.faction() != FACTIONS.player() || AD.supplies().health(a) >= 1) {
++			if (!(a.faction() instanceof Player) || AD.supplies().health(a) >= 1) { // SOSDET: every human's armies starve (SOS-46)
+ 				train(a);
+ 			}else {
+ 				starve(a);
+@@ -39,6 +41,7 @@
+ 			if (!a.added())
+ 				ai--;
+ 		}
++		sosdet.Hooks.currentHumanSwap(sosdetH);
+ 		
+ 	}
+ 	
+diff -ru -U2 a/world/army/WDivMercenaries.java b/world/army/WDivMercenaries.java
+--- a/world/army/WDivMercenaries.java	2025-09-22 07:59:34.000000000 +0500
++++ b/world/army/WDivMercenaries.java	2026-10-25 09:53:29.814751400 +0500
+@@ -7,6 +7,7 @@
+ import game.faction.FCredits.CTYPE;
+ import game.faction.Faction;
+ import game.faction.diplomacy.DIP;
++import game.faction.player.Player;
+ import game.time.TIME;
+ import settlement.stats.STATS;
+ import snake2d.util.file.FileGetter;
+@@ -44,14 +45,15 @@
+ 				int missed = 0;
+ 				int cc = 0;
+ 				for (WDivMercenary d : all) {
+-					if (d.army() == null || d.army().faction() != FACTIONS.player())
++					if (d.army() == null || !(d.army().faction() instanceof Player)) // SOSDET: every human pays their own mercenaries (SOS-46)
+ 						continue;
++					Player sosdetP = (Player) d.army().faction();
+ 					if (d.missedPayments < 0) {
+ 						d.missedPayments = 0;
+ 						continue;
+ 					}
+ 					int cost = (int) (d.costPerMan()*d.men()*d.army().supplyAmount());
+-					if (cost > FACTIONS.player().credits().credits()) {
++					if (cost > sosdetP.credits().credits()) {
+ 						d.missedPayments++;
+ 						if (d.missedPayments >= 2) {
+ 							d.reassign(null);
+@@ -59,10 +61,10 @@
+ 						cc+= cost;
+ 						missed = Math.max(missed, d.missedPayments);
+ 					}else {
+-						FACTIONS.player().credits().inc(-cost, CTYPE.MERCINARIES);
++						sosdetP.credits().inc(-cost, CTYPE.MERCINARIES);
+ 						d.missedPayments --;
+-						if (d.missedPayments > 0 && cost <= FACTIONS.player().credits().credits()) {
+-							FACTIONS.player().credits().inc(-cost, CTYPE.MERCINARIES);
++						if (d.missedPayments > 0 && cost <= sosdetP.credits().credits()) {
++							sosdetP.credits().inc(-cost, CTYPE.MERCINARIES);
+ 						}
+ 					}
+ 				}
+diff -ru -U2 a/world/army/ai/Rebel.java b/world/army/ai/Rebel.java
+--- a/world/army/ai/Rebel.java	2025-09-22 07:59:34.000000000 +0500
++++ b/world/army/ai/Rebel.java	2026-10-25 09:53:29.815788900 +0500
+@@ -1,6 +1,6 @@
+ package world.army.ai;
+ 
+-import game.faction.FACTIONS;
++import game.faction.player.Player;
+ import game.faction.diplomacy.DIP;
+ import game.time.TIME;
+ import snake2d.util.rnd.RND;
+@@ -51,7 +51,7 @@
+ 				}
+ 				a.disband();
+ 			}
+-		}else if(hh.faction() == FACTIONS.player()) {
++		}else if(hh.faction() instanceof Player) { // SOSDET: rebels raid the regions of every human (SOS-46)
+ 			if (RD.DEVASTATION().current.getD(hh) < 0.9) {
+ 				a.raid(true);
+ 				return;
+@@ -90,13 +90,13 @@
+ 		
+ 		@Override
+ 		public boolean is(Region t) {
+-			return t.faction() == FACTIONS.player() &&  AD.power().get(aa) > power(t);
++			return t.faction() instanceof Player &&  AD.power().get(aa) > power(t); // SOSDET: every human (SOS-46)
+ 		}
+ 		
+ 		private double power(Region reg) {
+ 			double m = 0;
+ 			for (WArmy a : WORLD.ENTITIES().armies.fill(reg)) {
+-				if (a.faction() != null &&(a.faction() == FACTIONS.player() || DIP.get(a.faction(), FACTIONS.player()).ally))
++				if (a.faction() != null &&(a.faction() == reg.faction() || DIP.get(a.faction(), reg.faction()).ally)) // SOSDET: the human of the region and its allies (SOS-46)
+ 					m += AD.power().get(a);
+ 			}
+ 			return m + RD.MILITARY().power.getD(reg);
+diff -ru -U2 a/world/army/ai/War.java b/world/army/ai/War.java
+--- a/world/army/ai/War.java	2026-04-09 18:46:34.000000000 +0500
++++ b/world/army/ai/War.java	2026-10-25 09:53:29.816306400 +0500
+@@ -47,7 +47,7 @@
+ 		Faction f = FACTIONS.getByIndex(i);
+ 		if (!f.isActive())
+ 			return;
+-		if (f == FACTIONS.player())
++		if (!(f instanceof FactionNPC)) // SOSDET: a human that is not this one is no NPC (ADR 0004)
+ 			return;
+ 		recruiter.recruit((FactionNPC) f);
+ 		planForWar(f);
+diff -ru -U2 a/world/battle/PRegAttack.java b/world/battle/PRegAttack.java
+--- a/world/battle/PRegAttack.java	2026-01-06 09:34:38.000000000 +0500
++++ b/world/battle/PRegAttack.java	2026-10-25 09:53:29.816306400 +0500
+@@ -2,7 +2,7 @@
+ 
+ import java.io.IOException;
+ 
+-import game.faction.FACTIONS;
++import game.faction.player.Player;
+ import snake2d.LOG;
+ import snake2d.util.file.FileGetter;
+ import snake2d.util.file.FilePutter;
+@@ -72,7 +72,7 @@
+ 			Region reg = WORLD.REGIONS().getByIndex(playerRegAttackRegion);
+ 			WArmy a = WORLD.ENTITIES().armies.get(playerRegAttackArmy);
+ 			playerRegAttackArmy = -1;
+-			if (reg.faction() == FACTIONS.player()) {
++			if (reg.faction() instanceof Player) { // SOSDET: the garrison attack of every human (SOS-46)
+ 				if (create(reg, a))
+ 					return true;
+ 			}
+@@ -105,7 +105,7 @@
+ 		if (RD.MILITARY().garrison.get(reg) <= 0)
+ 			return false;
+ 		
+-		if (reg.faction() == FACTIONS.player()) {
++		if (reg.faction() instanceof Player) { // SOSDET: no human garrison attacks unasked, as in vanilla (SOS-46)
+ 			return false;
+ 		}
+ 		
+@@ -154,9 +154,9 @@
+ 		
+ 		
+ 		Pair allies = util.fill(reg.faction(), a.faction(), a.ctx(), a.cty());
+-		boolean p = reg.faction() == FACTIONS.player();
++		boolean p = reg.faction() instanceof Player; // SOSDET: every human (SOS-46)
+ 		for (WArmy a2 : allies.a) {
+-			if ((p || a2.faction() == FACTIONS.player()))
++			if ((p || a2.faction() instanceof Player))
+ 				aPow += AD.power().get(a2);	
+ 		}
+ 		
+diff -ru -U2 a/world/battle/PSiege.java b/world/battle/PSiege.java
+--- a/world/battle/PSiege.java	2025-09-12 16:09:02.000000000 +0500
++++ b/world/battle/PSiege.java	2026-10-25 09:53:29.816306400 +0500
+@@ -3,7 +3,7 @@
+ import java.io.IOException;
+ import java.util.Arrays;
+ 
+-import game.faction.FACTIONS;
++import game.faction.player.Player;
+ import snake2d.LOG;
+ import snake2d.util.file.FileGetter;
+ import snake2d.util.file.FilePutter;
+@@ -150,7 +150,7 @@
+ 		if (!besigedMap.get(reg.index())) {
+ 			besigedMap.set(reg.index(), true);
+ 			besieged.add(reg.index());
+-			if (reg.faction() == FACTIONS.player() && !reg.capitol()) {
++			if (reg.faction() instanceof Player && !reg.capitol()) { // SOSDET: the regions of every human (SOS-46)
+ 				double regPow = RD.MILITARY().defensePower(reg);
+ 				double aPow = AD.power().get(a);
+ 				
+@@ -167,7 +167,7 @@
+ 			}
+ 			
+ 		}
+-		if (a.faction() == FACTIONS.player())
++		if (a.faction() instanceof Player) // SOSDET: the siege of every human is polled first (SOS-46)
+ 			playerRegAttackRegion = reg.index();
+ 	}
+ 	
+@@ -179,7 +179,7 @@
+ 			playerRegAttackRegion = -1;
+ 			WArmy a = util.getBesieger(reg);
+ 			
+-			if (a != null && a.faction() == FACTIONS.player()) {
++			if (a != null && a.faction() instanceof Player) { // SOSDET: every human (SOS-46)
+ 				if (create(a, reg, true))
+ 					return true;
+ 			}
+@@ -212,7 +212,7 @@
+ 			return false;
+ 		
+ 		WArmy a = util.getBesieger(reg);
+-		if (a != null && a.faction() != FACTIONS.player())
++		if (a != null && !(a.faction() instanceof Player)) // SOSDET: a human is asked about its siege when it orders it, as in vanilla (SOS-46)
+ 			return create(a, reg, first);
+ 		return false;
+ 		
+@@ -241,7 +241,7 @@
+ 			regPow += AD.power().get(a2);
+ 		}
+ 		
+-		if (a.faction() != FACTIONS.player() && regPow > aPow) {
++		if (!(a.faction() instanceof Player) && regPow > aPow) { // SOSDET: every human (SOS-46)
+ 			return false;
+ 		}
+ 
+diff -ru -U2 a/world/battle/Resolver.java b/world/battle/Resolver.java
+--- a/world/battle/Resolver.java	2026-06-18 21:36:34.000000000 +0500
++++ b/world/battle/Resolver.java	2026-10-25 09:53:29.817305800 +0500
+@@ -46,7 +46,9 @@
+ 			}
+ 			looser.count(count.clear(), autoValue(looser), false);
+ 			winner.count(count.clear(), autoValue(winner), false);
++			int sosdetH = sosdet.Hooks.currentHumanSwap(looser.human); // SOSDET: the prompt asks the human of this side (SOS-46)
+ 			iplayer.battle(looser, winner);
++			sosdet.Hooks.currentHumanSwap(sosdetH);
+ 			return;
+ 		}
+ 		
+@@ -64,7 +66,9 @@
+ 				
+ 				retreater.teleport(ret.x(), ret.y());
+ 				if (winner.player) {
++					int sosdetH = sosdet.Hooks.currentHumanSwap(winner.human); // SOSDET: the prompt asks the human of this side (SOS-46)
+ 					iplayer.enemyWithdraws(winner, looser);
++					sosdet.Hooks.currentHumanSwap(sosdetH);
+ 					return;
+ 				}
+ 				looser.us.get(0).extract(retValue);
+@@ -94,7 +98,9 @@
+ 					winner.retreatCoo.set(ret);
+ 				}
+ 			}
++			int sosdetH = sosdet.Hooks.currentHumanSwap(winner.human); // SOSDET: the prompt asks the human of this side (SOS-46)
+ 			iplayer.battle(winner, looser);
++			sosdet.Hooks.currentHumanSwap(sosdetH);
+ 			return;
+ 		}
+ 
+@@ -136,7 +142,9 @@
+ 				b.count(count, 1.0, false);
+ 				a.count(count, 1-a.powerBalance, false);
+ 			}
++			int sosdetH = sosdet.Hooks.currentHumanSwap(a.human); // SOSDET: the prompt asks the besieging human (SOS-46)
+ 			iplayer.besige(a, b);
++			sosdet.Hooks.currentHumanSwap(sosdetH);
+ 			return true;
+ 		}
+ 		if (b.player && first) {
+@@ -144,7 +152,9 @@
+ 			//b.count(count, 0, true);
+ 			a.count(count, 1-a.powerBalance, false);
+ 			if (b.men() > 0) {
++				int sosdetH = sosdet.Hooks.currentHumanSwap(b.human); // SOSDET: the prompt asks the besieged human (SOS-46)
+ 				iplayer.sallyOut(b, a);
++				sosdet.Hooks.currentHumanSwap(sosdetH);
+ 				return true;
+ 			}
+ 		}
+@@ -156,7 +166,9 @@
+ 		
+ 		
+ 		if (b.player && reg.capitol()) {
++			int sosdetH = sosdet.Hooks.currentHumanSwap(b.human); // SOSDET: the invasion goes to the city of the besieged human (INVADE, SOS-46)
+ 			iplayer.invadeCapitol(a);
++			sosdet.Hooks.currentHumanSwap(sosdetH);
+ 			return true;
+ 		}
+ 		
+diff -ru -U2 a/world/battle/ResolverSide.java b/world/battle/ResolverSide.java
+--- a/world/battle/ResolverSide.java	2026-06-17 10:48:06.000000000 +0500
++++ b/world/battle/ResolverSide.java	2026-10-25 09:53:29.817305800 +0500
+@@ -2,7 +2,7 @@
+ 
+ import java.util.Arrays;
+ 
+-import game.faction.FACTIONS;
++import game.faction.player.Player;
+ import init.constant.Config;
+ import init.race.RACES;
+ import init.resources.RESOURCES;
+@@ -37,6 +37,7 @@
+ 	public Side side;
+ 	private final Coo coo = new Coo();
+ 	public boolean player;
++	public int human; // SOSDET: the slot of the first human on this side, when player (SOS-46)
+ 	public double powerBalance;
+ 	private int men;
+ 	private int losses;
+@@ -61,7 +62,11 @@
+ 		for (int i = 0; i < side.us.size(); i++) {
+ 			ResolverUnit u = all.get(i);
+ 			u.init(side.us.get(i));
+-			player |= side.us.get(i).faction() == FACTIONS.player();
++			if (side.us.get(i).faction() instanceof Player) { // SOSDET: a side with any human is a player side; its first human is asked (SOS-46)
++				if (!player)
++					human = side.us.get(i).faction().index();
++				player = true;
++			}
+ 			men += side.us.get(i).men();
+ 			us.add(u);
+ 			units.add(u);
+diff -ru -U2 a/world/battle/Side.java b/world/battle/Side.java
+--- a/world/battle/Side.java	2026-06-17 10:48:04.000000000 +0500
++++ b/world/battle/Side.java	2026-10-25 09:53:29.818304600 +0500
+@@ -1,6 +1,6 @@
+ package world.battle;
+ 
+-import game.faction.FACTIONS;
++import game.faction.player.Player;
+ import game.faction.Faction;
+ import init.constant.Config;
+ import snake2d.LOG;
+@@ -193,8 +193,8 @@
+ 		
+ 		public double power() {
+ 			switch(type) {
+-			case T_ARMY : return (a().faction() == FACTIONS.player() ? 0.8 : 1.0)*AD.power().get(a());
+-			case T_GARRISON: return (r().faction() == FACTIONS.player() ? 0.8 : 1.0)*RD.MILITARY().power.getD(r());
++			case T_ARMY : return (a().faction() instanceof Player ? 0.8 : 1.0)*AD.power().get(a()); // SOSDET: every human (SOS-46)
++			case T_GARRISON: return (r().faction() instanceof Player ? 0.8 : 1.0)*RD.MILITARY().power.getD(r()); // SOSDET: every human (SOS-46)
+ 			default: throw new RuntimeException();
+ 			}
+ 		}
+diff -ru -U2 a/world/battle/Util.java b/world/battle/Util.java
+--- a/world/battle/Util.java	2026-06-18 21:36:26.000000000 +0500
++++ b/world/battle/Util.java	2026-10-25 09:53:29.818304600 +0500
+@@ -214,11 +214,13 @@
+ 
+ 		Faction fAttacker = side.us.get(0).faction();
+ 		Faction fDefender = reg.faction();
++		if (fDefender instanceof game.faction.player.Player && reg.capitol()) // SOSDET: a human's capitol falls only to an invasion
++			return;                                                           // of its city (M2); never taken here (SOS-46)
+ 		
+ 		if (fDefender == FACTIONS.player()) {
+ 			Str.TMP.clear().add(¤¤lostC).insert(0, reg.info.name());
+ 			new MessageText(¤¤lost).paragraph(Str.TMP).send();
+-		}else if (fDefender != null && fDefender.capitolRegion() == reg) {
++		}else if (fDefender instanceof FactionNPC && fDefender.capitolRegion() == reg) { // SOSDET: a human that is not this one is no NPC (ADR 0004)
+ 			Region newCapitol = reg;
+ 			int ri = Rnd.i(reg.faction().realm().all().size());
+ 			for (int i = 0; i < reg.faction().realm().all().size(); i++) {
+@@ -254,7 +256,7 @@
+ 		RD.DEVASTATION().current.setD(reg, dev);
+ 		
+ 		
+-		if (newFaction == FACTIONS.player() && RD.OWNER().prevOwner(reg) != FACTIONS.player()) {
++		if (newFaction instanceof game.faction.player.Player && RD.OWNER().prevOwner(reg) != newFaction) { // SOSDET: every human, as vanilla's player (SOS-46)
+ 			for (RDBuilding bu : RD.BUILDINGS().all) {
+ 				
+ 				
+diff -ru -U2 a/world/entity/caravan/Shipment.java b/world/entity/caravan/Shipment.java
+--- a/world/entity/caravan/Shipment.java	2026-06-17 12:48:28.000000000 +0500
++++ b/world/entity/caravan/Shipment.java	2026-10-25 09:53:29.819303500 +0500
+@@ -163,7 +163,9 @@
+ 			int am = payload[tt.index()];
+ 			if (am != 0) {
+ 				TRADE_TYPE t = TRADE_TYPE.all.get(type);
++				int sosdetH = sosdet.Hooks.currentHumanSwap(f); // SOSDET: a human's goods go to that human's city (SOS-46)
+ 				f.buyer(tt).addDeliver(am, t);
++				sosdet.Hooks.currentHumanSwap(sosdetH);
+ 				payload[tt.index()] = 0;
+ 			}
+ 		}
+@@ -214,7 +216,9 @@
+ 			int am = payload[tt.index()];
+ 			if (am != 0) {
+ 				TRADE_TYPE t = type();
++				int sosdetH = sosdet.Hooks.currentHumanSwap(f); // SOSDET: a human's goods go to that human's city (SOS-46)
+ 				f.buyer(tt).addDeliver(am, t);
++				sosdet.Hooks.currentHumanSwap(sosdetH);
+ 				payload[tt.index()] = 0;
+ 			}
+ 		}
+@@ -243,9 +247,11 @@
+ 	public Shipment loadAndReserve(TRADABLE r, int amount) {
+ 		if (amount == 0)
+ 			return this;
++		int sosdetH = sosdet.Hooks.currentHumanSwap(faction()); // SOSDET: a human's goods are reserved in that human's city (SOS-46)
+ 		faction().buyer(r).addReserve(-payload[r.index()], type(), 0, null);
+ 		payload[r.index()] = CLAMP.i(amount+payload[r.index()], 0, Integer.MAX_VALUE);
+ 		faction().buyer(r).addReserve(payload[r.index()], type(), 0, null);
++		sosdet.Hooks.currentHumanSwap(sosdetH);
+ 		size = -1;
+ 		return this;
+ 	}
+diff -ru -U2 a/world/map/fow/FOW.java b/world/map/fow/FOW.java
+--- a/world/map/fow/FOW.java	2025-12-10 17:58:10.000000000 +0500
++++ b/world/map/fow/FOW.java	2026-10-25 09:53:29.820312400 +0500
+@@ -82,7 +82,7 @@
+ 					visible.set(t, d, true);
+ 				if (WORLD.PATH().map.can(t, d)) {
+ 					Region to = WORLD.REGIONS().map.get(t, d);
+-					if (to == null || from == null || from == to || from.faction() == FACTIONS.player() || (from.faction() != null && DIP.get((FactionNPC) from.faction()).transit))
++					if (to == null || from == null || from == to || from.faction() == FACTIONS.player() || (from.faction() instanceof FactionNPC && DIP.get((FactionNPC) from.faction()).transit)) // SOSDET: a human that is not this one is no NPC (ADR 0004)
+ 						GUTIL.flooder().pushSmaller(t, d, t.getValue()+d.tileDistance());
+ 				}
+ 			}
+diff -ru -U2 a/world/map/pathing/WRegFinder.java b/world/map/pathing/WRegFinder.java
+--- a/world/map/pathing/WRegFinder.java	2026-06-04 09:03:20.000000000 +0500
++++ b/world/map/pathing/WRegFinder.java	2026-10-25 09:53:29.820832400 +0500
+@@ -1,9 +1,9 @@
+ package world.map.pathing;
+ 
+ import game.GAME;
+-import game.faction.FACTIONS;
+ import game.faction.Faction;
+ import game.faction.diplomacy.DIP;
++import game.faction.player.Player;
+ import snake2d.PathTile;
+ import snake2d.PathUtilOnline.Flooder;
+ import snake2d.util.sets.ArrayList;
+@@ -361,7 +361,7 @@
+ 				if (from.faction() == to.faction())
+ 					return true;
+ 				
+-				if (from.faction() == FACTIONS.player())
++				if (from.faction() instanceof Player) // SOSDET: through any human's land, not only the first's (SOS-46)
+ 					return true;
+ 				
+ 				
+diff -ru -U2 a/world/overlay/OverlayDiplomacy.java b/world/overlay/OverlayDiplomacy.java
+--- a/world/overlay/OverlayDiplomacy.java	2026-06-17 10:48:04.000000000 +0500
++++ b/world/overlay/OverlayDiplomacy.java	2026-10-25 09:53:29.820832400 +0500
+@@ -43,7 +43,7 @@
+ 		}
+ 			
+ 		COLOR c = GCOLOR.MAP().F_REBEL;
+-		if (reg != null && reg.faction() != null && reg.faction() != FACTIONS.player()) {
++		if (reg != null && reg.faction() instanceof FactionNPC) { // SOSDET: a human that is not this one is no NPC (ADR 0004)
+ 			ColorImp col = ColorImp.TMP;
+ 			GCOLOR.UI().badToGood(col, ROPINION.get(((FactionNPC)reg.faction()).court().king().roy()));
+ 			c = col;
+diff -ru -U2 a/world/region/RD.java b/world/region/RD.java
+--- a/world/region/RD.java	2026-06-17 10:48:04.000000000 +0500
++++ b/world/region/RD.java	2026-10-25 09:53:29.820832400 +0500
+@@ -488,7 +488,7 @@
+ 		Str.TMP.insert(2, FACTIONS.name(f));
+ 		WORLD.LOG().log(fold, f, UI.icons().s.crown, Str.TMP, region.cx(), region.cy());
+ 		
+-		if (f == FACTIONS.player()) {
++		if (f instanceof game.faction.player.Player) { // SOSDET: every human's new region drops the buildings it can't have (SOS-46)
+ 			for (RDBuilding bu : RD.BUILDINGS().all) {
+ 				if (bu.level.get(region) > 0 && !bu.levels.get(bu.level.get(region)).reqs.passes(region)) {
+ 					bu.level.set(region, 0);
+diff -ru -U2 a/world/region/RDHealth.java b/world/region/RDHealth.java
+--- a/world/region/RDHealth.java	2026-06-04 09:43:34.000000000 +0500
++++ b/world/region/RDHealth.java	2026-10-25 09:53:29.821831500 +0500
+@@ -45,7 +45,7 @@
+ 	public final RDataE outbreak;
+ 	private boolean btoggle = true;
+ 	
+-	private static double dTime = 1.0/(TIME.secondsPerDay()*2);
++	private final double dTime = 1.0/(TIME.secondsPerDay()*2); // SOSDET: per instance, made in the game: a shipped class's static would read TIME at the main menu
+ 	
+ 	private CharSequence eDesc(Region reg) {
+ 		Str.TMP.clear().add(¤¤epidemicD).insert(0, reg.info.name());
+@@ -161,10 +161,11 @@
+ 				
+ 				moveTo(reg, time*dTime, target);
+ 								
+-				if (reg.faction() == FACTIONS.player() && !reg.capitol()) {
++				if (reg.faction() instanceof game.faction.player.Player && !reg.capitol()) { // SOSDET: every human's regions get epidemics (SOS-46)
+ 					if (get(reg)  < 120 && outbreak.get(reg) == 0 && target < 120) {
+ 						outbreak.set(reg, 1);
+-						new MessageText(¤¤epidemic).paragraph(eDesc(reg)).send();
++						if (reg.faction() == FACTIONS.player()) // SOSDET: the message as before, the current human's (messages per PC: later) (SOS-46)
++							new MessageText(¤¤epidemic).paragraph(eDesc(reg)).send();
+ 					}else if (outbreak.get(reg) == 1 && (get(reg) > 128) && target > 128) {
+ 						outbreak.set(reg, 0);
+ 					}
+@@ -185,7 +186,7 @@
+ 			
+ 			@Override
+ 			public void change(Region reg, Faction oldOwner, Faction newOwner) {
+-				if (newOwner == FACTIONS.player())
++				if (newOwner instanceof game.faction.player.Player) // SOSDET: every human (SOS-46)
+ 					setD(reg, 1.0);
+ 			}
+ 		};
+diff -ru -U2 a/world/region/RDMilitary.java b/world/region/RDMilitary.java
+--- a/world/region/RDMilitary.java	2026-05-30 13:40:54.000000000 +0500
++++ b/world/region/RDMilitary.java	2026-10-25 09:53:29.821831500 +0500
+@@ -52,9 +52,10 @@
+ 		INT_OE<Region> dd = init.count.new DataShort("GARRISON", null, Config.battle().REGION_MAX_DIVS*Config.battle().MEN_PER_DIVISION) {
+ 			@Override
+ 			public int get(Region t) {
+-				if (FACTIONS.player().capitolRegion() == t) {
++				Faction sosdetF = t == null ? FACTIONS.player() : t.faction(); // SOSDET: every human's capitol holds its own city's garrison (SOS-46)
++				if (sosdetF instanceof game.faction.player.Player && sosdetF.capitolRegion() == t) {
+ 					int pow = 0;
+-					for (WDIV d : gar.player()) {
++					for (WDIV d : gar.player(sosdetF.index())) {
+ 						pow += d.men();
+ 					}
+ 					return pow;
+@@ -149,7 +150,7 @@
+ 	public int garrisonTarget(Region reg) {
+ 		if (reg == null)
+ 			return 0;
+-		if (reg.faction() == FACTIONS.player()) {
++		if (reg.faction() instanceof game.faction.player.Player) { // SOSDET: every human's region (SOS-46)
+ 			return (int) bgarrison.get(reg);
+ 		}else {
+ 			double dz = RD.RACES().population.get(reg)/(double)ENTETIES.MAX;
+@@ -177,7 +178,7 @@
+ 	
+ 	public int conscripts(Race r, Faction f) {
+ 		
+-		if (f == FACTIONS.player()) {
++		if (!(f instanceof FactionNPC)) { // SOSDET: a human that is not this one is no NPC (ADR 0004)
+ 			if (RD.RACES().get(r) == null) {
+ 				return 0;
+ 			}
+@@ -202,7 +203,7 @@
+ 			}
+ 			
+ 			FactionNPC ff = (FactionNPC) f;
+-			double dist = 1 + CLAMP.d(RD.DIST().distance(ff)/512.0, 0, 2);
++			double dist = 1 + CLAMP.d(RD.DIST().sosdetNearestDistance(ff)/512.0, 0, 2); // SOSDET: from the nearest human (SOS-46 M5)
+ 			
+ 			double p = 1 + f.realm().all().size()*0.025;
+ 			double d = POP.tot(null)/20000.0;
+diff -ru -U2 a/world/region/building/RDBuilding.java b/world/region/building/RDBuilding.java
+--- a/world/region/building/RDBuilding.java	2026-05-27 07:48:26.000000000 +0500
++++ b/world/region/building/RDBuilding.java	2026-10-25 09:53:29.822834700 +0500
+@@ -91,7 +91,7 @@
+ 			public void set(Region t, int s) {
+ 				if (get(t) != 0 && t.faction() != null)
+ 					levelAm.get(get(t)-1).inc(t.faction(), -1);
+-				if (s != get(t) && t.faction() == FACTIONS.player())
++				if (s != get(t) && t.faction() instanceof Player) // SOSDET: every human's build points (SOS-46)
+ 					RD.BUILDINGS().costs.setDirty();
+ 				super.set(t, s);
+ 				if (get(t) != 0 && t.faction() != null)
+@@ -112,7 +112,7 @@
+ 						levelAm.get(l-1).inc(newOwner, 1);
+ 					}
+ 				}
+-				if (newOwner == FACTIONS.player() || oldOwner == FACTIONS.player())
++				if (newOwner instanceof Player || oldOwner instanceof Player) // SOSDET: every human's build points (SOS-46)
+ 					RD.BUILDINGS().costs.setDirty();
+ 				
+ 			}
+@@ -324,7 +324,7 @@
+ 
+ 						@Override
+ 						public double vGet(Region t) {
+-							if (t.faction() == FACTIONS.player()) {
++							if (t.faction() instanceof Player) { // SOSDET: every human's buildings need their requirements (SOS-46)
+ 								for (int l = RD.BUILDINGS().tmp().level(RDBuilding.this, t); l >= 0; l--) {
+ 									
+ 								}
+diff -ru -U2 a/world/region/updating/Builder.java b/world/region/updating/Builder.java
+--- a/world/region/updating/Builder.java	2026-02-16 13:10:48.000000000 +0500
++++ b/world/region/updating/Builder.java	2026-10-25 09:53:29.822834700 +0500
+@@ -4,7 +4,6 @@
+ import java.util.Random;
+ 
+ import game.boosting.BoostSpec;
+-import game.faction.FACTIONS;
+ import game.faction.npc.FactionNPC;
+ import init.race.RACES;
+ import init.race.Race;
+@@ -68,7 +67,7 @@
+ 		if (builder == null)
+ 			builder = rebBuilder;
+ 		
+-		if (RD.OWNER().prevOwner(reg) == FACTIONS.player()) {
++		if (RD.OWNER().prevOwner(reg) instanceof game.faction.player.Player) { // SOSDET: any human's former region (SOS-46)
+ 			for (RDBuilding bu : RD.BUILDINGS().all) {
+ 				if (bu.level.get(reg) > 0) {
+ 					bu.level.set(reg, 0);
+diff -ru -U2 a/world/region/updating/RDUpdater.java b/world/region/updating/RDUpdater.java
+--- a/world/region/updating/RDUpdater.java	2026-02-14 16:58:16.000000000 +0500
++++ b/world/region/updating/RDUpdater.java	2026-10-25 09:53:29.823832500 +0500
+@@ -2,7 +2,6 @@
+ 
+ import java.io.IOException;
+ 
+-import game.faction.FACTIONS;
+ import game.faction.Faction;
+ import game.time.TIME;
+ import snake2d.util.file.FileGetter;
+@@ -50,7 +49,7 @@
+ 				
+ 
+ 				
+-				if (r.faction() == FACTIONS.player()) {
++				if (r.faction() instanceof game.faction.player.Player) { // SOSDET: every human's regions update as vanilla's player's, with no AI builder (SOS-46)
+ 					timers[r.index()] += timeSinceLast;
+ 					if (timers[r.index()] > ship) {
+ 						shipper.ship(r, ship);
+diff -ru -U2 a/world/region/updating/Shipper.java b/world/region/updating/Shipper.java
+--- a/world/region/updating/Shipper.java	2026-02-16 13:10:08.000000000 +0500
++++ b/world/region/updating/Shipper.java	2026-10-25 09:53:29.823832500 +0500
+@@ -1,6 +1,5 @@
+ package world.region.updating;
+ 
+-import game.faction.FACTIONS;
+ import game.faction.FCredits.CTYPE;
+ import game.faction.Faction;
+ import game.time.TIME;
+@@ -37,7 +36,7 @@
+ 		double days = seconds*TIME.secondsPerDayI();
+ 		int am = 0;
+ 		
+-		if (f == FACTIONS.player()) {
++		if (f instanceof game.faction.player.Player) { // SOSDET: a human's capitol is its city, which pays its own taxes (SOS-46)
+ 			if (r.capitol())
+ 				return;
+ 		}

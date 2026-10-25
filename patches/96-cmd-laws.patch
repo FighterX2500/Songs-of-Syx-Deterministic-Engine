@@ -1,7 +1,19 @@
 diff -ru -U2 a/game/faction/player/PTech.java b/game/faction/player/PTech.java
 --- a/game/faction/player/PTech.java	2026-06-17 10:48:06.000000000 +0500
-+++ b/game/faction/player/PTech.java	2026-10-23 02:20:59.663176700 +0500
-@@ -354,6 +354,8 @@
++++ b/game/faction/player/PTech.java	2026-10-25 02:22:41.215390000 +0500
+@@ -153,6 +153,11 @@
+ 		bos = new BoostCompound<TECH>(boosters, TECHS.ALL()) {
+ 
+ 			@Override
++			protected BoostCompound<TECH> of(Player f) {
++				return f.tech().bos; // SOSDET: each human's own tech (ADR 0004)
++			}
++
++			@Override
+ 			protected BoostSpecs bos(TECH t) {
+ 				BoostSpecs bos = new BoostSpecs(t.boosters.info.name, t.boosters.info.icon, false);
+ 				for (BoostSpec s : t.boosters.all()) {
+@@ -354,6 +359,8 @@
  	}
  	
  	public void levelSet(TECH tech, int level) {
@@ -12,7 +24,7 @@ diff -ru -U2 a/game/faction/player/PTech.java b/game/faction/player/PTech.java
  			for (TechCost c : tech.costs)
 diff -ru -U2 a/settlement/stats/colls/StatsEducation.java b/settlement/stats/colls/StatsEducation.java
 --- a/settlement/stats/colls/StatsEducation.java	2026-06-25 07:51:16.000000000 +0500
-+++ b/settlement/stats/colls/StatsEducation.java	2026-10-23 02:20:59.662176500 +0500
++++ b/settlement/stats/colls/StatsEducation.java	2026-10-25 02:22:41.204742400 +0500
 @@ -92,6 +92,8 @@
  	}
  	
@@ -33,7 +45,7 @@ diff -ru -U2 a/settlement/stats/colls/StatsEducation.java b/settlement/stats/col
  					limitSet(HCLASS_RACE.clP(RACES.all().get(ri), cl.cl), l);
 diff -ru -U2 a/settlement/stats/colls/StatsHome.java b/settlement/stats/colls/StatsHome.java
 --- a/settlement/stats/colls/StatsHome.java	2026-06-17 10:59:30.000000000 +0500
-+++ b/settlement/stats/colls/StatsHome.java	2026-10-23 02:20:59.661178700 +0500
++++ b/settlement/stats/colls/StatsHome.java	2026-10-25 02:22:41.205742100 +0500
 @@ -311,6 +311,8 @@
  	}
  	
@@ -45,7 +57,7 @@ diff -ru -U2 a/settlement/stats/colls/StatsHome.java b/settlement/stats/colls/St
  				Race r = RACES.all().get(ri);
 diff -ru -U2 a/settlement/stats/equip/EquipCivic.java b/settlement/stats/equip/EquipCivic.java
 --- a/settlement/stats/equip/EquipCivic.java	2025-10-25 07:53:54.000000000 +0500
-+++ b/settlement/stats/equip/EquipCivic.java	2026-10-23 02:20:59.661178700 +0500
++++ b/settlement/stats/equip/EquipCivic.java	2026-10-25 02:22:41.205742100 +0500
 @@ -79,6 +79,8 @@
  	}
  	
@@ -57,7 +69,7 @@ diff -ru -U2 a/settlement/stats/equip/EquipCivic.java b/settlement/stats/equip/E
  				Race r = RACES.all().get(ri);
 diff -ru -U2 a/settlement/stats/law/Curfew.java b/settlement/stats/law/Curfew.java
 --- a/settlement/stats/law/Curfew.java	2026-06-20 15:43:56.000000000 +0500
-+++ b/settlement/stats/law/Curfew.java	2026-10-23 02:01:46.705221900 +0500
++++ b/settlement/stats/law/Curfew.java	2026-10-25 02:22:41.206747000 +0500
 @@ -37,6 +37,8 @@
  	}
  	
@@ -69,7 +81,7 @@ diff -ru -U2 a/settlement/stats/law/Curfew.java b/settlement/stats/law/Curfew.ja
  		}else
 diff -ru -U2 a/settlement/stats/law/StatCrime.java b/settlement/stats/law/StatCrime.java
 --- a/settlement/stats/law/StatCrime.java	2026-06-29 09:04:40.000000000 +0500
-+++ b/settlement/stats/law/StatCrime.java	2026-10-23 02:20:59.660162700 +0500
++++ b/settlement/stats/law/StatCrime.java	2026-10-25 02:22:41.206747000 +0500
 @@ -290,6 +290,8 @@
  	}
  
@@ -81,7 +93,7 @@ diff -ru -U2 a/settlement/stats/law/StatCrime.java b/settlement/stats/law/StatCr
  			for (Race r : RACES.all()) {
 diff -ru -U2 a/settlement/stats/stat/StatDecree.java b/settlement/stats/stat/StatDecree.java
 --- a/settlement/stats/stat/StatDecree.java	2024-09-04 07:46:14.000000000 +0500
-+++ b/settlement/stats/stat/StatDecree.java	2026-10-23 02:20:59.663176700 +0500
++++ b/settlement/stats/stat/StatDecree.java	2026-10-25 02:22:41.207756500 +0500
 @@ -64,6 +64,8 @@
  
  				@Override
@@ -93,7 +105,7 @@ diff -ru -U2 a/settlement/stats/stat/StatDecree.java b/settlement/stats/stat/Sta
  							Race r = RACES.all().get(ri);
 diff -ru -U2 a/view/sett/ui/right/UIMiniRaces.java b/view/sett/ui/right/UIMiniRaces.java
 --- a/view/sett/ui/right/UIMiniRaces.java	2026-06-18 08:40:34.000000000 +0500
-+++ b/view/sett/ui/right/UIMiniRaces.java	2026-10-23 02:20:59.669219700 +0500
++++ b/view/sett/ui/right/UIMiniRaces.java	2026-10-25 02:22:41.207756500 +0500
 @@ -353,7 +353,7 @@
  			if (MButt.LEFT.isDouble()) {
  				Race res = FACTIONS.player().races.get(ri);
@@ -105,7 +117,7 @@ diff -ru -U2 a/view/sett/ui/right/UIMiniRaces.java b/view/sett/ui/right/UIMiniRa
  			clickI = ri;
 diff -ru -U2 a/view/sett/ui/standing/CatAccess.java b/view/sett/ui/standing/CatAccess.java
 --- a/view/sett/ui/standing/CatAccess.java	2026-05-30 11:34:34.000000000 +0500
-+++ b/view/sett/ui/standing/CatAccess.java	2026-10-23 02:20:59.665178600 +0500
++++ b/view/sett/ui/standing/CatAccess.java	2026-10-25 02:22:41.208742200 +0500
 @@ -89,7 +89,8 @@
  					
  					@Override
@@ -118,7 +130,7 @@ diff -ru -U2 a/view/sett/ui/standing/CatAccess.java b/view/sett/ui/standing/CatA
  					@Override
 diff -ru -U2 a/view/sett/ui/standing/CatPopulationGrowth.java b/view/sett/ui/standing/CatPopulationGrowth.java
 --- a/view/sett/ui/standing/CatPopulationGrowth.java	2026-06-25 09:14:08.000000000 +0500
-+++ b/view/sett/ui/standing/CatPopulationGrowth.java	2026-10-23 02:20:59.669219700 +0500
++++ b/view/sett/ui/standing/CatPopulationGrowth.java	2026-10-25 02:22:41.208742200 +0500
 @@ -144,7 +144,7 @@
  			
  			@Override
@@ -159,7 +171,7 @@ diff -ru -U2 a/view/sett/ui/standing/CatPopulationGrowth.java b/view/sett/ui/sta
  		
 diff -ru -U2 a/view/sett/ui/standing/CatReligion.java b/view/sett/ui/standing/CatReligion.java
 --- a/view/sett/ui/standing/CatReligion.java	2026-06-07 08:44:58.000000000 +0500
-+++ b/view/sett/ui/standing/CatReligion.java	2026-10-23 02:20:59.666146400 +0500
++++ b/view/sett/ui/standing/CatReligion.java	2026-10-25 02:22:41.209742400 +0500
 @@ -297,7 +297,8 @@
  		s.addRightC(16, new GButt.Checkbox() {
  			@Override
@@ -192,7 +204,7 @@ diff -ru -U2 a/view/sett/ui/standing/CatReligion.java b/view/sett/ui/standing/Ca
  				@Override
 diff -ru -U2 a/view/sett/ui/standing/CatServices.java b/view/sett/ui/standing/CatServices.java
 --- a/view/sett/ui/standing/CatServices.java	2026-03-21 09:14:20.000000000 +0500
-+++ b/view/sett/ui/standing/CatServices.java	2026-10-23 02:20:59.667258500 +0500
++++ b/view/sett/ui/standing/CatServices.java	2026-10-25 02:22:41.210415800 +0500
 @@ -115,7 +115,8 @@
  				
  				@Override
@@ -205,7 +217,7 @@ diff -ru -U2 a/view/sett/ui/standing/CatServices.java b/view/sett/ui/standing/Ca
  				
 diff -ru -U2 a/view/sett/ui/standing/decree/DPanel.java b/view/sett/ui/standing/decree/DPanel.java
 --- a/view/sett/ui/standing/decree/DPanel.java	2026-05-27 11:40:06.000000000 +0500
-+++ b/view/sett/ui/standing/decree/DPanel.java	2026-10-23 02:20:59.664176900 +0500
++++ b/view/sett/ui/standing/decree/DPanel.java	2026-10-25 02:22:41.210415800 +0500
 @@ -108,7 +108,8 @@
  			
  			@Override
@@ -238,7 +250,7 @@ diff -ru -U2 a/view/sett/ui/standing/decree/DPanel.java b/view/sett/ui/standing/
  			@Override
 diff -ru -U2 a/view/sett/ui/subject/UISubjectType.java b/view/sett/ui/subject/UISubjectType.java
 --- a/view/sett/ui/subject/UISubjectType.java	2026-02-11 12:27:44.000000000 +0500
-+++ b/view/sett/ui/subject/UISubjectType.java	2026-10-23 02:20:59.670217200 +0500
++++ b/view/sett/ui/subject/UISubjectType.java	2026-10-25 02:22:41.211388800 +0500
 @@ -55,7 +55,8 @@
  			
  			@Override

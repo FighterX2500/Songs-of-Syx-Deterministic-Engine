@@ -22,6 +22,7 @@ import sosdet.report.CitySource;
 import sosdet.report.Field;
 import sosdet.report.ReportFeed;
 import sosdet.report.ReportLayout;
+import sosdet.txn.Txn;
 
 /** The engine through the hooks the game calls: vanilla without a session, deterministic with one. */
 class EngineTest {
@@ -53,6 +54,11 @@ class EngineTest {
         public String describeEntities(long step) {
             return "";
         }
+
+        @Override
+        public String describeWorld(long step) {
+            return "";
+        }
     };
 
     /**
@@ -76,6 +82,11 @@ class EngineTest {
         @Override
         public int faction() {
             return 0;
+        }
+
+        @Override
+        public int[] humans() {
+            return new int[] { 0 };
         }
 
         @Override
@@ -119,9 +130,121 @@ class EngineTest {
     }
 
     private static byte[] reportRecord(long takenAt, long appliesAt) {
+        return reportRecord(0, takenAt, appliesAt);
+    }
+
+    private static byte[] reportRecord(int faction, long takenAt, long appliesAt) {
         ReportFeed f = new ReportFeed();
-        f.write(new CityReport(SMALL, 0, takenAt, appliesAt, new double[SMALL.size()]).toBytes());
+        f.write(new CityReport(SMALL, faction, takenAt, appliesAt, new double[SMALL.size()]).toBytes());
         return f.drain();
+    }
+
+    /** CITY with these human slots. */
+    private static CitySource humans(int... slots) {
+        return new CitySource() {
+            @Override
+            public ReportLayout layout() {
+                return SMALL;
+            }
+
+            @Override
+            public int faction() {
+                return slots[0];
+            }
+
+            @Override
+            public int[] humans() {
+                return slots;
+            }
+
+            @Override
+            public void fill(double[] values) {
+            }
+
+            @Override
+            public int indexOf(Field f, Object key) {
+                return -1;
+            }
+        };
+    }
+
+    /**
+     * ADR 0004: with several humans the world part waits for every other human's report, keeps each human's apart, and
+     * the city tail applies only this PC's human's transactions.
+     */
+    @Test
+    void theWorldWaitsForEveryOtherHumansReportAndKeepsEachApart() {
+        Session s = ownCity(0);
+        s.city = humans(0, 3);
+        Engine.pcHuman(0, 0);
+        Engine.pcHuman(1, 3);
+        Engine.runFreely();
+        assertEquals(0, steps(10, 1), "no load report of the human in slot 3 yet");
+        assertTrue(Engine.reportsOut().length > 0, "this PC's load report went out before it waits for slot 3's");
+        Engine.reportsIn(1, reportRecord(3, 1, 1));
+        assertEquals(59, steps(100, 1), "slot 3's report taken at 30 is read from 60");
+        Engine.reportsIn(1, reportRecord(3, 30, 60));
+        Engine.reportsIn(1, reportRecord(3, 30, 60)); // a repeat changes nothing
+        assertEquals(30, steps(100, 1));
+        assertEquals(30, s.reports(3).current().takenAt);
+        assertEquals(30, s.reports(0).current().takenAt, "this PC's own, taken here");
+        assertEquals(2, Engine.stats().reportsReceived);
+        assertThrows(IllegalArgumentException.class, () -> Engine.reportsIn(1, reportRecord(5, 60, 90)), "not PC 1's");
+        assertThrows(IllegalArgumentException.class, () -> Engine.reportsIn(2, reportRecord(0, 60, 90)), "this PC's");
+        assertThrows(IllegalArgumentException.class, () -> Engine.reportsIn(0, reportRecord(3, 60, 90)), "this PC");
+
+        java.util.List<Txn> applied = new java.util.ArrayList<>();
+        s.txnApplier = applied::add;
+        Txn mine = new Txn();
+        Txn theirs = new Txn();
+        theirs.human = 3;
+        s.ownTxns.accept(mine);
+        s.ownTxns.accept(theirs);
+        assertEquals(java.util.List.of(mine), applied, "slot 3's city is its own PC's");
+    }
+
+    /** SOS-46 M3 to M5: a per-human slice is the human's ordinal among the human slots, whoever reads. */
+    @Test
+    void eachHumanReadsItsOwnSlice() {
+        assertEquals(16, Hooks.HUMANS_MAX);
+        assertEquals(0, Hooks.humanIndex(), "without a session: slot 0's");
+        begin();
+        Session s = Engine.session();
+        s.city = humans(0, 3, 7);
+        s.localHuman = 3;
+        assertEquals(1, Hooks.humanIndex(), "outside the step: this PC's human");
+        s.part = StepParts.WORLD_PART;
+        s.currentHuman = 7;
+        assertEquals(2, Hooks.humanIndex(), "in the world part: the current human");
+        int before = Hooks.currentHumanSwap(0);
+        assertEquals(0, Hooks.humanIndex());
+        Hooks.currentHumanSwap(before);
+        assertEquals(2, Hooks.humanIndex());
+        assertThrows(IllegalStateException.class, () -> Engine.asHuman(0), "never in the step");
+        s.part = -1;
+        assertEquals(-1, Engine.asHuman(7));
+        assertEquals(2, Hooks.humanIndex(), "read as slot 7 between steps");
+        assertEquals(7, Engine.asHuman(-1));
+        assertEquals(1, Hooks.humanIndex(), "this PC's own again");
+        assertThrows(IllegalArgumentException.class, () -> Engine.asHuman(5), "slot 5 is no human");
+        s.localHuman = 5;
+        assertThrows(IllegalStateException.class, () -> Hooks.humanIndex(), "a slot that is no human has no slice");
+        s.loading = true;
+        assertEquals(0, Hooks.humanIndex(), "while a game loads: slot 0's");
+        s.loading = false;
+        s.localHuman = 0;
+        s.currentHuman = 0;
+    }
+
+    /** ADR 0004 (SOS-46): with several humans the run doesn't start until each human has exactly one PC. */
+    @Test
+    void severalHumansNeedOnePcEach() {
+        Session s = ownCity(0);
+        s.city = humans(0, 3);
+        Engine.pcHuman(1, 3);
+        Engine.runFreely();
+        assertThrows(IllegalStateException.class, () -> steps(1, 1), "slot 0 has no PC");
+        assertThrows(IllegalStateException.class, () -> Engine.reportsFrom(1), "each PC runs its own human's city");
     }
 
     /** ADR 0005 §1: an own city's draws are its own; the hash counts the world part's, so two cities compare equal. */
@@ -154,7 +277,7 @@ class EngineTest {
         Engine.reportsIn(0, reportRecord(30, 60)); // a repeat changes nothing
         assertEquals(30, steps(100, 1));
         assertEquals(89, Engine.step());
-        assertEquals(30, s.reports.current().takenAt);
+        assertEquals(30, s.reports(0).current().takenAt);
         assertEquals(2, Engine.stats().reportsReceived);
         assertTrue(Engine.reportsOut().length > 0, "the follower's own reports still go out");
         assertThrows(IllegalArgumentException.class, () -> Engine.reportsIn(2, load), "the world reads PC 0's city");
@@ -386,13 +509,63 @@ class EngineTest {
         long first = Hooks.stepPromptOpened(yes, no);
         long second = Hooks.stepPromptOpened(yes, null);
         Hooks.stepEnd();
-        assertEquals(asked * 64, first, "the key is the step that asked and the order in it");
+        assertEquals(asked * 64 + 32, first, "the key is the step that asked and the order in it: a city question's 32 on");
         assertEquals(first + 1, second);
         assertEquals(first, Hooks.stepPromptOldest());
         assertSame(no, Hooks.stepPromptTake(first, false));
         assertEquals(null, Hooks.stepPromptTake(first, true), "a second answer finds it gone");
         assertEquals(null, Hooks.stepPromptTake(second, false), "no action for that answer");
         assertEquals(-1, Hooks.stepPromptOldest());
+    }
+
+    /** ADR 0004 (SOS-46): a world question asks the current human; only that human's PC shows it, and only its answer applies. */
+    @Test
+    void aWorldQuestionIsItsHumansOnly() {
+        begin();
+        Session s = Engine.session();
+        Engine.runFreely();
+        Hooks.stepsFor(Engine.STEP_SECONDS + 1e-9);
+        assertTrue(Hooks.stepBegin());
+        s.part = StepParts.WORLD_PART;
+        s.currentHuman = 3;
+        long asked = Engine.step();
+        assertEquals(-1, Hooks.stepPromptOpened("yes", "no"), "slot 3's question doesn't show on slot 0's PC");
+        s.currentHuman = 0;
+        long mine = Hooks.stepPromptOpened("yes", "no");
+        s.part = -1;
+        Hooks.stepEnd();
+        assertEquals(asked * 64 + 1, mine, "world questions count apart from city ones, from 0");
+        assertTrue(Hooks.stepPromptWorld(mine));
+        assertEquals(mine, Hooks.stepPromptOldest(), "the rig answers only this PC's human's");
+        s.currentHuman = 0;
+        assertEquals(null, Hooks.stepPromptTake(asked * 64, true), "slot 0 can't answer slot 3's question");
+        s.currentHuman = 3;
+        assertEquals("yes", Hooks.stepPromptTake(asked * 64, true), "slot 3's answer applies");
+        s.currentHuman = 0;
+    }
+
+    /** SOS-46 M2: the world part works on a human for one call and gets the one before back, nested or not. */
+    @Test
+    void theCurrentHumanSwapsAndComesBack() {
+        assertEquals(0, Hooks.currentHumanSwap(5), "without a session nothing changes");
+        assertEquals(7, Hooks.worldInvasionRef(7), "without a session an invasion keeps its city's ref");
+        begin();
+        Session s = Engine.session();
+        s.part = StepParts.WORLD_PART;
+        s.currentHuman = 2;
+        int outer = Hooks.currentHumanSwap(5);
+        assertEquals(2, outer);
+        assertEquals(5, s.currentHuman);
+        int inner = Hooks.currentHumanSwap(1);
+        assertEquals(5, inner);
+        assertEquals((1 << 24) + 7, Hooks.worldInvasionRef(7), "the world names an invasion by its city's human");
+        Hooks.currentHumanSwap(inner);
+        assertEquals(5, s.currentHuman, "the inner call gives the outer human back");
+        Hooks.currentHumanSwap(outer);
+        assertEquals(2, s.currentHuman, "and the outer call the one before");
+        s.part = -1;
+        assertEquals(7, Hooks.worldInvasionRef(7), "outside the world part a ref is the city's own");
+        s.currentHuman = 0;
     }
 
     @Test

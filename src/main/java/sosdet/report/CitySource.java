@@ -8,6 +8,9 @@ public interface CitySource {
     /** The faction whose city it is. */
     int faction();
 
+    /** The game's human slots, in slot order (ADR 0004): the factions with a city report. */
+    int[] humans();
+
     /** Writes every field's values, in the layout's slots. */
     void fill(double[] values);
 

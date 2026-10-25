@@ -1,6 +1,6 @@
 diff -ru -U2 a/game/events/EVENTS.java b/game/events/EVENTS.java
 --- a/game/events/EVENTS.java	2026-02-17 17:15:30.000000000 +0500
-+++ b/game/events/EVENTS.java	2026-10-23 22:06:46.889249400 +0500
++++ b/game/events/EVENTS.java	2026-10-25 12:48:43.775012700 +0500
 @@ -131,7 +131,7 @@
  			return;
  		prof.logStart(EVENTS.class);
@@ -12,7 +12,7 @@ diff -ru -U2 a/game/events/EVENTS.java b/game/events/EVENTS.java
  	}
 diff -ru -U2 a/game/faction/FACTIONS.java b/game/faction/FACTIONS.java
 --- a/game/faction/FACTIONS.java	2026-03-25 10:31:18.000000000 +0500
-+++ b/game/faction/FACTIONS.java	2026-10-23 22:06:46.890250700 +0500
++++ b/game/faction/FACTIONS.java	2026-10-25 12:48:43.779531900 +0500
 @@ -41,7 +41,7 @@
  
  		@Override
@@ -22,25 +22,128 @@ diff -ru -U2 a/game/faction/FACTIONS.java b/game/faction/FACTIONS.java
  				all.get(i).update(timeSinceLast);
  			}
  			
-@@ -161,6 +161,14 @@
+@@ -61,6 +61,7 @@
+ 	private final ResourcePrices prices;
+ 	private final FWorth worth = new FWorth();
+ 	private DIP dip;
++	private final sosdet.game.GameHumans sosdetHumans; // SOSDET: the human slots and their spare Players (ADR 0004)
+ 
+ 	private static CharSequence ¤¤sim = "Simulating factions";
+ 	private static CharSequence ¤¤factionDestroyed = "The faction of {0} has been completely destroyed.";
+@@ -105,13 +106,27 @@
+ 		});
+ 		
+ 		prices = new ResourcePrices();
++		sosdetHumans = new sosdet.game.GameHumans(all, npcs); // SOSDET: built with the game, as Players must be (ADR 0004)
+ 		
+ 
+ 	}
+ 	
+ 	private void activate(Faction f) {
+-		if (f == null || f == player)
++		if (f == null)
+ 			return;
++		if (f instanceof Player) { // SOSDET: every human, not only slot 0's; one that loses its capitol leaves every stance, as an NPC does, and nothing else of an NPC's (ADR 0004, B5, SOS-46)
++			if (sosdet.Hooks.humanSlots().length < 2)
++				return; // one human: as vanilla, so a one-human save keeps its bytes
++			boolean a = f.isActive();
++			if (f.wasActive != a) {
++				dirty = true;
++				f.wasActive = a;
++				if (!a)
++					for (Faction.FactionActivityListener li: Faction.FactionActivityListener.all)
++						li.sosdetHumanGone(f);
++			}
++			return;
++		}
+ 		boolean a = f.isActive();
+ 		if (f.wasActive != a) {
+ 			dirty = true;
+@@ -161,6 +176,15 @@
  
  	@Override
  	protected void update(double ds, Profiler prof) {
 +		if (sosdet.Hooks.cityPart()) {
 +			// SOSDET: the player's own update is city work: the city part runs it, on a clock of its own (ADR 0005)
 +			double due = sosdet.Hooks.playerUpdateDue(ds, TIME.days().bitSeconds()/4);
-+			if (due > 0 && player.isActive())
-+				((Faction) player).update(due); // Player's own override, called from this package
-+			player.updateSpecial(ds, prof);
++			Player p = player(); // SOSDET: this PC's human only; every other human's city is its own PC's (ADR 0004)
++			if (due > 0 && p.isActive())
++				((Faction) p).update(due); // Player's own override, called from this package
++			p.updateSpecial(ds, prof);
 +			return;
 +		}
  		
  		prof.logStart(updater.getClass());
  		updater.update(ds);
+@@ -171,7 +195,15 @@
+ 		prof.logEnd(npcManager.getClass());
+ 		
+ 		prof.logStart(player.getClass());
+-		player.updateSpecial(ds, prof);
++		for (int i = 0; i < all.size(); i++) { // SOSDET: every human's world half, in slot order, each the current human in turn (ADR 0004)
++			if (all.get(i) instanceof Player && (i == 0 || sosdet.Hooks.everyHuman())) {
++				sosdet.Hooks.currentHuman(i);
++				if (sosdet.Hooks.humanSlots().length > 1)
++					RD.DIST().neighs(); // SOSDET: this human's distances, current for the other humans' reads and the UI (SOS-46 M5)
++				((Player) all.get(i)).updateSpecial(ds, prof);
++			}
++		}
++		sosdet.Hooks.currentHuman(0);
+ 		prof.logEnd(player.getClass());
+ 		
+ 		prof.logStart(dip.getClass());
+@@ -180,7 +212,7 @@
+ 	}
+ 	
+ 	public static Player player() {
+-		return self.player;
++		return sosdet.Hooks.player(self.player); // SOSDET: this PC's human; in the world part, the human it works on (ADR 0004)
+ 	}
+ 
+ 	public static Faction getByIndex(int index) {
+@@ -286,13 +318,15 @@
+ 	public static LIST<Faction> active(){
+ 		if (self.dirty) {
+ 			self.active.clearSloppy();
+-			self.active.add(self.player);
+ 			self.npcsActive.clearSloppy();
+-			self.dirty = false;
+-			for (int i = 0; i < self.npcs.size(); i++) {
+-				if (self.npcs.get(i).realm().capitol() != null) {
+-					self.npcsActive.add(self.npcs.get(i));
+-					self.active.add(self.npcs.get(i));
++			if (!sosdet.Hooks.worldCacheClosed()) self.dirty = false; // SOSDET: only the world part marks it fresh; UI lists rebuild it on one PC (SOS-46 PT3 audit)
++			for (int i = 0; i < self.all.size(); i++) { // SOSDET: every human, in slot order with the NPCs; one human: vanilla's order (ADR 0004)
++				Faction f = self.all.get(i);
++				if (f instanceof Player) {
++					self.active.add(f);
++				}else if (f.realm().capitol() != null) {
++					self.npcsActive.add((FactionNPC) f);
++					self.active.add(f);
+ 				}
+ 			}
+ 		}
 diff -ru -U2 a/game/faction/player/Player.java b/game/faction/player/Player.java
 --- a/game/faction/player/Player.java	2026-06-17 10:48:04.000000000 +0500
-+++ b/game/faction/player/Player.java	2026-10-23 22:06:46.901748600 +0500
-@@ -158,21 +158,22 @@
++++ b/game/faction/player/Player.java	2026-10-25 12:48:43.776012300 +0500
+@@ -6,7 +6,6 @@
+ import game.boosting.BOOSTABLE_O;
+ import game.boosting.BValue;
+ import game.debug.Profiler;
+-import game.faction.FACTIONS;
+ import game.faction.FBanner;
+ import game.faction.FCredits.CTYPE;
+ import game.faction.FResources;
+@@ -53,7 +52,7 @@
+ 	private final FBanner banner = new FBanner(this);
+ 	private final PLevels level = new PLevels();
+ 	private final PCredits credits = new PCredits();
+-	public final Emissaries emissaries = new Emissaries();
++	public final Emissaries emissaries = new Emissaries(this); // SOSDET: they read their own Player (SOS-46 M5)
+ 	public final PBonusSetting bonusesCustom;
+ 	private int ri;
+ 	public final PTrade trade = new PTrade();
+@@ -158,21 +157,22 @@
  	}
  	
  	public void updateSpecial(double ds, Profiler prof) {
@@ -66,7 +169,7 @@ diff -ru -U2 a/game/faction/player/Player.java b/game/faction/player/Player.java
  		prof.logStart(tech.getClass());
  		tech.update(ds);
  		prof.logEnd(tech.getClass());
-@@ -184,14 +185,19 @@
+@@ -184,14 +184,19 @@
  		prof.logStart(level.getClass());
  		level.update(ds);
  		prof.logEnd(level.getClass());
@@ -86,21 +189,55 @@ diff -ru -U2 a/game/faction/player/Player.java b/game/faction/player/Player.java
  		
  		
  		
-@@ -324,7 +330,7 @@
+@@ -226,7 +231,7 @@
+ 		return rulerName;
+ 	}
+ 	
+-	public static final class PlayerRaces{
++	public final class PlayerRaces{ // SOSDET: an inner class, so the old-save fallback reads its own Player (SOS-46)
+ 		
+ 		private final int[] order = Alloc.ii(RACES.all().size());
+ 		
+@@ -240,7 +245,7 @@
+ 			@Override
+ 			public void load(FileGetter file) throws IOException {
+ 				if (!file.isE(order)) {
+-					set(FACTIONS.player().race());
++					set(Player.this.race()); // SOSDET: this human's race, not the first human's (SOS-46)
+ 				}
+ 			}
+ 			
+@@ -324,13 +329,13 @@
  	
  	@Override
  	public double boostableValue(BValue v) {
 -		return v.vGet(this);
-+		return sosdet.Hooks.reportRead() ? sosdet.Hooks.reportBoost(v) : v.vGet(this); // SOSDET: the world part reads the city's report (ADR 0005)
++		return sosdet.Hooks.reportRead() ? sosdet.Hooks.reportBoost(v, this) : v.vGet(this); // SOSDET: the world part reads the city's report (ADR 0005), this human's (ADR 0004)
  	}
  
  	@Override
-@@ -349,6 +355,8 @@
+ 	public double offensivePower() {
+ 		double p = AD.power().get(this);
+-		int creds = (int) FACTIONS.player().credits().getD();
++		int creds = (int) credits().getD(); // SOSDET: this human's treasury (SOS-46)
+ 		for (int i = 0; i < AD.mercenaries().max() && creds > 0; i++) {
+ 			WDivMercenary d = AD.mercenaries().get(i);
+ 			if (d.army() == null && !d.disbanded() ) {
+@@ -342,13 +347,16 @@
+ 			}
+ 		}
+ 	
+-		p += RD.MILITARY().power.getD(this.capitolRegion())-SETT.INVADOR().invadingPower();
++		if (capitolRegion() != null) // SOSDET: a human with no realm left (SOS-46)
++		p += RD.MILITARY().power.getD(this.capitolRegion())-(sosdet.Hooks.reportRead() ? sosdet.Hooks.reportD(index(), sosdet.report.Field.INVADING_POWER, 0) : SETT.INVADOR().invadingPower()); // SOSDET: this human's (SOS-46 M5)
+ 	
+ 		return Math.max(p, 0);
+ 	}
  
  	@Override
  	public int citizens(Race race) {
 +		if (sosdet.Hooks.reportRead()) // SOSDET: the world part reads the city's report (ADR 0005)
-+			return sosdet.Hooks.reportI(sosdet.report.Field.CITIZENS, race.index());
++			return (int) sosdet.Hooks.reportD(index(), sosdet.report.Field.CITIZENS, race.index()); // SOSDET: this human's report (ADR 0004)
  		return STATS.POP().POP.data(HCLASSES.CITIZEN()).get(race);
  	}
  	

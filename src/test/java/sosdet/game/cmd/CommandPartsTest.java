@@ -21,6 +21,8 @@ class CommandPartsTest {
         assertTrue(CommandParts.world(Events.RAIDER_ALLY_HELP));
         assertTrue(CommandParts.world(WorldBattles.DECIDE));
         assertTrue(CommandParts.world(WorldBattles.SIEGE_RESULT));
+        assertTrue(CommandParts.world(StepPrompts.WORLD_ANSWER));
+        assertTrue(CommandParts.world(Diplomacy.TRIBUTE_ACCEPT));
 
         assertFalse(CommandParts.world(StepPrompts.ANSWER));
         assertFalse(CommandParts.world(Events.EVENT_CHOICE));
@@ -29,12 +31,16 @@ class CommandPartsTest {
         assertFalse(CommandParts.world(1000));
     }
 
-    /** Own-city mode (SOS-38): a city command acts on its issuer's city only; world ones and answers on every PC. */
+    /**
+     * Own-city mode (SOS-38): a city command acts on its issuer's city only, a city question's answer too (SOS-46);
+     * world ones and world questions' answers on every PC.
+     */
     @Test
-    void everyPcAppliesTheWorldsCommandsAndTheAnswers() {
+    void everyPcAppliesTheWorldsCommandsAndTheWorldsAnswers() {
         assertTrue(CommandParts.everyPc(new CmdWriter(World.ARMY_MOVE).i(3).bytes()));
         assertTrue(CommandParts.everyPc(Diplomacy.DEAL_ACCEPT));
-        assertTrue(CommandParts.everyPc(StepPrompts.ANSWER));
+        assertTrue(CommandParts.everyPc(StepPrompts.WORLD_ANSWER));
+        assertFalse(CommandParts.everyPc(StepPrompts.ANSWER));
         assertFalse(CommandParts.everyPc(Events.EVENT_CHOICE));
         assertFalse(CommandParts.everyPc(Events.KILLER_SUSPECT));
         assertFalse(CommandParts.everyPc(1000));

@@ -66,6 +66,10 @@ public final class Desync {
             b.append("\nEntities outside divisions at step ").append(step).append(" (compare with the other PC's report):\n");
             b.append(names.describeEntities(step));
         }
+        if (local[HashLog.WORLD] != remote[HashLog.WORLD]) {
+            b.append("\nThe world at step ").append(step).append(" (compare with the other PC's report):\n");
+            b.append(names.describeWorld(step));
+        }
         b.append("\nAI log entries applied last (step, sequence, kind, division):\n");
         lines(b, recentAi);
         b.append("\nPlayer orders applied last:\n");
