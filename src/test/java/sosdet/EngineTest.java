@@ -3,6 +3,7 @@ package sosdet;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -201,6 +202,37 @@ class EngineTest {
         s.ownTxns.accept(mine);
         s.ownTxns.accept(theirs);
         assertEquals(java.util.List.of(mine), applied, "slot 3's city is its own PC's");
+    }
+
+    /**
+     * Plan 0006: a battle holds every PC at its Engage step until the battle PC's battle is loaded; while it runs, every
+     * PC draws the step's seed, acts as the battle's human, takes no reports and keeps the others' for after it.
+     */
+    @Test
+    void anOwnCityBattleHoldsUntilLoadedThenRunsAsOneGame() {
+        Session s = ownCity(0);
+        s.city = humans(0, 3);
+        Engine.pcHuman(0, 0);
+        Engine.pcHuman(1, 3);
+        Engine.runFreely();
+        Engine.reportsIn(1, reportRecord(3, 1, 1));
+        steps(20, 1);
+        long step = Engine.step();
+        s.battle = new OwnBattle(step, 3, s.pcOf(3), s.streams.worldDraws());
+        assertEquals(1, s.battle.pc, "slot 3's PC");
+        assertEquals(0, steps(10, 1), "every PC holds until the battle is loaded");
+        assertNull(Engine.battleOut(), "this PC isn't the battle PC");
+        assertEquals(s.localHuman, s.humanNow(), "this PC's human until the battle loads");
+
+        s.battle.awaiting = false; // as the battle's load sets it (Session.battleLoaded)
+        assertEquals(s.stepSeed(step + 1), s.citySeed(step + 1), "every PC draws alike in the battle");
+        assertEquals(3, s.humanNow(), "FACTIONS.player() is the battle's human on every PC");
+        assertTrue(Hooks.cityCommandHere(1), "the battle is every PC's game");
+        long reportsTaken = s.reportsTaken;
+        assertEquals(100, steps(100, 1), "no report of slot 3 is waited for");
+        assertEquals(reportsTaken, s.reportsTaken, "nor any taken");
+        Engine.reportsIn(1, reportRecord(3, 200, 230));
+        assertEquals(1, s.heldReports.size(), "kept for after the battle");
     }
 
     /** SOS-46 M3 to M5: a per-human slice is the human's ordinal among the human slots, whoever reads. */

@@ -1,8 +1,12 @@
 package sosdet.game.cmd;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 
 import game.battle.state.BattleState;
+import init.paths.PATHS;
 import snake2d.util.color.COLOR;
 import sosdet.Engine;
 import sosdet.Hooks;
@@ -24,6 +28,11 @@ public final class MapBattles {
     static final int RETREAT = 7961;
     static final int CONCLUDE = 7962;
     static final int RESTART = 7963;
+
+    /** The save the battle's generation writes ({@code BattleState.setGenerate}). */
+    private static final String BATTLE_SAVE = "__battle";
+
+    static final String RESTART_NOTICE = "SOSDET: restarting a battle doesn't work with own cities.";
 
     static final String WORLD_COMMAND_NOTICE = "SOSDET: a world map action came in during the battle and was not done."
             + " Do it again after the battle.";
@@ -100,11 +109,40 @@ public final class MapBattles {
      * a session (true) a command. Applied inside the step, it runs the reload.
      */
     public static boolean restart() {
-        if (!Commands.capturing()) {
-            return false;
+        if (Hooks.battleLoadingNow() || !Commands.capturing()) {
+            return false; // the engine's own load of the battle PC's battle runs as vanilla's restart (plan 0006)
+        }
+        if (Hooks.ownCityBattle()) {
+            VIEW.inters().fullScreen.activate(RESTART_NOTICE, COLOR.WHITE100, null);
+            return true;
         }
         Commands.capture(new CmdWriter(RESTART));
         return true;
+    }
+
+    /** The battle PC's battle as generated at Engage: its {@code __battle} save's bytes (plan 0006). */
+    public static byte[] battleSave() {
+        Path file = PATHS.local().save().get(BATTLE_SAVE);
+        try {
+            return Files.readAllBytes(file);
+        } catch (IOException e) {
+            throw new IllegalStateException("SOSDET: the battle save " + file + " can't be read", e);
+        }
+    }
+
+    /** Loads the battle PC's battle on this PC, at deployment, as the restart does: written over this PC's own first. */
+    public static void loadBattle(byte[] bytes) {
+        BattleState b = VIEW.b().state();
+        if (b == null) {
+            throw new IllegalStateException("SOSDET: no battle open to load the battle PC's battle into");
+        }
+        Path file = PATHS.local().save().get(BATTLE_SAVE);
+        try {
+            Files.write(file, bytes);
+        } catch (IOException e) {
+            throw new IllegalStateException("SOSDET: the battle save " + file + " can't be written", e);
+        }
+        b.reloadBattle();
     }
 
     /**

@@ -144,6 +144,8 @@ python rig\rig.py city --tag MB10 --save Mogus-72-19f86f1e048-47002c-0-121c.save
 
 `--engage N` (default -1: off): copy 1 answers a field battle's prompt with Engage instead of auto-resolve, so the battle is fought on the battle map on every copy. It clicks Start as soon as the battle deploys, Retreat N steps later (0: fights on to the end), and Close on the victory or defeat panel; every copy then loads the game saved before the battle and goes on at the same step. A siege waits instead of being resolved, so the region's defenders come out and fight in the field.
 
+**Own cities (plan 0006, SOS-61):** `--engage` works with `--humans N`. The battle PC, the asked human's copy, generates the battle and writes it to its rig folder (`battle.save`, then `battle.done` with the Engage step). Every copy, that one too, loads it at the Engage step, and each copy loads its own city back after the battle. Example: `python rigig.py city --tag OB2 --save Mogus-72-19f86f1e048-47002c-0-121c.save --no-invade --engage 900 --humans 2 --copies 2 --speeds 5,7 --steps 18000 --cmds "wbesiegenear 0 stronger"` engages at about step 11,830.
+
 `--restart K` (with `--engage`): copy 1 restarts the battle once, K steps after Start, through the battle panel's restart; every copy loads the battle as generated and goes on at the same step, and copy 1 clicks Start again (SOS-41).
 
 `--in-battle "STEPS ACTION..."` (with `--engage`): copy 1 does the player action once, STEPS steps after the battle's Start, for example `--in-battle "100 warmyname 0 Renamed"`. A world command whose step falls in a map battle is skipped on every copy, and the copy that gave it shows a notice, which the rig closes (`notice` event); the summary's `commandsSkipped` counts it (SOS-41).

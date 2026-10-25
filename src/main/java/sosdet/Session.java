@@ -107,6 +107,14 @@ final class Session {
      * continues at the step the battle ended at.
      */
     boolean battleLeaving;
+    /** Own-city mode: the battle on the battle map, from Engage until every PC is back in its city (plan 0006). */
+    OwnBattle battle;
+    /** The engine itself loads a battle save ({@link Engine#battleIn}): the restart hook lets it through. */
+    boolean battleLoading;
+    /** The mod's actions after each load of a whole game: the new game has none of the old one's (plan 0006). */
+    final java.util.List<Runnable> afterLoads = new java.util.ArrayList<>();
+    /** Other PCs' report bytes that came in during a battle, by PC, fed after this PC is back in its city. */
+    final java.util.List<Object[]> heldReports = new java.util.ArrayList<>();
     /** The open battle's victory or defeat panel's close, kept for the conclude command, or null (SOS-32). */
     Runnable battleConclude;
     /** 0 = loads run as in vanilla; otherwise loads run on the simulation stream seeded with this. */
@@ -232,6 +240,9 @@ final class Session {
      * one it reads as outside the step).
      */
     int humanNow() {
+        if (battle != null && !battle.awaiting) {
+            return battle.human; // the battle is the battle PC's game on every PC, its human's boosts too (plan 0006)
+        }
         if (part == StepParts.WORLD_PART) {
             return currentHuman;
         }
@@ -307,8 +318,8 @@ final class Session {
      * two cities draw alike and nothing the city draws can stand in for a world draw.
      */
     int citySeed(long step) {
-        if (!ownCity) {
-            return stepSeed(step);
+        if (!ownCity || battle != null) {
+            return stepSeed(step); // in a battle every PC runs the same game (plan 0006)
         }
         long h = HashLog.mix(HashLog.mix(HashLog.mix(HashLog.mix(HashLog.start(), seed), step), CITY_STREAM),
                 ai().localPc());
@@ -319,6 +330,22 @@ final class Session {
     int battleSeed(long step) {
         long h = HashLog.mix(HashLog.mix(HashLog.mix(HashLog.start(), seed), step), BATTLE_STREAM);
         return (int) (h ^ (h >>> 32));
+    }
+
+    /** The world stream's seed after a battle's Engage in own-city mode: every PC's own generation drew differently. */
+    int afterEngageSeed(long step) {
+        long h = HashLog.mix(HashLog.mix(HashLog.mix(HashLog.start(), seed), step), BATTLE_STREAM + 1);
+        return (int) (h ^ (h >>> 32));
+    }
+
+    /** The PC whose human is {@code slot} (ADR 0004); the host (0) when no PC has it, as with one human. */
+    int pcOf(int slot) {
+        for (int pc = 0; pc < pcHumans.length; pc++) {
+            if (pcHumans[pc] == slot) {
+                return pc;
+            }
+        }
+        return 0;
     }
 
     /** The seed of the world part's random stream at a step: never the city part's, whatever the city drew. */
@@ -355,6 +382,9 @@ final class Session {
             // every PC left the battle at this step: the step, the hashes and the AI log go on (SOS-32)
             battleLeaving = false;
             resyncDraws = streams.drawsSinceLoad(); // the load's own draws don't count, as in a resync
+            if (battle != null) {
+                battleLoaded();
+            }
             return;
         }
         if (resync != null) {
@@ -379,12 +409,28 @@ final class Session {
     }
 
     /**
+     * Own-city mode, a load in a battle (plan 0006): the battle PC's battle, loaded on every PC, or each PC's own city
+     * back at the battle's end. Each PC's own city drew its own count, so both start the draws from 0 alike; the world's
+     * count goes back to the Engage step's, as the world stood still. The hash covers the battle while it runs.
+     */
+    private void battleLoaded() {
+        resyncDraws = 0;
+        streams.worldDraws(battle.worldDraws);
+        if (battle.awaiting) {
+            battle.awaiting = false;
+            hashes.worldOnly(false);
+        } else {
+            hashes.worldOnly(true);
+        }
+    }
+
+    /**
      * Whether the world part of this step may run: it waits for each report it reads from another PC, every other
      * human's and, on a follower, the source's (ADR 0005 §4, ADR 0004).
      */
     boolean worldMayRun(long step) {
-        if (!ownCity) {
-            return true; // co-op: every PC takes the same reports itself
+        if (!ownCity || battle != null) {
+            return true; // co-op: every PC takes the same reports itself; in a battle the world stands still
         }
         for (int h : humans()) {
             if (remote(h) && (receivedTakenAt[h] < 0 || step > Reports.lastReadableStep(receivedTakenAt[h]))) {

@@ -177,6 +177,10 @@ public final class PromptAnswers {
 
     /** On the battle map: Start, then Retreat after the set steps, and Close once the battle is won or lost. */
     private String battle(BattleState battle) {
+        sosdet.OwnBattle own = Engine.battle();
+        if (own != null && own.awaiting()) {
+            return null; // own cities: the battle PC's battle isn't loaded yet; this one is replaced (plan 0006)
+        }
         if (battle.deploying()) {
             if (battleFrom >= 0) { // restarted: it deploys again
                 battleFrom = -1;
