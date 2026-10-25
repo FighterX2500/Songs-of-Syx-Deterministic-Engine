@@ -274,6 +274,9 @@ public final class Rig implements SCRIPT {
         private boolean wresyncSaver;
         private Path wresyncSave;
         private Path wresyncState;
+        // the desync flow (SOS-53): what the host chooses at an engine's desync hold ("resync" or "exit"), or null
+        private String onDesync;
+        private sosdet.DesyncHold seenHold;
         // stall sampler: the simulation thread's stack for every step over 100 ms
         private volatile Thread simThread;
         private volatile boolean sampling;
@@ -354,6 +357,9 @@ public final class Rig implements SCRIPT {
             }
             if (running && worldStep >= 0 && Engine.step() == worldStep) {
                 worldAtStep();
+            }
+            if (running && onDesync != null && wresyncStep < 0) {
+                desyncHold();
             }
             if (running && wresyncStep >= 0 && Engine.step() == wresyncStep) {
                 worldResyncAtStep();
@@ -639,6 +645,27 @@ public final class Rig implements SCRIPT {
                     (System.nanoTime() - t0) / 1e6));
             wresyncStep = -1;
             runOn();
+        }
+
+        /**
+         * The desync flow (SOS-53), as the mod's window would run it with the host's choice made in advance: at the
+         * engine's hold step, "resync" makes it a world resync there (copy 1 saves, every copy loads); "exit" saves this
+         * PC's game and ends the run.
+         */
+        private void desyncHold() {
+            sosdet.DesyncHold h = Engine.desyncHold();
+            if (h == null || h == seenHold || Engine.step() != h.holdStep) {
+                return;
+            }
+            seenHold = h;
+            event("desynchold", String.format(Locale.ROOT, "\"desyncStep\":%d,\"pc\":%d,\"holdStep\":%d", h.desyncStep, h.pc,
+                    h.holdStep));
+            if (onDesync.equals("resync")) {
+                wresyncStep = h.holdStep;
+                return;
+            }
+            event("desyncexit", RigHumans.save(dir.resolve("desync-exit.save")));
+            finish();
         }
 
         /** Loads the sections named in worldKeys from worldFile into the running game, as GameSaver.load reads them. */
@@ -1007,6 +1034,13 @@ public final class Rig implements SCRIPT {
             case "reportsin": // reportsin <pc> <file>: another PC's human's reports (SOS-46)
                 reportsIn(c);
                 event("reportsin", "\"pc\":" + c[1]);
+                return;
+            case "ondesync": // ondesync <resync|exit> <save|load> <world save> <world state>: the host's choice at a desync hold (SOS-53)
+                onDesync = c[1];
+                wresyncSaver = c[2].equals("save");
+                wresyncSave = Paths.get(c[3]);
+                wresyncState = Paths.get(c[4]);
+                event("ondesync", "\"choice\":\"" + onDesync + "\"");
                 return;
             case "worldresyncat":
                 wresyncStep = Long.parseLong(c[1]);

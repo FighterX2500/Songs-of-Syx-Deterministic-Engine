@@ -26,14 +26,19 @@ public final class AiEntry {
     public static final int COMMAND = 16;
     /** Who commands each division and each army's artillery from this step ({@link Commanders}); not a battle change. */
     public static final int COMMANDERS = 17;
-    static final int KINDS = 18;
+    /**
+     * The host found a desync (SOS-53): every PC stops at this entry's step. The payload is the differing PC, then the
+     * desync's step as two ints (high, low); not a battle change.
+     */
+    public static final int HOLD = 18;
+    static final int KINDS = 19;
     public static String kindName(int kind) {
         return KIND_NAMES[kind];
     }
 
     private static final String[] KIND_NAMES = {"path", "dest", "task", "guard", "running", "fireAtWill", "formation",
         "artillery", "holdFire", "ammo", "muster", "mopUp", "artilleryMuster", "artilleryFire", "teleport", "speed",
-        "command", "commanders"};
+        "command", "commanders", "hold"};
 
     /** The general, as opposed to a player's PC. */
     public static final int AI = -1;

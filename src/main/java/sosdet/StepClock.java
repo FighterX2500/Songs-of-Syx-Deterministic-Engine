@@ -34,6 +34,8 @@ final class StepClock {
     private long lastStep;
     /** The host's pacing: the last step the slowest PC lets it run, on top of the last step (SOS-42). */
     private long paceCap = NO_LIMIT;
+    /** A desync hold (SOS-53): no step past this one until the hold ends, whatever the last step says. */
+    private long holdAt = NO_LIMIT;
 
     StepClock() {
         lastStep = 0;
@@ -88,7 +90,8 @@ final class StepClock {
 
     /** Starts the next step, or returns false at the last step allowed (and drops the game time owed). */
     boolean begin() {
-        if (lastStep != NO_LIMIT && step >= lastStep || paceCap != NO_LIMIT && step >= paceCap) {
+        if (lastStep != NO_LIMIT && step >= lastStep || paceCap != NO_LIMIT && step >= paceCap
+                || holdAt != NO_LIMIT && step >= holdAt) {
             accumulator = 0;
             return false;
         }
@@ -118,6 +121,15 @@ final class StepClock {
 
     void paceCap(long cap) {
         paceCap = cap;
+    }
+
+    /** Holds at {@code at} for a desync, or ends the hold ({@link #NO_LIMIT}) (SOS-53). */
+    void holdAt(long at) {
+        holdAt = at;
+    }
+
+    long holdAt() {
+        return holdAt;
     }
 
     /** After a resync load: at that step, holding there. */

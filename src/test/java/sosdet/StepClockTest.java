@@ -32,6 +32,25 @@ class StepClockTest {
         assertEquals(0, clock.stepsFor(0));
     }
 
+    /** A desync hold stops the clock at its step whatever the last step allows, until it ends (SOS-53). */
+    @Test
+    void aDesyncHoldWinsOverTheLastStep() {
+        StepClock clock = new StepClock();
+        clock.runUntil(StepClock.NO_LIMIT);
+        clock.holdAt(5);
+        int ran = 0;
+        for (int i = clock.stepsFor(1.0); i > 0 && clock.begin(); i--) {
+            ran++;
+        }
+        assertEquals(5, ran);
+        assertFalse(clock.begin());
+        clock.runUntil(100); // the mod's or the rig's own limit doesn't end the hold
+        assertFalse(clock.begin());
+        clock.holdAt(StepClock.NO_LIMIT);
+        assertTrue(clock.begin());
+        assertEquals(6, clock.step());
+    }
+
     @Test
     void aFrameShorterThanAStepCarriesOver() {
         StepClock clock = new StepClock();
