@@ -402,6 +402,9 @@ public final class WorldActions {
             int level = Integer.parseInt(a[2]);
             Rig.later(() -> {
                 Region reg = capital();
+                if (b < 0 || b >= RD.BUILDINGS().all.size()) { // the list answers null past its end (PT4 crash)
+                    throw new IllegalArgumentException("no building " + b);
+                }
                 RDBuilding building = RD.BUILDINGS().all.get(b);
                 RD.BUILDINGS().tmp(true, reg).levelSet(building, level);
                 if (!World.regionBuildings(reg)) {
