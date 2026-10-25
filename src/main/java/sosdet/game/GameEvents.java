@@ -95,6 +95,25 @@ final class GameEvents extends Savable {
         return h;
     }
 
+    /**
+     * Each human's values {@link #hash} mixes, from the second human on: war timer, rebellion timer and current
+     * raider's power, three per human into {@code out}; returns the humans written (desync report, no allocation).
+     */
+    static int keep(double[] out) {
+        int n = Math.min(Hooks.humanSlots().length, out.length / 3 + 1);
+        EventDiplomacy dip = GAME.events().world.dip;
+        EventWorldRebellion rebellion = GAME.events().rebellion;
+        RAIDING raids = GAME.raiders();
+        for (int k = 1; k < n; k++) {
+            int o = (k - 1) * 3;
+            out[o] = warCount(dip, k);
+            out[o + 1] = rebellionTimer(rebellion, k);
+            Raider r = raid(raids, k).current();
+            out[o + 2] = r == null ? -1 : r.army.power;
+        }
+        return Math.max(0, n - 1);
+    }
+
     private static double warCount(EventDiplomacy dip, int k) {
         try {
             return (double) WAR_COUNT.invokeExact(dip, k);

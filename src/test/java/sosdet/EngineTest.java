@@ -54,6 +54,11 @@ class EngineTest {
         public String describeEntities(long step) {
             return "";
         }
+
+        @Override
+        public String describeWorld(long step) {
+            return "";
+        }
     };
 
     /**

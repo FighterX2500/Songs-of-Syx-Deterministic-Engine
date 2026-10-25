@@ -94,6 +94,10 @@ public final class WorldActions {
             Rig.later(() -> Rig.note(relations(slot < 0 ? npc() : npcAt(slot))));
             return true;
         }
+        case "wwar": // wwar: notes each human's cached potential enemies (DipWarPlayer, as the next war timer reads them), each
+            // with its trust, and the war timer, read as that human between steps (SOS-46 playtest PT1)
+            Rig.later(() -> Rig.note(war()));
+            return true;
         case "wevents": // wevents: notes each human's war timer and warner, rebellion timer and realm cursor, raid and raid
             // timer, each read as that human between steps (SOS-46 M4)
             Rig.later(() -> Rig.note(events()));
@@ -640,6 +644,24 @@ public final class WorldActions {
                         (Double) patched(rebellion, "sosdetTimer", k), (Integer) patched(rebellion, "sosdetRi", k),
                         FACTIONS.player().realm().regions(), raider == null ? "none" : raider.name,
                         (Double) patched(GAME.raiders(), "sosdetRaidTimer", k)));
+            } finally {
+                Engine.asHuman(before);
+            }
+        }
+        return b.toString();
+    }
+
+    private static String war() {
+        StringBuilder b = new StringBuilder("war");
+        Object dip = GAME.events().world.dip;
+        for (int slot : Hooks.humanSlots()) {
+            int before = Engine.asHuman(slot);
+            try {
+                b.append(" | human ").append(slot).append(String.format(java.util.Locale.ROOT, " warCount %.3f potential",
+                        (Double) patched(dip, "sosdetWarCount", Hooks.humanIndex())));
+                for (FactionNPC f : DIP.WAR_PLAYER().potential()) {
+                    b.append(String.format(java.util.Locale.ROOT, " %d(%.3f)", f.index(), ROPINION.trust().get(f)));
+                }
             } finally {
                 Engine.asHuman(before);
             }
