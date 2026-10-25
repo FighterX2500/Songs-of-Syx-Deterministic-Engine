@@ -146,6 +146,8 @@ Every scenario passes only when its copies are identical at every step and no en
 
 `--battle-save NAME` (field) starts from that battle save instead of generating one; in a `--replay` run, `--cmds` is ignored, since the log already holds the actions.
 
+The recordings in `rig\golden` were made on the main dev PC (2026-10-25). A field recording needs its battle save, which stays in that PC's saves folder; on another PC the field scenario says `RECORD` until it is recorded there. Checked on 2026-10-25: the short suite passes in about 6 minutes (field and assault match their recordings, the own-city world stays identical through a world resync at step 1,500), and a probe that changed every step's seed made the field scenario fail at step 300, naming the expected and the actual hash.
+
 ## The timing rule
 
 ```
