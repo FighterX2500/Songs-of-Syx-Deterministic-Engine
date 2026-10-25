@@ -18,6 +18,10 @@ import java.util.Arrays;
  * region's race target and a room's employee list were last cached at (SOS-36). A PC that already ran a tick of its own
  * timeline (a resync load) could find that tick's old cache valid after the load. Back to -1 (and no room).</li>
  * </ul>
+ *
+ * <p>In a process that hasn't built a game yet (a campaign resumed from the menu, SOS-64), every one of them still holds
+ * its start value, which is the value the reset writes, and writing one would run its class's initializer, which needs
+ * the game's clock ({@code RDRace.RDRacePopulation} reads {@code TIME.t}). So the reset is skipped until a game exists.
  */
 public final class WorldStatics {
 
@@ -32,6 +36,8 @@ public final class WorldStatics {
     private static final Class<?> EMPLOYMENT = className("settlement.room.main.employment.RoomEmploymentIns");
     private static final Field EMPLOYEES_UP = field(EMPLOYMENT, "employeesI");
     private static final Field EMPLOYEES_ROOM = field(EMPLOYMENT, "employeesO");
+    /** The game's clock: set when the first game is built, never cleared. */
+    private static final Field CLOCK = field(className("game.time.TIME"), "t");
 
     private WorldStatics() {
     }
@@ -39,6 +45,9 @@ public final class WorldStatics {
     /** Game thread, at the start of a load in a session. */
     public static void reset() {
         try {
+            if (CLOCK.get(null) == null) {
+                return; // no game was built in this process: everything holds its start value
+            }
             Arrays.fill((int[]) RNDS.get(null), 0);
             RI.setInt(null, 0);
             SUPPLIES.set(null, null);
