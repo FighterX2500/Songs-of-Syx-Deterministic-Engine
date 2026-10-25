@@ -23,7 +23,7 @@ A short map for an AI agent (or a person) about to change SOSDET. Read it first,
    - applies the log entries due at this step: orders, commands, speed changes and the AI general's settings.
 4. **The step itself:** the city part, then the world part (patch `12`), each updating the game's resources by the step length; or the battle.
    - The world part never reads a live city: it reads the city report (patches `13`, `14`, `98`; `GameReport`) and changes the city only through transactions applied exactly once (`sosdet/txn`, `GameTxns`).
-   - In own-city mode (`Engine.ownCity`) each PC runs its own city, and the world reads the host's reports only (one player faction, [requirements](requirements.md) §2).
+   - In own-city mode (`Engine.ownCity`) each PC runs its own human's city, and the world reads each human's reports from that human's PC. The world part runs each human's world half in slot order, with that human as `FACTIONS.player()` (several humans, [ADR 0004](decisions/0004-several-humans.md), [requirements](requirements.md) §2).
    - Battle jobs run inside the step, not on their threads (patch `30`).
    - Path jobs queued in the step run at its end, before the hash: share 0 on the simulation thread, shares 1 and 2 on path threads, job i always on share i % 3 (patch `35`, `PathWorkers`).
    - The host's AI general keeps its own thread, but writes only to the log (patch `90`).

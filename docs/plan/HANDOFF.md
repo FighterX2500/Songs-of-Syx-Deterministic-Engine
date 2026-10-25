@@ -1,4 +1,4 @@
-# Handoff: next session starts here (updated 2026-10-24, SOS-32)
+# Handoff: next session starts here (updated 2026-10-25, SOS-46)
 
 ## 1. Read these first, before doing anything
 
@@ -22,7 +22,9 @@
 - SOS-36 and SOS-37: fixes from the owner's V0.1 sessions (prompt deadlock, copier and blueprints, the minimap's draws, path finding on path threads).
 - SOS-38 (PR #19, 2026-10-24): stage E, the city↔world link, in full: the step parts, the city report, the transactions, own-city mode, the world resync from a world-only save, raiders in the world hash, and pacing by the slowest PC. Results: `docs/plan/notes/stage-e-smoke-tests.md`.
 
-**Now, SOS-32:** the owner's 30-minute session, which unifies the remaining checks (owner, 2026-10-24):
+**In review, SOS-46 (branch `SOS-46-several-humans`):** several human factions on one world map ([ADR 0004](../decisions/0004-several-humans.md), [plan 0004](0004-several-humans.md)): up to 16 humans, each a `Player` in its own slot; the world part runs each human's world half as the current human; NPC relations, event timers and raids are kept per human (engine save sections `SOSDET_CITY_DIVS`, `SOSDET_RELATIONS`, `SOSDET_EVENTS`). Hash format 7, so the scenario suite's recordings (SOS-31) must be made again after it merges. Known gaps are in plan 0004's milestone notes: no message routing per human yet, `DIP.playerWarSecond` still one value, battles between humans outside the card, and the world resync refuses several humans.
+
+**Before SOS-46, SOS-32:** the owner's 30-minute session, which unifies the remaining checks (owner, 2026-10-24):
 - camera and clicks (render and UI state; the C1 split when the owner moved the camera is the biggest risk);
 - real-time battles started from the world map (SOS-32: Engage works in co-op and ran identical on three copies through a retreat; own-city mode refuses it and doesn't support city battles);
 - own-city followers from older saves (Mogus-40 and Mogus-20) under the host's Mogus-72 world;
@@ -30,7 +32,7 @@
 
 First three read-only audits (camera and clicks, battles from the map, older-save followers), then a fix plan for the owner's approval, then the session.
 
-**Still open elsewhere:** SOS-31 (the scenario suite as one local command); the V01B rig split at step 154,365; the resync-with-open-prompt gap (plan 0002, stage D); room-planning milestone 3; Engage with own cities; several human factions (the mod's work).
+**Still open elsewhere:** SOS-31 (the scenario suite as one local command); the V01B rig split at step 154,365; the resync-with-open-prompt gap (plan 0002, stage D); room-planning milestone 3; Engage with own cities.
 
 ## 3. How to work here
 
