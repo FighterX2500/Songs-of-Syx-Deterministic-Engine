@@ -29,10 +29,10 @@
 
 **The suite needs new recordings:** SOS-46 moved the hash format to 7 after the suite was recorded, so every recorded scenario says `RECORD` until `python rig\suite.py --record` and `--short --record` run again.
 
-**Waiting for the owner (open questions from the SOS-46 playtests, 2026-10-25):**
-- May a human be drawn into war with another human through an NPC vassal or ally? Vanilla's ally rule does it today, and it happened in almost every playtest.
-- An army's sub-pixel move remainder is not saved, so after a resync a moving army can be 1 px apart until it stops. Saving it changes the save format.
-- There is no recovery from a desync with several humans: the world resync refuses several humans, and a report miss throws.
+**Decided by the owner (2026-10-25), from the SOS-46 playtests; cards to propose:**
+- No war between two humans through an NPC vassal or ally: only by one of them declaring it. Vanilla's ally rule does it today, and it happened in almost every playtest. The spec change (§6, an [AT] in §15) goes with the card.
+- An army's sub-pixel move remainder is not saved, and a world resync loads into the running game without touching it, so a resync can't repair a remainder that differs. Every PC resets its armies' remainders when a world resync loads (no save format change).
+- Still to build: recovery from a desync with several humans. The world resync refuses several humans, and a report miss throws.
 
 **SOS-32, still open:** the owner's 30-minute session, which unifies the remaining checks (owner, 2026-10-24):
 - camera and clicks (render and UI state; the C1 split when the owner moved the camera is the biggest risk);
