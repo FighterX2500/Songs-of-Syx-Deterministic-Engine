@@ -85,6 +85,14 @@ public final class WorldActions {
             });
             return true;
         }
+        case "wsprite": { // wsprite <army>: what the army's sprite asks each frame it is drawn (WPath.moving), on this PC only (PT3)
+            int army = Integer.parseInt(a[1]);
+            Rig.later(() -> {
+                WArmy w = army(army);
+                w.path().moving(w.body());
+            });
+            return true;
+        }
         case "wstatus": // wstatus: notes the player's slot, treasury, capital, regions, armies and wars (a probe for an agent player)
             Rig.later(() -> Rig.note(status()));
             return true;
