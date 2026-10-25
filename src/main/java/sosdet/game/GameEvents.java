@@ -30,7 +30,12 @@ import sosdet.hash.HashLog;
 final class GameEvents extends Savable {
 
     static final String KEY = "SOSDET_EVENTS";
-    private static final int VERSION = 1;
+    /**
+     * 2: an end marker after the last human (SOS-52). The section is the save's last, and vanilla's FileGetter.d
+     * refuses a file's last 8 bytes, so the last raid timer could not be read; GameSaver.load hid that by dropping it.
+     */
+    private static final int VERSION = 2;
+    private static final int END = 0x53444545; // "SDEE"
     private static final Method DIP_SAVE = GameRelations.method(EventDiplomacy.class, "sosdetSave", int.class, FilePutter.class);
     private static final Method DIP_LOAD = GameRelations.method(EventDiplomacy.class, "sosdetLoad", int.class, FileGetter.class);
     private static final Method REBELLION_SAVE = GameRelations.method(EventWorldRebellion.class, "sosdetSave", int.class, FilePutter.class);
@@ -59,12 +64,13 @@ final class GameEvents extends Savable {
             GameRelations.call(REBELLION_SAVE, GAME.events().rebellion, k, file);
             GameRelations.call(RAID_SAVE, GAME.raiders(), k, file);
         }
+        file.i(END);
     }
 
     @Override
     protected void load(FileGetter file) throws IOException {
         int version = file.i();
-        if (version != VERSION) {
+        if (version != VERSION && version != 1) { // 1 is 2 without the end marker
             throw new IOException("SOSDET: an events section of version " + version + ", this engine reads " + VERSION);
         }
         int[] s = humans.slots();
@@ -74,6 +80,10 @@ final class GameEvents extends Savable {
             GameRelations.load(DIP_LOAD, GAME.events().world.dip, k, file);
             GameRelations.load(REBELLION_LOAD, GAME.events().rebellion, k, file);
             GameRelations.load(RAID_LOAD, GAME.raiders(), k, file);
+        }
+        int end = version == 1 ? END : file.i();
+        if (end != END) {
+            throw new IOException("SOSDET: an events section without its end marker (" + Integer.toHexString(end) + ")");
         }
     }
 

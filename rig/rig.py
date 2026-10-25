@@ -778,7 +778,7 @@ def main():
                          " then runs human k's city in own-city mode and reads every other copy's reports; the copies"
                          " are compared on the world only")
     ap.add_argument("--world-resync", type=int, default=0,
-                    help="with --follow: copy 1 saves at this step, and every copy reloads only the world from it")
+                    help="with --follow or --humans: copy 1 saves at this step, and every copy reloads only the world from it")
     ap.add_argument("--follower-saves", default="",
                     help="with --follow: each follower's own save (copies 2..N, comma-separated) instead of --save; their"
                          " worlds differ from copy 1's until the world resync, which must come before the first hash"
@@ -845,14 +845,14 @@ def main():
         fail("--follow needs a city run with the AI on the host, without --replay or --resync (a whole-game resync"
              " would take the followers' cities; use --world-resync)")
     if args.humans and (args.humans != args.copies or args.humans < 2 or args.scenario != "city" or args.ai != "host"
-                        or args.follow or args.replay or args.resync or args.resync_on_desync or args.world_resync):
-        fail("--humans N needs N copies (2 or more), a city run with the AI on the host, without --follow, --replay,"
-             " --resync or --world-resync")
+                        or args.follow or args.replay or args.resync or args.resync_on_desync):
+        fail("--humans N needs N copies (2 or more), a city run with the AI on the host, without --follow, --replay"
+             " or --resync")
     if 0 < args.pace_lead < HASH_EVERY:
         fail("--pace-lead %d: the host learns a copy's step from its hashes, every %d steps; use 0 or at least %d"
              % (args.pace_lead, HASH_EVERY, HASH_EVERY))
-    if args.world_resync and not args.follow:
-        fail("--world-resync is for --follow runs; co-op runs use --resync")
+    if args.world_resync and not (args.follow or args.humans):
+        fail("--world-resync is for --follow or --humans runs; co-op runs use --resync")
     follower_saves = [s for s in args.follower_saves.split(",") if s]
     if follower_saves:
         if not args.follow or len(follower_saves) != args.copies - 1:
@@ -973,9 +973,11 @@ def main():
                 c.send("reportsout %s" % reports_file, "reportsout")
             else:
                 c.send("reportsfrom 0 %s" % reports_file, "reportsfrom")
-            if args.world_resync:
-                c.send("worldresyncat %d %s %s %s" % (args.world_resync, "save" if c.k == 1 else "load", wresync_save,
-                                                      wresync_state), "worldresyncat")
+        if args.world_resync:
+            # copy 1 saves the world at that step; every copy, copy 1 too, reloads only the world (SOS-38; SOS-52 with
+            # several humans)
+            c.send("worldresyncat %d %s %s %s" % (args.world_resync, "save" if c.k == 1 else "load", wresync_save,
+                                                  wresync_state), "worldresyncat")
         if args.ai == "host" and not args.follow and not args.replay:
             # a peer's player acts too: its orders go to the host, which stamps them into its log (SOS-33)
             if c.k == 1:
