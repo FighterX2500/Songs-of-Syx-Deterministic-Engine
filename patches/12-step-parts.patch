@@ -1,6 +1,6 @@
 diff -ru -U2 a/game/events/EVENTS.java b/game/events/EVENTS.java
 --- a/game/events/EVENTS.java	2026-02-17 17:15:30.000000000 +0500
-+++ b/game/events/EVENTS.java	2026-10-25 05:25:11.677038700 +0500
++++ b/game/events/EVENTS.java	2026-10-25 06:11:10.728430700 +0500
 @@ -131,7 +131,7 @@
  			return;
  		prof.logStart(EVENTS.class);
@@ -12,7 +12,7 @@ diff -ru -U2 a/game/events/EVENTS.java b/game/events/EVENTS.java
  	}
 diff -ru -U2 a/game/faction/FACTIONS.java b/game/faction/FACTIONS.java
 --- a/game/faction/FACTIONS.java	2026-03-25 10:31:18.000000000 +0500
-+++ b/game/faction/FACTIONS.java	2026-10-25 05:25:11.681039000 +0500
++++ b/game/faction/FACTIONS.java	2026-10-25 06:11:10.732426500 +0500
 @@ -41,7 +41,7 @@
  
  		@Override
@@ -75,7 +75,7 @@ diff -ru -U2 a/game/faction/FACTIONS.java b/game/faction/FACTIONS.java
  		
  		prof.logStart(updater.getClass());
  		updater.update(ds);
-@@ -171,7 +195,13 @@
+@@ -171,7 +195,15 @@
  		prof.logEnd(npcManager.getClass());
  		
  		prof.logStart(player.getClass());
@@ -83,6 +83,8 @@ diff -ru -U2 a/game/faction/FACTIONS.java b/game/faction/FACTIONS.java
 +		for (int i = 0; i < all.size(); i++) { // SOSDET: every human's world half, in slot order, each the current human in turn (ADR 0004)
 +			if (all.get(i) instanceof Player && (i == 0 || sosdet.Hooks.everyHuman())) {
 +				sosdet.Hooks.currentHuman(i);
++				if (sosdet.Hooks.humanSlots().length > 1)
++					RD.DIST().neighs(); // SOSDET: this human's distances, current for the other humans' reads and the UI (SOS-46 M5)
 +				((Player) all.get(i)).updateSpecial(ds, prof);
 +			}
 +		}
@@ -90,7 +92,7 @@ diff -ru -U2 a/game/faction/FACTIONS.java b/game/faction/FACTIONS.java
  		prof.logEnd(player.getClass());
  		
  		prof.logStart(dip.getClass());
-@@ -180,7 +210,7 @@
+@@ -180,7 +212,7 @@
  	}
  	
  	public static Player player() {
@@ -99,7 +101,7 @@ diff -ru -U2 a/game/faction/FACTIONS.java b/game/faction/FACTIONS.java
  	}
  
  	public static Faction getByIndex(int index) {
-@@ -286,13 +316,15 @@
+@@ -286,13 +318,15 @@
  	public static LIST<Faction> active(){
  		if (self.dirty) {
  			self.active.clearSloppy();
@@ -122,7 +124,7 @@ diff -ru -U2 a/game/faction/FACTIONS.java b/game/faction/FACTIONS.java
  		}
 diff -ru -U2 a/game/faction/player/Player.java b/game/faction/player/Player.java
 --- a/game/faction/player/Player.java	2026-06-17 10:48:04.000000000 +0500
-+++ b/game/faction/player/Player.java	2026-10-25 05:25:11.678038800 +0500
++++ b/game/faction/player/Player.java	2026-10-25 06:11:10.733432300 +0500
 @@ -6,7 +6,6 @@
  import game.boosting.BOOSTABLE_O;
  import game.boosting.BValue;
@@ -131,6 +133,15 @@ diff -ru -U2 a/game/faction/player/Player.java b/game/faction/player/Player.java
  import game.faction.FBanner;
  import game.faction.FCredits.CTYPE;
  import game.faction.FResources;
+@@ -53,7 +52,7 @@
+ 	private final FBanner banner = new FBanner(this);
+ 	private final PLevels level = new PLevels();
+ 	private final PCredits credits = new PCredits();
+-	public final Emissaries emissaries = new Emissaries();
++	public final Emissaries emissaries = new Emissaries(this); // SOSDET: they read their own Player (SOS-46 M5)
+ 	public final PBonusSetting bonusesCustom;
+ 	private int ri;
+ 	public final PTrade trade = new PTrade();
 @@ -158,21 +157,22 @@
  	}
  	
@@ -211,15 +222,16 @@ diff -ru -U2 a/game/faction/player/Player.java b/game/faction/player/Player.java
  		for (int i = 0; i < AD.mercenaries().max() && creds > 0; i++) {
  			WDivMercenary d = AD.mercenaries().get(i);
  			if (d.army() == null && !d.disbanded() ) {
-@@ -342,6 +347,7 @@
+@@ -342,13 +347,16 @@
  			}
  		}
  	
+-		p += RD.MILITARY().power.getD(this.capitolRegion())-SETT.INVADOR().invadingPower();
 +		if (capitolRegion() != null) // SOSDET: a human with no realm left (SOS-46)
- 		p += RD.MILITARY().power.getD(this.capitolRegion())-SETT.INVADOR().invadingPower();
++		p += RD.MILITARY().power.getD(this.capitolRegion())-(sosdet.Hooks.reportRead() ? sosdet.Hooks.reportD(index(), sosdet.report.Field.INVADING_POWER, 0) : SETT.INVADOR().invadingPower()); // SOSDET: this human's (SOS-46 M5)
  	
  		return Math.max(p, 0);
-@@ -349,6 +355,8 @@
+ 	}
  
  	@Override
  	public int citizens(Race race) {

@@ -116,7 +116,7 @@ public final class GameHumans extends Savable {
     /**
      * Setup, before a session: the NPC in {@code slot} becomes a human with its name, race, credits and realm. Other
      * game objects may still hold the NPC, so the game is saved and loaded before the session starts, the way every
-     * PC then loads it.
+     * PC then loads it. Humans join in slot order: a slot below an existing human's is refused.
      */
     public Player add(int slot) {
         if (slot <= 0 || slot >= all.size()) {
@@ -132,6 +132,13 @@ public final class GameHumans extends Savable {
         }
         if (!npc.isActive() || npc.capitolRegion() == null) {
             throw new IllegalArgumentException("SOSDET: slot " + slot + " has no realm; a human starts with a capitol");
+        }
+        int[] humans = slots();
+        if (humans[humans.length - 1] > slot) {
+            // each human's own data (relations, events) is kept by its place among the humans; a human added below
+            // another would take that one's place before the setup's save
+            throw new IllegalArgumentException("SOSDET: slot " + slot + " is below human slot " + humans[humans.length - 1]
+                    + "; humans join in slot order");
         }
         Player p = put(slot);
         p.name.clear().add(npc.name);

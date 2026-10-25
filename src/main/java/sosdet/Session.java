@@ -131,6 +131,11 @@ final class Session {
     int currentHuman;
     /** Each PC's human, by PC: the same table on every PC (ADR 0004); slot 0 for a PC the mod hasn't set. */
     final int[] pcHumans = unset(new int[SLOTS]);
+    /**
+     * Outside the step only: the human this PC reads the game as ({@code Engine.asHuman}, the rig's probes), -1 for its
+     * own. Never read in the step (SOS-46).
+     */
+    int viewHuman = -1;
     /** Game time since the player's own faction update last ran in the city part; 0 after every load. */
     double playerUpdateAcc;
     /** The slots a game has ({@code FACTIONS.MAX()}). */
@@ -215,6 +220,31 @@ final class Session {
         return humans;
     }
 
+    /**
+     * The slot {@code FACTIONS.player()} is now: in the world part the current human, elsewhere this PC's human (or the
+     * one it reads as outside the step).
+     */
+    int humanNow() {
+        if (part == StepParts.WORLD_PART) {
+            return currentHuman;
+        }
+        return viewHuman >= 0 ? viewHuman : localHuman;
+    }
+
+    /** The ordinal of the human in {@code slot} among the human slots; 0 for slot 0 and while a game loads (SOS-46). */
+    int ordinal(int slot) {
+        if (slot == 0 || loading) {
+            return 0;
+        }
+        int[] hs = humans();
+        for (int i = 0; i < hs.length; i++) {
+            if (hs[i] == slot) {
+                return i;
+            }
+        }
+        throw new IllegalStateException("SOSDET: slot " + slot + " is no human (ADR 0004)");
+    }
+
     /** True when a human's city reports come from another PC: every human but this PC's, and this PC's on a follower. */
     boolean remote(int slot) {
         return slot != localHuman || reportsFrom >= 0;
@@ -296,6 +326,7 @@ final class Session {
      */
     void afterLoad() {
         playerUpdateAcc = 0;
+        viewHuman = -1; // a read as another human never outlives a load (SOS-46)
         for (Reports r : reports) {
             if (r != null) {
                 r.clear(); // every PC reloads, so every PC takes its load report from the loaded city

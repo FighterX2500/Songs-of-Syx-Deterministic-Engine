@@ -198,6 +198,39 @@ class EngineTest {
         assertEquals(java.util.List.of(mine), applied, "slot 3's city is its own PC's");
     }
 
+    /** SOS-46 M3 to M5: a per-human slice is the human's ordinal among the human slots, whoever reads. */
+    @Test
+    void eachHumanReadsItsOwnSlice() {
+        assertEquals(16, Hooks.HUMANS_MAX);
+        assertEquals(0, Hooks.humanIndex(), "without a session: slot 0's");
+        begin();
+        Session s = Engine.session();
+        s.city = humans(0, 3, 7);
+        s.localHuman = 3;
+        assertEquals(1, Hooks.humanIndex(), "outside the step: this PC's human");
+        s.part = StepParts.WORLD_PART;
+        s.currentHuman = 7;
+        assertEquals(2, Hooks.humanIndex(), "in the world part: the current human");
+        int before = Hooks.currentHumanSwap(0);
+        assertEquals(0, Hooks.humanIndex());
+        Hooks.currentHumanSwap(before);
+        assertEquals(2, Hooks.humanIndex());
+        assertThrows(IllegalStateException.class, () -> Engine.asHuman(0), "never in the step");
+        s.part = -1;
+        assertEquals(-1, Engine.asHuman(7));
+        assertEquals(2, Hooks.humanIndex(), "read as slot 7 between steps");
+        assertEquals(7, Engine.asHuman(-1));
+        assertEquals(1, Hooks.humanIndex(), "this PC's own again");
+        assertThrows(IllegalArgumentException.class, () -> Engine.asHuman(5), "slot 5 is no human");
+        s.localHuman = 5;
+        assertThrows(IllegalStateException.class, () -> Hooks.humanIndex(), "a slot that is no human has no slice");
+        s.loading = true;
+        assertEquals(0, Hooks.humanIndex(), "while a game loads: slot 0's");
+        s.loading = false;
+        s.localHuman = 0;
+        s.currentHuman = 0;
+    }
+
     /** ADR 0004 (SOS-46): with several humans the run doesn't start until each human has exactly one PC. */
     @Test
     void severalHumansNeedOnePcEach() {

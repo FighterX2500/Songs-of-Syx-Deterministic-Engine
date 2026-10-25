@@ -172,6 +172,9 @@ public final class Hooks {
      */
     public static boolean stepBegin() {
         Session s = Engine.session();
+        if (s.viewHuman >= 0) {
+            throw new IllegalStateException("SOSDET: Engine.asHuman(" + s.viewHuman + ") still set at a step (SOS-46)");
+        }
         if (s.ownCity && s.clock.step() == 0) {
             s.checkPcHumans();
         }
@@ -391,7 +394,7 @@ public final class Hooks {
         if (s == null) {
             return first;
         }
-        int slot = s.part == StepParts.WORLD_PART ? s.currentHuman : s.localHuman;
+        int slot = s.humanNow();
         if (slot == 0) {
             return first;
         }
@@ -433,6 +436,39 @@ public final class Hooks {
     public static int[] humanSlots() {
         Session s = Engine.session();
         return s == null ? FIRST_HUMAN : s.humans();
+    }
+
+    /**
+     * The most humans a game holds (slot 0's Player and the spares): the size of every per-human slice the game keeps
+     * (relations, events, raids, distances; SOS-46 M3 to M5). Slice 0 is slot 0's, the game's own fields.
+     */
+    public static final int HUMANS_MAX = sosdet.game.GameHumans.SPARES + 1;
+
+    /**
+     * The slice a per-human value reads now: the ordinal (0 to {@link #HUMANS_MAX}-1, in slot order) of the human
+     * {@code FACTIONS.player()} is, so in the world part the current human's and elsewhere this PC's human's (or the
+     * one {@link Engine#asHuman} reads as). 0 without a session, and while a game loads (SOS-46).
+     */
+    public static int humanIndex() {
+        Session s = Engine.session();
+        return s == null ? 0 : s.ordinal(s.humanNow());
+    }
+
+    /** The slice of the human {@code faction} (a Player in a slot): its ordinal among the human slots (SOS-46). */
+    public static int humanIndex(Object faction) {
+        if (!(faction instanceof Player)) {
+            throw new IllegalArgumentException("SOSDET: " + faction + " is no human (ADR 0004)");
+        }
+        int slot = ((Player) faction).index();
+        Session s = Engine.session();
+        if (s != null) {
+            return s.ordinal(slot);
+        }
+        int n = 0;
+        for (int i = 0; i < slot; i++) {
+            n += FACTIONS.getByIndex(i) instanceof Player ? 1 : 0;
+        }
+        return n;
     }
 
     /** The world part works on the human in {@code slot} (its own world half), or on the first human again (slot 0). */

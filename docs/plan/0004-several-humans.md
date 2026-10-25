@@ -118,6 +118,7 @@ Each milestone is a PR on SOS-46, rig-checked before the next one starts.
 - The rest of the world's reads come from the right human's report: `offensivePower`, emissaries, tech boosts, level and titles.
 - `RD.DIST()` per human capitol (76 sites).
 - `FACTIONS.WORTH()`.
+- **Done, 2026-10-25 (done first: M3 and M4 read `RD.DIST`).** `RDDistance` keeps one slice per human (it also multiplied every other human's region output by 0.1), emissaries and `FWorth` read their own human, `offensivePower` reads this Player's report, the prosecution booster reads the region's owner, `RDMilitary` measures from the nearest human and `Chiller` from any human it borders. Base for M3 to M5: `Hooks.humanIndex()` (a human's place among the humans; slot 0 is always 0, so vanilla's fields stay slot 0's) and `Engine.asHuman`, a read as another human between steps only, for the rig. Smoke S46V: identical to step 12,000, hashes agree, step time as in M2.
 
 ## Acceptance (owner, 2026-10-25: smoke tests only, with draw tracing, 8 minutes at most)
 

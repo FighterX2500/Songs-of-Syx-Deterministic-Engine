@@ -1,0 +1,26 @@
+diff -ru -U2 a/world/army/ai/Chiller.java b/world/army/ai/Chiller.java
+--- a/world/army/ai/Chiller.java	2024-12-26 16:43:54.000000000 +0500
++++ b/world/army/ai/Chiller.java	2026-10-25 06:11:11.905338700 +0500
+@@ -1,6 +1,5 @@
+ package world.army.ai;
+ 
+-import game.faction.FACTIONS;
+ import game.faction.Faction;
+ import snake2d.PathTile;
+ import snake2d.util.rnd.RND;
+@@ -22,12 +21,13 @@
+ 	
+ 	public void chill(Faction f, ArrayList<WArmy> armies) {
+ 
+-		if (armies.size() > 0 && RND.oneIn(2) && RD.DIST().factionHasRegionBorderingPlayer(f)) {
++		Faction sosdetHuman = null; // SOSDET: the human it borders, any of them (SOS-46 M5)
++		if (armies.size() > 0 && RND.oneIn(2) && (sosdetHuman = RD.DIST().sosdetBorderingHuman(f)) != null) {
+ 			
+ 			WArmy a = armies.rnd();
+ 			
+ 			if (a.state() == WArmyState.fortified) {
+-				LIST<RegDist> l = WORLD.PATH().regFinder.all(a.ctx(), a.cty(), Treaty.FACTION_BORDERS, WRegSel.FACTION(FACTIONS.player()));
++				LIST<RegDist> l = WORLD.PATH().regFinder.all(a.ctx(), a.cty(), Treaty.FACTION_BORDERS, WRegSel.FACTION(sosdetHuman)); // SOSDET: that human (SOS-46 M5)
+ 				if (l.size() == 0)
+ 					return;
+ 				RegDist d = l.rnd();

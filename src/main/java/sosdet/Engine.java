@@ -407,6 +407,24 @@ public final class Engine {
         }
     }
 
+    /**
+     * Outside the step only (the rig's probes, a save's per-human sections): reads the game as the human in
+     * {@code slot}: {@code FACTIONS.player()} and every per-human slice are that human's until the call that gives
+     * back the returned slot (-1: this PC's own human). Throws in the step (SOS-46).
+     */
+    public static int asHuman(int slot) {
+        Session s = required();
+        if (s.part >= 0 || !Hooks.outsideStep()) {
+            throw new IllegalStateException("SOSDET: reading as another human is for between steps (part " + s.part + ")");
+        }
+        if (slot >= 0 && !s.isHuman(slot)) {
+            throw new IllegalArgumentException("SOSDET: slot " + slot + " is not a human in this game");
+        }
+        int before = s.viewHuman;
+        s.viewHuman = slot;
+        return before;
+    }
+
     /** The mod's number for this PC: 0 on the host, from 1 on a peer (for feedback only the issuer gets). */
     public static void localPc(int pc) {
         required().ai().localPc(pc);

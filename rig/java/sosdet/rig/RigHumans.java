@@ -49,6 +49,7 @@ final class RigHumans {
                 slots[i] = Integer.parseInt(s[i].trim());
             }
         }
+        java.util.Arrays.sort(slots); // humans join in slot order (GameHumans.add)
         for (int slot : slots) {
             GameHumans.get().add(slot);
         }
