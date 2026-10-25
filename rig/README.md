@@ -129,8 +129,8 @@ A field battle needs an enemy that stands: a weaker NPC army withdraws without a
 `rig\suite.py` runs every scenario in one command and prints pass or fail per scenario, with the first step that differs:
 
 ```
-python rig\suite.py --short     before each pull request, about 5 minutes
-python rig\suite.py             the full suite, about 55 minutes
+python rig\suite.py --short     before each pull request, about 6 minutes
+python rig\suite.py             the full suite, about 49 minutes
 python rig\suite.py --record    record the expected hashes again (a change meant to alter the simulation)
 python rig\suite.py --dry-run   what would run, and the state of each recording; starts no game
 ```
