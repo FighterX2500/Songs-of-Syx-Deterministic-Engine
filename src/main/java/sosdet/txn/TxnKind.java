@@ -36,7 +36,9 @@ public enum TxnKind {
     /** C6: an invasion called off ({@code Invador.cancel}). */
     INVASION_CANCEL,
     /** C6: a war with the player ended; the city calls off that faction's invasions ({@code Invador}'s listener). */
-    WAR_ENDED;
+    WAR_ENDED,
+    /** A2 (SOS-46): a haven's race wants more immigrants in the city ({@code Immigration.setHigher}, from the world's havens). */
+    IMMIGRANTS_HIGHER;
 
     /**
      * Whether a follower's city applies it (SOS-38: its world reads another PC's city). Not the ones that carry the

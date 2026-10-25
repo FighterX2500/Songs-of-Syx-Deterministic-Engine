@@ -1,6 +1,6 @@
 diff -ru -U2 a/settlement/battle/invasion/Attack.java b/settlement/battle/invasion/Attack.java
 --- a/settlement/battle/invasion/Attack.java	2026-06-17 10:48:04.000000000 +0500
-+++ b/settlement/battle/invasion/Attack.java	2026-10-25 04:14:01.673887500 +0500
++++ b/settlement/battle/invasion/Attack.java	2026-10-25 05:10:22.032273700 +0500
 @@ -155,7 +155,7 @@
  			
  			new MVictory2(ress).send();
@@ -21,7 +21,7 @@ diff -ru -U2 a/settlement/battle/invasion/Attack.java b/settlement/battle/invasi
  			}
 diff -ru -U2 a/settlement/battle/invasion/Invasion.java b/settlement/battle/invasion/Invasion.java
 --- a/settlement/battle/invasion/Invasion.java	2026-03-25 10:31:18.000000000 +0500
-+++ b/settlement/battle/invasion/Invasion.java	2026-10-25 04:14:01.673887500 +0500
++++ b/settlement/battle/invasion/Invasion.java	2026-10-25 05:10:22.032273700 +0500
 @@ -113,7 +113,7 @@
  		pLosses = STATS.POP().COUNT.leaves().get(CAUSE_LEAVES.SLAYED().index()).statistics(HCLASSES.CITIZEN()).get(null);
  		this.spec = spec;
@@ -102,7 +102,7 @@ diff -ru -U2 a/settlement/battle/invasion/Invasion.java b/settlement/battle/inva
  			return f;
 diff -ru -U2 a/view/world/ui/battle/BattleAssist.java b/view/world/ui/battle/BattleAssist.java
 --- a/view/world/ui/battle/BattleAssist.java	2025-09-12 16:10:28.000000000 +0500
-+++ b/view/world/ui/battle/BattleAssist.java	2026-10-25 04:14:01.674887400 +0500
++++ b/view/world/ui/battle/BattleAssist.java	2026-10-25 05:10:22.033272700 +0500
 @@ -44,6 +44,8 @@
  		bb = new Butt(UI.icons().s.sword, ¤¤Command) {
  			@Override
@@ -132,7 +132,7 @@ diff -ru -U2 a/view/world/ui/battle/BattleAssist.java b/view/world/ui/battle/Bat
  			}
 diff -ru -U2 a/view/world/ui/battle/BattleBattle.java b/view/world/ui/battle/BattleBattle.java
 --- a/view/world/ui/battle/BattleBattle.java	2026-01-08 07:48:44.000000000 +0500
-+++ b/view/world/ui/battle/BattleBattle.java	2026-10-25 04:14:01.674887400 +0500
++++ b/view/world/ui/battle/BattleBattle.java	2026-10-25 05:10:22.033272700 +0500
 @@ -44,6 +44,8 @@
  		bb = new Butt(UI.icons().s.sword, ¤¤Command) {
  			@Override
@@ -162,7 +162,7 @@ diff -ru -U2 a/view/world/ui/battle/BattleBattle.java b/view/world/ui/battle/Bat
  			}
 diff -ru -U2 a/view/world/ui/battle/BattleLastStand.java b/view/world/ui/battle/BattleLastStand.java
 --- a/view/world/ui/battle/BattleLastStand.java	2025-09-12 16:09:02.000000000 +0500
-+++ b/view/world/ui/battle/BattleLastStand.java	2026-10-25 04:14:01.675888500 +0500
++++ b/view/world/ui/battle/BattleLastStand.java	2026-10-25 05:10:22.034273400 +0500
 @@ -54,6 +54,8 @@
  		bb = new Butt(UI.icons().s.sword, ¤¤Command) {
  			@Override
@@ -183,7 +183,7 @@ diff -ru -U2 a/view/world/ui/battle/BattleLastStand.java b/view/world/ui/battle/
  			}
 diff -ru -U2 a/view/world/ui/battle/BattleSally.java b/view/world/ui/battle/BattleSally.java
 --- a/view/world/ui/battle/BattleSally.java	2026-01-12 14:19:00.000000000 +0500
-+++ b/view/world/ui/battle/BattleSally.java	2026-10-25 04:14:01.675888500 +0500
++++ b/view/world/ui/battle/BattleSally.java	2026-10-25 05:10:22.034273400 +0500
 @@ -54,6 +54,8 @@
  		bb = new Butt(UI.icons().s.sword, ¤¤Command) {
  			@Override
@@ -213,7 +213,7 @@ diff -ru -U2 a/view/world/ui/battle/BattleSally.java b/view/world/ui/battle/Batt
  			}
 diff -ru -U2 a/view/world/ui/battle/BattleSiege.java b/view/world/ui/battle/BattleSiege.java
 --- a/view/world/ui/battle/BattleSiege.java	2025-09-22 07:59:26.000000000 +0500
-+++ b/view/world/ui/battle/BattleSiege.java	2026-10-25 04:14:01.676857000 +0500
++++ b/view/world/ui/battle/BattleSiege.java	2026-10-25 05:10:22.035273900 +0500
 @@ -110,6 +110,8 @@
  			
  			@Override
@@ -243,7 +243,7 @@ diff -ru -U2 a/view/world/ui/battle/BattleSiege.java b/view/world/ui/battle/Batt
  			}
 diff -ru -U2 a/view/world/ui/battle/Conquer.java b/view/world/ui/battle/Conquer.java
 --- a/view/world/ui/battle/Conquer.java	2026-06-17 10:48:04.000000000 +0500
-+++ b/view/world/ui/battle/Conquer.java	2026-10-25 04:14:01.676857000 +0500
++++ b/view/world/ui/battle/Conquer.java	2026-10-25 05:10:22.036273700 +0500
 @@ -168,6 +168,8 @@
  				
  				@Override
@@ -273,7 +273,7 @@ diff -ru -U2 a/view/world/ui/battle/Conquer.java b/view/world/ui/battle/Conquer.
  					AD.stats().mercy().incD(FACTIONS.player(), mercy());
 diff -ru -U2 a/view/world/ui/battle/Res.java b/view/world/ui/battle/Res.java
 --- a/view/world/ui/battle/Res.java	2026-06-25 10:22:22.000000000 +0500
-+++ b/view/world/ui/battle/Res.java	2026-10-25 04:14:01.677894300 +0500
++++ b/view/world/ui/battle/Res.java	2026-10-25 05:10:22.037272900 +0500
 @@ -115,6 +115,10 @@
  			
  			@Override
@@ -287,7 +287,7 @@ diff -ru -U2 a/view/world/ui/battle/Res.java b/view/world/ui/battle/Res.java
  					AD.stats().mercy().incD(FACTIONS.player(), slaves.mercy());
 diff -ru -U2 a/view/world/ui/battle/UIWBattlePrompt.java b/view/world/ui/battle/UIWBattlePrompt.java
 --- a/view/world/ui/battle/UIWBattlePrompt.java	2026-01-12 14:21:48.000000000 +0500
-+++ b/view/world/ui/battle/UIWBattlePrompt.java	2026-10-25 04:14:01.677894300 +0500
++++ b/view/world/ui/battle/UIWBattlePrompt.java	2026-10-25 05:10:22.038275200 +0500
 @@ -50,7 +50,7 @@
  	}
  	
@@ -342,7 +342,25 @@ diff -ru -U2 a/view/world/ui/battle/UIWBattlePrompt.java b/view/world/ui/battle/
  
 diff -ru -U2 a/world/entity/army/WArmyState.java b/world/entity/army/WArmyState.java
 --- a/world/entity/army/WArmyState.java	2026-06-08 21:03:50.000000000 +0500
-+++ b/world/entity/army/WArmyState.java	2026-10-25 04:14:01.681889200 +0500
++++ b/world/entity/army/WArmyState.java	2026-10-25 05:10:22.044787700 +0500
+@@ -51,7 +51,7 @@
+ 		@Override
+ 		WArmyState update(WArmy a, double ds) {
+ 			checkTile(a);
+-			if(a.faction() == null && a.region().faction() == FACTIONS.player()) {
++			if(a.faction() == null && a.region().faction() instanceof game.faction.player.Player) { // SOSDET: rebels raid the region of any human (SOS-46)
+ 				return raiding;
+ 			}
+ 			return this;
+@@ -75,7 +75,7 @@
+ 		@Override
+ 		WArmyState update(WArmy a, double ds) {
+ 			checkTile(a);
+-			if(a.faction() == null && a.region().faction() == FACTIONS.player()) {
++			if(a.faction() == null && a.region().faction() instanceof game.faction.player.Player) { // SOSDET: rebels raid the region of any human (SOS-46)
+ 				return raiding;
+ 			}
+ 			a.stateFloat += ds;
 @@ -160,7 +160,7 @@
  						
  						int am = (int) Math.ceil(RD.OUTPUT().get(TR.get(res)).loot(reg)*d*10.0);
@@ -361,12 +379,19 @@ diff -ru -U2 a/world/entity/army/WArmyState.java b/world/entity/army/WArmyState.
  								s = WORLD.ENTITIES().caravans.create(a.ctx(), a.cty(), to.capitolRegion(), TRADE_TYPE.spoils);
  							}
  							if (s != null) {
-@@ -364,7 +364,7 @@
- 				if (a.faction() == FACTIONS.player() && reg.faction() != a.faction() && !DIP.WAR().is(reg.faction(), a.faction()) && reg.faction() != null) {
- 					aReg = reg;
- 					aa = a;
+@@ -361,10 +361,11 @@
+ 				return this;
+ 			}else {
+ 				a.path().clear();
+-				if (a.faction() == FACTIONS.player() && reg.faction() != a.faction() && !DIP.WAR().is(reg.faction(), a.faction()) && reg.faction() != null) {
+-					aReg = reg;
+-					aa = a;
 -					VIEW.inters().yesNo.activate(Str.TMP.clear().add(¤¤siege).insert(0, reg.info.name()).insert(0, reg.faction().name), besiege, ACTION.NOP, true);
-+					sosdet.game.cmd.StepPrompts.yesNo(Str.TMP.clear().add(¤¤siege).insert(0, reg.info.name()).insert(0, reg.faction().name), besiege, ACTION.NOP, true); // SOSDET: answered by command in a session (SOS-35)
++				if (a.faction() instanceof game.faction.player.Player && reg.faction() != a.faction() && !DIP.WAR().is(reg.faction(), a.faction()) && reg.faction() != null) { // SOSDET: the army of every human asks (SOS-46)
++					ACTION sosdetYes = () -> { aReg = reg; aa = a; besiege.exe(); }; // SOSDET: each question keeps its own region and army: two humans may be asked at once (SOS-46)
++					int sosdetH = sosdet.Hooks.currentHumanSwap(a.faction().index()); // SOSDET: the question asks the human of the army (SOS-46)
++					sosdet.game.cmd.StepPrompts.yesNo(Str.TMP.clear().add(¤¤siege).insert(0, reg.info.name()).insert(0, reg.faction().name), sosdetYes, ACTION.NOP, true); // SOSDET: answered by command in a session (SOS-35)
++					sosdet.Hooks.currentHumanSwap(sosdetH);
  					return this;
  				}else {
  					WORLD.BATTLES().besige(a, reg);

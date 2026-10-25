@@ -100,6 +100,7 @@ Each milestone is a PR on SOS-46, rig-checked before the next one starts.
 - `isHuman(f)` at the "is the player" sites in world, faction, raiding and event code. For example, War AI skips every human, and tariffs, sieges and region attacks treat every human as a player.
 - Each human's empire: regions, armies, garrisons, and mercenary pay from that human's credits.
 - Goods and money to their owner: caravans, sales, spoils, tribute, demand payments.
+- **Done, 2026-10-25.** Every human is vanilla's player at the "is the player" sites (trade, deliveries, mercenary pay, supplies, garrisons, region rules, battle and siege prompts against NPCs), with that human current for the call; war ends, invasion refs, soldiers' relations and the haven's immigrants go to their own human's PC. A one-human game keeps vanilla's branches, draws and saved bytes. An agent drafted the edits from the audit and an agent review found two one-human regressions (a ref line swallowed by a comment, a changed random range), both fixed. Deferred: the region affiliation (M3), the prosecution read (M5), the "besieged" message per PC. Smoke S46T: 3 humans, a status probe, a move, a gift, war and peace from each; identical to step 12,000, hashes agree, 0 report misses; step time as in M1 (mean 7.3 to 7.7 ms, p99 23 ms). One peace deal was refused in the step: its price exceeded the treasury the report showed.
 
 ### M3. NPC relations per human (F8, SP1)
 

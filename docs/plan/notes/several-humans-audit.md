@@ -277,9 +277,10 @@ Then: build, unit tests, the 3-human smoke (`--humans 3 --trace-draws`, 3 to 5 m
   - the load report was stamped `takenAt = S+1`, the same as the regular report when S+1 is a 30th step, so the other PCs dropped the second as a repeat: a desync on 1 load in 30. Now stamped `takenAt = S`, applying at S+1;
   - a world-battle prompt's timeout ran as human 0 and couldn't close a prompt asked of another human: it now runs as the human asked;
   - the hash ran with a part that depended on whether this PC ran city paths or a city tail: the part is now fixed before the hash;
-  - a region attack or siege on another human's region (battles between humans are outside this card) could take a human's capitol and leave it without one: both commands refuse it;
+  - a siege of another human's region (battles between humans are outside this card) could take a human's capitol and leave it without one: refused. The region attack (a region's garrison attacking a foreign army in it) is accepted only on the issuer's own region and against an army no human owns; the M1 change to `ownArmy` had refused it for every human, found by the M2 sweep;
   - `Args.npc` range-checks the slot (`-1` from the tribute message threw);
   - `reportsIn` names a PC out of range; a person's unlock is read live again in co-op with one human; the PC table is checked again after a load in the run.
+- **Checked, no fix:** REL_SOLDIER and REL_DEATH write a stored soldier's `RELATION_DATA` word on the owning PC only. Only the city's UI reads it (`UISubjectActions`), and a returning soldier carries it into its own city, so the step and the hash never see the difference. A save of the world differs there between PCs; a world resync with several humans is refused anyway (C19).
 
 ### Later milestones (recorded, not fixed now)
 

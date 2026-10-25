@@ -443,6 +443,35 @@ public final class Hooks {
         }
     }
 
+    /**
+     * The world part works on the human in {@code slot} for one call into the game: returns the human it worked on
+     * before, to give back with a second call (nesting-safe inside the per-human loops and a command's apply). Without
+     * a session nothing changes and it returns 0. Outside the world part the value is not read ({@code FACTIONS.player()}
+     * is this PC's human there), and the second call puts it back (SOS-46).
+     */
+    public static int currentHumanSwap(int slot) {
+        Session s = Engine.session();
+        if (s == null) {
+            return 0;
+        }
+        int before = s.currentHuman;
+        s.currentHuman = slot;
+        return before;
+    }
+
+    /** As {@link #currentHumanSwap(int)}, for a faction: a human's slot; for one that is no human it stays as it is. */
+    public static int currentHumanSwap(Object faction) {
+        Session s = Engine.session();
+        if (s == null) {
+            return 0;
+        }
+        int before = s.currentHuman;
+        if (faction instanceof Player) {
+            s.currentHuman = ((Player) faction).index();
+        }
+        return before;
+    }
+
     /** True when the world part's faction updater runs this faction: no human's own in a session. */
     public static boolean worldUpdatesFaction(Object faction) {
         return Engine.session() == null || StepParts.worldUpdatesFaction(faction);
@@ -514,6 +543,11 @@ public final class Hooks {
 
     public static double reportD(Field f, int i, int j) {
         return Engine.session().reports().value(f, i, j);
+    }
+
+    /** As {@link #reportD(Field, int, int)}, from the report of the human in {@code human} (ADR 0004). */
+    public static double reportD(int human, Field f, int i, int j) {
+        return Engine.session().reports(human).value(f, i, j);
     }
 
     public static int reportI(Field f, int i) {
@@ -787,6 +821,30 @@ public final class Hooks {
         return true;
     }
 
+    /** As {@link #relSoldier(Induvidual, int)}, for the city of the division's human (C26, SOS-46). */
+    public static boolean relSoldier(Induvidual i, int storedId, int human) {
+        Txn x = toCity(TxnKind.REL_SOLDIER);
+        if (x == null) {
+            return false;
+        }
+        x.human = human;
+        x.a = i;
+        x.i = storedId;
+        return true;
+    }
+
+    /** As {@link #relDeath(Induvidual, CAUSE_LEAVE)}, for the city of the division's human (C26, SOS-46). */
+    public static boolean relDeath(Induvidual i, CAUSE_LEAVE cause, int human) {
+        Txn x = toCity(TxnKind.REL_DEATH);
+        if (x == null) {
+            return false;
+        }
+        x.human = human;
+        x.a = i;
+        x.b = cause;
+        return true;
+    }
+
     /** {@code StatsRelations.setHumanoid} (C5): true when queued. */
     public static boolean relHumanoid(Humanoid h) {
         Txn x = toCity(TxnKind.REL_HUMANOID);
@@ -823,24 +881,29 @@ public final class Hooks {
         return true;
     }
 
-    /** {@code WDivCity.resolve} (C5): a world battle's result for a capitol garrison division; true when queued. */
-    public static boolean garrisonResolve(Object div, int survivors, double experiencePerMan) {
+    /**
+     * {@code WDivCity.resolve} (C5): a world battle's result for a capitol garrison division of the human in
+     * {@code human}, whose city fought (SOS-46); true when queued.
+     */
+    public static boolean garrisonResolve(Object div, int survivors, double experiencePerMan, int human) {
         Txn x = toCity(TxnKind.GARRISON_RESOLVE);
         if (x == null) {
             return false;
         }
+        x.human = human;
         x.a = div;
         x.i = survivors;
         x.d = experiencePerMan;
         return true;
     }
 
-    /** {@code WDivCity.resolve(Induvidual[])} (C5): true when queued. */
-    public static boolean garrisonResolve(Object div, Induvidual[] survivors) {
+    /** {@code WDivCity.resolve(Induvidual[])} (C5): true when queued, for the capitol's human (SOS-46). */
+    public static boolean garrisonResolve(Object div, Induvidual[] survivors, int human) {
         Txn x = toCity(TxnKind.GARRISON_RESOLVE_PEOPLE);
         if (x == null) {
             return false;
         }
+        x.human = human;
         x.a = div;
         x.b = survivors;
         return true;
@@ -852,6 +915,19 @@ public final class Hooks {
      */
     public static int invasionRef() {
         return (int) Engine.session().reports().value(Field.INVASION_REF, 0);
+    }
+
+    /** C14 (SOS-46): the span of one city's invasion refs in the world's; slot 0's refs stay as they are (old saves). */
+    private static final int INVASION_REF_SPAN = 1 << 24;
+
+    /**
+     * The world's name for a city's invasion ref (C14, SOS-46): in the world part, of the current human's city; elsewhere
+     * (and without a session) the city's own ref, as in vanilla.
+     */
+    public static int worldInvasionRef(int cityRef) {
+        Session s = Engine.session();
+        int h = s == null || s.part != StepParts.WORLD_PART ? 0 : s.currentHuman;
+        return h * INVASION_REF_SPAN + cityRef;
     }
 
     /** {@code Invador.invade} (C6): true when queued for the city tail. */
@@ -886,7 +962,8 @@ public final class Hooks {
         if (x == null) {
             return false;
         }
-        x.i = ref;
+        x.human = ref / INVASION_REF_SPAN; // the city whose invasion it is: the world names it by its human (C14, SOS-46)
+        x.i = ref % INVASION_REF_SPAN;
         return true;
     }
 
@@ -895,12 +972,37 @@ public final class Hooks {
      * listener, which calls off that faction's invasions. True when queued.
      */
     public static boolean warEnded(Object listener, Object faction, Object other, Object old, Object stance) {
-        Txn x = toCity(TxnKind.WAR_ENDED);
-        if (x == null) {
+        Session s = Engine.session();
+        if (s == null || s.part != StepParts.WORLD_PART) {
             return false;
+        }
+        boolean fh = faction instanceof Player;
+        boolean oh = other instanceof Player;
+        if (fh == oh && (fh || s.humans().length > 1)) {
+            // no human's city holds invasions of it: a war between humans, or (with several humans) between NPCs; with
+            // one human a war between NPCs still goes to its city, as in vanilla (C13, SOS-46)
+            return true;
+        }
+        Txn x = toCity(TxnKind.WAR_ENDED);
+        if (fh != oh) {
+            x.human = ((Faction) (fh ? faction : other)).index(); // the human side's city calls off the other's invasions
         }
         x.a = listener;
         x.b = new Object[] {faction, other, old, stance};
+        return true;
+    }
+
+    /**
+     * {@code Immigration.setHigher} (A2, SOS-46): in the world part, a transaction for the current human's city, whose
+     * haven it is; true when queued.
+     */
+    public static boolean immigrantsHigher(Object race, int am) {
+        Txn x = toCity(TxnKind.IMMIGRANTS_HIGHER);
+        if (x == null) {
+            return false;
+        }
+        x.a = race;
+        x.i = am;
         return true;
     }
 

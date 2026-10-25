@@ -506,6 +506,30 @@ class EngineTest {
         s.currentHuman = 0;
     }
 
+    /** SOS-46 M2: the world part works on a human for one call and gets the one before back, nested or not. */
+    @Test
+    void theCurrentHumanSwapsAndComesBack() {
+        assertEquals(0, Hooks.currentHumanSwap(5), "without a session nothing changes");
+        assertEquals(7, Hooks.worldInvasionRef(7), "without a session an invasion keeps its city's ref");
+        begin();
+        Session s = Engine.session();
+        s.part = StepParts.WORLD_PART;
+        s.currentHuman = 2;
+        int outer = Hooks.currentHumanSwap(5);
+        assertEquals(2, outer);
+        assertEquals(5, s.currentHuman);
+        int inner = Hooks.currentHumanSwap(1);
+        assertEquals(5, inner);
+        assertEquals((1 << 24) + 7, Hooks.worldInvasionRef(7), "the world names an invasion by its city's human");
+        Hooks.currentHumanSwap(inner);
+        assertEquals(5, s.currentHuman, "the inner call gives the outer human back");
+        Hooks.currentHumanSwap(outer);
+        assertEquals(2, s.currentHuman, "and the outer call the one before");
+        s.part = -1;
+        assertEquals(7, Hooks.worldInvasionRef(7), "outside the world part a ref is the city's own");
+        s.currentHuman = 0;
+    }
+
     @Test
     void theDialogShowsTheLastQuestionAskedUntilItIsAnswered() {
         begin();

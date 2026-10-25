@@ -79,8 +79,12 @@ public final class WorldActions {
             });
             return true;
         }
+        case "wstatus": // wstatus: notes the player's slot, treasury, capital, regions, armies and wars (a probe for an agent player)
+            Rig.later(() -> Rig.note(status()));
+            return true;
         case "wwarnear": { // wwarnear <army> [stronger] [still]: war declared on the faction of the nearest NPC army (stronger
-            // and still as for winterceptnear), by the attack tool on its capital (SOS-32)
+            // and still as for winterceptnear), by the faction screen's deal with Declare war (SOS-32; the attack tool's
+            // own-region rule refuses the old route through it, SOS-46)
             int army = Integer.parseInt(a[1]);
             java.util.List<String> flags = java.util.Arrays.asList(a).subList(2, a.length);
             boolean stronger = flags.contains("stronger");
@@ -109,7 +113,13 @@ public final class WorldActions {
                 }
                 Rig.note("war on faction " + best.faction().index() + ", whose army " + best.armyIndex() + " is at distance "
                         + (long) Math.sqrt(bestD));
-                if (!World.regionAttack(best.faction().capitolRegion(), w, true)) {
+                Deal d = new Deal();
+                d.setFactionAndClear((FactionNPC) best.faction());
+                d.bools.WAR.set(true);
+                if (!d.canBeAccepted()) {
+                    throw new IllegalStateException("faction " + best.faction().index() + " refuses the war declaration");
+                }
+                if (!Diplomacy.dealAccept(d)) {
                     throw new IllegalStateException("no session");
                 }
             });
@@ -381,12 +391,17 @@ public final class WorldActions {
             });
             return true;
         }
-        case "wattack": { // wattack <region index> <army> <1|0 declare war>: the attack tool (starts a battle)
+        case "wattack": { // wattack <region index> <world army index> <1|0 declare war>: the attack tool on the player's
+            // region, its garrison attacking a foreign army in it (starts a battle)
             int reg = Integer.parseInt(a[1]);
             int army = Integer.parseInt(a[2]);
             boolean war = a[3].equals("1");
             Rig.later(() -> {
-                if (!World.regionAttack(WORLD.REGIONS().getByIndex(reg), army(army), war)) {
+                WArmy target = WORLD.ENTITIES().armies.tryGet(army);
+                if (target == null) {
+                    throw new IllegalStateException("no world army " + army);
+                }
+                if (!World.regionAttack(WORLD.REGIONS().getByIndex(reg), target, war)) {
                     throw new IllegalStateException("no session");
                 }
             });
@@ -486,6 +501,33 @@ public final class WorldActions {
         default:
             return false;
         }
+    }
+
+    /** The player's state in one line: what an agent player reads before it acts. */
+    private static String status() {
+        game.faction.player.Player p = FACTIONS.player();
+        StringBuilder b = new StringBuilder("status slot ").append(p.index())
+                .append(" credits ").append((long) p.credits().getD());
+        Region cap = p.capitolRegion();
+        b.append(" capital ").append(cap == null ? "none" : cap.index() + " at " + cap.cx() + "," + cap.cy());
+        b.append(" regions ").append(p.realm().regions()).append(" [");
+        for (int i = 0; i < p.realm().regions(); i++) {
+            b.append(i == 0 ? "" : " ").append(p.realm().region(i).index());
+        }
+        b.append("] armies [");
+        for (int i = 0; i < p.armies().all().size(); i++) {
+            WArmy w = p.armies().all().get(i);
+            b.append(i == 0 ? "" : "; ").append(i).append(": world ").append(w.armyIndex()).append(" at ").append(w.ctx())
+                    .append(",").append(w.cty()).append(" men ").append(AD.men(null).get(w)).append(" power ")
+                    .append((long) AD.power().get(w)).append(" ").append(w.state().name(w));
+        }
+        b.append("] wars [");
+        boolean first = true;
+        for (FactionNPC f : DIP.WAR().player()) {
+            b.append(first ? "" : " ").append(f.index());
+            first = false;
+        }
+        return b.append("]").toString();
     }
 
     private static WArmy army(int i) {

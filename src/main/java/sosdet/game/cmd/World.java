@@ -343,9 +343,10 @@ public final class World {
             }),
             new Command(REGION_ATTACK, "regionAttack", r -> {
                 Region reg = Args.region(r);
-                WArmy a = Args.ownArmy(r);
+                WArmy a = Args.army(r); // the intruder its garrison attacks: not the issuer's army
                 boolean declareWar = r.b();
-                if (reg == null || a == null || otherHumans(reg, a)) {
+                // the issuer's own region, and never another human's army: battles between humans are outside SOS-46
+                if (reg == null || a == null || reg.faction() != FACTIONS.player() || a.faction() instanceof Player) {
                     return false;
                 }
                 if (declareWar) {
@@ -634,7 +635,7 @@ public final class World {
         return true;
     }
 
-    /** Hook in the attack tool ({@code PlayToolAttack}): an army attacks a region, declaring war first if asked. */
+    /** Hook in the attack tool ({@code PlayToolAttack}): the region's garrison attacks a foreign army in it, declaring war first if asked. */
     public static boolean regionAttack(Region reg, WArmy a, boolean declareWar) {
         if (!Commands.capturing()) {
             return false;
