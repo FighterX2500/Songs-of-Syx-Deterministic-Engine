@@ -70,7 +70,7 @@ Each milestone was rig-checked before the next one started. They went into one P
   - `localHuman(id)`;
   - a report feed per human.
 
-  As built: `Engine.localHuman(slot)`, `Engine.pcHuman(pc, slot)` and the report feed per PC (`reportsIn(pc, bytes)`). `humans()` and `addHuman(region)` were not built. A human is made only through the adapter, `GameHumans.add(slot)` (the rig's `makehuman`): an active NPC with a capitol becomes a human, humans join in slot order, and the game is saved and loaded before the session. A free region can't become a human yet. The mod's setup needs the real API; that is later work.
+  As built: `Engine.localHuman(slot)`, `Engine.pcHuman(pc, slot)` and the report feed per PC (`reportsIn(pc, bytes)`). `humans()` and `addHuman(region)` were not built. A human is made only through the adapter, `GameHumans.add(slot)` (the rig's `makehuman`): an active NPC with a capitol becomes a human, humans join in slot order, and the game is saved and loaded before the session. A free region can't become a human yet. The mod's setup needs the real API; that is later work. *Status:* built as `Engine.buildWorld` (SOS-55, PR #35, [plan 0005](0005-add-human.md)).
 - **Reports per human:**
   - every human's report applies at its stamped step on every PC;
   - pacing waits for every human's report;
@@ -154,7 +154,7 @@ Replaces the card's 30-minute run. Every run uses `--trace-draws`.
 
 1. **War between humans through an NPC.** Vanilla's ally rule gives an overlord its vassal's enemies, and allies join their ally's wars, so one human's war on an NPC can put two humans at war with each other (PT2 to PT6). The mod's spec keeps a sovereign out of its vassal's wars between players (§6) and wants a real-time battle when two players' armies meet (§8); today one human's vanilla prompt settles such a battle. **Decided:** a war between two humans comes only from one of them declaring it; the ally and vassal rules never add a human as another human's enemy. The spec change (§6, an [AT] in §15) and the code go with one card, to propose.
 2. **The move remainder after a resync.** An army's sub-pixel move remainder (PT3) is not saved, and a world resync loads into the running game without touching it (`WPath.load`), so a resync can't repair a remainder that differs between PCs. **Decided:** every PC resets its armies' remainders when a world resync loads; no save format change. With item 3.
-3. **Recovery with several humans.** There is none yet: the full resync is refused in own-city mode, the world resync refuses several humans (audit C19), and a report miss throws with several humans. To build in a card, to propose: the world resync extended to the engine's sections (`SOSDET_HUMANS`, `SOSDET_RELATIONS`, `SOSDET_EVENTS`) and to one ledger per human.
+3. **Recovery with several humans.** There is none yet: the full resync is refused in own-city mode, the world resync refuses several humans (audit C19), and a report miss throws with several humans. To build in a card, to propose: the world resync extended to the engine's sections (`SOSDET_HUMANS`, `SOSDET_RELATIONS`, `SOSDET_EVENTS`) and to one ledger per human. *Status:* built in SOS-52 (PR #33), with item 2; the desync hold is SOS-53 (PR #34). A report miss still throws with several humans.
 
 ## Outside this card
 
