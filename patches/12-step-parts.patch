@@ -1,6 +1,6 @@
 diff -ru -U2 a/game/events/EVENTS.java b/game/events/EVENTS.java
 --- a/game/events/EVENTS.java	2026-02-17 17:15:30.000000000 +0500
-+++ b/game/events/EVENTS.java	2026-10-25 06:11:10.728430700 +0500
++++ b/game/events/EVENTS.java	2026-10-25 12:48:43.775012700 +0500
 @@ -131,7 +131,7 @@
  			return;
  		prof.logStart(EVENTS.class);
@@ -12,7 +12,7 @@ diff -ru -U2 a/game/events/EVENTS.java b/game/events/EVENTS.java
  	}
 diff -ru -U2 a/game/faction/FACTIONS.java b/game/faction/FACTIONS.java
 --- a/game/faction/FACTIONS.java	2026-03-25 10:31:18.000000000 +0500
-+++ b/game/faction/FACTIONS.java	2026-10-25 06:11:10.732426500 +0500
++++ b/game/faction/FACTIONS.java	2026-10-25 12:48:43.779531900 +0500
 @@ -41,7 +41,7 @@
  
  		@Override
@@ -107,11 +107,12 @@ diff -ru -U2 a/game/faction/FACTIONS.java b/game/faction/FACTIONS.java
  			self.active.clearSloppy();
 -			self.active.add(self.player);
  			self.npcsActive.clearSloppy();
- 			self.dirty = false;
+-			self.dirty = false;
 -			for (int i = 0; i < self.npcs.size(); i++) {
 -				if (self.npcs.get(i).realm().capitol() != null) {
 -					self.npcsActive.add(self.npcs.get(i));
 -					self.active.add(self.npcs.get(i));
++			if (!sosdet.Hooks.worldCacheClosed()) self.dirty = false; // SOSDET: only the world part marks it fresh; UI lists rebuild it on one PC (SOS-46 PT3 audit)
 +			for (int i = 0; i < self.all.size(); i++) { // SOSDET: every human, in slot order with the NPCs; one human: vanilla's order (ADR 0004)
 +				Faction f = self.all.get(i);
 +				if (f instanceof Player) {
@@ -124,7 +125,7 @@ diff -ru -U2 a/game/faction/FACTIONS.java b/game/faction/FACTIONS.java
  		}
 diff -ru -U2 a/game/faction/player/Player.java b/game/faction/player/Player.java
 --- a/game/faction/player/Player.java	2026-06-17 10:48:04.000000000 +0500
-+++ b/game/faction/player/Player.java	2026-10-25 06:11:10.733432300 +0500
++++ b/game/faction/player/Player.java	2026-10-25 12:48:43.776012300 +0500
 @@ -6,7 +6,6 @@
  import game.boosting.BOOSTABLE_O;
  import game.boosting.BValue;
