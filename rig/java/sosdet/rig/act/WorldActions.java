@@ -88,6 +88,9 @@ public final class WorldActions {
         case "wstatus": // wstatus: notes the player's slot, treasury, capital, regions, armies and wars (a probe for an agent player)
             Rig.later(() -> Rig.note(status()));
             return true;
+        case "wcredits": // wcredits: notes the player's credits in and out by kind, today and yesterday (a treasury drop's cause)
+            Rig.later(() -> Rig.note(credits()));
+            return true;
         case "wrelations": { // wrelations [npc slot]: notes the NPC's king, and its stance, stored opinion (each entry), dealings, opinion and trust toward
             // each human, read as that human between steps (the NPC by default: the one wgift gives to; SOS-46 M3)
             int slot = a.length > 1 ? Integer.parseInt(a[1]) : -1;
@@ -521,6 +524,21 @@ public final class WorldActions {
         default:
             return false;
         }
+    }
+
+    /** The player's credits by kind: in and out today, then yesterday; kinds with no flow are left out. */
+    private static String credits() {
+        game.faction.player.Player p = FACTIONS.player();
+        StringBuilder b = new StringBuilder("credits slot ").append(p.index()).append(" treasury ")
+                .append((long) p.credits().getD()).append(" | kind: in/out today, in/out yesterday");
+        for (game.faction.player.PCredits.CredHistory h : p.credits().all()) {
+            if (h.IN.get(0) == 0 && h.OUT.get(0) == 0 && h.IN.get(1) == 0 && h.OUT.get(1) == 0) {
+                continue;
+            }
+            b.append(" | ").append(h.type).append(": ").append(h.IN.get(0)).append('/').append(h.OUT.get(0)).append(", ")
+                    .append(h.IN.get(1)).append('/').append(h.OUT.get(1));
+        }
+        return b.toString();
     }
 
     /** The player's state in one line: what an agent player reads before it acts. */
