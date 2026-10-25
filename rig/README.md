@@ -81,6 +81,30 @@ python rig\rig.py city --tag F1 --no-invade --follow --world-resync 3000
 
 `--govern`: every copy starts at copy 1's speed and follows the agreed speed, and the host lowers it once a second when the slowest copy holds it back for over a tenth of that second, to the fastest speed that copy's steps per second allow; after 10 s unheld it tries a quarter faster (SOS-42). The summary lists each copy's agreed speed changes and speed lines, and the longest hold.
 
+## Several humans (SOS-46)
+
+```
+python rig\rig.py city --tag H1 --save Mogus-72-19f86f1e048-47002c-0-121c.save --no-invade --copies 3 --humans 3 --remote 3 --cmds @<file>
+```
+
+`--humans N` (a city run with N copies and the AI on the host; not with `--follow`, `--replay`, `--resync` or `--world-resync`): before the run, copy 1 loads the save, makes N - 1 NPCs humans (`makehuman auto N-1`: the first active NPCs) and saves `humans.save` in the run folder. Every copy then starts from that save. Copy k is human k: it runs only that human's city, in own-city mode, writes its city's reports to a file and reads every other copy's (`pchuman`, `reportsout`, `reportsin`), as the mod will over the network. The copies are compared on the world only. `--remote K` works with it, so one human can run on the laptop.
+
+In `--cmds`, `k: <action>` is copy k's player's action, so each human acts for itself; the other copies get it through the host's log at the same step.
+
+`play <action>`, sent to a running copy (the LLM playtests send it): like `cmd`, but an action that fails gives a `refused` event instead of a failed run. Any scripted action that throws in its call between steps, such as a bad index past the end of a game list, gives a `cmdskipped` event with the exception's name; nothing was captured, so the copies stay comparable (PT4, PT5).
+
+Probes for a player. Each notes what it reads between steps and changes nothing:
+- `wstatus`: this human's slot, treasury, capital, regions, armies and wars, wars with other humans included.
+- `wcredits`: this human's credits in and out by kind, today and yesterday, to explain a treasury drop.
+- `wrelations [npc slot]`: the NPC's king, and its stance, stored opinion entries, dealings, opinion and trust toward each human.
+- `wwar`: each human's potential enemies as the next war timer reads them, with their trust, and the war timer.
+- `wevents`: each human's war timer and warner, rebellion timer and realm cursor, raid and raid timer.
+- `wsprite <army>`: the call the army's sprite makes each frame it is drawn (`WPath.moving`), on this copy only. Rig copies don't draw the world map, so a UI call that writes world state shows only with this probe (PT3).
+
+World actions for several humans: `wpeace` makes the peace deal with the strongest NPC at war with this human, at the denari it asks. `wraiderpay` and `wallyhelp` answer this human's own raider. `wbesiegenear` skips settlements of other humans.
+
+When the world section differs, the desync report lists the world at that step part by part, with every army and each human's timers, so two copies' reports can be compared line by line.
+
 ## Playing a copy (SOS-32)
 
 ```
@@ -94,14 +118,14 @@ python rig\rig.py field --tag P1 --play --copies 3
 `--play` with `--remote K` (SOS-15): copy K runs on the other PC in a 1600×900 window with sound, to watch there; add `--govern` so it runs at the agreed speed. `--watch K[,K]`: those copies' players only watch (`Engine.watchOnly`): orders and commands clicked there are dropped, and the summary counts them. Without it, a peer's clicks go to the host and apply on every copy.
 
 ```
-python rigig.py field --tag V1 --play --copies 2 --remote 2 --watch 2 --govern --trace-draws 600
+python rig\rig.py field --tag V1 --play --copies 2 --remote 2 --watch 2 --govern --trace-draws 600
 ```
 
 `--commanders "ARMY0 ARMY1"` (field, SOS-15): copy 1 sets who commands each army at the battle's start: a PC (0 the host, K-1 copy K), `ai`, or `A/B`, the army's divisions with men split in half between PCs A and B (the artillery A's). The summary counts the entries skipped as not commanded by their source.
 
 ```
-python rigig.py field --tag V3 --play --copies 2 --remote 2 --govern --commanders "0 1"
-python rigig.py field --tag V4 --play --copies 2 --remote 2 --govern --commanders "0/1 ai"
+python rig\rig.py field --tag V3 --play --copies 2 --remote 2 --govern --commanders "0 1"
+python rig\rig.py field --tag V4 --play --copies 2 --remote 2 --govern --commanders "0/1 ai"
 ```
 
 `--warm K[,K]`: those copies play the autoloaded game normally for 30 game seconds before the session, so their session game is not the first one their process ran (the competing mod's first-game desync; SOS-32 found none).
@@ -129,8 +153,8 @@ A field battle needs an enemy that stands: a weaker NPC army withdraws without a
 `rig\suite.py` runs every scenario in one command and prints pass or fail per scenario, with the first step that differs:
 
 ```
-python rig\suite.py --short     before each pull request, about 5 minutes
-python rig\suite.py             the full suite, about 55 minutes
+python rig\suite.py --short     before each pull request, about 6 minutes
+python rig\suite.py             the full suite, about 49 minutes
 python rig\suite.py --record    record the expected hashes again (a change meant to alter the simulation)
 python rig\suite.py --dry-run   what would run, and the state of each recording; starts no game
 ```

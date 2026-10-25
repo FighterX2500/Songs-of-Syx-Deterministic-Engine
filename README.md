@@ -10,6 +10,8 @@ Deterministic simulation engine for Songs of Syx V71 (build 71.44). The same sav
 - **Players' battle orders and speed changes:** in the host's log, and the step length follows the agreed speed. The owner's 13-minute play session on the Mogus-72 city invasion stayed identical across three copies (SOS-32 M1).
 - **City and world lockstep:** the city's and the world map's player actions are commands, and the world runs in the step (SOS-34, SOS-35, [plan 0002](docs/plan/0002-city-and-world-lockstep.md)).
 - **City↔world link:** the world never reads a live city. It reads city reports, and changes a city only through transactions applied exactly once, so each PC can run its own city under one lockstep world. A PC whose world splits reloads the host's world and keeps its city, and the slowest PC caps the pace (SOS-38, plan 0002 stage E).
+- **Several humans:** up to 16 human factions share one world map, each a player in its own slot. Each PC runs only its own human's city; the world runs each human's part with that human as the player, and keeps NPC relations, event timers and raids per human. Three LLM players stayed identical for an hour on two PCs (SOS-46, [ADR 0004](docs/decisions/0004-several-humans.md), [plan 0004](docs/plan/0004-several-humans.md)). There is no desync recovery with several humans yet.
+- **Scenario suite:** `python rig\suite.py` runs every rig scenario in one command, before each pull request (SOS-31, [rig/README.md](rig/README.md)).
 - **V0.1:** [docs/release/V0.1.md](docs/release/V0.1.md): what works, what is blocked, and how to start the owner's session. `gradlew.bat releaseZip` packs it into `build\release\SOSDET-0.1.0.zip`.
 
 Until something starts an engine session, the game plays as vanilla.
@@ -23,7 +25,7 @@ Until something starts an engine session, the game plays as vanilla.
 - Code and ideas adapted from other projects: [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)
 - License: MIT for SOSDET's own code ([LICENSE](LICENSE)). The game source lines in `patches/` stay the game developer's, published with their permission; the mod is free and must not be sold.
 
-No game files or game source are ever committed. The build reads the game from `SOS_GAME_DIR`. Where the scenario suite keeps its test saves is settled in SOS-31.
+No game files or game source are ever committed. The build reads the game from `SOS_GAME_DIR`. The scenario suite's test saves stay in your own saves folder ([rig/README.md](rig/README.md)).
 
 ## How it works
 

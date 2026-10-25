@@ -282,11 +282,11 @@ Then: build, unit tests, the 3-human smoke (`--humans 3 --trace-draws`, 3 to 5 m
   - `reportsIn` names a PC out of range; a person's unlock is read live again in co-op with one human; the PC table is checked again after a load in the run.
 - **Checked, no fix:** REL_SOLDIER and REL_DEATH write a stored soldier's `RELATION_DATA` word on the owning PC only. Only the city's UI reads it (`UISubjectActions`), and a returning soldier carries it into its own city, so the step and the hash never see the difference. A save of the world differs there between PCs; a world resync with several humans is refused anyway (C19).
 
-### Later milestones (recorded, not fixed now)
+### Later milestones (recorded here; M2 to M5 are done, see plan 0004)
 
 - **M2:** trade and caravans per human (C11, B16, B17), `ADConscripts`' count of stored men (B23; the stores themselves are per human since M1), WAR_ENDED and invasion refs to the owner (C13, C14, C26), `activate` listeners for humans (B5), every `== FACTIONS.player()` branch in armies, regions, battles and supplies (B24 to B28, B31, B32, B34, B36, C21, C22), `EContext` bound (B37), the race-order fallback (B39), the haven write into this PC's city (A2).
-- **M3:** emissaries and opinion per human (B29), diplomacy per human (B30, B33, A3 `DIP` fields), the `DIP.TMP()` scratch deal (C33).
+- **M3:** emissaries and opinion per human (B29), diplomacy per human (B30, B33, A3 `DIP` fields), the `DIP.TMP()` scratch deal (C33; no result of a check on it is recorded).
 - **M4:** raiding (B35, B38, A3 `RaidingMap`), events and the rebellion timer (A3), havens (B22).
 - **M5:** `RD.DIST()` per human, `offensivePower` (B18), `FWorth`, FOW per human (A4, C32).
-- **Resync** (C19): a desync can't be recovered with several humans (full resync is refused in own-city mode, world resync with several humans). Needs its own design: coordinated per-PC saves with identical world sections, or a world resync with per-human ledgers. Proposed as a follow-up card, not in plan 0004 today.
-- **Cosmetic or UI** (no desync): names and banners as world commands (C29), `PlayerColors` per slot (C30), spares' profile reads (C31), debug-panel entries for spares (C34), `UIDipMessDeal` expiry (A4).
+- **Still open: resync** (C19): a desync can't be recovered with several humans (full resync is refused in own-city mode, world resync with several humans). Needs its own design: coordinated per-PC saves with identical world sections, or a world resync with per-human ledgers. Proposed as a follow-up card, not in plan 0004 today.
+- **Still open: cosmetic or UI** (no desync): names and banners as world commands (C29), `PlayerColors` per slot (C30), spares' profile reads (C31), debug-panel entries for spares (C34), `UIDipMessDeal` expiry (A4).

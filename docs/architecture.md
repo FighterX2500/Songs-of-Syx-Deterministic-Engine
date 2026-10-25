@@ -27,7 +27,9 @@ A short map for an AI agent (or a person) about to change SOSDET. Read it first,
    - Battle jobs run inside the step, not on their threads (patch `30`).
    - Path jobs queued in the step run at its end, before the hash: share 0 on the simulation thread, shares 1 and 2 on path threads, job i always on share i % 3 (patch `35`, `PathWorkers`).
    - The host's AI general keeps its own thread, but writes only to the log (patch `90`).
-5. **`Hooks.stepEnd`:** every 30 steps the state hash ([`GameHash`](../src/main/java/sosdet/game/GameHash.java), [`HashLog`](../src/main/java/sosdet/hash/HashLog.java)). It has seven sections: clock, soldiers, divisions, projectiles, entities, world (armies, every world entity, region owners, credits, wars, raiders) and report (the city report the world part reads, ADR 0005). Rooms, stock and stats are not hashed, so a split there shows up in the entities a few steps later.
+5. **`Hooks.stepEnd`:** every 30 steps the state hash ([`GameHash`](../src/main/java/sosdet/game/GameHash.java), [`HashLog`](../src/main/java/sosdet/hash/HashLog.java)). It has seven sections: clock, soldiers, divisions, projectiles, entities, world and report (the city report the world part reads, ADR 0005). Rooms, stock and stats are not hashed, so a split there shows up in the entities a few steps later.
+   - The clock section also holds the human slots and each PC's human, when there are several humans in own-city mode (SOS-46).
+   - The world section holds the armies, every world entity, region owners, each faction's credits, overlord and stance with every other faction (not only wars), every NPC king's opinion of each human after slot 0, the raiders, each human's war and rebellion timers and current raider, and the calendar. Hash format 7 (SOS-46). When it differs, the desync report lists it part by part.
 6. **Between steps** come the UI and rendering. They draw from the cosmetic stream and must never write simulation state (patches `65`, `67`, `98`).
 
 ## Player input: commands
@@ -70,7 +72,7 @@ A player's action never changes state on the PC where it was clicked. It becomes
 | `sosdet/Hooks.java` | Every call the patches make into the engine |
 | `sosdet/Session.java`, `StepClock`, `Streams` | One session's state, the fixed step, the simulation and cosmetic random streams |
 | `sosdet/ai/` | The log: `AiLog` (host and peer, stamping, confirmations, the 30-step delay), `AiEntry`, `CmdWriter`/`CmdReader` |
-| `sosdet/game/` | Everything that touches game classes: `GameAi` (applies log entries), `GameHash`, `GameResync`, `AiHooks`, world fixes; the city↔world link: `StepParts`, `GameReport`, `GameTxns`, `GameSoldiers`, `GameWorldLoad` (the world resync) |
+| `sosdet/game/` | Everything that touches game classes: `GameAi` (applies log entries), `GameHash`, `GameResync`, `AiHooks`, world fixes; the city↔world link: `StepParts`, `GameReport`, `GameTxns`, `GameSoldiers`, `GameWorldLoad` (the world resync); several humans: `GameHumans` (the human slots, spares, `SOSDET_HUMANS`), `GameCityDivs`, `GameRelations` (NPC relations per human), `GameEvents` (event timers and raids per human) |
 | `sosdet/txn/` | Transactions: the world's changes to a city, each applied exactly once |
 | `sosdet/game/cmd/` | Commands per area, room-plan records (`Plan*`) |
 | `sosdet/hash/` | The hash log and the desync report |
@@ -95,9 +97,12 @@ Each line is a class of cause found in practice. The patch named holds the fix; 
 | | Draws while loading a save | `70` |
 | **This PC's settings or view read by the simulation** | Whether the battle view is open; the placement being previewed; the weather-effects setting; where the camera looks (the serial killer) | `60`, `65` |
 | | The developer flag; titles from this PC's profile | `98` |
+| | Whether this PC shows a world-battle prompt (`UIWBattlePrompt.isBusty`), which held world battles on that PC only (SOS-46 PT2) | `99` |
 | **UI or rendering writing simulation state** | Drawing placing floor tiles or bleeding gore | `67` |
 | | Caches filled by whoever calls first; caches keyed on the render frame (`VIEW.RI()`) | `67`, `98` |
 | | Drafts the UI refills every frame and the step reads (`DIP.TMP`, `RDLevelsTmp`) | `98` |
+| | Getters the UI calls that write world state: an army's move remainder (`WPath.moving`), an interceptor's lost target, a region's previous owner, `FACTIONS.active()`'s fresh mark (SOS-46 PT3) | `98`, `99`, `16`, `12` |
+| | Lazy world caches rebuilt or stamped outside the world part, and a rebuild inside a loop over the same list resetting its one iterator (SOS-46 PT1) | `15`, `14` |
 | | A formation's unused tail carrying this PC's move preview | `66` |
 | **The world reading a live city** | Trade stock, credits, population, the garrison, army power, opinion and trust read from this PC's city in the world step; own cities differ per PC | `12`, `13`, `14`, `98`: the city report and transactions (ADR 0005) |
 | **Loading part of a save** | The world resync loaded only the world's sections of a whole save; the game writes one object stream for the whole file, so the skipped city sections broke its back-references, the raiders misread and were regenerated per PC | `GameWorldLoad.save` writes a world-only save (no patch) |
