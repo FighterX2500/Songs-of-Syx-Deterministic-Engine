@@ -842,10 +842,9 @@ def main():
         fail("--follow needs a city run with the AI on the host, without --replay or --resync (a whole-game resync"
              " would take the followers' cities; use --world-resync)")
     if args.humans and (args.humans != args.copies or args.humans < 2 or args.scenario != "city" or args.ai != "host"
-                        or args.follow or args.replay or args.resync or args.resync_on_desync or args.world_resync
-                        or args.remote):
+                        or args.follow or args.replay or args.resync or args.resync_on_desync or args.world_resync):
         fail("--humans N needs N copies (2 or more), a city run with the AI on the host, without --follow, --replay,"
-             " --resync, --world-resync or --remote")
+             " --resync or --world-resync")
     if 0 < args.pace_lead < HASH_EVERY:
         fail("--pace-lead %d: the host learns a copy's step from its hashes, every %d steps; use 0 or at least %d"
              % (args.pace_lead, HASH_EVERY, HASH_EVERY))
