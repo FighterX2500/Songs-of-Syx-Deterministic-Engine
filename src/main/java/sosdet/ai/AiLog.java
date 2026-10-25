@@ -234,6 +234,26 @@ public final class AiLog {
         return mode != AiMode.PEER || step <= confirmed + DELAY_STEPS;
     }
 
+    /**
+     * Whether a player's command due at {@code step} passes {@code test}, before the step applies it. A PC may run a
+     * step only once it has the host's entries for it ({@link #mayRun}), so every PC gives the same answer (SOS-70).
+     * It looks only when an entry is due at the step.
+     */
+    public boolean commandDue(long step, java.util.function.Predicate<byte[]> test) {
+        if (pending.isEmpty() || pending.peekFirst().step > step) {
+            return false;
+        }
+        for (AiEntry e : pending) {
+            if (e.step > step) {
+                return false;
+            }
+            if (e.step == step && e.kind == AiEntry.COMMAND && test.test(e.payload())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** Start of a step: the host stamps what was captured; every PC applies the entries due now. */
     public void stepBegin(long step) {
         if (mode == AiMode.IN_STEP) {

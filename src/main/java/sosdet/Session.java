@@ -109,6 +109,10 @@ final class Session {
     boolean battleLeaving;
     /** Own-city mode: the battle on the battle map, from Engage until every PC is back in its city (plan 0006). */
     OwnBattle battle;
+    /** Own-city mode, set by the mod: every PC holds before a step whose commands engage a battle (SOS-70). */
+    boolean battleHold;
+    /** The step an Engage applies at while every PC holds before it, and the last one let through; -1 for none. */
+    long battleAhead = -1, battleGo = -1;
     /** The engine itself loads a battle save ({@link Engine#battleIn}): the restart hook lets it through. */
     boolean battleLoading;
     /** The mod's actions after each load of a whole game: the new game has none of the old one's (plan 0006). */
