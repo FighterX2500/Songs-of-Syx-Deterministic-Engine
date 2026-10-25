@@ -26,6 +26,7 @@ The asked human's PC generates the battle and ships it; every PC loads it at the
 - `Engine.battle()`: null, or the battle running: its step N, its human and PC, and whether the battle save is still awaited.
 - `Engine.battleOut()`: on the battle PC, once, the battle save's bytes; null otherwise.
 - `Engine.battleIn(bytes)`: every PC, between steps at N, loads the battle.
+- *SOS-70:* `Engine.battleHold(true)`: every PC holds before a step whose commands engage a battle (the Engage command is in the host's log for that step, which every PC has before it may run it). `Engine.battleAhead()` gives that step, and this PC's last step run is the one before it. The mod saves the campaign there (mod spec §11), and `Engine.battleGo()` lets the step run. Off by default. The Engage is a command applied 30 steps after the click, so the save is from while the prompt is still open: resuming it opens the prompt again (H70B).
 
 ## Milestones
 

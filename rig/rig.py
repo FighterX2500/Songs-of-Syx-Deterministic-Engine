@@ -800,6 +800,13 @@ def main():
     ap.add_argument("--new-world", type=int, default=None,
                     help="with --humans N: copy 1 builds a fresh world from this terrain seed around N humans (SOS-55,"
                          " Engine.buildWorld) instead of turning NPCs into humans; every copy then loads it")
+    ap.add_argument("--humans-saves", default="",
+                    help="with --humans N: 'A,B,...', one save per copy from your saves folder, each already holding the"
+                         " humans in slots 0 to N-1 (for example each copy's beforebattle.save): copy k resumes save k"
+                         " as human k-1, as the mod's campaign resume does, instead of making the humans (SOS-70)")
+    ap.add_argument("--battle-hold", action="store_true",
+                    help="with --humans: every copy holds before a step whose commands engage a battle, saves its game"
+                         " there (beforebattle.save in its rig folder), then lets the step run (SOS-70)")
     ap.add_argument("--difficulty", default=None,
                     help="with --new-world: every human gets this difficulty mode (a file in the game's player/mode"
                          " folder, e.g. 00_FIRST_NAME), as the mod's world build gives the lobby's (SOS-69)")
@@ -883,6 +890,8 @@ def main():
              % (args.pace_lead, HASH_EVERY, HASH_EVERY))
     if args.new_world is not None and not args.humans:
         fail("--new-world is for --humans runs")
+    if args.battle_hold and not args.humans:
+        fail("--battle-hold is for --humans runs")
     if args.difficulty and args.new_world is None:
         fail("--difficulty is for --new-world runs")
     if args.on_desync and (not args.humans or args.world_resync):
@@ -900,9 +909,18 @@ def main():
         for s in follower_saves:
             if not (REAL / "saves" / "saves" / s).is_file():
                 fail("no save %s" % (REAL / "saves" / "saves" / s))
+    humans_saves = [s for s in args.humans_saves.split(",") if s]
+    if humans_saves:
+        if not args.humans or len(humans_saves) != args.copies or args.new_world is not None:
+            fail("--humans-saves needs --humans, one save per copy (%d), and no --new-world" % args.copies)
+        for s in humans_saves:
+            if not (REAL / "saves" / "saves" / s).is_file():
+                fail("no save %s" % (REAL / "saves" / "saves" / s))
     saves, autoload = scenario_saves(args)
     human_slots = []
-    if args.humans:
+    if humans_saves:
+        human_slots = list(range(args.humans))  # each copy resumes its own game, as the mod's campaign resume does
+    elif args.humans:
         saves, human_slots = make_humans(game, saves, args.humans, run_dir, args.new_world, args.difficulty)
 
     if args.remote and (not REMOTE or not 1 < args.remote <= args.copies):
@@ -917,6 +935,8 @@ def main():
               for k in range(1, args.copies + 1)]
     for c in copies:
         own = {"sosdet-city.save": REAL / "saves" / "saves" / follower_saves[c.k - 2]} if follower_saves and c.k > 1 else saves
+        if humans_saves:
+            own = {"sosdet-city.save": REAL / "saves" / "saves" / humans_saves[c.k - 1]}
         # a played host gets this PC's screen; a remote copy, with --play or --watch, a window on its own screen
         c.prepare(own, args.window or (args.play and c.k == 1) or (c.k == args.remote and (args.play or c.k in watched)))
     if args.remote:
@@ -1005,6 +1025,8 @@ def main():
                     c.send("reportsin %d %s" % (o.k - 1, o.rig / "reports.bin"), "reportsin")
                 # a battle on the battle map: the battle PC's battle save, which every copy loads (plan 0006)
                 c.send("battledir %d %s" % (o.k - 1, o.rig), "battledir")
+            if args.battle_hold:
+                c.send("battlehold", "battlehold")
         if args.follow:
             # copy 1's city reports go to the followers through a file, as the mod will send them over the network
             if c.k == 1:

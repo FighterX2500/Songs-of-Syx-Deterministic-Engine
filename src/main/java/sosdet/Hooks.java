@@ -192,7 +192,8 @@ public final class Hooks {
             s.takeReport(s.clock.step(), s.clock.step() + 1);
         }
         boolean battleAwaited = s.battle != null && s.battle.awaiting; // the battle PC's battle isn't loaded yet
-        if (s.battleLeaving || battleAwaited || !s.ai().mayRun(s.clock.step() + 1) || !s.worldMayRun(s.clock.step() + 1)) {
+        if (s.battleLeaving || battleAwaited || !s.ai().mayRun(s.clock.step() + 1) || !s.worldMayRun(s.clock.step() + 1)
+                || battleAhead(s, s.clock.step() + 1)) {
             s.clock.hold();
             return false;
         }
@@ -208,6 +209,24 @@ public final class Hooks {
         }
         s.stepStartNanos = System.nanoTime(); // timing only, never fed to the simulation
         s.ai().stepBegin(s.clock.step());
+        return true;
+    }
+
+    /**
+     * With the mod's hold before battles on: true while {@code step}'s commands engage a battle on the battle map and the
+     * mod hasn't let the step through ({@link Engine#battleGo}), so every PC holds before it alike (SOS-70).
+     */
+    private static boolean battleAhead(Session s, long step) {
+        if (!s.battleHold || s.battle != null || s.battleGo == step) {
+            return false;
+        }
+        if (s.battleAhead == step) {
+            return true;
+        }
+        if (!s.ai().commandDue(step, sosdet.game.cmd.WorldBattles::isEngage)) {
+            return false;
+        }
+        s.battleAhead = step;
         return true;
     }
 

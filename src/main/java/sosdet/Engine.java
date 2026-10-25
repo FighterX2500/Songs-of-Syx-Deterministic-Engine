@@ -307,6 +307,38 @@ public final class Engine {
     }
 
     /**
+     * Own-city mode, off by default: with it on, every PC holds before a step whose commands engage a battle on the
+     * battle map, so the mod can save the campaign there, before the battle (mod spec §11, SOS-70). The mod lets the
+     * step run with {@link #battleGo}.
+     */
+    public static void battleHold(boolean on) {
+        Session s = required();
+        if (!s.ownCity) {
+            throw new IllegalStateException("SOSDET: the hold before a battle is for own-city mode");
+        }
+        s.battleHold = on;
+    }
+
+    /**
+     * With {@link #battleHold} on: the step a battle's Engage applies at while every PC holds before it, the same on
+     * every PC; this PC's last step run is the one before it. -1 when there is none.
+     */
+    public static long battleAhead() {
+        Session s = required();
+        return s.battleAhead > s.clock.step() && s.battleAhead != s.battleGo ? s.battleAhead : -1;
+    }
+
+    /** Every PC, between steps while it holds before an Engage: the step runs, and the battle begins as before. */
+    public static void battleGo() {
+        Session s = required();
+        long ahead = battleAhead();
+        if (ahead < 0) {
+            throw new IllegalStateException("SOSDET: no battle ahead to let through at step " + s.clock.step());
+        }
+        s.battleGo = ahead;
+    }
+
+    /**
      * Own-city mode: the battle on the battle map, from its Engage step until every PC is back in its own city, or
      * null. While {@link OwnBattle#awaiting()}, every PC holds at {@link OwnBattle#step} until it has loaded the battle
      * PC's battle: the mod carries {@link #battleOut} from that PC to every PC's {@link #battleIn}.

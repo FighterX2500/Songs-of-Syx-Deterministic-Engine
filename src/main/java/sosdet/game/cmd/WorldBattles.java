@@ -68,6 +68,14 @@ public final class WorldBattles {
     private WorldBattles() {
     }
 
+    /** Whether a command's payload is the prompt's Engage, read without applying it (SOS-70). */
+    public static boolean isEngage(byte[] payload) {
+        if (CmdReader.idOf(payload) != DECIDE) {
+            return false;
+        }
+        return new CmdReader(payload).i() == ENGAGE;
+    }
+
     // ------------------------------------------------------------------ decisions (inside the step, on every PC)
 
     /**

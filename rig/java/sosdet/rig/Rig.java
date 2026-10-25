@@ -273,6 +273,8 @@ public final class Rig implements SCRIPT {
         // own-city battles (plan 0006): each copy's rig folder by PC, where the battle PC puts its battle save
         private final java.util.Map<Integer, Path> battleDirs = new java.util.HashMap<>();
         private long battleLoadedAt = -1;
+        // the hold before a battle (SOS-70): each copy saves its game there, as the mod's campaign save will, then goes on
+        private boolean battleHold;
         // world resync (SOS-38): copy 1 saves at wresyncStep; every copy, copy 1 too, loads only the world from it
         private long wresyncStep = -1;
         private boolean wresyncSaver;
@@ -473,6 +475,12 @@ public final class Rig implements SCRIPT {
         private void exchangeBattle() {
             if (!Engine.active() || battleDirs.isEmpty()) {
                 return;
+            }
+            if (battleHold && Engine.battleAhead() >= 0) {
+                long ahead = Engine.battleAhead();
+                String saved = RigHumans.save(dir.resolve("beforebattle.save"));
+                event("battleahead", String.format(Locale.ROOT, "\"step\":%d,\"at\":%d,%s", ahead, Engine.step(), saved));
+                Engine.battleGo();
             }
             try {
                 byte[] out = Engine.battleOut();
@@ -1065,6 +1073,11 @@ public final class Rig implements SCRIPT {
                 battleDirs.put(Integer.parseInt(c[1]), Paths.get(rest(Arrays.copyOfRange(c, 1, c.length))));
                 event("battledir", "\"pc\":" + c[1]);
                 break;
+            case "battlehold": // the hold before a battle (SOS-70): own-city mode first
+                Engine.battleHold(true);
+                battleHold = true;
+                event("battlehold", "");
+                return;
             case "reportsout":
                 reportsOutFile = Paths.get(rest(c));
                 Files.deleteIfExists(reportsOutFile);
