@@ -518,7 +518,7 @@ public final class WorldActions {
         }
         case "wraiderpay": // wraiderpay: the current raider's demand paid, with nothing asked (skipped without one)
             Rig.later(() -> {
-                Raider r = GAME.raiders().current.current();
+                Raider r = currentRaider();
                 if (r == null || !Events.raiderPay(r, 0, new int[TR.ALL().size()])) {
                     throw new IllegalStateException("no current raider, or no session");
                 }
@@ -526,7 +526,7 @@ public final class WorldActions {
             return true;
         case "wallyhelp": // wallyhelp: an ally's help against the current raider asked for
             Rig.later(() -> {
-                Raider r = GAME.raiders().current.current();
+                Raider r = currentRaider();
                 if (r == null || !Events.raiderAllyHelp(r)) {
                     throw new IllegalStateException("no current raider, or no session");
                 }
@@ -705,6 +705,11 @@ public final class WorldActions {
     }
 
     /** A patch-added public method, with int arguments (the rig, like the engine, compiles against the vanilla jar). */
+    /** The raider raiding this PC's human: its own slot of the raid (SOS-46 M4), not slot 0's field (PT5). */
+    private static Raider currentRaider() {
+        return ((RaidingCurrent) patched(GAME.raiders(), "current")).current();
+    }
+
     private static Object patched(Object target, String name, int... args) {
         Class<?>[] types = new Class<?>[args.length];
         Object[] values = new Object[args.length];
