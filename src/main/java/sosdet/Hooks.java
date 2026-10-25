@@ -26,6 +26,7 @@ import snake2d.util.rnd.RND;
 import sosdet.ai.AiApplier;
 import sosdet.ai.Commanders;
 import sosdet.ai.AiMode;
+import sosdet.game.GameOwnCity;
 import sosdet.game.GameReport;
 import sosdet.game.StepParts;
 import sosdet.game.WorldStatics;
@@ -1192,6 +1193,30 @@ public final class Hooks {
         }
         s.cityInputs.add(s.inputs().eventAction(action, event, context));
         return true;
+    }
+
+    /**
+     * {@code SETT.CreateFromWorldMap} starts (hook 18): in a session, a city's generation (a PC's own city at setup, the
+     * landing view's Regenerate) keeps the world's state. It re-rolls the NPCs' production boosts on this PC only
+     * ({@code Recipes.clear}); they are put back at {@link #cityGenerateEnd}. A battle's generation runs as vanilla
+     * (SOS-56).
+     */
+    public static void cityGenerateBegin(boolean isBattle) {
+        Session s = Engine.session();
+        if (s == null || isBattle) {
+            return;
+        }
+        s.keptBoosts = GameOwnCity.boosts();
+    }
+
+    /** {@code SETT.CreateFromWorldMap} ends (hook 18). */
+    public static void cityGenerateEnd() {
+        Session s = Engine.session();
+        if (s == null || s.keptBoosts == null) {
+            return;
+        }
+        GameOwnCity.restore(s.keptBoosts);
+        s.keptBoosts = null;
     }
 
     /** A cache kept per update ({@code GAME.updateI()}) that must not carry the city part's values into the world part. */

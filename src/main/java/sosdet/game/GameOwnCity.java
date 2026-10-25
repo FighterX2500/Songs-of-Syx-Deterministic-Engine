@@ -14,9 +14,10 @@ import snake2d.util.sets.LIST;
  * ({@code StageFinish}: {@code CreateFromWorldMap(playerX - 1, playerY - 1)}).
  *
  * <p>The city's generation touches one thing the world reads: clearing the recipes re-rolls the NPCs' production boosts
- * ({@code Recipes.clear} → {@code FBoost.randomize}; {@code FBoost.vGet(FactionNPC)}), which only this PC would do. They
- * are kept as loaded. Everything else it writes is the city's or the view's (audit of {@code SETT.CreateFromWorldMap},
- * 2026-10-25). Setup only, outside the step: the city's random draws go to the cosmetic stream.
+ * ({@code Recipes.clear} → {@code FBoost.randomize}; {@code FBoost.vGet(FactionNPC)}), which only this PC would do. Hook
+ * 18 keeps them around every city generation in a session ({@code Hooks.cityGenerateBegin}), so the landing view's
+ * Regenerate is safe too. Everything else it writes is the city's or the view's (audit of
+ * {@code SETT.CreateFromWorldMap}, 2026-10-25). Outside the step: the city's random draws go to the cosmetic stream.
  */
 public final class GameOwnCity {
 
@@ -35,18 +36,31 @@ public final class GameOwnCity {
             throw new IllegalStateException("SOSDET: an own city is made at setup, with no armies out ("
                     + FACTIONS.player().armies().all().size() + ")");
         }
-        LIST<?> boosts = boosts();
+        GAME.s().CreateFromWorldMap(tx - 1, ty - 1, false); // hook 18 keeps the NPCs' boosts
+    }
+
+    /** The NPCs' production boosts' multipliers, in order. */
+    public static double[] boosts() {
+        LIST<?> boosts = fboosts();
         double[] kept = new double[boosts.size()];
         for (int i = 0; i < kept.length; i++) {
             kept[i] = mul(boosts.get(i));
         }
-        GAME.s().CreateFromWorldMap(tx - 1, ty - 1, false);
+        return kept;
+    }
+
+    /** Puts back multipliers {@link #boosts} took. */
+    public static void restore(double[] kept) {
+        LIST<?> boosts = fboosts();
+        if (boosts.size() != kept.length) {
+            throw new IllegalStateException("SOSDET: " + boosts.size() + " production boosts, " + kept.length + " kept");
+        }
         for (int i = 0; i < kept.length; i++) {
             setMul(boosts.get(i), kept[i]);
         }
     }
 
-    private static LIST<?> boosts() {
+    private static LIST<?> fboosts() {
         try {
             return (LIST<?>) FBOOSTS.get(SETT.RECIPES());
         } catch (IllegalAccessException e) {
