@@ -1,0 +1,17 @@
+# args field --copies 3 --speeds 5,7,10 --steps 3000
+# save SOSDET-suite-field-short.save
+# savecrc 83d43e0d
+# start 740710b8ba653e41
+# aiformat 4
+# hashformat 6
+300 233234f8920fd004
+600 6abfcc318971e547
+900 8de28e1f71001e0e
+1200 f111b209cc42d88
+1500 3e804ece8db203c
+1800 6416e4cf4fc0c044
+2100 151740324d29b9ba
+2400 73da906e5433be67
+2700 33816ed92cc61df0
+3000 dae032fa38e97c7c
+end adff02d9f128be17

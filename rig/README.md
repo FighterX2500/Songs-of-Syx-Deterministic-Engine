@@ -124,6 +124,30 @@ python rig\rig.py city --tag MB10 --save Mogus-72-19f86f1e048-47002c-0-121c.save
 
 A field battle needs an enemy that stands: a weaker NPC army withdraws without a prompt, and a chase after a marching army stalls (the game's intercept re-paths only once the target has moved a tenth of the path away). `wbesiegenear 0 stronger` besieges the nearest settlement of a faction with at least twice the army's power, whose defenders then attack it. `wwarnear`, `winterceptnear` (with `stronger` and `still`) and the `warmystate` probe are there for other setups.
 
+## The scenario suite (SOS-31)
+
+`rig\suite.py` runs every scenario in one command and prints pass or fail per scenario, with the first step that differs:
+
+```
+python rig\suite.py --short     before each pull request, about 5 minutes
+python rig\suite.py             the full suite, about 55 minutes
+python rig\suite.py --record    record the expected hashes again (a change meant to alter the simulation)
+python rig\suite.py --dry-run   what would run, and the state of each recording; starts no game
+```
+
+| Scenario | Full | Short | Checked by |
+|---|---|---|---|
+| `field` | the field battle, 3 copies at 5, 7 and 10x, 36,000 steps | 3,000 steps | copies, expected hashes |
+| `assault` | Mogus-72 with its invasion, 3 copies, 36,000 steps | 6,000 steps | copies, expected hashes |
+| `ownworld` | Mogus-72 own cities (M4): followers, world resync at 3,000, `m3.txt` actions, 108,000 steps | 6,000 steps, resync at 1,500, no actions | copies only |
+| `mapbattle` | Mogus-72 besieged, Engage, the battle on the battle map (MB12), 2 copies, 36,000 steps | not in it | copies, expected hashes |
+
+Every scenario passes only when its copies are identical at every step and no engine reports a desync. A recorded one must also match its expected hashes. `--record` runs it with copy 1 as the host and keeps two things in `rig\golden\<scenario>.txt` and `<scenario>.log.gz`: copy 1's hash every 300 steps and at the end, and the host's AI log, which holds the general's changes and the player's actions at their steps. A field recording also keeps its generated battle in your saves folder as `SOSDET-suite-<scenario>.save`, since a generated battle's bytes differ between runs. A later run replays that log on every copy (`--replay`, with `--battle-save` for the field battle), so its steps must give the same hashes. A recording names the scenario's arguments, its save's checksum, the start hash and the engine's AI log and hash formats; when one differs, the scenario says `RECORD` and to record again, rather than failing. The own-city world can't be replayed, since a `--follow` run needs a host, so only its copies are compared.
+
+`--battle-save NAME` (field) starts from that battle save instead of generating one; in a `--replay` run, `--cmds` is ignored, since the log already holds the actions.
+
+The recordings in `rig\golden` were made on the main dev PC (2026-10-25). A field recording needs its battle save, which stays in that PC's saves folder; on another PC the field scenario says `RECORD` until it is recorded there. Checked on 2026-10-25: the short suite passes in about 6 minutes (field and assault match their recordings, the own-city world stays identical through a world resync at step 1,500), and a probe that changed every step's seed made the field scenario fail at step 300, naming the expected and the actual hash. The full suite passes in 49 minutes: field, assault and map battle each match 121 expected hashes, and the own-city world stays identical for 108,000 steps through a world resync at step 3,000.
+
 ## The timing rule
 
 ```

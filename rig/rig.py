@@ -703,6 +703,9 @@ def main():
     ap.add_argument("--save", help="city: the save file in your saves folder")
     ap.add_argument("--keep", action="store_true", help="leave the copies open")
     ap.add_argument("--artillery", type=int, default=0, help="field: artillery pieces per side in the generated battle")
+    ap.add_argument("--battle-save", default="",
+                    help="field: start from this battle save in your saves folder instead of generating one (a replayed"
+                         " log needs the start it was recorded on; SOS-31)")
     ap.add_argument("--window", action="store_true", help="the user's own screen and sound settings, to watch a copy")
     ap.add_argument("--run-on", action="store_true", help="don't stop at the first difference; run the whole length")
     ap.add_argument("--ai", choices=["instep", "host"], default="host",
@@ -858,7 +861,15 @@ def main():
     log("%d copies up; %s, %s test, speeds %s; copy %d runs %d steps, the others until it stops"
         % (len(copies), args.scenario, baseline, speeds, ref, args.steps))
 
-    if args.scenario == "field":
+    if args.scenario == "field" and args.battle_save:
+        battle = REAL / "saves" / "saves" / args.battle_save
+        if not battle.is_file():
+            fail("no battle save %s" % battle)
+        log("the battle from %s" % battle.name)
+        shutil.copy2(battle, run_dir / "battle.save")
+        for c in copies:
+            c.put_save(battle, "sosdet-battle.save")
+    elif args.scenario == "field":
         log("copy 1 generates the battle (seed %d, %d men and %d artillery per side)" % (BATTLE_SEED, MEN_PER_SIDE, args.artillery))
         gen = copies[0].send("generate %d %d %d" % (BATTLE_SEED, MEN_PER_SIDE, args.artillery), "generated", 600)
         log("generated: %s" % json.dumps(gen))
@@ -990,6 +1001,9 @@ def main():
     else:
         actions = [a.strip() for a in args.cmds.split(";")]
     actions = [a for a in actions if a] if args.cmds else []
+    if args.replay and actions:
+        log("--cmds ignored: a replayed log already holds the host player's actions")
+        actions = []
     for action in actions:
         if action.startswith("wait "):  # wait <s>: the player does nothing for that long
             time.sleep(float(action.split()[1]))
