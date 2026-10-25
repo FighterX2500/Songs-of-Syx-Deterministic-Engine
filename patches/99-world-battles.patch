@@ -1,6 +1,6 @@
 diff -ru -U2 a/settlement/battle/invasion/Attack.java b/settlement/battle/invasion/Attack.java
 --- a/settlement/battle/invasion/Attack.java	2026-06-17 10:48:04.000000000 +0500
-+++ b/settlement/battle/invasion/Attack.java	2026-10-25 06:35:18.618803000 +0500
++++ b/settlement/battle/invasion/Attack.java	2026-10-25 10:30:23.041160300 +0500
 @@ -155,7 +155,7 @@
  			
  			new MVictory2(ress).send();
@@ -21,7 +21,7 @@ diff -ru -U2 a/settlement/battle/invasion/Attack.java b/settlement/battle/invasi
  			}
 diff -ru -U2 a/settlement/battle/invasion/Invasion.java b/settlement/battle/invasion/Invasion.java
 --- a/settlement/battle/invasion/Invasion.java	2026-03-25 10:31:18.000000000 +0500
-+++ b/settlement/battle/invasion/Invasion.java	2026-10-25 06:35:18.618803000 +0500
++++ b/settlement/battle/invasion/Invasion.java	2026-10-25 10:30:23.041160300 +0500
 @@ -113,7 +113,7 @@
  		pLosses = STATS.POP().COUNT.leaves().get(CAUSE_LEAVES.SLAYED().index()).statistics(HCLASSES.CITIZEN()).get(null);
  		this.spec = spec;
@@ -102,7 +102,7 @@ diff -ru -U2 a/settlement/battle/invasion/Invasion.java b/settlement/battle/inva
  			return f;
 diff -ru -U2 a/view/world/ui/battle/BattleAssist.java b/view/world/ui/battle/BattleAssist.java
 --- a/view/world/ui/battle/BattleAssist.java	2025-09-12 16:10:28.000000000 +0500
-+++ b/view/world/ui/battle/BattleAssist.java	2026-10-25 06:35:18.619802700 +0500
++++ b/view/world/ui/battle/BattleAssist.java	2026-10-25 10:30:23.042161400 +0500
 @@ -44,6 +44,8 @@
  		bb = new Butt(UI.icons().s.sword, ¤¤Command) {
  			@Override
@@ -132,7 +132,7 @@ diff -ru -U2 a/view/world/ui/battle/BattleAssist.java b/view/world/ui/battle/Bat
  			}
 diff -ru -U2 a/view/world/ui/battle/BattleBattle.java b/view/world/ui/battle/BattleBattle.java
 --- a/view/world/ui/battle/BattleBattle.java	2026-01-08 07:48:44.000000000 +0500
-+++ b/view/world/ui/battle/BattleBattle.java	2026-10-25 06:35:18.619802700 +0500
++++ b/view/world/ui/battle/BattleBattle.java	2026-10-25 10:30:23.042161400 +0500
 @@ -44,6 +44,8 @@
  		bb = new Butt(UI.icons().s.sword, ¤¤Command) {
  			@Override
@@ -162,7 +162,7 @@ diff -ru -U2 a/view/world/ui/battle/BattleBattle.java b/view/world/ui/battle/Bat
  			}
 diff -ru -U2 a/view/world/ui/battle/BattleLastStand.java b/view/world/ui/battle/BattleLastStand.java
 --- a/view/world/ui/battle/BattleLastStand.java	2025-09-12 16:09:02.000000000 +0500
-+++ b/view/world/ui/battle/BattleLastStand.java	2026-10-25 06:35:18.619802700 +0500
++++ b/view/world/ui/battle/BattleLastStand.java	2026-10-25 10:30:23.043160900 +0500
 @@ -54,6 +54,8 @@
  		bb = new Butt(UI.icons().s.sword, ¤¤Command) {
  			@Override
@@ -183,7 +183,7 @@ diff -ru -U2 a/view/world/ui/battle/BattleLastStand.java b/view/world/ui/battle/
  			}
 diff -ru -U2 a/view/world/ui/battle/BattleSally.java b/view/world/ui/battle/BattleSally.java
 --- a/view/world/ui/battle/BattleSally.java	2026-01-12 14:19:00.000000000 +0500
-+++ b/view/world/ui/battle/BattleSally.java	2026-10-25 06:35:18.620803400 +0500
++++ b/view/world/ui/battle/BattleSally.java	2026-10-25 10:30:23.043160900 +0500
 @@ -54,6 +54,8 @@
  		bb = new Butt(UI.icons().s.sword, ¤¤Command) {
  			@Override
@@ -213,7 +213,7 @@ diff -ru -U2 a/view/world/ui/battle/BattleSally.java b/view/world/ui/battle/Batt
  			}
 diff -ru -U2 a/view/world/ui/battle/BattleSiege.java b/view/world/ui/battle/BattleSiege.java
 --- a/view/world/ui/battle/BattleSiege.java	2025-09-22 07:59:26.000000000 +0500
-+++ b/view/world/ui/battle/BattleSiege.java	2026-10-25 06:35:18.620803400 +0500
++++ b/view/world/ui/battle/BattleSiege.java	2026-10-25 10:30:23.044160700 +0500
 @@ -110,6 +110,8 @@
  			
  			@Override
@@ -243,7 +243,7 @@ diff -ru -U2 a/view/world/ui/battle/BattleSiege.java b/view/world/ui/battle/Batt
  			}
 diff -ru -U2 a/view/world/ui/battle/Conquer.java b/view/world/ui/battle/Conquer.java
 --- a/view/world/ui/battle/Conquer.java	2026-06-17 10:48:04.000000000 +0500
-+++ b/view/world/ui/battle/Conquer.java	2026-10-25 06:35:18.621807500 +0500
++++ b/view/world/ui/battle/Conquer.java	2026-10-25 10:30:23.044160700 +0500
 @@ -168,6 +168,8 @@
  				
  				@Override
@@ -273,7 +273,7 @@ diff -ru -U2 a/view/world/ui/battle/Conquer.java b/view/world/ui/battle/Conquer.
  					AD.stats().mercy().incD(FACTIONS.player(), mercy());
 diff -ru -U2 a/view/world/ui/battle/Res.java b/view/world/ui/battle/Res.java
 --- a/view/world/ui/battle/Res.java	2026-06-25 10:22:22.000000000 +0500
-+++ b/view/world/ui/battle/Res.java	2026-10-25 06:35:18.621807500 +0500
++++ b/view/world/ui/battle/Res.java	2026-10-25 10:30:23.045160500 +0500
 @@ -115,6 +115,10 @@
  			
  			@Override
@@ -287,7 +287,16 @@ diff -ru -U2 a/view/world/ui/battle/Res.java b/view/world/ui/battle/Res.java
  					AD.stats().mercy().incD(FACTIONS.player(), slaves.mercy());
 diff -ru -U2 a/view/world/ui/battle/UIWBattlePrompt.java b/view/world/ui/battle/UIWBattlePrompt.java
 --- a/view/world/ui/battle/UIWBattlePrompt.java	2026-01-12 14:21:48.000000000 +0500
-+++ b/view/world/ui/battle/UIWBattlePrompt.java	2026-10-25 06:35:18.622805000 +0500
++++ b/view/world/ui/battle/UIWBattlePrompt.java	2026-10-25 10:30:23.049161400 +0500
+@@ -30,7 +30,7 @@
+ 	}
+ 	
+ 	public boolean isBusty() {
+-		return inter.isActivated();
++		return sosdet.game.cmd.WorldBattles.blocked(inter.isActivated()); // SOSDET: the engine's test, the same on every PC: WBattles.poll stops on every PC while a prompt waits, not only on the asked human's (SOS-46 PT2)
+ 	}
+ 	
+ 	public void battle(WBattleSpec battle) {
 @@ -50,7 +50,7 @@
  	}
  	
@@ -342,7 +351,7 @@ diff -ru -U2 a/view/world/ui/battle/UIWBattlePrompt.java b/view/world/ui/battle/
  
 diff -ru -U2 a/world/entity/army/WArmyState.java b/world/entity/army/WArmyState.java
 --- a/world/entity/army/WArmyState.java	2026-06-08 21:03:50.000000000 +0500
-+++ b/world/entity/army/WArmyState.java	2026-10-25 06:35:18.625773400 +0500
++++ b/world/entity/army/WArmyState.java	2026-10-25 10:30:23.046159800 +0500
 @@ -51,7 +51,7 @@
  		@Override
  		WArmyState update(WArmy a, double ds) {

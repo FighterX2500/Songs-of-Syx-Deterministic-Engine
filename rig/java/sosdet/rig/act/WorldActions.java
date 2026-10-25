@@ -547,6 +547,12 @@ public final class WorldActions {
             b.append(first ? "" : " ").append(f.index());
             first = false;
         }
+        for (int slot : Hooks.humanSlots()) { // another human, at war through an ally or a vassal (PT2)
+            if (slot != p.index() && DIP.get(p, FACTIONS.getByIndex(slot)) == DIP.WAR()) {
+                b.append(first ? "" : " ").append("human").append(slot);
+                first = false;
+            }
+        }
         return b.append("]").toString();
     }
 
