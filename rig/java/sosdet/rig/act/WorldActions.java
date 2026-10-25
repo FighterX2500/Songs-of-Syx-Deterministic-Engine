@@ -206,7 +206,7 @@ public final class WorldActions {
                 Region best = null;
                 long bestD = Long.MAX_VALUE;
                 for (Region r : WORLD.REGIONS().active()) {
-                    if (r.faction() == null || r.faction() == FACTIONS.player()
+                    if (r.faction() == null || r.faction() instanceof game.faction.player.Player // no other human's (PT5)
                             || (stronger && AD.power().get(r.faction()) <= 2 * AD.power().get(w))) {
                         continue;
                     }

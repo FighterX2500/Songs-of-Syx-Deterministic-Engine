@@ -14,7 +14,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
-import java.util.NoSuchElementException;
 
 import game.GAME;
 import game.battle.state.BattleState;
@@ -155,14 +154,15 @@ public final class Rig implements SCRIPT {
     /**
      * Queues a scripted player's action to run outside the step, as the UI would (SOS-34). An action whose target is
      * missing in this save (a room type it doesn't have) is reported as a "cmdskipped" event instead of crashing the
-     * game; nothing was captured, so the copies stay comparable.
+     * game; nothing was captured, so the copies stay comparable. The one boundary for scripted actions: any runtime
+     * exception, such as a game list answering null past its end for a bad index (PT4, PT5), is skipped the same way.
      */
     public static void later(Runnable action) {
         Engine.betweenSteps(() -> {
             try {
                 action.run();
-            } catch (IllegalStateException | IllegalArgumentException | IndexOutOfBoundsException | NoSuchElementException e) {
-                current.event("cmdskipped", "\"reason\":\"" + Instance.clean(String.valueOf(e.getMessage())) + "\"");
+            } catch (RuntimeException e) {
+                current.event("cmdskipped", "\"reason\":\"" + Instance.clean(e.getClass().getSimpleName() + ": " + e.getMessage()) + "\"");
             }
         });
     }
