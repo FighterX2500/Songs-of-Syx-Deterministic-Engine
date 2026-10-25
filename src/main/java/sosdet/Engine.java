@@ -333,6 +333,7 @@ public final class Engine {
             s.reports(slot).ledgerIn(r.ledger(slot));
         }
         s.hashes.rewind(r.step, r.hashEpoch);
+        s.endDesyncHold(r.step);
         s.clock.runUntil(r.step);
     }
 
@@ -584,6 +585,16 @@ public final class Engine {
 
     public static double longestHoldSeconds() {
         return required().pacer.longestHoldSeconds();
+    }
+
+    /**
+     * The desync every PC holds for (SOS-53), or null. The host logs the hold when its hashes first differ; every PC
+     * applies it at the same step and stops there, while the mod's window names the PC and the host chooses: a world
+     * resync at {@link DesyncHold#holdStep} ({@link #worldResyncSave}, then {@link #worldResyncLoad} on every PC, which
+     * ends the hold), or saving and leaving ({@link #end}).
+     */
+    public static DesyncHold desyncHold() {
+        return required().desyncHold;
     }
 
     /** The first desync found, or null. */

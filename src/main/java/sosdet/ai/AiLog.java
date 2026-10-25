@@ -26,8 +26,11 @@ public final class AiLog {
 
     /** Steps between the host taking a change and every PC applying it: 0.5 s at 1x. */
     public static final int DELAY_STEPS = 30;
-    /** 4: the commanders entry (SOS-15). A format 3 log is a format 4 log without one, so it is read too. */
-    static final int FORMAT_VERSION = 4;
+    /**
+     * 5: the hold entry (SOS-53). 4: the commanders entry (SOS-15). A format 3 or 4 log is a format 5 log without the
+     * newer entries, so it is read too.
+     */
+    static final int FORMAT_VERSION = 5;
     static final int OLDEST_FORMAT = 3;
     static final int MAGIC = 0x53444149; // "SDAI"
     static final int HEADER_BYTES = 4 + 4 + 4 + 8;
@@ -190,6 +193,17 @@ public final class AiLog {
         captured.add(new AiEntry(-1, -1, AiEntry.COMMANDERS, -1, 0, payload.clone()));
     }
 
+    /**
+     * Host: a desync hold ({@link AiEntry#HOLD}) into the log, applied at the step it stamps on every PC, where every PC
+     * stops. It comes from the engine, not a player, so watch-only never drops it (SOS-53).
+     */
+    public void captureHold(byte[] payload) {
+        if (mode != AiMode.HOST) {
+            throw new IllegalStateException("SOSDET: only the host holds for a desync (mode " + mode + ")");
+        }
+        captured.add(new AiEntry(-1, -1, AiEntry.HOLD, -1, 0, payload.clone()));
+    }
+
     public Commanders commanders() {
         return commanders;
     }
@@ -269,7 +283,7 @@ public final class AiLog {
             (due.pc == AiEntry.AI ? recentAi : recentOrders).add(due);
             applied++;
             appliedByKind[due.kind]++;
-            if (due.pc != AiEntry.AI && !skipped && due.kind != AiEntry.COMMANDERS) { // the table is the mod's, no order
+            if (due.pc != AiEntry.AI && !skipped && due.kind != AiEntry.COMMANDERS && due.kind != AiEntry.HOLD) { // the mod's or the engine's, no order
                 appliedOrders++;
             }
             if (mode == AiMode.PEER) {

@@ -114,6 +114,9 @@ public final class GameAi implements AiApplier {
         case AiEntry.ARTILLERY_FIRE:
             artillery(e);
             return;
+        case AiEntry.HOLD:
+            Hooks.desyncHold(e.step, e.intAt(0), ((long) e.intAt(1) << 32) | (e.intAt(2) & 0xFFFFFFFFL)); // SOS-53
+            return;
         case AiEntry.TELEPORT:
             ArrayList<Div> divs = new ArrayList<>(e.ints());
             Commanders c = Hooks.commanders();

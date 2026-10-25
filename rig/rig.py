@@ -777,6 +777,10 @@ def main():
                     help="city: N humans (SOS-46), one per copy: copy 1 first makes N - 1 NPCs humans and saves; copy k"
                          " then runs human k's city in own-city mode and reads every other copy's reports; the copies"
                          " are compared on the world only")
+    ap.add_argument("--on-desync", choices=["resync", "exit"], default=None,
+                    help="with --humans: the host's choice when an engine finds a desync and every copy holds (SOS-53):"
+                         " a world resync at the hold step, or save and exit; the copies are compared from the step after"
+                         " the resync")
     ap.add_argument("--world-resync", type=int, default=0,
                     help="with --follow or --humans: copy 1 saves at this step, and every copy reloads only the world from it")
     ap.add_argument("--follower-saves", default="",
@@ -851,6 +855,8 @@ def main():
     if 0 < args.pace_lead < HASH_EVERY:
         fail("--pace-lead %d: the host learns a copy's step from its hashes, every %d steps; use 0 or at least %d"
              % (args.pace_lead, HASH_EVERY, HASH_EVERY))
+    if args.on_desync and (not args.humans or args.world_resync):
+        fail("--on-desync is for --humans runs, without --world-resync")
     if args.world_resync and not (args.follow or args.humans):
         fail("--world-resync is for --follow or --humans runs; co-op runs use --resync")
     follower_saves = [s for s in args.follower_saves.split(",") if s]
@@ -973,6 +979,9 @@ def main():
                 c.send("reportsout %s" % reports_file, "reportsout")
             else:
                 c.send("reportsfrom 0 %s" % reports_file, "reportsfrom")
+        if args.on_desync:
+            c.send("ondesync %s %s %s %s" % (args.on_desync, "save" if c.k == 1 else "load", wresync_save, wresync_state),
+                   "ondesync")
         if args.world_resync:
             # copy 1 saves the world at that step; every copy, copy 1 too, reloads only the world (SOS-38; SOS-52 with
             # several humans)
@@ -1068,6 +1077,7 @@ def main():
     watcher = Watcher({c.k: c.rig / ("%s-c%d.csv" % (args.tag, c.k)) for c in copies}, compare_from)
     finished, deadline = {}, time.time() + 6 * 3600
     resync = None  # copy 1's resyncsaved event, once it saved
+    held = None  # the desync hold every copy resynced from (SOS-53), once all have
     checked = time.time()
     while True:
         if args.play and time.time() - checked > 10:
@@ -1088,16 +1098,32 @@ def main():
             resync = copies[0].find("resyncsaved", 0)
             if resync:
                 load_resync(copies, resync, resync_save, resync_state)
+        if args.on_desync and held is None:
+            holds = [c.find("desynchold", 0) for c in copies]
+            if all(holds) and args.on_desync == "resync" and all(c.find("worldresynced", 0) for c in copies):
+                held = holds[0]
+                log("every copy held at step %d for the desync at step %d (PC %d) and resynced"
+                    % (held["holdStep"], held["desyncStep"], held["pc"]))
+                watcher = Watcher({c.k: c.rig / ("%s-c%d.csv" % (args.tag, c.k)) for c in copies}, held["holdStep"] + 1)
+            elif all(holds) and args.on_desync == "exit" and all(c.find("desyncexit", 0) and c.find("finished", 0)
+                                                                 for c in copies):
+                held = holds[0]
+                log("every copy held at step %d for the desync at step %d (PC %d), saved and stopped"
+                    % (held["holdStep"], held["desyncStep"], held["pc"]))
+                for c in copies:
+                    finished[c.k] = c.find("finished", 0)
+                args.steps = held["holdStep"]
+                break
         done = copies[ref - 1].find("finished", 0)
         if done:
             finished[ref] = done
             break
         diverged = watcher.check()
-        if diverged is not None and not args.run_on and not args.nudge and not (args.resync_on_desync and resync is None):
+        if diverged is not None and not args.run_on and not args.nudge and not (args.resync_on_desync and resync is None)                 and not (args.on_desync and held is None):
             log("copies differ at step %d; holding every copy" % diverged)
             break
         time.sleep(2)
-    if args.ai == "host" and ref in finished:
+    if args.ai == "host" and ref in finished and not (held is not None and args.on_desync == "exit"):
         # Peers can't outrun the host: give them the time to pass its last step before holding them.
         for c in copies[1:]:
             path, deadline = c.rig / ("%s-c%d.csv" % (args.tag, c.k)), time.time() + 600
@@ -1115,7 +1141,17 @@ def main():
     ends = {k: f["endStep"] for k, f in finished.items()}
 
     after = resync["step"] + 1 if resync and args.nudge else compare_from  # a forced desync is only repaired from the resync on
-    identical, lines = compare(copies, run_dir, args.tag, ref, args.steps, ends, after, resync["step"] if resync else 0)
+    if held is not None and args.on_desync == "resync":
+        after = held["holdStep"] + 1  # a forced desync (wcorrupt) is only repaired from the resync on (SOS-53)
+    if held is not None and args.on_desync == "exit":
+        # the copies differ from the desync on by design: the check is that every copy held at the same step and saved
+        exits = {c.k: c.find("desyncexit", 0) for c in copies}
+        identical = len(set(ends.values())) == 1 and all(exits.values())
+        lines = ["desync exit: copy %d held at step %d and saved %s (%s bytes)" % (k, ends[k], e["file"], e["bytes"])
+                 for k, e in sorted(exits.items())]
+    else:
+        identical, lines = compare(copies, run_dir, args.tag, ref, args.steps, ends, after,
+                                   resync["step"] if resync else 0)
     if resync:
         lines.insert(0, "resync: copy 1 saved at step %d in %d ms (save %d bytes, engine state %d bytes)"
                      % (resync["step"], resync["saveMs"], resync["saveBytes"], resync["stateBytes"]))
@@ -1132,7 +1168,10 @@ def main():
                 w = c.find("worldloaded", 0)
                 lines.insert(1, "world: copy %d loaded %s at step %s in %s ms: %s"
                              % (c.k, args.world_keys, w and w["step"], w and w["loadMs"], w and json.dumps(w["sections"])))
-    if args.world_resync:
+    if args.on_desync and held is None:
+        identical = False
+        lines.insert(0, "desync flow: the copies never all held for a desync (--on-desync %s)" % args.on_desync)
+    if args.world_resync or (held is not None and args.on_desync == "resync"):
         saved = copies[0].find("worldresyncsaved", 0)
         lines.insert(0, "world resync: copy 1 saved at step %s in %s ms (%s bytes)"
                      % (saved and saved["step"], saved and saved["saveMs"], saved and saved["saveBytes"]))
@@ -1206,7 +1245,14 @@ def main():
                                      else "NOT found as expected: %s" % desyncs))
     else:
         clean = not any(desyncs.values())
-        summary.append("RESULT: " + ("all copies identical to step %d" % args.steps if identical else "copies differ")
+        if held is not None:  # the forced desync the copies held for (SOS-53)
+            clean = all(d is None or d["step"] == held["desyncStep"] for d in desyncs.values())
+        verdict = "all copies identical to step %d" % args.steps if identical else "copies differ"
+        if held is not None and args.on_desync == "exit":
+            verdict = "every copy stopped at step %d" % args.steps if identical else "the copies did not all stop and save"
+        summary.append("RESULT: " + verdict
+                       + ("" if held is None else "; the copies held for the desync at step %d and %s"
+                          % (held["desyncStep"], "resynced" if args.on_desync == "resync" else "saved and stopped"))
                        + ("; engine hashes agree" if clean else "; ENGINE FOUND A DESYNC"))
     (run_dir / "summary.txt").write_text("\n".join(summary) + "\n", encoding="utf-8")
     print("\n".join(summary))
