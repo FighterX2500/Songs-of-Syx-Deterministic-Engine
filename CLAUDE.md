@@ -15,10 +15,12 @@ Read [docs/architecture.md](docs/architecture.md) first: how a session runs, the
 - `docs/decisions/`: the engine's own ADRs, numbered `0001-short-name.md`. Each records context, the decision, the options rejected and why.
 - `docs/hooks.md`: every change to the game's own code, with the reason it exists.
 
-## Current phase: V0.1 play sessions (SOS-32)
+## Current phase: after several humans (SOS-46)
 
-- Built: the engine core, the AI log, the state hash, resync and battle orders (cards SOS-25 to SOS-32 under the epic SOS-22; SOS-31, the scenario suite, and SOS-32 are still open); the city commands (SOS-34); the world lockstep and the V0.1 package (SOS-35); the V0.1 session fixes (SOS-36, SOS-37); stage E of [plan 0002](docs/plan/0002-city-and-world-lockstep.md), the city↔world link, with own-city mode, the world resync and pacing (SOS-38).
-- Now: SOS-32, the owner's 30-minute session: camera and clicks, real-time battles started from the world map, and own-city followers from older saves (Mogus-40, Mogus-20), with draw tracing on. Read-only audits come first.
+- Built: the engine core, the AI log, the state hash, resync and battle orders (cards SOS-25 to SOS-32 under the epic SOS-22; SOS-32 is still open); the city commands (SOS-34); the world lockstep and the V0.1 package (SOS-35); the V0.1 session fixes (SOS-36, SOS-37); stage E of [plan 0002](docs/plan/0002-city-and-world-lockstep.md), the city↔world link, with own-city mode, the world resync and pacing (SOS-38); world-battle prompts that hold only the battle's armies (SOS-45); the scenario suite, `rig\suite.py` (SOS-31, PR #30); several human factions on one world map, each PC running its own human's city ([ADR 0004](docs/decisions/0004-several-humans.md), [plan 0004](docs/plan/0004-several-humans.md); SOS-46, PR #31).
+- SOS-46 moved the hash format to 7, so the suite's recordings must be made again (`python rig\suite.py --record`, then `--short --record`) before the suite can pass.
+- Waiting for the owner (2026-10-25), from the SOS-46 playtests: may a human be drawn into war with another human through an NPC vassal or ally; should an army's move remainder be saved; how to recover from a desync with several humans (the world resync refuses several humans, and a report miss throws). Details in plan 0004.
+- Still open: SOS-32, the owner's 30-minute session: camera and clicks, real-time battles started from the world map, and own-city followers from older saves (Mogus-40, Mogus-20), with draw tracing on. Read-only audits come first.
 - Engage (world battles on the battle map) is refused in a session until generated battles are ported.
 - Where the last session stopped: [docs/plan/HANDOFF.md](docs/plan/HANDOFF.md).
 
@@ -29,7 +31,7 @@ Spikes for open questions go under `spikes/<name>/` and end with a report in `do
 - Planning first: for anything larger than a small fix, propose a plan and wait for my approval before editing.
 - One Jira card at a time, on the SOS board (Jira project SOS). The branch is `SOS-N-short-name`, and the PR title starts with the key. Close a card only when I say its PR is merged.
 - Game runs one at a time on this PC, and one combined smoke run per stage (the owner's direction: speed up, test less). Never build while a rig run is live. Use parallel read-only subagents for audits and reviews; give any agent that edits files its own worktree.
-- Before each PR: `gradlew.bat build`, then `python rig\suite.py --short` (about 5 minutes; ask me before running it). A change meant to alter the simulation records the suite again (`--record`) and says so in the PR (SOS-31).
+- Before each PR: `gradlew.bat build`, then `python rig\suite.py --short` (about 6 minutes; ask me before running it). A change meant to alter the simulation records the suite again (`--record`) and says so in the PR (SOS-31).
 - The timing rule (requirements §4) applies to any change that touches the step.
 - Write multi-line scripts with the Write and Edit tools, not shell heredocs.
 - Never print the keys in `.env` (SOSGSGMP holds the Jira and GitHub keys).

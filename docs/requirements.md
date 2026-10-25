@@ -32,6 +32,7 @@ Every PC that starts from the same save and seed (a battle, a city or the campai
 - Read the state hash at a step.
 - Save the battle at a step and load it at that step (start and resync). The save carries the step number and the AI log entries not yet applied. AI state that vanilla doesn't save (the offence `flanking` value) is saved, or drawn again on the simulation stream after loading ([ADR 0003](https://github.com/FighterX2500/SOSGSGMP/blob/main/docs/decisions/0003-battle-lockstep.md) consequences). Every PC, the host included, loads a resync (owner, 2026-10-22, SOS-30): a game that ran on keeps caches a freshly loaded one rebuilds.
 - Switch a PC from peer to host mid-battle: after a host change, the new host starts its own general (ADR 0003).
+- With several humans (SOS-46): say which human slot is this PC's (`Engine.localHuman`) and which is each PC's (`Engine.pcHuman`), so each PC's commands act for its own human and its city's reports feed that human. `Engine.asHuman` reads the game as another human between steps only (for the rig's probes). Making a human is still setup through the adapter (`GameHumans.add`, the rig's `makehuman`); the `addHuman` call of [ADR 0004](decisions/0004-several-humans.md) is not built yet.
 - Every data format crossing the API (orders, AI log entries, engine save data) carries a format version.
 
 ## 4. Targets
@@ -48,15 +49,14 @@ On the reference PC (Intel Core i5-11600K, 16 GB RAM; mod spec §13) unless a li
 | Determinism, city | Several game copies stay identical through a 30-minute session in the Mogus-72 city with the owner giving city commands (plan 0002, stage C) |
 | Determinism, world | Several game copies running the world and a city stay identical for 30 minutes with the AI host (plan 0002, stage D) |
 | Desync report | Every desync can produce a report: the step, which part of the state differs, recent orders, commands and AI log |
-| Resync | Saving and loading at a step leaves room for the mod to recover within 10 s (mod spec §13) |
+| Resync | Saving and loading at a step leaves room for the mod to recover within 10 s (mod spec §13). Not met yet with several humans: the world resync refuses several humans, and a report miss throws (SOS-46; an open question for the owner) |
 | AI log delay | Entries are applied 30 steps (0.5 s) after the host's general writes them, inside the 1 s order latency (mod spec §13) |
 
 ## 5. Verification
 
-- A scenario suite (save, seed, order log, AI log, expected hashes every N steps) replayed in several copies at different speeds; it runs as one local command (card SOS-31).
-- Until then, the spike rig in SOSGSGMP (`spikes/determinism/matrix.sh`).
+- A scenario suite (save, seed, order log, AI log, expected hashes every N steps) replayed in several copies at different speeds; it runs as one local command, `python rig\suite.py` (SOS-31, [rig/README.md](../rig/README.md)). It has no scenario with several humans yet.
 
 ## 6. Open questions
 
 - [x] **City assault as a target.** Settled 2026-10-23: the whole city runs in lockstep (plan 0002), so the Mogus-72 city, invasion included, is a determinism and timing target now. Lockstep for siege assaults between players still waits on SOS-17.
-- [ ] **Test saves.** Where the scenario suite's saves live, since game files are never committed (SOS-31).
+- [x] **Test saves.** Settled in SOS-31: the suite's saves stay in each PC's own saves folder, a field recording's battle save too; the recordings name each save's checksum ([rig/README.md](../rig/README.md)).

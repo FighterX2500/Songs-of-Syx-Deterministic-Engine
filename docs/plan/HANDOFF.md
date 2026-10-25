@@ -8,6 +8,7 @@
 4. `docs/plan/0002-city-and-world-lockstep.md`: the overall plan and the owner's decisions. Stage order: **A → B → D → C → E**.
 5. `docs/plan/0003-room-planning.md`: where SOS-34 stands. Plan 0002, decision 6: the road to SOSDET V0.1.
 6. ADRs `docs/decisions/0002-player-commands.md` (accepted) and `docs/decisions/0003-room-planning.md` (accepted).
+7. ADR `docs/decisions/0004-several-humans.md` (accepted) and `docs/plan/0004-several-humans.md`: several humans on one world, its milestones, playtests and known gaps.
 
 ## 2. Where things stand
 
@@ -22,9 +23,18 @@
 - SOS-36 and SOS-37: fixes from the owner's V0.1 sessions (prompt deadlock, copier and blueprints, the minimap's draws, path finding on path threads).
 - SOS-38 (PR #19, 2026-10-24): stage E, the city↔world link, in full: the step parts, the city report, the transactions, own-city mode, the world resync from a world-only save, raiders in the world hash, and pacing by the slowest PC. Results: `docs/plan/notes/stage-e-smoke-tests.md`.
 
-**In review, SOS-46 (branch `SOS-46-several-humans`):** several human factions on one world map ([ADR 0004](../decisions/0004-several-humans.md), [plan 0004](0004-several-humans.md)): up to 16 humans, each a `Player` in its own slot; the world part runs each human's world half as the current human; NPC relations, event timers and raids are kept per human (engine save sections `SOSDET_CITY_DIVS`, `SOSDET_RELATIONS`, `SOSDET_EVENTS`). Hash format 7, so the scenario suite's recordings (SOS-31) must be made again after it merges. Known gaps are in plan 0004's milestone notes: no message routing per human yet, `DIP.playerWarSecond` still one value, battles between humans outside the card, and the world resync refuses several humans.
+- SOS-45 (PR #29): world-battle prompts hold only the battle's armies and answer themselves after 30 s.
+- SOS-31 (PR #30, 2026-10-25): the scenario suite as one local command, `rig\suite.py` (short about 6 minutes, full about 49). See `rig/README.md`.
+- SOS-46 (PR #31, 2026-10-25): several human factions on one world map ([ADR 0004](../decisions/0004-several-humans.md), [plan 0004](0004-several-humans.md)): up to 16 humans, each a `Player` in its own slot; the world part runs each human's world half as the current human; NPC relations, event timers and raids are kept per human (engine save sections `SOSDET_HUMANS`, `SOSDET_CITY_DIVS`, `SOSDET_RELATIONS`, `SOSDET_EVENTS`). Six playtests with three LLM players, one copy on the laptop: PT1 to PT3 found two desyncs and a crash, all fixed; PT6 ran an hour (270,000 steps) identical on every copy. Known gaps are in plan 0004's milestone notes: no message routing per human yet, `DIP.playerWarSecond` still one value, battles between humans outside the card, no engine API to add humans (only the rig's), and no desync recovery with several humans.
 
-**Before SOS-46, SOS-32:** the owner's 30-minute session, which unifies the remaining checks (owner, 2026-10-24):
+**The suite needs new recordings:** SOS-46 moved the hash format to 7 after the suite was recorded, so every recorded scenario says `RECORD` until `python rig\suite.py --record` and `--short --record` run again.
+
+**Waiting for the owner (open questions from the SOS-46 playtests, 2026-10-25):**
+- May a human be drawn into war with another human through an NPC vassal or ally? Vanilla's ally rule does it today, and it happened in almost every playtest.
+- An army's sub-pixel move remainder is not saved, so after a resync a moving army can be 1 px apart until it stops. Saving it changes the save format.
+- There is no recovery from a desync with several humans: the world resync refuses several humans, and a report miss throws.
+
+**SOS-32, still open:** the owner's 30-minute session, which unifies the remaining checks (owner, 2026-10-24):
 - camera and clicks (render and UI state; the C1 split when the owner moved the camera is the biggest risk);
 - real-time battles started from the world map (SOS-32: Engage works in co-op and ran identical on three copies through a retreat; own-city mode refuses it and doesn't support city battles);
 - own-city followers from older saves (Mogus-40 and Mogus-20) under the host's Mogus-72 world;
@@ -32,7 +42,7 @@
 
 First three read-only audits (camera and clicks, battles from the map, older-save followers), then a fix plan for the owner's approval, then the session.
 
-**Still open elsewhere:** SOS-31 (the scenario suite as one local command); the V01B rig split at step 154,365; the resync-with-open-prompt gap (plan 0002, stage D); room-planning milestone 3; Engage with own cities.
+**Still open elsewhere:** the V01B rig split at step 154,365; the resync-with-open-prompt gap (plan 0002, stage D); room-planning milestone 3; Engage with own cities.
 
 ## 3. How to work here
 
@@ -46,7 +56,8 @@ First three read-only audits (camera and clicks, battles from the map, older-sav
     The test copies run off-screen. Give it enough steps: about 300 per scripted action plus 6,000.
   - **Owner play session:** `--play` (copy 1 in a normal window at 1x; close the window to end). The owner plays the city and the world; room planning and refurnish work. Without `--play`, copy 1's player answers world-battle prompts by itself.
   - **Own cities:** `--follow` runs every copy in own-city mode with copy 1 as the host; `--world-resync STEP` reloads the followers' worlds from the host's; `--pace-lead N` (default 60) caps how far the host runs past the slowest copy; `--remote K` runs copy K on the laptop over Radmin (`SOSDET_RIG_REMOTE`). See `rig/README.md`.
-  - **Splits:** `--trace-draws 300` names the first differing draw. The desync report lists divisions and entities per step.
+  - **Several humans:** `--humans N` (N copies) makes N - 1 NPCs humans and runs copy k as human k in own-city mode; `k: <action>` in `--cmds` is copy k's player's. It works with `--remote K`. Probes for a player: `wstatus`, `wcredits`, `wrelations`, `wwar`, `wevents`, `wsprite`. See `rig/README.md`, "Several humans".
+  - **Splits:** `--trace-draws 300` names the first differing draw. The desync report lists divisions and entities per step, and, when the world differs, the world part by part (every army, each human's timers).
   - **Never rebuild while a rig run is live:** it swaps the jars under the running copies.
 - **Patches:** `python tools/mkpatch.py <patch> <edits.py>`. FILES lists every game file the patch covers; EDITS holds only the new edits. Each game file belongs to one patch. Every hook goes in `docs/hooks.md`; every command goes in `docs/commands.md`.
 - **Agents for big ports:** one worktree per agent (`git worktree add ... -b <branch> <base>`), one patch and one area class each. The brief that worked is in `docs/plan/notes/agent-wave-brief.md`. Tell agents to run `./gradlew.bat` directly; `cmd /c` from Git Bash hangs (see `tooling-quirks`). Check on long-running agents: a child-less `cmd.exe` process means a hang.

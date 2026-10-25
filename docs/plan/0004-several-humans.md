@@ -1,6 +1,6 @@
 # Plan 0004: several human factions on the world map (SOS-46)
 
-Status: done, in review (2026-10-25). The owner chose option 1 and accepted [ADR 0004](../decisions/0004-several-humans.md) (2026-10-25); milestone 1 started. Card: [SOS-46](https://fighterx2500.atlassian.net/browse/SOS-46). Branch: `SOS-46-several-humans` (local). The design is settled in an ADR (0004) in milestone 1.
+Status: done, merged (PR #31, 2026-10-25). The owner chose option 1 and accepted [ADR 0004](../decisions/0004-several-humans.md) (2026-10-25). Card: [SOS-46](https://fighterx2500.atlassian.net/browse/SOS-46). Branch: `SOS-46-several-humans`. The design is settled in an ADR (0004) in milestone 1. Not built from this plan: the engine API `humans()` and `addHuman(region)`, and the rule that `player()` throws outside per-human work (see M1). Three questions from the playtests wait for the owner (see "Open questions").
 
 ## Goal
 
@@ -47,7 +47,7 @@ Status: done, in review (2026-10-25). The owner chose option 1 and accepted [ADR
 
 ## Milestones
 
-Each milestone is a PR on SOS-46, rig-checked before the next one starts.
+Each milestone was rig-checked before the next one started. They went into one PR (#31), in the order M1, M2, M5, M3, M4.
 
 ### M1. Several humans exist, and each world reads each city (the base)
 
@@ -69,6 +69,8 @@ Each milestone is a PR on SOS-46, rig-checked before the next one starts.
   - `addHuman(region)`, which turns an NPC's capitol or a free region into a human: setup, before the session starts;
   - `localHuman(id)`;
   - a report feed per human.
+
+  As built: `Engine.localHuman(slot)`, `Engine.pcHuman(pc, slot)` and the report feed per PC (`reportsIn(pc, bytes)`). `humans()` and `addHuman(region)` were not built. A human is made only through the adapter, `GameHumans.add(slot)` (the rig's `makehuman`): an active NPC with a capitol becomes a human, humans join in slot order, and the game is saved and loaded before the session. A free region can't become a human yet. The mod's setup needs the real API; that is later work.
 - **Reports per human:**
   - every human's report applies at its stamped step on every PC;
   - pacing waits for every human's report;
@@ -84,7 +86,7 @@ Each milestone is a PR on SOS-46, rig-checked before the next one starts.
   - `makehuman <faction>` (setup) and a save with 3 humans;
   - `--humans`: each copy runs a different human's city in own-city mode.
 - **The casts (owner, 2026-10-25):** a game with several humans crashes in its first frame at the `(FactionNPC)` casts and the `instanceof FactionNPC` branches (85 sites). M1 guards each one so the game runs: there a human is skipped or treated as a faction that is not an NPC. What each human should get at those sites stays M2's work.
-- **Until M2 to M5 are done,** the world part's current human outside a per-human loop is the first human, not *none*: with one human the game runs exactly as today. The rule that `player()` throws there comes in once the last site is converted.
+- **Until M2 to M5 are done,** the world part's current human outside a per-human loop is the first human, not *none*: with one human the game runs exactly as today. The rule that `player()` throws there comes in once the last site is converted. As built after M5: not done. `player()` still gives the first human there (hooks.md, patch `12-step-parts`), so a single-player site no one found reads slot 0 without an error.
 - **Work order**, each step built and checked before the next:
   1. Humans in the game: spares, the save section, the slot swap, `active()`, `activate`, and `BoostCompound` and `PCredits` reading the `Player` asked; the rig's `makehuman`. Check: a 3-human save and load round trip, without frames.
   2. The current human: the `FACTIONS.player()` hook, this PC's human, the per-human world half of `Player`'s update, the city half for this PC's human only.
@@ -148,6 +150,12 @@ Replaces the card's 30-minute run. Every run uses `--trace-draws`.
   - An agent audit for UI code that writes world state found three more getters (`WArmyState.intercepting`'s lookup, `RDOwner.prevOwner`, `FACTIONS.active()`'s fresh mark); each write is now world-part only. Playtest PT4 ran 25 minutes without a desync, until a rig action with a bad building index crashed a copy (the rig now refuses it). Final smoke S46FIN4 identical to step 33,000.
   - Playtest PT5 ran 27 minutes without a desync until another bad rig index (an edict's race) crashed a copy; the rig now skips any runtime exception in a scripted action. **Playtest PT6: three LLM players, copy 3 on a second PC, 270,000 steps (one hour, about 23 game days), all copies identical, 85 commands applied on every copy, 0 report misses.** Step mean 5.8 to 8.2 ms, p99 14.5 to 18.9 ms.
 
+## Open questions (for the owner, 2026-10-25)
+
+1. **War between humans through an NPC.** Vanilla's ally rule gives an overlord its vassal's enemies, and allies join their ally's wars, so one human's war on an NPC can put two humans at war with each other (PT2 to PT6). The mod's spec keeps a sovereign out of its vassal's wars between players (§6) and wants a real-time battle when two players' armies meet (§8); today one human's vanilla prompt settles such a battle. Left as vanilla until the owner decides.
+2. **The move remainder after a resync.** An army's sub-pixel move remainder (PT3) is not saved, so after a world resync a moving army can be 1 px apart until it stops. Options: save it (a save format change), or reset it on every PC when the world resync loads. Not decided.
+3. **Recovery with several humans.** There is none yet: the full resync is refused in own-city mode, the world resync refuses several humans (audit C19), and a report miss throws with several humans. It needs its own design.
+
 ## Outside this card
 
 Battles and sieges between humans, and in own-city mode (B6). Networking, the lobby, campaign rules and UI, which are the mod's work. Local-view code (fog of war, minimap, overlays: G8), which stays this PC's player outside the step.
@@ -156,5 +164,5 @@ Battles and sieges between humans, and in own-city mode (B6). Networking, the lo
 
 - **Size:** the largest card yet. About 350 world references, plus the opinion framework, `RD.DIST` and raiding. M3 is the critical path.
 - **Hidden references to the player:** `FACTIONS.player()` cached in a field at startup would keep slot 0 for good. M1 scans for these.
-- **Shared scratch deals** (`DIP.TMP()`): several humans negotiating in the same step. Commands apply one at a time inside the step, so this should hold. M3 checks it.
+- **Shared scratch deals** (`DIP.TMP()`): several humans negotiating in the same step. Commands apply one at a time inside the step, so this should hold. M3 checks it. No result of that check is recorded yet.
 - **Pre-existing bug:** `DipStance.any()` reads `active().get(0)` instead of `get(fi)`. It is noted, not fixed, unless a milestone trips on it.

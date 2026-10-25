@@ -42,3 +42,9 @@ Status: Accepted (owner, 2026-10-25) · Card: [SOS-46](https://fighterx2500.atla
 - **Per-human state** that vanilla keeps once (opinion, `DipWarPlayer`, events' timers, raids) becomes per human in milestones 3 and 4, through the current human.
 - **`PlayerColors.saver`** is static, so every human saves the same colours until it gets a per-slot saver.
 - **Local view** (fog of war, minimap, overlays) stays this PC's human's, outside the step (G8).
+
+## Amendments (2026-10-25, after SOS-46 was built)
+
+- **`player()` doesn't throw yet.** In the world part, outside a human's own work, `FACTIONS.player()` gives the first human, not *none*. The rule that it throws waits until no single-player site is left ([plan 0004](../plan/0004-several-humans.md), M1). Until then such a site reads slot 0 without an error.
+- **`Player.java` is patched**, for other reasons than registering once: the city and world halves of its update (patch 12, SOS-38), and in SOS-46 the reads of each human's report and the audit fixes (patches 12 and 14; see `docs/hooks.md`). Registering once still needs no patch: `PBonusSetting` stays unpatched.
+- **`addHuman` isn't built.** A human is made only through `GameHumans.add(slot)` (the rig's `makehuman`): an active NPC with a capitol, humans in slot order, then a save and load. A free region can't become a human yet.
