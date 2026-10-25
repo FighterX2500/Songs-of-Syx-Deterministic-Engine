@@ -63,12 +63,13 @@ final class RigHumans {
      * {@code <seed> auto <n>}: a fresh terrain from the seed on this game's map, then a world built around n humans
      * (SOS-55): human 0 at the first free location from the map's centre outwards, the others 7 to 15 tiles from it where
      * the terrain allows, so the 6-15-tile route rule is exercised. Every human takes this game's player's race. Reports the humans, their
-     * locations and a path check between every two of them 6 to 15 tiles apart (mod spec §5).
+     * locations and a path check between every two of them 6 to 15 tiles apart (mod spec §5). With a fourth word, every
+     * human gets that difficulty mode after the build, as the mod's world build gives the lobby's (SOS-69).
      */
     static String newWorld(String args) {
         String[] a = args.trim().split("\\s+");
-        if (a.length != 3 || !a[1].equals("auto")) {
-            throw new IllegalArgumentException("SOSDET rig: newworld <seed> auto <n>, not " + args);
+        if (a.length < 3 || a.length > 4 || !a[1].equals("auto")) {
+            throw new IllegalArgumentException("SOSDET rig: newworld <seed> auto <n> [difficulty], not " + args);
         }
         int n = Integer.parseInt(a[2]);
         // the rig builds in the game it loaded, unlike the mod's fresh game: its NPCs and armies go while they still exist
@@ -122,6 +123,11 @@ final class RigHumans {
             starts[k] = new HumanStart(race, "Human " + k, null, xs[k], ys[k]);
         }
         Engine.buildWorld(starts);
+        if (a.length == 4) {
+            for (int k = 0; k < n; k++) {
+                ((game.faction.player.Player) FACTIONS.getByIndex(k)).bonusesCustom.setMode(a[3]);
+            }
+        }
         StringBuilder b = new StringBuilder(state()).append(",\"locations\":[");
         for (int k = 0; k < n; k++) {
             b.append(k == 0 ? "" : ",").append('[').append(xs[k]).append(',').append(ys[k]).append(']');
