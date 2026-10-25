@@ -136,6 +136,11 @@ public final class Hooks {
      * A speed change from the log, at its step: the step length from the next step on, the speed line (with the host
      * player's speed and the PC that held it down, or -1), and, when every PC follows it, this PC's game speed.
      */
+    /** The host's desync hold applies at {@code step} on this PC (SOS-53). */
+    public static void desyncHold(long step, int pc, long desyncStep) {
+        Engine.session().desyncHold(step, pc, desyncStep);
+    }
+
     public static void agreedSpeed(double speed, double wanted, int slowPc) {
         Session s = Engine.session();
         s.clock.agreedSpeed(speed);

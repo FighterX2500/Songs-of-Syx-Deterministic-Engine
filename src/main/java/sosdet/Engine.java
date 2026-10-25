@@ -283,12 +283,15 @@ public final class Engine {
         if (s.streams.inStep()) {
             throw new IllegalStateException("SOSDET: a world resync is saved between steps, not inside one");
         }
-        oneHuman(s);
         long step = s.clock.step();
         GameWorldLoad.save(file);
         s.clock.runUntil(step); // the host waits for its own load too
-        return new WorldResync(step, s.hashes.epoch() + 1, s.streams.worldDraws(),
-                s.reports(s.localHuman).ledgerOut()).toBytes();
+        int[] slots = s.humans();
+        byte[][] ledgers = new byte[slots.length][];
+        for (int i = 0; i < slots.length; i++) {
+            ledgers[i] = s.reports(slots[i]).ledgerOut(); // every PC's world keeps every human's ledger (SOS-52)
+        }
+        return new WorldResync(step, s.hashes.epoch() + 1, s.streams.worldDraws(), slots, ledgers).toBytes();
     }
 
     /**
@@ -305,7 +308,10 @@ public final class Engine {
         if (s.clock.step() != r.step) {
             throw new IllegalStateException("SOSDET: a world resync for step " + r.step + " loaded at step " + s.clock.step());
         }
-        oneHuman(s);
+        if (!java.util.Arrays.equals(r.slots, s.humans())) {
+            throw new IllegalStateException("SOSDET: a world resync of human slots " + java.util.Arrays.toString(r.slots)
+                    + " loaded in a game of slots " + java.util.Arrays.toString(s.humans()));
+        }
         if (s.reports(s.localHuman).current() == null) {
             throw new IllegalStateException("SOSDET: a world resync at step " + r.step + ", before the first city report:"
                     + " the load counts the soldiers away from it");
@@ -324,17 +330,12 @@ public final class Engine {
         }
         s.worldLoads++;
         s.streams.worldDraws(r.worldDraws);
-        s.reports(s.localHuman).ledgerIn(r.ledger);
-        s.hashes.rewind(r.step, r.hashEpoch);
-        s.clock.runUntil(r.step);
-    }
-
-    /** A world resync carries one human's open changes; several humans' come after milestone 1 (plan 0004). */
-    private static void oneHuman(Session s) {
-        if (s.humans().length > 1) {
-            throw new IllegalStateException("SOSDET: a world resync with " + s.humans().length + " humans is not supported"
-                    + " yet (plan 0004)");
+        for (int slot : r.slots) {
+            s.reports(slot).ledgerIn(r.ledger(slot));
         }
+        s.hashes.rewind(r.step, r.hashEpoch);
+        s.endDesyncHold(r.step);
+        s.clock.runUntil(r.step);
     }
 
     // ------------------------------------------------------------ the AI general (requirements §3)
@@ -616,6 +617,16 @@ public final class Engine {
 
     public static double longestHoldSeconds() {
         return required().pacer.longestHoldSeconds();
+    }
+
+    /**
+     * The desync every PC holds for (SOS-53), or null. The host logs the hold when its hashes first differ; every PC
+     * applies it at the same step and stops there, while the mod's window names the PC and the host chooses: a world
+     * resync at {@link DesyncHold#holdStep} ({@link #worldResyncSave}, then {@link #worldResyncLoad} on every PC, which
+     * ends the hold), or saving and leaving ({@link #end}).
+     */
+    public static DesyncHold desyncHold() {
+        return required().desyncHold;
     }
 
     /** The first desync found, or null. */

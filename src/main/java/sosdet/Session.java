@@ -12,6 +12,7 @@ import sosdet.game.StepParts;
 import sosdet.game.SpeedLine;
 import sosdet.game.cmd.BannerDraft;
 import sosdet.game.cmd.PlanStash;
+import sosdet.hash.Desync;
 import sosdet.hash.HashLog;
 import sosdet.hash.StateSource;
 import sosdet.report.CityReport;
@@ -85,6 +86,10 @@ final class Session {
     final Pacer pacer = new Pacer(pc -> hashes.reached(pc));
     /** Every PC's game speed follows the agreed one, and the host's governor runs (SOS-42). */
     boolean followSpeed;
+    /** The desync every PC holds for, from the host's hold entry, until a resync loads it (SOS-53); or null. */
+    DesyncHold desyncHold;
+    /** Host: a hold entry was logged for the desync found now, so a second one isn't (SOS-53). */
+    boolean holdLogged;
     /** The speed line the top bar shows (null: none), and when it goes (0: while the speed is held down). */
     volatile String speedNotice;
     volatile long speedNoticeUntil;
@@ -525,10 +530,40 @@ final class Session {
         if (ai().mode() != AiMode.HOST) {
             return;
         }
+        holdForDesync();
         clock.paceCap(pacer.frame(now, clock.step(), clock.lastStep()));
         double speed = pacer.speed(now);
         if (speed > 0) {
             logSpeed(speed, pacer.wantedSpeed(), pacer.slowPc());
+        }
+    }
+
+    /**
+     * Host, every frame: the first desync its hashes show puts a hold entry in the log, so every PC, the host too,
+     * stops at that entry's step and the host chooses what follows (SOS-53). The desync and the differing PC travel in
+     * the entry, so every PC's window can name them.
+     */
+    private void holdForDesync() {
+        Desync d = hashes.desync();
+        if (d == null || holdLogged) {
+            return;
+        }
+        holdLogged = true;
+        ai().captureHold(AiEntry.ints(d.pc, (int) (d.step >>> 32), (int) d.step));
+    }
+
+    /** Every PC, as the host's hold entry applies at {@code step}: no step past it until a resync ends the hold. */
+    void desyncHold(long step, int pc, long desyncStep) {
+        desyncHold = new DesyncHold(desyncStep, pc, step);
+        clock.holdAt(step);
+    }
+
+    /** A world resync at the hold's step ends the hold (SOS-53). */
+    void endDesyncHold(long resyncStep) {
+        if (desyncHold != null && desyncHold.holdStep == resyncStep) {
+            desyncHold = null;
+            holdLogged = false;
+            clock.holdAt(StepClock.NO_LIMIT);
         }
     }
 
