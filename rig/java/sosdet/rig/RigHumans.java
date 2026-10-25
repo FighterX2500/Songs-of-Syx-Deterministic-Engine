@@ -13,6 +13,9 @@ import snake2d.util.file.FileGetter;
 import sosdet.game.GameHash;
 import sosdet.game.GameHumans;
 import sosdet.game.GameResync;
+import sosdet.Engine;
+import sosdet.HumanStart;
+import world.WORLD;
 
 /**
  * The rig's human factions (SOS-46, plan 0004): {@code makehuman} turns NPCs into humans at setup, {@code humans}
@@ -54,6 +57,90 @@ final class RigHumans {
             GameHumans.get().add(slot);
         }
         return state();
+    }
+
+    /**
+     * {@code <seed> auto <n>}: a fresh terrain from the seed on this game's map, then a world built around n humans
+     * (SOS-55): human 0 at the first free location from the map's centre outwards, the others 7 to 15 tiles from it where
+     * the terrain allows, so the 6-15-tile route rule is exercised. Every human takes this game's player's race. Reports the humans, their
+     * locations and a path check between every two of them 6 to 15 tiles apart (mod spec §5).
+     */
+    static String newWorld(String args) {
+        String[] a = args.trim().split("\\s+");
+        if (a.length != 3 || !a[1].equals("auto")) {
+            throw new IllegalArgumentException("SOSDET rig: newworld <seed> auto <n>, not " + args);
+        }
+        int n = Integer.parseInt(a[2]);
+        // the rig builds in the game it loaded, unlike the mod's fresh game: its NPCs and armies go while they still exist
+        while (FACTIONS.NPCs().size() > 0) {
+            FACTIONS.remove(FACTIONS.NPCs().get(0), false);
+        }
+        while (FACTIONS.player().armies().all().size() > 0) {
+            FACTIONS.player().armies().all().get(0).disband();
+        }
+        WORLD.GEN().seed = Integer.parseInt(a[0]);
+        WORLD.GEN().map = null;
+        snake2d.util.misc.ACTION none = () -> {
+        };
+        WORLD.TERRAIN().saver().generate(none);
+        WORLD.LANDMARKS().saver().generate(none);
+        WORLD.GEN().hasGeneratedTerrain = true;
+        int[] xs = new int[n];
+        int[] ys = new int[n];
+        int cx = WORLD.TWIDTH() / 2;
+        int cy = WORLD.THEIGHT() / 2;
+        for (int k = 0; k < n; k++) {
+            boolean found = false;
+            for (int pass = 0; pass < 2 && !found; pass++) // 7 to 15 tiles from human 0 first, then anywhere
+            for (int rad = 0; rad < WORLD.TWIDTH() && !found; rad++) {
+                for (int dy = -rad; dy <= rad && !found; dy++) {
+                    for (int dx = -rad; dx <= rad && !found; dx++) {
+                        if (Math.max(Math.abs(dx), Math.abs(dy)) != rad) {
+                            continue; // the ring at this radius only
+                        }
+                        int x = (k == 0 ? cx : xs[0]) + dx;
+                        int y = (k == 0 ? cy : ys[0]) + dy;
+                        double d = Math.hypot(x - xs[0], y - ys[0]);
+                        if (k > 0 && pass == 0 && (d < 7 || d > 15)) {
+                            continue;
+                        }
+                        if (Engine.locationProblem(x, y, java.util.Arrays.copyOf(xs, k), java.util.Arrays.copyOf(ys, k)) == null) {
+                            xs[k] = x;
+                            ys[k] = y;
+                            found = true;
+                        }
+                    }
+                }
+            }
+            if (!found) {
+                throw new IllegalStateException("SOSDET rig: no location for human " + k + " near " + xs[0] + "," + ys[0]);
+            }
+        }
+        HumanStart[] starts = new HumanStart[n];
+        String race = FACTIONS.player().race().key;
+        for (int k = 0; k < n; k++) {
+            starts[k] = new HumanStart(race, "Human " + k, null, xs[k], ys[k]);
+        }
+        Engine.buildWorld(starts);
+        StringBuilder b = new StringBuilder(state()).append(",\"locations\":[");
+        for (int k = 0; k < n; k++) {
+            b.append(k == 0 ? "" : ",").append('[').append(xs[k]).append(',').append(ys[k]).append(']');
+        }
+        b.append("],\"routes\":[");
+        boolean first = true;
+        for (int i = 0; i < n; i++) {
+            for (int j = i + 1; j < n; j++) {
+                double d = Math.hypot(xs[i] - xs[j], ys[i] - ys[j]);
+                if (d < 6 || d > 15) {
+                    continue;
+                }
+                boolean ok = WORLD.PATH().path(xs[i], ys[i], xs[j], ys[j]) != null;
+                b.append(first ? "" : ",").append(String.format(Locale.ROOT, "{\"a\":%d,\"b\":%d,\"tiles\":%.1f,\"ok\":%b}",
+                        i, j, d, ok));
+                first = false;
+            }
+        }
+        return b.append(']').toString();
     }
 
     /** The engine's world hash and every human faction, as JSON. */

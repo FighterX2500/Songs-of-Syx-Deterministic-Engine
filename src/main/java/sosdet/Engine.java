@@ -10,6 +10,7 @@ import sosdet.game.GameAi;
 import sosdet.game.GameHumans;
 import sosdet.game.GameResync;
 import sosdet.game.GameWorldLoad;
+import sosdet.game.GameWorldSetup;
 import sosdet.game.OwnArmy;
 import sosdet.report.CityReport;
 import sosdet.hash.Desync;
@@ -365,6 +366,37 @@ public final class Engine {
     /** Host: the AI log written since the last call, for the mod to send to every peer. */
     public static byte[] aiLogOut() {
         return required().ai().logOut();
+    }
+
+    // ------------------------------------------------------------ world setup (SOS-55, plan 0005)
+
+    /**
+     * Setup: why a human can't start at {@code tx, ty}, as {@code WorldGen.playerX/playerY} (the terrain, or closer than
+     * {@link HumanStart#MIN_DISTANCE} tiles to one of the other humans' locations), or null. Every PC's location picker
+     * asks it; needs a game with its terrain generated, no session.
+     */
+    public static String locationProblem(int tx, int ty, int[] otherTx, int[] otherTy) {
+        String p = GameWorldSetup.terrainProblem(tx, ty);
+        return p != null ? p : HumanStart.tooClose(tx, ty, otherTx, otherTy);
+    }
+
+    /**
+     * Setup, on the one PC that builds the world (owner, 2026-10-25): the confirmed terrain becomes a world with a
+     * capital at each human's location, NPC countries and routes around them as vanilla makes them, and this PC's city
+     * at {@code humans[0]}'s capital. {@code humans[0]} is slot 0, this PC's; the others take slots 1 to N-1 in order.
+     * Then this PC saves, and every PC, this one too, loads that save before step 0.
+     */
+    public static void buildWorld(HumanStart[] humans) {
+        String p = HumanStart.problem(humans);
+        if (p != null) {
+            throw new IllegalArgumentException("SOSDET: " + p);
+        }
+        GameWorldSetup.build(humans);
+    }
+
+    /** Setup: this PC's player's banner, as {@link HumanStart} carries it to the PC that builds the world. */
+    public static byte[] bannerBytes() {
+        return GameWorldSetup.bannerBytes();
     }
 
     /**
