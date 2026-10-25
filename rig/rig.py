@@ -47,7 +47,8 @@ SSH = ["ssh", "-i", REMOTE_KEY, "-o", "BatchMode=yes", "-o", "ConnectTimeout=20"
 REMOTE_WINDOW = (1600, 900)  # a watched remote copy's window (the laptop: 1920x1080)
 RELAY, RELAY_SRC, RELAY_PORT = BUILD / "rig" / "relay", ROOT / "rig" / "relay" / "Relay.java", 47710
 # what a remote copy reads from the copies on this PC; everything else stays here
-SHARED = "hashes.bin,ai-host.log,reports.bin,resync.save,resync.state,wresync.save,wresync.state,wresync.state.done"
+SHARED = ("hashes.bin,ai-host.log,reports.bin,resync.save,resync.state,wresync.save,wresync.state,wresync.state.done,"
+          "battle.save,battle.done")
 
 
 def log(msg):
@@ -997,6 +998,8 @@ def main():
             for o in copies:
                 if o.k != c.k:
                     c.send("reportsin %d %s" % (o.k - 1, o.rig / "reports.bin"), "reportsin")
+                # a battle on the battle map: the battle PC's battle save, which every copy loads (plan 0006)
+                c.send("battledir %d %s" % (o.k - 1, o.rig), "battledir")
         if args.follow:
             # copy 1's city reports go to the followers through a file, as the mod will send them over the network
             if c.k == 1:

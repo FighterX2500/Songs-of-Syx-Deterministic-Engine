@@ -184,14 +184,15 @@ public final class Hooks {
         if (s.ownCity && s.clock.step() == 0) {
             s.checkPcHumans();
         }
-        if (s.ownCity && s.reportsFrom < 0 && s.reports(s.localHuman).current() == null
+        if (s.ownCity && s.battle == null && s.reportsFrom < 0 && s.reports(s.localHuman).current() == null
                 && !s.reports(s.localHuman).pending()) {
             // the load report goes out before this PC waits for the others' (SOS-46): with several humans every PC waits
             // for every other's first report, which none would send from a world part it may not run
             // taken at the last step run, so a regular report the next step takes is never a repeat of it
             s.takeReport(s.clock.step(), s.clock.step() + 1);
         }
-        if (s.battleLeaving || !s.ai().mayRun(s.clock.step() + 1) || !s.worldMayRun(s.clock.step() + 1)) {
+        boolean battleAwaited = s.battle != null && s.battle.awaiting; // the battle PC's battle isn't loaded yet
+        if (s.battleLeaving || battleAwaited || !s.ai().mayRun(s.clock.step() + 1) || !s.worldMayRun(s.clock.step() + 1)) {
             s.clock.hold();
             return false;
         }
@@ -229,8 +230,10 @@ public final class Hooks {
             s.txns.apply(s.ownTxns); // this PC's human's only (ADR 0004)
         }
         if (s.hashes.due(step)) {
-            // an own city's draws are its own: the world part's alone are counted (ADR 0005 §1)
-            long draws = s.ownCity ? s.streams.worldDraws() : s.streams.drawsSinceLoad();
+            // an own city's draws are its own: the world part's alone are counted (ADR 0005 §1); in a battle every PC
+            // runs the same game, its draws counted from the battle's load (plan 0006)
+            boolean battleRuns = s.battle != null && !s.battle.awaiting;
+            long draws = s.ownCity && !battleRuns ? s.streams.worldDraws() : s.streams.drawsSinceLoad();
             long clock = HashLog.mix(HashLog.mix(HashLog.mix(HashLog.start(), step), draws), s.ai().applied());
             if (s.ai().commanders().set()) {
                 clock = HashLog.mix(clock, s.ai().commanders().hash()); // left out until a table is set (SOS-15)
@@ -306,16 +309,18 @@ public final class Hooks {
                 throw new IllegalStateException("SOSDET: " + s.humans().length + " humans need own-city mode: each"
                         + " human's city runs on its own PC");
             }
-            if (s.reports(s.localHuman).current() == null && !s.reports(s.localHuman).pending()) {
+            // in a battle the world stands still (spec §4) and no city runs: no reports are taken or read (plan 0006)
+            boolean battleRuns = s.battle != null && !s.battle.awaiting;
+            if (!battleRuns && s.reports(s.localHuman).current() == null && !s.reports(s.localHuman).pending()) {
                 s.takeReport(step, step);
             }
-            if (Reports.takenAt(step)) {
+            if (!battleRuns && Reports.takenAt(step)) {
                 s.takeReport(step, step + Reports.DELAY);
             }
             s.part = part;
             s.streams.reseed(s.worldSeed(step));
             s.streams.worldPart(true);
-            int[] humans = s.humans();
+            int[] humans = battleRuns ? Session.NO_ARMIES : s.humans();
             for (int h : humans) {
                 s.currentHuman = h; // a report's inputs act for its own human
                 s.reports(h).applyDue(step, s.inputApplier());
@@ -352,7 +357,8 @@ public final class Hooks {
     /** Whether a city command PC {@code pc} gave applies here: always in co-op; an own city's only on its own PC. */
     public static boolean cityCommandHere(int pc) {
         Session s = Engine.session();
-        return s == null || !s.ownCity || pc == s.ai().localPc();
+        // in a battle every PC runs the battle PC's game, so its commands apply everywhere (plan 0006)
+        return s == null || !s.ownCity || pc == s.ai().localPc() || s.battle != null && !s.battle.awaiting;
     }
 
     /** True when the resource updates in this part of the step. */
@@ -1427,6 +1433,9 @@ public final class Hooks {
                 VIEW.inters().load.deactivate();
             }
         }
+        for (Runnable r : s.afterLoads) {
+            r.run(); // the new game is set: the mod puts its per-update actions and windows in it again (plan 0006)
+        }
     }
 
     /**
@@ -1545,7 +1554,9 @@ public final class Hooks {
         s.worldPromptClose = close;
         s.worldPromptTimeout = timeout;
         s.worldPromptArmies = armies;
-        s.worldPromptHuman = s.part == StepParts.WORLD_PART ? s.currentHuman : s.localHuman;
+        // a battle's result asks the battle's human on every PC; it opens outside the world part (plan 0006)
+        s.worldPromptHuman = s.battle != null ? s.battle.human
+                : s.part == StepParts.WORLD_PART ? s.currentHuman : s.localHuman;
         s.promptTimer.open();
         return s.worldPromptHuman == s.localHuman;
     }
@@ -1685,6 +1696,48 @@ public final class Hooks {
         } finally {
             s.streams.leave();
         }
+        if (s.battle != null && !s.battle.awaiting) {
+            s.battle = null; // every PC is back in its own city: the reports go on (plan 0006)
+            Engine.feedHeldReports(s);
+        }
+    }
+
+    /**
+     * Own-city mode, the world-battle prompt's Engage, inside the world part on every PC (plan 0006): the battle of
+     * {@code human}. Every PC saves its own city and generates a battle, on a stream of its own: only the battle PC's
+     * is kept, which every PC then loads ({@link Engine#battleIn}). The world stream goes on alike after it: reseeded,
+     * its draw count put back. No step runs past this one until the battle is loaded.
+     */
+    public static void ownCityEngage(int human, Runnable engage) {
+        Session s = Engine.session();
+        long step = s.clock.step();
+        OwnBattle b = new OwnBattle(step, human, s.pcOf(human), s.streams.worldDraws());
+        s.battle = b;
+        s.streams.reseed(s.battleSeed(step));
+        try {
+            engage.run();
+        } finally {
+            s.streams.reseed(s.afterEngageSeed(step));
+            s.streams.worldDraws(b.worldDraws);
+        }
+    }
+
+    /** The human the open world-battle prompt asks (SOS-46); read before a decision closes it. */
+    public static int worldPromptHuman() {
+        Session s = Engine.session();
+        return s == null ? 0 : s.worldPromptHuman;
+    }
+
+    /** True while the engine itself loads a battle save ({@link Engine#battleIn}), which no hook turns into a command. */
+    public static boolean battleLoadingNow() {
+        Session s = Engine.session();
+        return s != null && s.battleLoading;
+    }
+
+    /** True in own-city mode from a battle's Engage until every PC is back in its city (plan 0006). */
+    public static boolean ownCityBattle() {
+        Session s = Engine.session();
+        return s != null && s.battle != null;
     }
 
     /** True once a map battle has ended in this step: no other end, retreat or close, applies after it. */

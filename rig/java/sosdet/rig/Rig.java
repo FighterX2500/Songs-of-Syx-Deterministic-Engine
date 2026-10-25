@@ -270,6 +270,9 @@ public final class Rig implements SCRIPT {
         private final List<Path> reportsIn = new ArrayList<>();
         private final List<Integer> reportsInPcs = new ArrayList<>();
         private long[] reportsOffsets = new long[0];
+        // own-city battles (plan 0006): each copy's rig folder by PC, where the battle PC puts its battle save
+        private final java.util.Map<Integer, Path> battleDirs = new java.util.HashMap<>();
+        private long battleLoadedAt = -1;
         // world resync (SOS-38): copy 1 saves at wresyncStep; every copy, copy 1 too, loads only the world from it
         private long wresyncStep = -1;
         private boolean wresyncSaver;
@@ -346,6 +349,7 @@ public final class Rig implements SCRIPT {
             exchangeAiLog();
             exchangeOrders();
             exchangeReports();
+            exchangeBattle();
             exchangeHashes();
             speedEvents();
             if (traceFrom >= 0 && Engine.active() && Engine.step() >= traceFrom) {
@@ -458,6 +462,40 @@ public final class Rig implements SCRIPT {
                 }
             } catch (IOException e) {
                 throw new IllegalStateException("SOSDET rig: report file", e);
+            }
+        }
+
+        /**
+         * Own-city battles (plan 0006): the battle PC writes its battle to its rig folder ({@code battle.save}), then
+         * the Engage step to {@code battle.done}; every copy, that one too, loads it once the marker names this battle's
+         * step. Fixed names, so the relay mirrors them to a copy on another PC. Between frames.
+         */
+        private void exchangeBattle() {
+            if (!Engine.active() || battleDirs.isEmpty()) {
+                return;
+            }
+            try {
+                byte[] out = Engine.battleOut();
+                sosdet.OwnBattle b = Engine.battle();
+                if (out != null) {
+                    Path dir = battleDirs.get(b.pc);
+                    Files.write(dir.resolve("battle.save"), out);
+                    Files.write(dir.resolve("battle.done"), Long.toString(b.step).getBytes(StandardCharsets.UTF_8));
+                    event("battleout", String.format(Locale.ROOT, "\"step\":%d,\"bytes\":%d", b.step, out.length));
+                }
+                if (b == null || !b.awaiting() || battleLoadedAt == b.step) {
+                    return;
+                }
+                Path done = battleDirs.get(b.pc).resolve("battle.done");
+                if (!Files.exists(done)
+                        || !new String(Files.readAllBytes(done), StandardCharsets.UTF_8).trim().equals(Long.toString(b.step))) {
+                    return;
+                }
+                battleLoadedAt = b.step;
+                Engine.battleIn(Files.readAllBytes(battleDirs.get(b.pc).resolve("battle.save")));
+                event("battlein", String.format(Locale.ROOT, "\"step\":%d,\"human\":%d,\"pc\":%d", b.step, b.human, b.pc));
+            } catch (IOException e) {
+                throw new IllegalStateException("SOSDET rig: battle file", e);
             }
         }
 
@@ -1023,6 +1061,10 @@ public final class Rig implements SCRIPT {
                 ownCity = true;
                 event("owncity", "");
                 return;
+            case "battledir":
+                battleDirs.put(Integer.parseInt(c[1]), Paths.get(rest(Arrays.copyOfRange(c, 1, c.length))));
+                event("battledir", "\"pc\":" + c[1]);
+                break;
             case "reportsout":
                 reportsOutFile = Paths.get(rest(c));
                 Files.deleteIfExists(reportsOutFile);

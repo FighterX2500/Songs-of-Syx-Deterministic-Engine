@@ -6,14 +6,12 @@ import game.faction.FACTIONS;
 import init.race.RACES;
 import init.resources.RESOURCES;
 import init.trade.TR;
-import snake2d.util.color.COLOR;
 import snake2d.util.misc.ACTION;
 import sosdet.Engine;
 import sosdet.Hooks;
 import sosdet.ai.CmdReader;
 import sosdet.ai.CmdWriter;
 import sosdet.game.BattleArmies;
-import view.main.VIEW;
 import world.army.AD;
 import world.battle.spec.BATTLE_RESULT;
 import world.battle.spec.WBattleResult;
@@ -29,8 +27,8 @@ import world.battle.spec.WBattleSpec;
  * is open ({@code Hooks.armyHeld}). When nobody answers within 30 s at the agreed speed, every PC gives the default
  * answer at the same step ({@link #timedOut}; spec §16, owner 2026-10-25, SOS-45).
  *
- * <p>Engage fights the battle on the battle map on every PC ({@link MapBattles}); in own-city mode it is refused with
- * a notice, as the battle would replace each PC's own city.
+ * <p>Engage fights the battle on the battle map on every PC ({@link MapBattles}); in own-city mode the asked human's
+ * PC's battle is loaded on every PC, and each PC returns to its own city after it (plan 0006).
  */
 public final class WorldBattles {
 
@@ -43,16 +41,13 @@ public final class WorldBattles {
     public static final int RETREAT = 2;
     /** The siege prompt's Wait: closes it, the siege goes on. */
     public static final int WAIT = 3;
-    /** Engage: the battle is fought on the battle map, on every PC (co-op only; {@link MapBattles}, SOS-32). */
+    /** Engage: the battle is fought on the battle map, on every PC ({@link MapBattles}, SOS-32; own cities: plan 0006). */
     public static final int ENGAGE = 4;
 
     /** {@link #siegeResult} choices. */
     public static final int OCCUPY = 1;
     public static final int ABANDON = 2;
     public static final int PUPPET = 3;
-
-    static final String ENGAGE_NOTICE = "SOSDET: fighting a world battle on the battle map doesn't work with own "
-            + "cities yet. Choose auto-resolve or retreat.";
 
     static final List<Command> ALL = List.of(
             new Command(DECIDE, "worldBattleDecide", r -> applyDecide(r.i())),
@@ -85,6 +80,7 @@ public final class WorldBattles {
             return false;
         }
         WBattleSpec spec = (WBattleSpec) open;
+        int asked = Hooks.worldPromptHuman();
         Hooks.worldPromptClose();
         if (choice == AUTO) {
             spec.auto();
@@ -92,9 +88,10 @@ public final class WorldBattles {
             spec.retreat();
         } else if (choice == ENGAGE) {
             if (Hooks.ownCity()) {
-                throw new IllegalStateException("SOSDET: Engage in own-city mode");
+                Hooks.ownCityEngage(asked, spec::engage); // the asked human's PC's battle goes to every PC (plan 0006)
+            } else {
+                spec.engage(); // saves the game, generates the battle on the step's stream and opens it (MapBattles)
             }
-            spec.engage(); // saves the game, generates the battle on the step's stream and opens it (MapBattles)
         } else if (choice != WAIT) {
             throw new IllegalStateException("SOSDET: world battle choice " + choice);
         }
@@ -184,17 +181,10 @@ public final class WorldBattles {
         return true;
     }
 
-    /**
-     * Hook in the prompt's Engage buttons: in a session (true) a command, which fights the battle on every PC; in own-city
-     * mode refused with a notice, and the prompt stays open (the battle would replace each PC's own city).
-     */
+    /** Hook in the prompt's Engage buttons: in a session (true) a command, which fights the battle on every PC. */
     public static boolean engage() {
         if (!Commands.capturing()) {
             return false;
-        }
-        if (Hooks.ownCity()) {
-            VIEW.inters().fullScreen.activate(ENGAGE_NOTICE, COLOR.WHITE100, null);
-            return true;
         }
         Commands.capture(new CmdWriter(DECIDE).i(ENGAGE));
         return true;

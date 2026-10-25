@@ -261,13 +261,96 @@ public final class Engine {
         if (s.loading) {
             throw new IllegalStateException("SOSDET: reports from PC " + pc + " while the game loads; feed them after the load");
         }
+        if (s.battle != null) {
+            // the battle's loads clear the feeds: kept until this PC is back in its own city (plan 0006)
+            s.heldReports.add(new Object[] {pc, bytes.clone()});
+            return;
+        }
+        readReports(s, pc, bytes, -1);
+    }
+
+    /** Another PC's report bytes into its feed; reports taken before {@code from} are dropped. */
+    private static void readReports(Session s, int pc, byte[] bytes, long from) {
         for (byte[] r : s.feedIn(pc).read(bytes)) {
             CityReport c = CityReport.fromBytes(r, s.city().layout());
             if (s.reportsFrom < 0 && c.faction != s.pcHumans[pc]) {
                 throw new IllegalArgumentException("SOSDET: PC " + pc + " sent a city report of faction " + c.faction
                         + ", its human is slot " + s.pcHumans[pc]);
             }
-            s.reportReceived(c);
+            if (c.takenAt >= from) {
+                s.reportReceived(c);
+            }
+        }
+    }
+
+    /**
+     * Back in its own city after a battle: the reports that came in during it. Those taken before the return belong to
+     * the cities before the battle, which the return's load replaced (plan 0006).
+     */
+    static void feedHeldReports(Session s) {
+        java.util.List<Object[]> held = new java.util.ArrayList<>(s.heldReports);
+        s.heldReports.clear();
+        for (Object[] h : held) {
+            readReports(s, (Integer) h[0], (byte[]) h[1], s.clock.step());
+        }
+    }
+
+    // ------------------------------------------------------------ battles with own cities (plan 0006, SOS-61)
+
+    /**
+     * Runs {@code action} after every load of a whole game in this session: a battle's start and end, a resync. Each
+     * such load builds a new game, without the per-update actions and windows the mod added to the old one; the action
+     * adds them again. Game thread, outside the step.
+     */
+    public static void afterEachLoad(Runnable action) {
+        required().afterLoads.add(action);
+    }
+
+    /**
+     * Own-city mode: the battle on the battle map, from its Engage step until every PC is back in its own city, or
+     * null. While {@link OwnBattle#awaiting()}, every PC holds at {@link OwnBattle#step} until it has loaded the battle
+     * PC's battle: the mod carries {@link #battleOut} from that PC to every PC's {@link #battleIn}.
+     */
+    public static OwnBattle battle() {
+        return required().battle;
+    }
+
+    /**
+     * Between steps, on the battle PC (its human's): the battle it generated at Engage, as save bytes for every PC's
+     * {@link #battleIn}, once; null on every other PC, before Engage, and after the first call.
+     */
+    public static byte[] battleOut() {
+        Session s = required();
+        OwnBattle b = s.battle;
+        if (b == null || !b.awaiting || b.sent || b.pc != s.ai().localPc() || s.streams.inStep()) {
+            return null;
+        }
+        b.sent = true;
+        return sosdet.game.cmd.MapBattles.battleSave();
+    }
+
+    /**
+     * Every PC, the battle PC too, between steps at the Engage step: loads the battle PC's battle, as Restart reloads a
+     * battle (SOS-41). The session goes on at this step with the battle running on every PC alike.
+     */
+    public static void battleIn(byte[] bytes) {
+        Session s = required();
+        OwnBattle b = s.battle;
+        if (b == null || !b.awaiting) {
+            throw new IllegalStateException("SOSDET: a battle save with no battle awaiting one");
+        }
+        if (s.streams.inStep()) {
+            throw new IllegalStateException("SOSDET: a battle is loaded between steps, not inside one");
+        }
+        if (s.clock.step() != b.step) {
+            throw new IllegalStateException("SOSDET: the battle of step " + b.step + " loaded at step " + s.clock.step());
+        }
+        s.battleLeaving = true; // the load goes on at this step, as a battle's restart does
+        s.battleLoading = true;
+        try {
+            sosdet.game.cmd.MapBattles.loadBattle(bytes);
+        } finally {
+            s.battleLoading = false;
         }
     }
 
