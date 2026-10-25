@@ -93,6 +93,28 @@ public final class WorldActions {
             });
             return true;
         }
+        case "wcorrupt": { // wcorrupt [army]: a test desync, on this PC only (SOS-52): the second human's rebellion
+            // timer +1000 s (in the world hash, kept in SOSDET_EVENTS); with an army, also that army's move remainder
+            // (the PT3 kind, outside the hash until the army moves)
+            int army = a.length > 1 ? Integer.parseInt(a[1]) : -1;
+            Rig.later(() -> {
+                try {
+                    java.lang.reflect.Field timer = game.events.world.EventWorldRebellion.class.getDeclaredField("timer");
+                    timer.setAccessible(true);
+                    double[] t = (double[]) timer.get(GAME.events().rebellion);
+                    t[1] += 1000;
+                    if (army >= 0) {
+                        java.lang.reflect.Field movement = world.map.pathing.WPath.class.getDeclaredField("movement");
+                        movement.setAccessible(true);
+                        movement.setFloat(army(army).path(), 0.9f);
+                    }
+                } catch (ReflectiveOperationException e) {
+                    throw new IllegalStateException("SOSDET rig: wcorrupt", e);
+                }
+                Rig.note("corrupted step " + Engine.step() + " rebellion timer of human 2" + (army >= 0 ? ", army " + army + " remainder" : ""));
+            });
+            return true;
+        }
         case "wstatus": // wstatus: notes the player's slot, treasury, capital, regions, armies and wars (a probe for an agent player)
             Rig.later(() -> Rig.note(status()));
             return true;

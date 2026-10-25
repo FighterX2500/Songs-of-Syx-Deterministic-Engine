@@ -32,6 +32,9 @@ import snake2d.util.sets.KeyMap;
 import snake2d.util.sets.LIST;
 import util.data.DataO;
 import util.keymap.RMAPS;
+import world.WORLD;
+import world.entity.WEntity;
+import world.map.pathing.WPath;
 
 /**
  * Loads the world's sections of a save into the running game and keeps this PC's city (ADR 0005 §5, SOS-38): the
@@ -45,9 +48,11 @@ public final class GameWorldLoad {
     /**
      * The sections the world is in: the map's resources, every faction, the raiders (the world-load spike); the
      * calendar, which the world's events and wars count by; the temporary boosts of regions and factions; and the
-     * world's events, without the city's ({@link #EVENTS_KEY}) (SOS-32).
+     * world's events, without the city's ({@link #EVENTS_KEY}) (SOS-32); and the engine's stores, relations and event
+     * timers of every human but slot 0 (SOS-52). Not the human slots: they are set once, and a resync checks they match.
      */
-    public static final List<String> KEYS = Arrays.asList("TIME", "WORLD", "FACTIONS", "RAIDING", "TEMP_EVENTS", "EVENTS");
+    public static final List<String> KEYS = Arrays.asList("TIME", "WORLD", "FACTIONS", "RAIDING", "TEMP_EVENTS", "EVENTS",
+            GameCityDivs.KEY, GameRelations.KEY, GameEvents.KEY);
     /** Saved and loaded with only the world's events ({@link StepParts#worldEvent}): the city's are each PC's own. */
     private static final String EVENTS_KEY = "EVENTS";
 
@@ -76,6 +81,8 @@ public final class GameWorldLoad {
     private static final Field BOOST_DATAS = field(TmpBoosting.class, "datas");
     /** Room for the player's city-owned data: a late-game city's is a few hundred KB. */
     private static final int KEEP_BYTES = 1 << 24;
+    /** An entity's sub-pixel move remainder, which no save holds and a load leaves as it was (SOS-52). */
+    private static final Field MOVEMENT = field(WPath.class, "movement");
 
     private GameWorldLoad() {
     }
@@ -103,6 +110,7 @@ public final class GameWorldLoad {
         }
         keep.save();
         sections(save);
+        resetMoveRemainders();
         try {
             FileGetter back = new FileGetter(scratch);
             load(p.credits(), back);
@@ -226,6 +234,29 @@ public final class GameWorldLoad {
                 throw new IllegalStateException("SOSDET: world event " + k + " read " + (f.getPosition() - end + le)
                         + " of " + le + " bytes" + VERSION);
             }
+        }
+    }
+
+    /**
+     * Zeroes every world entity's move remainder (armies, caravans). The save doesn't hold it, so a load into the
+     * running game would keep each PC's own, and a remainder that differs between PCs (the PT3 kind of desync) would
+     * outlive the resync. Every PC, the host included, loads the resync, so every PC then has 0 (owner, 2026-10-25).
+     */
+    private static void resetMoveRemainders() {
+        resetMoveRemainders(WORLD.ENTITIES().allFast());
+        resetMoveRemainders(WORLD.ENTITIES().allSlow());
+    }
+
+    private static void resetMoveRemainders(LIST<WEntity> entities) {
+        try {
+            for (int i = 0; i < entities.size(); i++) { // an index loop: snake2d lists share one iterator
+                WPath p = entities.get(i).path();
+                if (p != null) {
+                    MOVEMENT.setFloat(p, 0);
+                }
+            }
+        } catch (IllegalAccessException e) {
+            throw new IllegalStateException("SOSDET: cannot reset " + MOVEMENT + VERSION, e);
         }
     }
 
