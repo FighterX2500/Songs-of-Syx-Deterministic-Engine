@@ -567,7 +567,7 @@ def scenario_saves(args):
     return saves, autoload
 
 
-def make_humans(game, saves, n, run_dir, new_world=None):
+def make_humans(game, saves, n, run_dir, new_world=None, difficulty=None):
     """--humans: copy 1 makes n - 1 NPCs humans in the save and saves it, before the run; every copy then starts from
     that save (SOS-46). With --new-world SEED it builds a fresh world around n humans instead (SOS-55). Returns the saves
     and the human slots, slot 0 first."""
@@ -582,7 +582,7 @@ def make_humans(game, saves, n, run_dir, new_world=None):
     if new_world is None:
         made = c.send("makehuman auto %d" % (n - 1), "makehuman", 600)
     else:
-        made = c.send("newworld %d auto %d" % (new_world, n), "newworld", 900)
+        made = c.send("newworld %d auto %d%s" % (new_world, n, " " + difficulty if difficulty else ""), "newworld", 900)
         log("new world from seed %d: humans at %s" % (new_world, made["locations"]))
         for r in made["routes"]:
             log("route between humans %d and %d, %.1f tiles apart: %s" % (r["a"], r["b"], r["tiles"],
@@ -800,6 +800,9 @@ def main():
     ap.add_argument("--new-world", type=int, default=None,
                     help="with --humans N: copy 1 builds a fresh world from this terrain seed around N humans (SOS-55,"
                          " Engine.buildWorld) instead of turning NPCs into humans; every copy then loads it")
+    ap.add_argument("--difficulty", default=None,
+                    help="with --new-world: every human gets this difficulty mode (a file in the game's player/mode"
+                         " folder, e.g. 00_FIRST_NAME), as the mod's world build gives the lobby's (SOS-69)")
     ap.add_argument("--on-desync", choices=["resync", "exit"], default=None,
                     help="with --humans: the host's choice when an engine finds a desync and every copy holds (SOS-53):"
                          " a world resync at the hold step, or save and exit; the copies are compared from the step after"
@@ -880,6 +883,8 @@ def main():
              % (args.pace_lead, HASH_EVERY, HASH_EVERY))
     if args.new_world is not None and not args.humans:
         fail("--new-world is for --humans runs")
+    if args.difficulty and args.new_world is None:
+        fail("--difficulty is for --new-world runs")
     if args.on_desync and (not args.humans or args.world_resync):
         fail("--on-desync is for --humans runs, without --world-resync")
     if args.world_resync and not (args.follow or args.humans):
@@ -898,7 +903,7 @@ def main():
     saves, autoload = scenario_saves(args)
     human_slots = []
     if args.humans:
-        saves, human_slots = make_humans(game, saves, args.humans, run_dir, args.new_world)
+        saves, human_slots = make_humans(game, saves, args.humans, run_dir, args.new_world, args.difficulty)
 
     if args.remote and (not REMOTE or not 1 < args.remote <= args.copies):
         fail("--remote needs SOSDET_RIG_REMOTE=user@host and a copy other than copy 1 (the host)")
