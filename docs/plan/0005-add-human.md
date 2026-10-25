@@ -1,6 +1,6 @@
 # Plan 0005: humans placed at world setup (addHuman)
 
-Card: [SOS-55](https://fighterx2500.atlassian.net/browse/SOS-55) · Date: 2026-10-25 · Status: draft for the owner's review · Mod spec: §5 Factions and starting locations · [ADR 0004](../decisions/0004-several-humans.md)
+Card: [SOS-55](https://fighterx2500.atlassian.net/browse/SOS-55) · Date: 2026-10-25 · Status: approved by the owner 2026-10-25 (one PC builds, every PC loads; small NPC states around every human) · Mod spec: §5 Factions and starting locations · [ADR 0004](../decisions/0004-several-humans.md)
 
 Game paths are relative to `<game>/info/SongsOfSyx-sources/`. Nothing here has been run yet.
 

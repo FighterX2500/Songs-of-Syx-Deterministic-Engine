@@ -117,6 +117,7 @@ import view.main.VIEW;
  *   hold                                end a run at the current step
  *   hash                                the current battle and city hashes
  *   makehuman &lt;auto n|k,k&gt;              setup: NPC slots become humans (SOS-46); then save and load
+ *   newworld &lt;seed&gt; auto &lt;n&gt;           setup: a fresh terrain and a world built around n humans (SOS-55); then save and load
  *   humans                              the human slots and their state
  *   localhuman &lt;slot&gt;                   at step 0: this copy's human (SOS-46)
  *   savegame &lt;file&gt;                     save to the run folder
@@ -833,6 +834,7 @@ public final class Rig implements SCRIPT {
             try {
                 execute(command.split("\\s+"));
             } catch (RuntimeException | ReflectiveOperationException | IOException e) {
+                e.printStackTrace(System.out); // the game log keeps where it came from
                 event("error", "\"command\":\"" + clean(command) + "\",\"message\":\"" + clean(e.toString()) + "\"");
             }
         }
@@ -1059,6 +1061,9 @@ public final class Rig implements SCRIPT {
                 return;
             case "makehuman":
                 event("makehuman", RigHumans.make(rest(c)));
+                return;
+            case "newworld":
+                event("newworld", RigHumans.newWorld(rest(c)));
                 return;
             case "humans":
                 event("humans", RigHumans.state());

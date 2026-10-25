@@ -566,9 +566,10 @@ def scenario_saves(args):
     return saves, autoload
 
 
-def make_humans(game, saves, n, run_dir):
+def make_humans(game, saves, n, run_dir, new_world=None):
     """--humans: copy 1 makes n - 1 NPCs humans in the save and saves it, before the run; every copy then starts from
-    that save (SOS-46). Returns the saves and the human slots, slot 0 first."""
+    that save (SOS-46). With --new-world SEED it builds a fresh world around n humans instead (SOS-55). Returns the saves
+    and the human slots, slot 0 first."""
     stop_copies()
     c = Copy(1, game)
     c.prepare(saves)
@@ -577,8 +578,26 @@ def make_humans(game, saves, n, run_dir):
     c.wait("loaded", 0, 600)
     move_offscreen(1)
     c.send("load sosdet-city", "loaded", 600)
-    made = c.send("makehuman auto %d" % (n - 1), "makehuman", 600)
+    if new_world is None:
+        made = c.send("makehuman auto %d" % (n - 1), "makehuman", 600)
+    else:
+        made = c.send("newworld %d auto %d" % (new_world, n), "newworld", 900)
+        log("new world from seed %d: humans at %s" % (new_world, made["locations"]))
+        for r in made["routes"]:
+            log("route between humans %d and %d, %.1f tiles apart: %s" % (r["a"], r["b"], r["tiles"],
+                                                                        "found" if r["ok"] else "NONE"))
+        if not all(r["ok"] for r in made["routes"]):
+            fail("--new-world: two humans 6-15 tiles apart have no route (mod spec 5)")
     c.send("savegame humans.save", "savegame", 600)
+    if new_world is not None:
+        # the save -> load round trip keeps every human's slot and capital (SOS-55)
+        rt = c.send("roundtrip humans.save humans-rt.save", "roundtrip", 900)
+        before = [(h["slot"], h["capitol"]) for h in made["humans"]]
+        after = [(h["slot"], h["capitol"]) for h in rt["humans"]]
+        log("round trip: humans (slot, capital) %s before, %s after the load; %d of %d sections the same, differ: %s"
+            % (before, after, rt["same"], rt["sections"], [d["key"] for d in rt["differ"]]))
+        if before != after:
+            fail("--new-world: the save -> load round trip changed the humans")
     stop_copies()
     slots = [h["slot"] for h in made["humans"]]
     if len(slots) != n:
@@ -777,6 +796,9 @@ def main():
                     help="city: N humans (SOS-46), one per copy: copy 1 first makes N - 1 NPCs humans and saves; copy k"
                          " then runs human k's city in own-city mode and reads every other copy's reports; the copies"
                          " are compared on the world only")
+    ap.add_argument("--new-world", type=int, default=None,
+                    help="with --humans N: copy 1 builds a fresh world from this terrain seed around N humans (SOS-55,"
+                         " Engine.buildWorld) instead of turning NPCs into humans; every copy then loads it")
     ap.add_argument("--world-resync", type=int, default=0,
                     help="with --follow: copy 1 saves at this step, and every copy reloads only the world from it")
     ap.add_argument("--follower-saves", default="",
@@ -851,6 +873,8 @@ def main():
     if 0 < args.pace_lead < HASH_EVERY:
         fail("--pace-lead %d: the host learns a copy's step from its hashes, every %d steps; use 0 or at least %d"
              % (args.pace_lead, HASH_EVERY, HASH_EVERY))
+    if args.new_world is not None and not args.humans:
+        fail("--new-world is for --humans runs")
     if args.world_resync and not args.follow:
         fail("--world-resync is for --follow runs; co-op runs use --resync")
     follower_saves = [s for s in args.follower_saves.split(",") if s]
@@ -867,7 +891,7 @@ def main():
     saves, autoload = scenario_saves(args)
     human_slots = []
     if args.humans:
-        saves, human_slots = make_humans(game, saves, args.humans, run_dir)
+        saves, human_slots = make_humans(game, saves, args.humans, run_dir, args.new_world)
 
     if args.remote and (not REMOTE or not 1 < args.remote <= args.copies):
         fail("--remote needs SOSDET_RIG_REMOTE=user@host and a copy other than copy 1 (the host)")
