@@ -1,6 +1,6 @@
 diff -ru -U2 a/game/battle/util/Power.java b/game/battle/util/Power.java
 --- a/game/battle/util/Power.java	2026-05-18 14:41:46.000000000 +0500
-+++ b/game/battle/util/Power.java	2026-10-25 06:35:17.631074700 +0500
++++ b/game/battle/util/Power.java	2026-10-25 07:08:59.625991900 +0500
 @@ -46,7 +46,9 @@
  	
  	private double minPower = -1;
@@ -32,7 +32,7 @@ diff -ru -U2 a/game/battle/util/Power.java b/game/battle/util/Power.java
  		double d = pget(div);
 diff -ru -U2 a/game/faction/FWorth.java b/game/faction/FWorth.java
 --- a/game/faction/FWorth.java	2026-06-25 10:49:36.000000000 +0500
-+++ b/game/faction/FWorth.java	2026-10-25 06:35:17.632071100 +0500
++++ b/game/faction/FWorth.java	2026-10-25 07:08:59.625991900 +0500
 @@ -58,8 +58,8 @@
  			}
  			for (int ei = 0; ei < STATS.EQUIP().BATTLE_ALL().size(); ei++) {
@@ -75,7 +75,7 @@ diff -ru -U2 a/game/faction/FWorth.java b/game/faction/FWorth.java
  			return cache[f.index()];
 diff -ru -U2 a/game/faction/diplomacy/DipWarPlayer.java b/game/faction/diplomacy/DipWarPlayer.java
 --- a/game/faction/diplomacy/DipWarPlayer.java	2026-04-04 17:39:24.000000000 +0500
-+++ b/game/faction/diplomacy/DipWarPlayer.java	2026-10-25 06:35:17.641084700 +0500
++++ b/game/faction/diplomacy/DipWarPlayer.java	2026-10-25 07:08:59.625991900 +0500
 @@ -42,20 +42,32 @@
  	public final Str warName = new Str(64);
  	public final Str teamName = new Str(64);
@@ -154,7 +154,7 @@ diff -ru -U2 a/game/faction/diplomacy/DipWarPlayer.java b/game/faction/diplomacy
  		int upI = -120;
 diff -ru -U2 a/game/faction/diplomacy/deal/DealBools.java b/game/faction/diplomacy/deal/DealBools.java
 --- a/game/faction/diplomacy/deal/DealBools.java	2026-05-18 09:29:22.000000000 +0500
-+++ b/game/faction/diplomacy/deal/DealBools.java	2026-10-25 06:35:17.633083700 +0500
++++ b/game/faction/diplomacy/deal/DealBools.java	2026-10-25 07:08:59.627024200 +0500
 @@ -286,7 +286,7 @@
  //			if (DIP.get(a.f(), b.f()).minLoyalty > 0 && DIP.get(a.f(), b.f()).minLoyalty > ss.minLoyalty)
  //				return ¤¤pDowngrade;
@@ -175,7 +175,7 @@ diff -ru -U2 a/game/faction/diplomacy/deal/DealBools.java b/game/faction/diploma
  			}else if (f != b.f() && DIP.WAR().is(a.f(), f)) {
 diff -ru -U2 a/game/faction/player/PTitles.java b/game/faction/player/PTitles.java
 --- a/game/faction/player/PTitles.java	2026-06-12 10:34:58.000000000 +0500
-+++ b/game/faction/player/PTitles.java	2026-10-25 06:35:17.633083700 +0500
++++ b/game/faction/player/PTitles.java	2026-10-25 07:08:59.627024200 +0500
 @@ -146,8 +146,13 @@
  		bos = new BoostCompound<PTitle>(boosters, titles) {
  
@@ -229,7 +229,7 @@ diff -ru -U2 a/game/faction/player/PTitles.java b/game/faction/player/PTitles.ja
  		
 diff -ru -U2 a/game/faction/player/emmi/Emissaries.java b/game/faction/player/emmi/Emissaries.java
 --- a/game/faction/player/emmi/Emissaries.java	2026-03-25 20:23:06.000000000 +0500
-+++ b/game/faction/player/emmi/Emissaries.java	2026-10-25 06:35:17.634113200 +0500
++++ b/game/faction/player/emmi/Emissaries.java	2026-10-25 07:08:59.628020900 +0500
 @@ -107,7 +107,10 @@
  	public final LIST<EmiType<?>> all = new ArrayList<>(assimilate, assasinate, flatter, sabotage);
  
@@ -311,7 +311,7 @@ diff -ru -U2 a/game/faction/player/emmi/Emissaries.java b/game/faction/player/em
  	public int spent() {
 diff -ru -U2 a/game/raiding/RaidingMap.java b/game/raiding/RaidingMap.java
 --- a/game/raiding/RaidingMap.java	2026-06-11 11:15:38.000000000 +0500
-+++ b/game/raiding/RaidingMap.java	2026-10-25 06:35:17.634113200 +0500
++++ b/game/raiding/RaidingMap.java	2026-10-25 07:08:59.636035000 +0500
 @@ -55,6 +55,7 @@
  	
  	private boolean dirty = true;
@@ -320,7 +320,40 @@ diff -ru -U2 a/game/raiding/RaidingMap.java b/game/raiding/RaidingMap.java
  	private final ArrayList<RaidRegion> regsAll = new ArrayList<RaidRegion>(WREGIONS.MAX);
  	private final ArrayList<RaidRegion> regsCurrent = new ArrayList<RaidRegion>(WREGIONS.MAX);
  	
-@@ -299,6 +300,11 @@
+@@ -64,12 +65,21 @@
+ 	private final Bitmap1D rtmp = new Bitmap1D(WREGIONS.MAX+1, false);
+ 	private final RECedgeIter iter = new RECedgeIter();
+ 	
+-	RaidingMap() {
++	private final int sosdetHuman; // SOSDET: the slice of the human this map is (SOS-46 M4)
++	
++	/** SOSDET: true for this map's human; false for any faction while the game has fewer humans (SOS-46 M4). */
++	private boolean sosdetMine(Faction f) {
++		int[] hs = sosdet.Hooks.humanSlots();
++		return f != null && sosdetHuman < hs.length && hs[sosdetHuman] == f.index();
++	}
++	
++	RaidingMap(int sosdetHuman) {
++		this.sosdetHuman = sosdetHuman;
+ 		new RD.RDOwnerChanger() {
+ 			
+ 			@Override
+ 			public void change(Region reg, Faction oldOwner, Faction newOwner) {
+-				if (oldOwner == FACTIONS.player() || newOwner == FACTIONS.player())
++				if (sosdetMine(oldOwner) || sosdetMine(newOwner)) // SOSDET: this map's human (SOS-46 M4)
+ 					dirty = true;
+ 			}
+ 		};
+@@ -80,7 +90,7 @@
+ 			public void change(Faction faction, Faction other, DipStance old, DipStance nn) {
+ 				if (old == nn)
+ 					return;
+-				if (faction == FACTIONS.player() || other == FACTIONS.player())
++				if (sosdetMine(faction) || sosdetMine(other)) // SOSDET: this map's human (SOS-46 M4)
+ 					dirty = true;
+ 				
+ 			}
+@@ -299,6 +309,11 @@
  //	}
  	
  	private void process() {
@@ -332,7 +365,7 @@ diff -ru -U2 a/game/raiding/RaidingMap.java b/game/raiding/RaidingMap.java
  		
  		aProcess();
  		
-@@ -433,7 +439,7 @@
+@@ -433,7 +448,7 @@
  				return;
  			}
  			
@@ -341,7 +374,7 @@ diff -ru -U2 a/game/raiding/RaidingMap.java b/game/raiding/RaidingMap.java
  				if (t == null) {
  					add(c, 1.0, null);
  					return;
-@@ -455,7 +461,7 @@
+@@ -455,7 +470,7 @@
  				Faction f = WORLD.REGIONS().faction.get(c, d);
  				if (f == null)
  					return null;
@@ -352,8 +385,17 @@ diff -ru -U2 a/game/raiding/RaidingMap.java b/game/raiding/RaidingMap.java
  			}
 diff -ru -U2 a/game/raiding/RaidingUtil.java b/game/raiding/RaidingUtil.java
 --- a/game/raiding/RaidingUtil.java	2026-02-06 15:19:52.000000000 +0500
-+++ b/game/raiding/RaidingUtil.java	2026-10-25 06:35:17.634113200 +0500
-@@ -57,7 +57,7 @@
++++ b/game/raiding/RaidingUtil.java	2026-10-25 07:08:59.637072100 +0500
+@@ -42,7 +42,7 @@
+ 		
+ 		double p = RD.MILITARY().power.getD(reg);
+ 		
+-		if (reg == FACTIONS.player().capitolRegion() && GAME.raiders().entry.get(FACTIONS.player().capitolRegion()).points() > 0) {
++		if (reg == FACTIONS.player().capitolRegion() && GAME.raiders().entry().get(FACTIONS.player().capitolRegion()).points() > 0) {
+ 			p *= 0.25;
+ 			for (WArmy a : WORLD.ENTITIES().armies.fill(reg))
+ 				if (a.faction() == reg.faction())
+@@ -57,31 +57,31 @@
  	}
  	
  	public int ransomCurrent() {
@@ -362,6 +404,34 @@ diff -ru -U2 a/game/raiding/RaidingUtil.java b/game/raiding/RaidingUtil.java
  	}
  	
  	public COORDINATE attackSpot(Raider raider) {
+ 		
+ 		double prob = 0;
+ 		
+-		for (RaidRegion r : GAME.raiders().entry.entryRegions()) {
++		for (RaidRegion r : GAME.raiders().entry().entryRegions()) {
+ 			if (defences(r.r()) < raider.army.power) {
+ 				prob += r.r().capitol() ? 10 : 1;
+ 			}
+ 		}
+ 		prob *= RND.rFloat();
+-		for (RaidRegion r : GAME.raiders().entry.entryRegions()) {
++		for (RaidRegion r : GAME.raiders().entry().entryRegions()) {
+ 			if (defences(r.r()) < raider.army.power) {
+ 				prob -= r.r().capitol() ? 10 : 1;
+ 				if (prob <= 0) {
+ 					prob = 0;
+ 					
+-					for (RaidEntryPoint e : GAME.raiders().entry.entrySpots()) {
++					for (RaidEntryPoint e : GAME.raiders().entry().entrySpots()) {
+ 						if (r.r().is(e.c()))
+ 							prob ++;
+ 					}
+ 					prob *= RND.rFloat();
+-					for (RaidEntryPoint e : GAME.raiders().entry.entrySpots()) {
++					for (RaidEntryPoint e : GAME.raiders().entry().entrySpots()) {
+ 						if (r.r().is(e.c())) {
+ 							prob --;
+ 							if (prob <= 0)
 @@ -125,7 +125,7 @@
  	
  	private void cache() {
@@ -371,9 +441,18 @@ diff -ru -U2 a/game/raiding/RaidingUtil.java b/game/raiding/RaidingUtil.java
  			return;
  		
  		if (cp == GAME.updateI())
+@@ -134,7 +134,7 @@
+ 		weakest = -1;
+ 		double power = Double.MAX_VALUE*0.5;
+ 		
+-		for (RaidRegion reg : GAME.raiders().entry.entryRegions()) {
++		for (RaidRegion reg : GAME.raiders().entry().entryRegions()) {
+ 			if (reg.r().capitol())
+ 				continue;
+ 			
 diff -ru -U2 a/util/data/DOUBLE_O.java b/util/data/DOUBLE_O.java
 --- a/util/data/DOUBLE_O.java	2024-05-08 10:24:34.000000000 +0500
-+++ b/util/data/DOUBLE_O.java	2026-10-25 06:35:17.635114100 +0500
++++ b/util/data/DOUBLE_O.java	2026-10-25 07:08:59.629025200 +0500
 @@ -28,8 +28,8 @@
  		
  		@Override
@@ -387,7 +466,7 @@ diff -ru -U2 a/util/data/DOUBLE_O.java b/util/data/DOUBLE_O.java
  			}
 diff -ru -U2 a/world/army/ADPower.java b/world/army/ADPower.java
 --- a/world/army/ADPower.java	2025-12-09 10:56:44.000000000 +0500
-+++ b/world/army/ADPower.java	2026-10-25 06:35:17.635114100 +0500
++++ b/world/army/ADPower.java	2026-10-25 07:08:59.630035800 +0500
 @@ -46,7 +46,8 @@
  	}
  	
@@ -413,7 +492,7 @@ diff -ru -U2 a/world/army/ADPower.java b/world/army/ADPower.java
  			int p = 0;
 diff -ru -U2 a/world/region/RDBoostCache.java b/world/region/RDBoostCache.java
 --- a/world/region/RDBoostCache.java	2024-11-22 17:46:48.000000000 +0500
-+++ b/world/region/RDBoostCache.java	2026-10-25 06:35:17.636119100 +0500
++++ b/world/region/RDBoostCache.java	2026-10-25 07:08:59.630035800 +0500
 @@ -29,6 +29,8 @@
  	public double get(Region reg) {
  		if (reg == null)
@@ -425,7 +504,7 @@ diff -ru -U2 a/world/region/RDBoostCache.java b/world/region/RDBoostCache.java
  			cache.set(reg, upI);
 diff -ru -U2 a/world/region/RDDistance.java b/world/region/RDDistance.java
 --- a/world/region/RDDistance.java	2026-06-17 10:48:04.000000000 +0500
-+++ b/world/region/RDDistance.java	2026-10-25 06:35:17.636119100 +0500
++++ b/world/region/RDDistance.java	2026-10-25 07:08:59.635035700 +0500
 @@ -47,32 +47,39 @@
  	private static CharSequence ¤¤Borders = "¤Borders";
  	private static CharSequence ¤¤Reachable = "¤Reachable";
@@ -567,7 +646,7 @@ diff -ru -U2 a/world/region/RDDistance.java b/world/region/RDDistance.java
  						borders.add((FactionNPC) d.reg.faction());
  				}
  			}
-@@ -295,12 +304,136 @@
+@@ -295,12 +304,150 @@
  	
  	public LIST<FactionNPC> neighs(){
  		init();
@@ -605,6 +684,20 @@ diff -ru -U2 a/world/region/RDDistance.java b/world/region/RDDistance.java
 +				return FACTIONS.getByIndex(hs[k]);
 +		}
 +		return null;
++	}
++	
++	/**
++	 * SOSDET: true when a human with {@code minRegions} to {@code maxRegions} regions reaches {@code reg}; with one
++	 * human, "the player has that many regions and {@link #reachable(Region)}" (SOS-46 M4).
++	 */
++	public boolean sosdetHumanReaches(Region reg, int minRegions, int maxRegions) {
++		int[] hs = sosdet.Hooks.humanSlots();
++		for (int k = 0; k < hs.length; k++) {
++			int n = FACTIONS.getByIndex(hs[k]).realm().regions();
++			if (n >= minRegions && n <= maxRegions && sosdetReachable(k, reg))
++				return true;
++		}
++		return false;
 +	}
 +	
 +	/** SOSDET: the slice a region's own value reads: its human owner's, else the current one's (SOS-46 M5). */
@@ -707,7 +800,7 @@ diff -ru -U2 a/world/region/RDDistance.java b/world/region/RDDistance.java
  			else {
 diff -ru -U2 a/world/region/RDMilitaryGar.java b/world/region/RDMilitaryGar.java
 --- a/world/region/RDMilitaryGar.java	2026-07-01 08:35:36.000000000 +0500
-+++ b/world/region/RDMilitaryGar.java	2026-10-25 06:35:17.636119100 +0500
++++ b/world/region/RDMilitaryGar.java	2026-10-25 07:08:59.631066700 +0500
 @@ -53,16 +53,18 @@
  	private final ArrayList<WDIV> res = new ArrayList<>(128);
  	private Region lReg = null;
@@ -876,7 +969,7 @@ diff -ru -U2 a/world/region/RDMilitaryGar.java b/world/region/RDMilitaryGar.java
  
 diff -ru -U2 a/world/region/building/RDBuildPoints.java b/world/region/building/RDBuildPoints.java
 --- a/world/region/building/RDBuildPoints.java	2026-06-17 10:48:04.000000000 +0500
-+++ b/world/region/building/RDBuildPoints.java	2026-10-25 06:35:17.637113500 +0500
++++ b/world/region/building/RDBuildPoints.java	2026-10-25 07:08:59.631066700 +0500
 @@ -60,7 +60,7 @@
  	}
  	
@@ -1048,7 +1141,7 @@ diff -ru -U2 a/world/region/building/RDBuildPoints.java b/world/region/building/
  		}
 diff -ru -U2 a/world/region/building/RDLevelsTmp.java b/world/region/building/RDLevelsTmp.java
 --- a/world/region/building/RDLevelsTmp.java	2026-06-17 10:48:06.000000000 +0500
-+++ b/world/region/building/RDLevelsTmp.java	2026-10-25 06:35:17.637113500 +0500
++++ b/world/region/building/RDLevelsTmp.java	2026-10-25 07:08:59.632068100 +0500
 @@ -29,7 +29,7 @@
  	}
  	
@@ -1060,7 +1153,7 @@ diff -ru -U2 a/world/region/building/RDLevelsTmp.java b/world/region/building/RD
  	}
 diff -ru -U2 a/world/region/pop/RDRaces.java b/world/region/pop/RDRaces.java
 --- a/world/region/pop/RDRaces.java	2026-06-08 10:30:50.000000000 +0500
-+++ b/world/region/pop/RDRaces.java	2026-10-25 06:35:17.638115700 +0500
++++ b/world/region/pop/RDRaces.java	2026-10-25 07:08:59.632068100 +0500
 @@ -4,7 +4,6 @@
  import game.boosting.BSourceInfo;
  import game.boosting.Boostable;

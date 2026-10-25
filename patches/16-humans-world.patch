@@ -1,6 +1,315 @@
+diff -ru -U2 a/game/events/faction/EventFactionExpand.java b/game/events/faction/EventFactionExpand.java
+--- a/game/events/faction/EventFactionExpand.java	2026-01-12 09:17:34.000000000 +0500
++++ b/game/events/faction/EventFactionExpand.java	2026-10-25 07:08:58.947030000 +0500
+@@ -23,7 +23,7 @@
+ 
+ public class EventFactionExpand extends EventResource{
+ 
+-	private static final double dtime = TIME.secondsPerDay()*2;
++	private final double dtime = TIME.secondsPerDay()*2; // SOSDET: an instance field, so the build's menu check passes the shipped class (SOS-46 M4)
+ 	private double timer = dtime;
+ 	private int nextFaction = RND.rInt(FACTIONS.MAX());
+ 	
+@@ -34,6 +34,12 @@
+ 	
+ 	@Override
+ 	protected void update(double ds) {
++		int sosdetBefore = sosdet.Hooks.currentHumanSwap(sosdet.Hooks.largestHuman()); // SOSDET: measured from the largest human realm (SOS-46 M4)
++		sosdetUpdate(ds);
++		sosdet.Hooks.currentHumanSwap(sosdetBefore);
++	}
++	
++	private void sosdetUpdate(double ds) {
+ 		timer -= ds*CLAMP.d(FACTIONS.player().realm().regions()/8.0, 0, 1);
+ 		if (timer > 0)
+ 			return;
+@@ -59,7 +65,7 @@
+ 		double bv = 0;
+ 		
+ 		for (RegDist d : WORLD.PATH().regFinder.all(f, Treaty.FACTION_BORDERS, WRegSel.FACTION(null))) {
+-			if (FACTIONS.player().realm().regions() == 1 && RD.DIST().reachable(d.reg))
++			if (RD.DIST().sosdetHumanReaches(d.reg, 1, 1)) // SOSDET: any human of one region that reaches it is spared (SOS-46 M4)
+ 				continue;
+ 			double v = RD.OWNER().prevOwner(d.reg) == f ? 5.0 : 1.0;
+ 			v /= d.distance;
+diff -ru -U2 a/game/events/faction/player/EventDiplomacy.java b/game/events/faction/player/EventDiplomacy.java
+--- a/game/events/faction/player/EventDiplomacy.java	2026-06-25 10:49:14.000000000 +0500
++++ b/game/events/faction/player/EventDiplomacy.java	2026-10-25 07:08:58.942032900 +0500
+@@ -28,11 +28,20 @@
+ 	private final Stance stance = new Stance();
+ 
+ 	private final EData[] datas = new EData[FACTIONS.MAX()];
++	// SOSDET: each human's entries (SOS-46 M4): [0] is datas, saved as vanilla saves it; the others go to the engine's
++	// own section. Hooks.humanIndex() picks the slice.
++	private final EData[][] sosdetDatas = new EData[sosdet.Hooks.HUMANS_MAX][];
+ 	
+ 	public EventDiplomacy() {
+ 		super("DIPLOMACY");
+ 		for (int i = 0; i < datas.length; i++)
+ 			datas[i] = new EData();
++		sosdetDatas[0] = datas;
++		for (int h = 1; h < sosdetDatas.length; h++) {
++			sosdetDatas[h] = new EData[datas.length];
++			for (int i = 0; i < datas.length; i++)
++				sosdetDatas[h][i] = new EData();
++		}
+ 		
+ 		new FactionActivityListener() {
+ 			
+@@ -44,7 +53,8 @@
+ 			
+ 			@Override
+ 			public void add(FactionNPC f) {
+-				datas[f.index()].clear();
++				for (EData[] d : sosdetDatas) // SOSDET: a faction made again: every human's entry (SOS-46 M4)
++					d[f.index()].clear();
+ 			}
+ 		};
+ 		
+@@ -52,6 +62,12 @@
+ 			
+ 			@Override
+ 			public void change(Faction faction, Faction other, DipStance old, DipStance nn) {
++				// SOSDET: the entries of the human in the change; for a change between NPCs, every human's (SOS-46 M4)
++				int sosdetH = faction instanceof game.faction.player.Player ? sosdet.Hooks.humanIndex(faction)
++						: other instanceof game.faction.player.Player ? sosdet.Hooks.humanIndex(other) : -1;
++				int sosdetEnd = sosdetH < 0 ? sosdet.Hooks.humanSlots().length : sosdetH + 1;
++				for (int sosdetK = sosdetH < 0 ? 0 : sosdetH; sosdetK < sosdetEnd; sosdetK++) {
++				EData[] datas = sosdetDatas[sosdetK];
+ 				boolean w = datas[faction.index()].welcomed;
+ 				datas[faction.index()].clear();
+ 				datas[faction.index()].welcomed = w;
+@@ -60,6 +76,7 @@
+ 				datas[other.index()].welcomed = w;
+ 				datas[other.index()].stanceMess = false;
+ 				datas[faction.index()].stanceMess = false;
++				}
+ 			}
+ 		};
+ 		
+@@ -71,13 +88,22 @@
+ 		timer -= ds*dTime*FACTIONS.NPCs().size();
+ 		while(timer < 0) {
+ 			timer ++;
++			int[] sosdetHs = sosdet.Hooks.humanSlots(); // SOSDET: each human's war timer and proposals, with that human current (SOS-46 M4)
+ 			if (ii >= FACTIONS.NPCs().size()) {
+ 				ii = 0;
+-				war.updateAll(TIME.secondsPerDay());
+-				peace.update();
++				for (int sosdetK = 0; sosdetK < sosdetHs.length; sosdetK++) {
++					int sosdetBefore = sosdet.Hooks.currentHumanSwap(sosdetHs[sosdetK]);
++					war.updateAll(TIME.secondsPerDay());
++					peace.update();
++					sosdet.Hooks.currentHumanSwap(sosdetBefore);
++				}
+ 			}
+ 			FactionNPC fa = FACTIONS.NPCs().get(ii);
+-			process(fa);
++			for (int sosdetK = 0; sosdetK < sosdetHs.length; sosdetK++) {
++				int sosdetBefore = sosdet.Hooks.currentHumanSwap(sosdetHs[sosdetK]);
++				process(fa);
++				sosdet.Hooks.currentHumanSwap(sosdetBefore);
++			}
+ 			ii++;
+ 		}
+ 		
+@@ -98,7 +124,7 @@
+ 			return;
+ 		}
+ 		
+-		EData data = datas[fa.index()];
++		EData data = sosdetDatas[sosdet.Hooks.humanIndex()][fa.index()]; // SOSDET: this human's (SOS-46 M4)
+ 		Induvidual king = fa.court().king().roy().induvidual;
+ 		
+ 		if (stance.process(fa, king, data))
+@@ -135,15 +161,38 @@
+ 	protected void clear() {
+ 		ii = 0;
+ 		timer = 0;
+-		for (int i = 0; i < datas.length; i++) {
+-			datas[i].clear();
+-		}
++		for (EData[] d : sosdetDatas) // SOSDET: every human's (SOS-46 M4)
++			for (int i = 0; i < d.length; i++)
++				d[i].clear();
+ 		war.clear();
+ 	}
+ 
+ 
+ 	public void dismissWelcome(FactionNPC f) {
+-		datas[f.index()].welcomed = true;
++		sosdetDatas[sosdet.Hooks.humanIndex()][f.index()].welcomed = true; // SOSDET: the issuer's (SOS-46 M4)
++	}
++	
++	/** SOSDET: the entries and war timer of the human of slice {@code h}, for the engine's own section (SOS-46 M4). */
++	public void sosdetSave(int h, FilePutter file) {
++		for (int i = 0; i < sosdetDatas[h].length; i++)
++			sosdetDatas[h][i].save(file);
++		war.sosdetSave(h, file);
++	}
++	
++	public void sosdetLoad(int h, FileGetter file) throws IOException {
++		for (int i = 0; i < sosdetDatas[h].length; i++)
++			sosdetDatas[h][i].load(file);
++		war.sosdetLoad(h, file);
++	}
++	
++	/** SOSDET: the war timer of the human of slice {@code h}: it grows while that human is at peace (SOS-46 M4). */
++	public double sosdetWarCount(int h) {
++		return war.sosdetWarCount(h);
++	}
++	
++	/** SOSDET: the slot of the NPC that warned the human of slice {@code h} it will attack, or -1 (SOS-46 M4). */
++	public int sosdetWarner(int h) {
++		return war.sosdetWarner(h);
+ 	}
+ 
+ 	static class EData implements SAVABLE{
+diff -ru -U2 a/game/events/world/EventWorldRebellion.java b/game/events/world/EventWorldRebellion.java
+--- a/game/events/world/EventWorldRebellion.java	2025-12-18 13:27:26.000000000 +0500
++++ b/game/events/world/EventWorldRebellion.java	2026-10-25 07:08:58.946001000 +0500
+@@ -41,9 +41,15 @@
+ 	private static CharSequence ¤¤RebellionArmy = "¤In fact they hate you so much that they have raised an army against you. You better deal with this problem before it spreads.";
+ 	
+ 	
+-	private double timer = 0;
+-	private int ri = 0;
+-	private final Bitmap1D warning = new Bitmap1D(WREGIONS.MAX, false);
++	// SOSDET: each human's timer, realm cursor and warning map (SOS-46 M4): [0] slot 0's, saved as vanilla saves them;
++	// the others go to the engine's own section. update runs once per human, with that human current.
++	private final double[] timer = new double[sosdet.Hooks.HUMANS_MAX];
++	private final int[] ri = new int[sosdet.Hooks.HUMANS_MAX];
++	private final Bitmap1D[] warning = new Bitmap1D[sosdet.Hooks.HUMANS_MAX];
++	{
++		for (int h = 0; h < warning.length; h++)
++			warning[h] = new Bitmap1D(WREGIONS.MAX, false);
++	}
+ 	
+ 	static {
+ 		D.ts(EventWorldRebellion.class);
+@@ -66,9 +72,10 @@
+ 			
+ 			@Override
+ 			public void change(Region reg, Faction oldOwner, Faction newOwner) {
+-				if (newOwner == FACTIONS.player()) {
+-					timer = 0;
+-					warning.set(reg.index(), false);
++				if (newOwner instanceof game.faction.player.Player) { // SOSDET: any human's new region, in its own slice (SOS-46 M4)
++					int h = sosdet.Hooks.humanIndex(newOwner);
++					timer[h] = 0;
++					warning[h].set(reg.index(), false);
+ 				}
+ 			}
+ 		};
+@@ -77,54 +84,84 @@
+ 	
+ 	@Override
+ 	protected void save(FilePutter file) {
+-		file.d(timer);
+-		file.i(ri);
+-		warning.save(file);
++		sosdetSave(0, file); // SOSDET: slot 0's, as vanilla saves it (SOS-46 M4)
+ 	}
+ 	
+ 	@Override
+ 	protected void load(FileGetter file) throws IOException {
+-		timer = file.d();
+-		ri = file.i();
+-		warning.load(file);
++		sosdetLoad(0, file); // SOSDET: slot 0's, as vanilla loads it (SOS-46 M4)
+ 	}
+ 	
+ 	@Override
+ 	protected void clear() {
+-		ri = 0;
+-		timer = 0;
+-		warning.setAll(false);
++		for (int h = 0; h < warning.length; h++) { // SOSDET: every human's (SOS-46 M4)
++			ri[h] = 0;
++			timer[h] = 0;
++			warning[h].setAll(false);
++		}
++	}
++	
++	/** SOSDET: the timer, realm cursor and warning map of the human of slice {@code h}, in vanilla's layout (SOS-46 M4). */
++	public void sosdetSave(int h, FilePutter file) {
++		file.d(timer[h]);
++		file.i(ri[h]);
++		warning[h].save(file);
++	}
++	
++	public void sosdetLoad(int h, FileGetter file) throws IOException {
++		timer[h] = file.d();
++		ri[h] = file.i();
++		warning[h].load(file);
++	}
++	
++	/** SOSDET: the timer of the human of slice {@code h}, for the hash and the rig (SOS-46 M4). */
++	public double sosdetTimer(int h) {
++		return timer[h];
++	}
++	
++	/** SOSDET: the realm cursor of the human of slice {@code h}, for the rig (SOS-46 M4). */
++	public int sosdetRi(int h) {
++		return ri[h];
+ 	}
+ 
+ 	
+ 	@Override
+ 	protected void update(double ds) {
++		int[] sosdetHs = sosdet.Hooks.humanSlots(); // SOSDET: each human's, with that human current (SOS-46 M4)
++		for (int sosdetK = 0; sosdetK < sosdetHs.length; sosdetK++) {
++			int sosdetBefore = sosdet.Hooks.currentHumanSwap(sosdetHs[sosdetK]);
++			sosdetUpdate(sosdetK, ds);
++			sosdet.Hooks.currentHumanSwap(sosdetBefore);
++		}
++	}
++	
++	private void sosdetUpdate(int h, double ds) {
+ 		if (FACTIONS.player().realm().regions() == 0)
+ 			return;
+-		int t = (int) timer;
+-		timer += ds;
+-		if (t != (int)timer) {
++		int t = (int) timer[h];
++		timer[h] += ds;
++		if (t != (int)timer[h]) {
+ 			
+ 		}
+-		if (timer > TIME.secondsPerDay()) {
+-			timer -= TIME.secondsPerDay();
+-			ri++;
+-			if (ri >= FACTIONS.player().realm().regions())
+-				ri = 0;
+-			Region reg = FACTIONS.player().realm().region(ri);
++		if (timer[h] > TIME.secondsPerDay()) {
++			timer[h] -= TIME.secondsPerDay();
++			ri[h]++;
++			if (ri[h] >= FACTIONS.player().realm().regions())
++				ri[h] = 0;
++			Region reg = FACTIONS.player().realm().region(ri[h]);
+ 			if (reg.capitol())
+ 				return;
+ 			
+ 			if (RD.RACES().loyaltyAll.getD(reg) <= 0) {
+-				if (!warning.get(ri)) {
+-					warning.set(ri, true);
++				if (!warning[h].get(ri[h])) {
++					warning[h].set(ri[h], true);
+ 					new MessageText(¤¤Warning).paragraph(GText.TMP.clear().add(¤¤WarningD).insert(0, reg.info.name())).send();
+ 				}else {
+ 					rebel(reg);
+ 				}
+ 				
+ 			}else if (RD.RACES().loyaltyAll.getD(reg) > 0.5) {
+-				warning.set(ri, false);
++				warning[h].set(ri[h], false);
+ 			}
+ 		}
+ 	}
 diff -ru -U2 a/game/faction/npc/FactionNPC.java b/game/faction/npc/FactionNPC.java
 --- a/game/faction/npc/FactionNPC.java	2026-06-01 14:10:18.000000000 +0500
-+++ b/game/faction/npc/FactionNPC.java	2026-10-25 06:35:16.996917800 +0500
++++ b/game/faction/npc/FactionNPC.java	2026-10-25 07:08:58.935032600 +0500
 @@ -170,7 +170,7 @@
  				s.clear();
  		}
@@ -12,7 +321,7 @@ diff -ru -U2 a/game/faction/npc/FactionNPC.java b/game/faction/npc/FactionNPC.ja
  	}
 diff -ru -U2 a/game/faction/royalty/Royalty.java b/game/faction/royalty/Royalty.java
 --- a/game/faction/royalty/Royalty.java	2026-03-26 10:56:52.000000000 +0500
-+++ b/game/faction/royalty/Royalty.java	2026-10-25 06:35:16.993891800 +0500
++++ b/game/faction/royalty/Royalty.java	2026-10-25 07:08:58.935032600 +0500
 @@ -28,6 +28,22 @@
  	public short eventMark;
  	
@@ -59,9 +368,496 @@ diff -ru -U2 a/game/faction/royalty/Royalty.java b/game/faction/royalty/Royalty.
  	}
  	
  }
+diff -ru -U2 a/game/raiding/RAIDING.java b/game/raiding/RAIDING.java
+--- a/game/raiding/RAIDING.java	2026-05-28 12:01:02.000000000 +0500
++++ b/game/raiding/RAIDING.java	2026-10-25 07:08:58.951611500 +0500
+@@ -32,13 +32,28 @@
+ 	public final int AMOUNT = 100;
+ 	
+ 	private final ArrayList<Raider> all = new ArrayList<Raider>(AMOUNT);
+-	public final RaidingCurrent current = new RaidingCurrent();
++	public final RaidingCurrent current = new RaidingCurrent(0);
+ 	public final RaidingUtil util = new RaidingUtil(AMOUNT);
+ 	
+ 	private final Updater updater = new Updater(this);
+ 	private final UpdaterRegions updaterRegs = new UpdaterRegions();
+ 	
+-	public final RaidingMap entry = new RaidingMap();
++	public final RaidingMap entry = new RaidingMap(0);
++	// SOSDET: one raid, raid map and raider cache per human (SOS-46 M4): [0] the fields above, slot 0's, saved as
++	// vanilla saves them; current(), entry() and util() pick the human FACTIONS.player() is. The pool is shared.
++	private final RaidingCurrent[] sosdetCurrents = new RaidingCurrent[sosdet.Hooks.HUMANS_MAX];
++	private final RaidingMap[] sosdetEntries = new RaidingMap[sosdet.Hooks.HUMANS_MAX];
++	private final RaidingUtil[] sosdetUtils = new RaidingUtil[sosdet.Hooks.HUMANS_MAX];
++	{
++		sosdetCurrents[0] = current;
++		sosdetEntries[0] = entry;
++		sosdetUtils[0] = util;
++		for (int h = 1; h < sosdet.Hooks.HUMANS_MAX; h++) {
++			sosdetCurrents[h] = new RaidingCurrent(h);
++			sosdetEntries[h] = new RaidingMap(h);
++			sosdetUtils[h] = new RaidingUtil(AMOUNT);
++		}
++	}
+ 
+ 	private final ACTION init = new ACTION() {
+ 		
+@@ -57,7 +72,8 @@
+ 				Raider r = new Raider(wealth, power, CLAMP.d(i/10.0, 0, 1));
+ 				all.add(r);
+ 			}
+-			current.clear();
++			for (RaidingCurrent c : sosdetCurrents) // SOSDET: every human's raid (SOS-46 M4)
++				c.clear();
+ 			updater.clear();
+ 		}
+ 	};
+@@ -199,7 +215,8 @@
+ 		}
+ 
+ 		current.load(file);
+-		util.clear();
++		for (RaidingUtil u : sosdetUtils) // SOSDET: every human's cache (SOS-46 M4)
++			u.clear();
+ 		updater.load(file);
+ 		
+ 		if (fucked)
+@@ -231,12 +248,62 @@
+ 	@Override
+ 	protected void update(double ds, Profiler prof) {
+ 		prof.logStart(this);
+-		current.update(ds, prof);
++		int[] sosdetHs = sosdet.Hooks.humanSlots(); // SOSDET: each human's raid, with that human current (SOS-46 M4)
++		for (int sosdetK = 0; sosdetK < sosdetHs.length; sosdetK++) {
++			int sosdetBefore = sosdet.Hooks.currentHumanSwap(sosdetHs[sosdetK]);
++			sosdetCurrents[sosdetK].update(ds, prof);
++			sosdet.Hooks.currentHumanSwap(sosdetBefore);
++		}
+ 		updater.update(ds);
+ 		updaterRegs.update(ds);
+ 		prof.logEnd(this);
+ 	}
+ 	
++	/** SOSDET: the raid of the human FACTIONS.player() is (SOS-46 M4). */
++	public RaidingCurrent current() {
++		return sosdetCurrents[sosdet.Hooks.humanIndex()];
++	}
++	
++	/** SOSDET: the raid of the human of slice {@code human}, for the engine's hash and section (SOS-46 M4). */
++	public RaidingCurrent current(int human) {
++		return sosdetCurrents[human];
++	}
++	
++	/** SOSDET: the raid map of the human FACTIONS.player() is (SOS-46 M4). */
++	public RaidingMap entry() {
++		return sosdetEntries[sosdet.Hooks.humanIndex()];
++	}
++	
++	/** SOSDET: the raider cache of the human FACTIONS.player() is (SOS-46 M4). */
++	public RaidingUtil util() {
++		return sosdetUtils[sosdet.Hooks.humanIndex()];
++	}
++	
++	/** SOSDET: true while {@code r} raids a human: the pool is shared, and a raider raids one human at a time (SOS-46 M4). */
++	boolean sosdetBusy(Raider r) {
++		int n = sosdet.Hooks.humanSlots().length;
++		for (int k = 0; k < n; k++)
++			if (sosdetCurrents[k].current() == r)
++				return true;
++		return false;
++	}
++	
++	/** SOSDET: the raid and raid timer of the human of slice {@code human}, for the engine's own section (SOS-46 M4). */
++	public void sosdetSave(int human, FilePutter file) {
++		sosdetCurrents[human].sosdetSave(file);
++		file.d(updater.sosdetTimer(human));
++	}
++	
++	public void sosdetLoad(int human, FileGetter file) throws IOException {
++		sosdetCurrents[human].sosdetLoad(file);
++		updater.sosdetTimer(human, file.d());
++	}
++	
++	/** SOSDET: the raid timer of the human of slice {@code human}, for the rig (SOS-46 M4). */
++	public double sosdetRaidTimer(int human) {
++		return updater.sosdetTimer(human);
++	}
++	
+ 	public LIST<Raider> ALL(){
+ 		return all;
+ 	}
+@@ -247,7 +314,7 @@
+ 	}
+ 	
+ 	public LIST<Raider> active(){
+-		return util.active();
++		return util().active(); // SOSDET: this human's (SOS-46 M4)
+ 	}
+ 	
+ 	public void reset() {
+@@ -258,7 +325,7 @@
+ 		if (active().size() > 0) {
+ 			Raider r = active().rnd();
+ 			r.text.set(r, r.raids == 0);
+-			GAME.raiders().current.raid(r);
++			GAME.raiders().current().raid(r);
+ 		}
+ 	}
+ 	
+diff -ru -U2 a/game/raiding/RaidingCurrent.java b/game/raiding/RaidingCurrent.java
+--- a/game/raiding/RaidingCurrent.java	2026-06-24 16:32:06.000000000 +0500
++++ b/game/raiding/RaidingCurrent.java	2026-10-25 07:08:58.954191700 +0500
+@@ -76,7 +76,10 @@
+ 
+ 	}
+ 
+-	public RaidingCurrent() {
++	private final int sosdetHuman; // SOSDET: the slice of the human this raid is (SOS-46 M4)
++	
++	public RaidingCurrent(int sosdetHuman) {
++		this.sosdetHuman = sosdetHuman;
+ 
+ 		new InvasionListener() {
+ 
+@@ -143,6 +146,7 @@
+ 			}
+ 		};
+ 		
++		if (sosdetHuman == 0) // SOSDET: one debug entry (SOS-46 M4)
+ 		IDebugPanel.add("RAIDER next step", new ACTION() {
+ 			
+ 			@Override
+@@ -153,6 +157,50 @@
+ 
+ 	}
+ 
++	/** SOSDET: as save, with the raider as its place in the shared pool, for the engine's own section (SOS-46 M4). */
++	public void sosdetSave(FilePutter file) {
++		int index = -1;
++		for (int i = 0; raider != null && i < GAME.raiders().ALL().size(); i++)
++			if (GAME.raiders().ALL().get(i) == raider)
++				index = i;
++		if (index < 0 && raider != null)
++			index = -2; // a raider outside the pool (an event's invasion): the game's own format for it, as RAIDING's section saves slot 0's
++		file.i(index);
++		if (index == -1)
++			return;
++		if (index == -2)
++			file.object(raider);
++		file.i(currentArmy);
++		file.i(ai);
++		file.d(timer);
++		file.i(state.ordinal());
++		file.i(invadeRef);
++		file.i(iterration);
++		appearCoo.save(file);
++	}
++	
++	public void sosdetLoad(FileGetter file) throws IOException {
++		int index = file.i();
++		if (index == -1) {
++			raider = null;
++			clear();
++			return;
++		}
++		if (index < -2 || index >= GAME.raiders().ALL().size())
++			throw new IOException("SOSDET: raider " + index + " of " + GAME.raiders().ALL().size());
++		raider = index == -2 ? (Raider) file.object(true) : GAME.raiders().ALL().get(index);
++		currentArmy = file.i();
++		ai = file.i();
++		timer = file.d();
++		int s = file.i();
++		if (s < 0 || s >= STATE.values().length)
++			throw new IOException("SOSDET: raid state " + s);
++		state = STATE.values()[s];
++		invadeRef = file.i();
++		iterration = file.i();
++		appearCoo.load(file);
++	}
++	
+ 	public Raider current() {
+ 		return raider;
+ 	}
+@@ -206,7 +254,7 @@
+ 	public void raid(Raider raider) {
+ 		clear();
+ 		
+-		COORDINATE c = GAME.raiders().util.attackSpot(raider);
++		COORDINATE c = GAME.raiders().util().attackSpot(raider);
+ 		if (c == null) {
+ 			LOG.ln("no spots");
+ 			return;
+@@ -229,7 +277,7 @@
+ 	public void raid(Raider raider, CharSequence text) {
+ 		clear();
+ 		
+-		COORDINATE c = GAME.raiders().util.attackSpot(raider);
++		COORDINATE c = GAME.raiders().util().attackSpot(raider);
+ 		appearCoo.set(c);
+ 		
+ 		set(raider, STATE.WARNING_REJECTED, null);
+@@ -239,7 +287,7 @@
+ 
+ 	boolean appear(Raider raider) {
+ 		
+-		COORDINATE c = GAME.raiders().util.attackSpot(raider);
++		COORDINATE c = GAME.raiders().util().attackSpot(raider);
+ 		if (c == null)
+ 			return false;
+ 
+@@ -300,7 +348,7 @@
+ 				if (f == null) {
+ 					set(raider, STATE.WARNING_REJECTED, null);
+ 					new MessDemandRejected(raider).send();
+-				}else if (!GAME.raiders().util.validCoo(appearCoo, raider)){
++				}else if (!GAME.raiders().util().validCoo(appearCoo, raider)){
+ 					MessAlly.fight(raider, f);
+ 					clear();
+ 				}else {
+diff -ru -U2 a/game/raiding/Updater.java b/game/raiding/Updater.java
+--- a/game/raiding/Updater.java	2025-09-22 07:59:34.000000000 +0500
++++ b/game/raiding/Updater.java	2026-10-25 07:08:58.956190500 +0500
+@@ -10,8 +10,9 @@
+ 
+ class Updater extends IUpdater{
+ 
+-	private static double raidingInterval = 6*16*TIME.secondsPerDay();
+-	private double timer = 0;
++	private final double raidingInterval = 6*16*TIME.secondsPerDay(); // SOSDET: an instance field, so the build's menu check passes the shipped class (SOS-46 M4)
++	// SOSDET: each human's raid timer (SOS-46 M4): [0] slot 0's, saved as vanilla saves it; the others in the engine's section
++	private final double[] timer = new double[sosdet.Hooks.HUMANS_MAX];
+ 	
+ 	public Updater(RAIDING r) {
+ 		super(r.AMOUNT, TIME.secondsPerDay());
+@@ -19,37 +20,54 @@
+ 
+ 	@Override
+ 	protected void update(int i, double timeSinceLast) {
+-		if (GAME.raiders().current.current() != null)
++		int[] sosdetHs = sosdet.Hooks.humanSlots(); // SOSDET: each human's raid, with that human current (SOS-46 M4)
++		for (int sosdetK = 0; sosdetK < sosdetHs.length; sosdetK++) {
++			int sosdetBefore = sosdet.Hooks.currentHumanSwap(sosdetHs[sosdetK]);
++			sosdetUpdate(sosdetK, i, timeSinceLast);
++			sosdet.Hooks.currentHumanSwap(sosdetBefore);
++		}
++	}
++	
++	private void sosdetUpdate(int h, int i, double timeSinceLast) {
++		if (GAME.raiders().current().current() != null)
+ 			return;
+ 		
+ 		
+ 		Raider r = GAME.raiders().ALL().get(i);
+-		if (!r.defeated && r.hasInterrest() && !r.isScared()) {
+-			timer += timeSinceLast;
++		if (!r.defeated && r.hasInterrest() && !r.isScared() && !GAME.raiders().sosdetBusy(r)) { // SOSDET: one human at a time (SOS-46 M4)
++			timer[h] += timeSinceLast;
+ 			
+-			if (timer >= raidingInterval) {
++			if (timer[h] >= raidingInterval) {
+ 				r.text.set(r, r.raids == 0);
+-				GAME.raiders().current.raid(r);
+-				timer -= raidingInterval*Math.sqrt(GAME.raiders().ALL().size());
++				GAME.raiders().current().raid(r);
++				timer[h] -= raidingInterval*Math.sqrt(GAME.raiders().ALL().size());
+ 			}
+ 		}
+ 	}
++	
++	double sosdetTimer(int h) {
++		return timer[h];
++	}
++	
++	void sosdetTimer(int h, double t) {
++		timer[h] = t;
++	}
+ 
+ 	@Override
+ 	public void save(FilePutter file) {
+-		file.d(timer);
++		file.d(timer[0]); // SOSDET: slot 0's (SOS-46 M4)
+ 		super.save(file);
+ 	}
+ 	
+ 	@Override
+ 	public void load(FileGetter file) throws IOException {
+-		timer = file.d();
++		timer[0] = file.d(); // SOSDET: slot 0's (SOS-46 M4)
+ 		super.load(file);
+ 	}
+ 	
+ 	@Override
+ 	public void clear() {
+-		timer = 0;
++		java.util.Arrays.fill(timer, 0); // SOSDET: every human's (SOS-46 M4)
+ 		super.clear();
+ 	}
+ 	
+diff -ru -U2 a/game/raiding/UpdaterRegions.java b/game/raiding/UpdaterRegions.java
+--- a/game/raiding/UpdaterRegions.java	2026-06-11 09:04:28.000000000 +0500
++++ b/game/raiding/UpdaterRegions.java	2026-10-25 07:08:58.957159700 +0500
+@@ -56,8 +56,8 @@
+ 			
+ 			@Override
+ 			public void exe() {
+-				if (GAME.raiders().entry.entryRegions().size() > 0) {
+-					raid(GAME.raiders().entry.entryRegions().rnd().r());
++				if (GAME.raiders().entry().entryRegions().size() > 0) {
++					raid(GAME.raiders().entry().entryRegions().rnd().r());
+ 				}
+ 				
+ 			}
+@@ -88,7 +88,13 @@
+ 
+ 	@Override
+ 	protected void update(int i, double timeSinceLast) {
+-		RaidRegion r = GAME.raiders().entry.get(WORLD.REGIONS().all().get(i));
++		int sosdetBefore = sosdet.Hooks.currentHumanSwap(WORLD.REGIONS().all().get(i).faction()); // SOSDET: a human's region with that human current (SOS-46 M4)
++		sosdetUpdate(i, timeSinceLast);
++		sosdet.Hooks.currentHumanSwap(sosdetBefore);
++	}
++	
++	private void sosdetUpdate(int i, double timeSinceLast) {
++		RaidRegion r = GAME.raiders().entry().get(WORLD.REGIONS().all().get(i));
+ 		double d = counts[i];
+ 		if (r.r().faction() != FACTIONS.player() || r.r().capitol()) {
+ 			d -= timeSinceLast*II;
+@@ -117,7 +123,7 @@
+ 		}
+ 		
+ 		tmp.clearSloppy();
+-		for (RaidEntryPoint c : GAME.raiders().entry.entrySpots()) {
++		for (RaidEntryPoint c : GAME.raiders().entry().entrySpots()) {
+ 			if (reg.is(c.c()) && tmp.hasRoom()) {
+ 				tmp.add(c);
+ 			}
+@@ -129,7 +135,7 @@
+ 		RaidEntryPoint e = tmp.rnd();
+ 		
+ 		double power = RD.MILITARY().power.getD(reg) + 20;
+-		power += GAME.raiders().entry.get(reg).army();
++		power += GAME.raiders().entry().get(reg).army();
+ 		power *= 1.25 + RND.rExpo()*2.0;
+ 		Race race = race(e);
+ 		
+diff -ru -U2 a/view/ui/raider/Current.java b/view/ui/raider/Current.java
+--- a/view/ui/raider/Current.java	2025-11-18 07:32:38.000000000 +0500
++++ b/view/ui/raider/Current.java	2026-10-25 07:08:58.958192000 +0500
+@@ -69,7 +69,7 @@
+ 			public void update(GText text) {
+ 				text.setMaxWidth(700);
+ 				text.setMultipleLines(true);
+-				if (GAME.raiders().current.current() == rr()) {
++				if (GAME.raiders().current().current() == rr()) {
+ 					text.color(GCOLOR.T().IBAD).add(¤¤raidingD);
+ 				}else if (rr().defeated) {
+ 					Str.TMP.clear();
+diff -ru -U2 a/view/ui/raider/Info.java b/view/ui/raider/Info.java
+--- a/view/ui/raider/Info.java	2026-01-31 09:04:10.000000000 +0500
++++ b/view/ui/raider/Info.java	2026-10-25 07:08:58.959194000 +0500
+@@ -52,7 +52,7 @@
+ 			
+ 			@Override
+ 			public void update(GText text) {
+-				GFORMAT.i(text, (int)GAME.raiders().util.playerPow());
++				GFORMAT.i(text, (int)GAME.raiders().util().playerPow());
+ 			}
+ 			
+ 			@Override
+@@ -86,7 +86,7 @@
+ 				
+ 				b.textLL(¤¤suprise);
+ 				b.NL();
+-				if (GAME.raiders().entry.get(FACTIONS.player().capitolRegion()).points() > 0) {
++				if (GAME.raiders().entry().get(FACTIONS.player().capitolRegion()).points() > 0) {
+ 					int pp = (int) (0.75*(RD.MILITARY().power.getD(FACTIONS.player().capitolRegion()) + pow));
+ 					pp += pow2;
+ 					b.add(GFORMAT.iIncr(b.text(), -pp));
+@@ -107,7 +107,7 @@
+ 			@Override
+ 			public void update(GText text) {
+ 
+-				if (GAME.raiders().entry.get(FACTIONS.player().capitolRegion()).points() > 0) {
++				if (GAME.raiders().entry().get(FACTIONS.player().capitolRegion()).points() > 0) {
+ 					text.errorify().add(¤¤entryA);
+ 				}else {
+ 					text.normalify().add(¤¤entryB);
+@@ -117,12 +117,12 @@
+ 			@Override
+ 			public void hoverInfoGet(GBox b) {
+ 				
+-				if (GAME.raiders().entry.get(FACTIONS.player().capitolRegion()).points() > 0) {
++				if (GAME.raiders().entry().get(FACTIONS.player().capitolRegion()).points() > 0) {
+ 					b.text(¤¤entryAD);
+ 				}else {
+ 					b.text(¤¤entryBD);
+ 					b.NL(8);
+-					for (RaidRegion r : GAME.raiders().entry.entryRegions()) {
++					for (RaidRegion r : GAME.raiders().entry().entryRegions()) {
+ 						b.textLL(r.r().info.name());
+ 						b.tab(6);
+ 						b.add(UI.icons().s.sword);
+@@ -167,7 +167,7 @@
+ 			
+ 			@Override
+ 			public void update(GText text) {
+-				GFORMAT.i(text, (int)GAME.raiders().util.ransomCurrent());
++				GFORMAT.i(text, (int)GAME.raiders().util().ransomCurrent());
+ 			}
+ 			
+ 			@Override
+diff -ru -U2 a/view/ui/raider/List.java b/view/ui/raider/List.java
+--- a/view/ui/raider/List.java	2025-09-12 16:09:02.000000000 +0500
++++ b/view/ui/raider/List.java	2026-10-25 07:08:58.960191600 +0500
+@@ -136,7 +136,7 @@
+ 			COLOR c = COLOR.WHITE100;
+ 			Str.TMP.clear();
+ 			
+-			if (GAME.raiders().current.current() == rr) {
++			if (GAME.raiders().current().current() == rr) {
+ 				c = GCOLOR.T().IBAD;
+ 				Str.TMP.add(¤¤raiding);
+ 			}else if (rr.defeated) {
+diff -ru -U2 a/view/world/ui/army/Hoverer.java b/view/world/ui/army/Hoverer.java
+--- a/view/world/ui/army/Hoverer.java	2025-10-21 12:33:42.000000000 +0500
++++ b/view/world/ui/army/Hoverer.java	2026-10-25 07:08:58.961163900 +0500
+@@ -41,8 +41,8 @@
+ 					text.add(a.get().faction().name);
+ 				}else {
+ 					text.color(COLOR.WHITE85);
+-					if (GAME.raiders().current.army() == a.get()) {
+-						text.add(GAME.raiders().current.current().name);
++					if (GAME.raiders().current().army() == a.get()) {
++						text.add(GAME.raiders().current().current().name);
+ 					}else
+ 						text.add(Dic.¤¤Rebels);
+ 				}
+@@ -107,8 +107,8 @@
+ 				if (a.get().faction() != null) {
+ 					a.get().faction().banner().HUGE.render(r, body.x1(), body.y1());
+ 				}else {
+-					if (GAME.raiders().current.army() == a.get()) {
+-						RaiderPortrait.render(r, body.x1()-8, body.y1()-10, 2, GAME.raiders().current.current().indu, false);
++					if (GAME.raiders().current().army() == a.get()) {
++						RaiderPortrait.render(r, body.x1()-8, body.y1()-10, 2, GAME.raiders().current().current().indu, false);
+ 					}else
+ 						UI.icons().l.rebel.huge.render(r, body.x1(), body.y1());;
+ 				}
+diff -ru -U2 a/view/world/ui/region/ListPlayer.java b/view/world/ui/region/ListPlayer.java
+--- a/view/world/ui/region/ListPlayer.java	2026-06-16 11:04:52.000000000 +0500
++++ b/view/world/ui/region/ListPlayer.java	2026-10-25 07:08:58.961163900 +0500
+@@ -136,7 +136,7 @@
+ 					
+ 					@Override
+ 					public void update(GText text) {
+-						GFORMAT.perc(text, CLAMP.d(GAME.raiders().entry.get(reg(ier)).security(), -1, 1));
++						GFORMAT.perc(text, CLAMP.d(GAME.raiders().entry().get(reg(ier)).security(), -1, 1));
+ 					}
+ 					
+ 					@Override
 diff -ru -U2 a/world/army/ai/Chiller.java b/world/army/ai/Chiller.java
 --- a/world/army/ai/Chiller.java	2024-12-26 16:43:54.000000000 +0500
-+++ b/world/army/ai/Chiller.java	2026-10-25 06:35:16.989887400 +0500
++++ b/world/army/ai/Chiller.java	2026-10-25 07:08:58.935999400 +0500
 @@ -1,6 +1,5 @@
  package world.army.ai;
  
@@ -85,9 +881,42 @@ diff -ru -U2 a/world/army/ai/Chiller.java b/world/army/ai/Chiller.java
  				if (l.size() == 0)
  					return;
  				RegDist d = l.rnd();
+diff -ru -U2 a/world/overlay/OverlayRegAbs.java b/world/overlay/OverlayRegAbs.java
+--- a/world/overlay/OverlayRegAbs.java	2026-06-10 09:44:08.000000000 +0500
++++ b/world/overlay/OverlayRegAbs.java	2026-10-25 07:08:58.962191200 +0500
+@@ -54,7 +54,7 @@
+ 		COLOR.WHITE2WHITE.bind();
+ 		
+ 		
+-		for (RaidEntryPoint c : GAME.raiders().entry.entrySpots()) {
++		for (RaidEntryPoint c : GAME.raiders().entry().entrySpots()) {
+ 			int x = data.transformGX(c.c().x()*C.TILE_SIZE);
+ 			int y = data.transformGY(c.c().y()*C.TILE_SIZE);
+ 			
+diff -ru -U2 a/world/overlay/WorldOverlays.java b/world/overlay/WorldOverlays.java
+--- a/world/overlay/WorldOverlays.java	2026-06-10 10:26:48.000000000 +0500
++++ b/world/overlay/WorldOverlays.java	2026-10-25 07:08:58.963177000 +0500
+@@ -51,7 +51,7 @@
+ 		
+ 		@Override
+ 		public double value(Region reg) {
+-			return CLAMP.d(GAME.raiders().entry.get(reg).security(), 0, 1);
++			return CLAMP.d(GAME.raiders().entry().get(reg).security(), 0, 1);
+ 		}
+ 		
+ 		@Override
+@@ -66,7 +66,7 @@
+ 			
+ 			COLOR.WHITE2WHITE.bind();
+ 			
+-			for (RaidEntryPoint c : GAME.raiders().entry.entrySpots()) {
++			for (RaidEntryPoint c : GAME.raiders().entry().entrySpots()) {
+ 				int x = data.transformGX(c.c().x()*C.TILE_SIZE);
+ 				int y = data.transformGY(c.c().y()*C.TILE_SIZE);
+ 				
 diff -ru -U2 a/world/region/RDOwner.java b/world/region/RDOwner.java
 --- a/world/region/RDOwner.java	2026-03-24 16:15:46.000000000 +0500
-+++ b/world/region/RDOwner.java	2026-10-25 06:35:16.996917800 +0500
++++ b/world/region/RDOwner.java	2026-10-25 07:08:58.935999400 +0500
 @@ -24,15 +24,17 @@
  		D.ts(RDOwner.class);
  	}

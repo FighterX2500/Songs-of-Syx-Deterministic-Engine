@@ -471,6 +471,27 @@ public final class Hooks {
         return n;
     }
 
+    /**
+     * The slot of the human with the most regions, the first in slot order on a tie: the world's NPC events (wars and
+     * expansion between NPCs) measure "the player" by it (SOS-46 M4). Slot 0 without a session and with one human.
+     */
+    public static int largestHuman() {
+        int[] hs = humanSlots();
+        if (hs.length == 1) {
+            return hs[0];
+        }
+        int best = hs[0];
+        int most = -1;
+        for (int slot : hs) {
+            int n = FACTIONS.getByIndex(slot).realm().regions();
+            if (n > most) {
+                most = n;
+                best = slot;
+            }
+        }
+        return best;
+    }
+
     /** The world part works on the human in {@code slot} (its own world half), or on the first human again (slot 0). */
     public static void currentHuman(int slot) {
         Session s = Engine.session();
@@ -1518,15 +1539,6 @@ public final class Hooks {
     public static boolean worldPromptAnswerer() {
         Session s = Engine.session();
         return s == null || s.currentHuman == s.worldPromptHuman;
-    }
-
-    /**
-     * Inside a world command: true when it acts for the first human. NPC requests and proposals and the raids ask the
-     * first human until M3 and M4 give each human their own (plan 0004); another human's answer is skipped (SOS-46).
-     */
-    public static boolean issuerIsFirstHuman() {
-        Session s = Engine.session();
-        return s == null || s.currentHuman == s.humans()[0];
     }
 
     /** True in a session's step: a yes/no the simulation asks is kept, and answered by command (cmd.StepPrompts). */

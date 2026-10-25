@@ -13,6 +13,7 @@ import game.faction.royalty.Royalty;
 import game.faction.royalty.opinion.ROPINION;
 import game.boosting.superb.SuperSpec.SuperSpecImp;
 import game.raiding.Raider;
+import game.raiding.RaidingCurrent;
 import init.race.RACES;
 import init.trade.TR;
 import settlement.stats.STATS;
@@ -93,6 +94,10 @@ public final class WorldActions {
             Rig.later(() -> Rig.note(relations(slot < 0 ? npc() : npcAt(slot))));
             return true;
         }
+        case "wevents": // wevents: notes each human's war timer and warner, rebellion timer and realm cursor, raid and raid
+            // timer, each read as that human between steps (SOS-46 M4)
+            Rig.later(() -> Rig.note(events()));
+            return true;
         case "wwarnear": { // wwarnear <army> [stronger] [still]: war declared on the faction of the nearest NPC army (stronger
             // and still as for winterceptnear), by the faction screen's deal with Declare war (SOS-32; the attack tool's
             // own-region rule refuses the old route through it, SOS-46)
@@ -613,6 +618,48 @@ public final class WorldActions {
             }
         }
         return b.toString();
+    }
+
+    /**
+     * Each human's event timers and raid, each read as that human between steps (SOS-46 M4): the war timer (it grows
+     * while the human is at peace), the warner (an NPC slot, or -1), the rebellion timer and realm cursor (below the
+     * human's region count), the raider raiding it (or none) and its raid timer. All are world state, the same on every PC.
+     */
+    private static String events() {
+        StringBuilder b = new StringBuilder("events");
+        Object dip = GAME.events().world.dip;
+        Object rebellion = GAME.events().rebellion;
+        for (int slot : Hooks.humanSlots()) {
+            int before = Engine.asHuman(slot);
+            try {
+                int k = Hooks.humanIndex();
+                Raider raider = ((RaidingCurrent) patched(GAME.raiders(), "current")).current();
+                b.append(" | human ").append(slot).append(String.format(java.util.Locale.ROOT,
+                        " warCount %.3f warner %d rebellion %.1f ri %d regions %d raid %s raidTimer %.1f",
+                        (Double) patched(dip, "sosdetWarCount", k), (Integer) patched(dip, "sosdetWarner", k),
+                        (Double) patched(rebellion, "sosdetTimer", k), (Integer) patched(rebellion, "sosdetRi", k),
+                        FACTIONS.player().realm().regions(), raider == null ? "none" : raider.name,
+                        (Double) patched(GAME.raiders(), "sosdetRaidTimer", k)));
+            } finally {
+                Engine.asHuman(before);
+            }
+        }
+        return b.toString();
+    }
+
+    /** A patch-added public method, with int arguments (the rig, like the engine, compiles against the vanilla jar). */
+    private static Object patched(Object target, String name, int... args) {
+        Class<?>[] types = new Class<?>[args.length];
+        Object[] values = new Object[args.length];
+        for (int i = 0; i < args.length; i++) {
+            types[i] = int.class;
+            values[i] = args[i];
+        }
+        try {
+            return target.getClass().getMethod(name, types).invoke(target, values);
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException("SOSDET rig: no " + target.getClass().getSimpleName() + "." + name + " in this build", e);
+        }
     }
 
     private static FactionNPC npcAt(int slot) {

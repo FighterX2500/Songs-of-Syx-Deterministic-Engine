@@ -72,6 +72,7 @@ public final class GameHumans extends Savable {
         GAME.saver().addSpecialSaver(this);
         GAME.saver().add(new GameCityDivs(this)); // after AD's and FACTIONS's sections: the world is built first (SOS-46)
         GAME.saver().add(new GameRelations(this)); // the other humans' relations, after FACTIONS's and the world's (SOS-46 M3)
+        GAME.saver().add(new GameEvents(this)); // the other humans' event timers and raids, after EVENTS's and RAIDING's (SOS-46 M4)
     }
 
     /** This game's humans: the {@code GameHumans} its {@code FACTIONS} holds. */
