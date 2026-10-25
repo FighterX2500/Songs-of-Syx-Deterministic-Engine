@@ -9,10 +9,15 @@ import game.faction.diplomacy.DIP;
 import game.faction.diplomacy.deal.Deal;
 import game.faction.npc.FactionNPC;
 import game.faction.player.emmi.EmiTypeRoy;
+import game.faction.royalty.Royalty;
+import game.faction.royalty.opinion.ROPINION;
+import game.boosting.superb.SuperSpec.SuperSpecImp;
 import game.raiding.Raider;
 import init.race.RACES;
 import init.trade.TR;
 import settlement.stats.STATS;
+import sosdet.Engine;
+import sosdet.Hooks;
 import sosdet.game.cmd.Diplomacy;
 import sosdet.game.cmd.Events;
 import sosdet.game.cmd.World;
@@ -82,6 +87,12 @@ public final class WorldActions {
         case "wstatus": // wstatus: notes the player's slot, treasury, capital, regions, armies and wars (a probe for an agent player)
             Rig.later(() -> Rig.note(status()));
             return true;
+        case "wrelations": { // wrelations [npc slot]: notes the NPC's king, and its stance, stored opinion (each entry), dealings, opinion and trust toward
+            // each human, read as that human between steps (the NPC by default: the one wgift gives to; SOS-46 M3)
+            int slot = a.length > 1 ? Integer.parseInt(a[1]) : -1;
+            Rig.later(() -> Rig.note(relations(slot < 0 ? npc() : npcAt(slot))));
+            return true;
+        }
         case "wwarnear": { // wwarnear <army> [stronger] [still]: war declared on the faction of the nearest NPC army (stronger
             // and still as for winterceptnear), by the faction screen's deal with Declare war (SOS-32; the attack tool's
             // own-region rule refuses the old route through it, SOS-46)
@@ -569,6 +580,46 @@ public final class WorldActions {
             throw new IllegalStateException("the player has no capital");
         }
         return reg;
+    }
+
+    /**
+     * An NPC's relations with each human, each read as that human between steps (SOS-46 M3). "stored" (the sum of the
+     * opinion's stored values) and "dealings" (gifts and extortion) are world state, the same on every PC; "opinion" and
+     * "trust" add values this PC computes live, so they may differ between PCs.
+     */
+    private static String relations(FactionNPC f) {
+        StringBuilder b = new StringBuilder("relations npc ").append(f.index()).append(" king ").append(f.court().king().roy().name()); // the king: a new one starts with fresh opinions
+        Royalty king = f.court().king().roy();
+        for (int slot : Hooks.humanSlots()) {
+            int before = Engine.asHuman(slot);
+            try {
+                double stored = 0;
+                double dealings = 0;
+                StringBuilder parts = new StringBuilder(); // each stored entry by name
+                for (SuperSpecImp<Royalty> s : ROPINION.BOOST().imps()) {
+                    stored += s.value.getD(king);
+                    if (s.value.getD(king) != 0) {
+                        parts.append(' ').append(s.key).append('=').append(String.format(java.util.Locale.ROOT, "%.4f", s.value.getD(king)));
+                    }
+                    if (s.key.equals("DEALINGS")) {
+                        dealings = s.value.getD(king);
+                    }
+                }
+                b.append(" | human ").append(slot).append(" stance ").append(DIP.get(f, FACTIONS.getByIndex(slot)).key())
+                        .append(String.format(java.util.Locale.ROOT, " stored %.6f dealings %.6f opinion %.3f trust %.3f", stored,
+                                dealings, ROPINION.get(f), ROPINION.trust().get(f))).append(" [").append(parts).append(" ]");
+            } finally {
+                Engine.asHuman(before);
+            }
+        }
+        return b.toString();
+    }
+
+    private static FactionNPC npcAt(int slot) {
+        if (slot < 0 || slot >= FACTIONS.MAX() || !(FACTIONS.getByIndex(slot) instanceof FactionNPC)) {
+            throw new IllegalArgumentException("slot " + slot + " is no NPC");
+        }
+        return (FactionNPC) FACTIONS.getByIndex(slot);
     }
 
     private static FactionNPC npc() {

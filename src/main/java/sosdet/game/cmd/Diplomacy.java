@@ -52,9 +52,9 @@ public final class Diplomacy {
             new Command(DEAL_PROPOSAL, "dealProposal", r -> {
                 Deal d = deal(r);
                 double happiness = r.d();
-                if (d == null || !d.npc.npc().request.has() || !sosdet.Hooks.issuerIsFirstHuman()) {
-                    return false; // answered or expired since, the other player accepted it first, or (SOS-46) the
-                                  // request asks the first human until M3
+                if (d == null || !d.npc.npc().request.has()) {
+                    return false; // answered or expired since, or the other player accepted it first; the request is the
+                                  // issuer's own, one per human (SOS-46 M3)
                 }
                 FactionNPC f = d.npc.npc();
                 d.execute(false);
@@ -64,8 +64,8 @@ public final class Diplomacy {
             }),
             new Command(REQUEST_EXPIRE, "requestExpire", r -> {
                 FactionNPC f = Args.npc(r);
-                if (f == null || !sosdet.Hooks.issuerIsFirstHuman()) {
-                    return false; // the request asks the first human until M3 (SOS-46)
+                if (f == null) {
+                    return false;
                 }
                 f.request.expire();
                 return true;
@@ -113,10 +113,7 @@ public final class Diplomacy {
                     credits[i] = r.i();
                     taken[i] = r.b();
                 }
-                if (!sosdet.Hooks.issuerIsFirstHuman()) {
-                    return false; // the overlord message goes to the first human until M3 (SOS-46)
-                }
-                boolean any = false;
+                boolean any = false; // each human's own vassals: UpVassal sends each human its message (SOS-46 M3)
                 for (int i = 0; i < n; i++) {
                     FactionNPC f = vassals[i];
                     if (f == null || DIP.overlord(f) != FACTIONS.player()) {

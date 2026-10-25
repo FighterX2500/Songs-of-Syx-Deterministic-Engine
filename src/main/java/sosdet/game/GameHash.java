@@ -113,7 +113,8 @@ public final class GameHash implements StateSource {
 
     /**
      * The world map: every army's slot, faction, tile, state and men; every world entity; every region's owner; every
-     * faction's credits, overlord and stance with every other (war, peace, pact, ...); every raider's power, defeat and
+     * faction's credits, overlord and stance with every other (war, peace, pact, ...); every NPC king's opinion of
+     * every human but slot 0's (SOS-46 M3); every raider's power, defeat and
      * raids, and the raider now raiding; the calendar. In own-city mode the humans' credits are their cities' and are
      * left out (ADR 0005, ADR 0004).
      * Public for the rig's per-step log of a follower run.
@@ -154,6 +155,7 @@ public final class GameHash implements StateSource {
                 h = HashLog.mix(h, DIP.get(f, factions.get(k)).index()); // every stance, not only war (SOS-46)
             }
         }
+        h = GameRelations.hash(h);
         LIST<Raider> raiders = GAME.raiders().ALL();
         for (int i = 0; i < raiders.size(); i++) {
             Raider r = raiders.get(i);

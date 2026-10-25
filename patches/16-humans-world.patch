@@ -1,6 +1,67 @@
+diff -ru -U2 a/game/faction/npc/FactionNPC.java b/game/faction/npc/FactionNPC.java
+--- a/game/faction/npc/FactionNPC.java	2026-06-01 14:10:18.000000000 +0500
++++ b/game/faction/npc/FactionNPC.java	2026-10-25 06:35:16.996917800 +0500
+@@ -170,7 +170,7 @@
+ 				s.clear();
+ 		}
+ 		iteration = 0;
+-		request.clear();
++		request.sosdetClearAll(); // SOSDET: no human's request (SOS-46 M3)
+ 		sanctified = false;
+ 		super.clear();
+ 	}
+diff -ru -U2 a/game/faction/royalty/Royalty.java b/game/faction/royalty/Royalty.java
+--- a/game/faction/royalty/Royalty.java	2026-03-26 10:56:52.000000000 +0500
++++ b/game/faction/royalty/Royalty.java	2026-10-25 06:35:16.993891800 +0500
+@@ -28,6 +28,22 @@
+ 	public short eventMark;
+ 	
+ 	private final SuperData bdata = ROPINION.BOOST().makeData();
++	// SOSDET: this royal's opinion of each human (SOS-46 M3): slice 0 is bdata, saved with the royal as vanilla saves
++	// it; the other humans' go to the engine's own save section. Hooks.humanIndex() picks the slice.
++	private final SuperData[] sosdetData = sosdetSlices(bdata);
++	
++	private static SuperData[] sosdetSlices(SuperData first) {
++		SuperData[] s = new SuperData[sosdet.Hooks.HUMANS_MAX];
++		s[0] = first;
++		for (int h = 1; h < s.length; h++)
++			s[h] = ROPINION.BOOST().makeData();
++		return s;
++	}
++	
++	/** SOSDET: the opinion of the human of slice {@code human}, for the engine's save section (SOS-46 M3). */
++	public SuperData sosdetData(int human) {
++		return sosdetData[human];
++	}
+ 	
+ 	private static CharSequence ¤¤Ruler = "¤Ruler of {0}";
+ 	private static CharSequence ¤¤Heir = "¤First Heir of {0}";
+@@ -81,7 +97,12 @@
+ 	}
+ 	
+ 	public void update(double seconds) {
+-		ROPINION.BOOST().update(this, seconds);
++		int[] hs = sosdet.Hooks.humanSlots(); // SOSDET: the opinion of each human, with that human current (SOS-46 M3)
++		for (int k = 0; k < hs.length; k++) {
++			int before = sosdet.Hooks.currentHumanSwap(hs[k]);
++			ROPINION.BOOST().update(this, seconds);
++			sosdet.Hooks.currentHumanSwap(before);
++		}
+ 	}
+ 	
+ 	void save(FilePutter file) {
+@@ -138,7 +159,7 @@
+ 
+ 	@Override
+ 	public SuperData boostingData() {
+-		return bdata;
++		return sosdetData[sosdet.Hooks.humanIndex()]; // SOSDET: the opinion of the human FACTIONS.player() is (SOS-46 M3)
+ 	}
+ 	
+ }
 diff -ru -U2 a/world/army/ai/Chiller.java b/world/army/ai/Chiller.java
 --- a/world/army/ai/Chiller.java	2024-12-26 16:43:54.000000000 +0500
-+++ b/world/army/ai/Chiller.java	2026-10-25 06:11:11.905338700 +0500
++++ b/world/army/ai/Chiller.java	2026-10-25 06:35:16.989887400 +0500
 @@ -1,6 +1,5 @@
  package world.army.ai;
  
@@ -24,3 +85,127 @@ diff -ru -U2 a/world/army/ai/Chiller.java b/world/army/ai/Chiller.java
  				if (l.size() == 0)
  					return;
  				RegDist d = l.rnd();
+diff -ru -U2 a/world/region/RDOwner.java b/world/region/RDOwner.java
+--- a/world/region/RDOwner.java	2026-03-24 16:15:46.000000000 +0500
++++ b/world/region/RDOwner.java	2026-10-25 06:35:16.996917800 +0500
+@@ -24,15 +24,17 @@
+ 		D.ts(RDOwner.class);
+ 	}
+ 	
+-	private static final double dTime = 1.0/(TIME.secondsPerDay()*8);
++	private final double dTime = 1.0/(TIME.secondsPerDay()*8); // SOSDET: an instance field: the build's menu check rejects a shipped class whose static initializer reads TIME (SOS-46 M3)
+ 	public final INT_OE<Region> affiliation;
++	private final SosdetSupport sosdetSupport; // SOSDET: the same object, each human's support (SOS-46 M3)
+ 	
+ 	private final INT_OE<Region> prevOwner;
+ 	private final INT_OE<Region> prevOwnerII;
+ 	public final INT_OE<Region> ownerI;
+ 	
+ 	RDOwner(RDInit init){
+-		affiliation = init.count.new DataByte("OWNER", ¤¤Affiliation, ¤¤AffiliationD);
++		sosdetSupport = new SosdetSupport(init.count.new DataByte("OWNER", ¤¤Affiliation, ¤¤AffiliationD)); // SOSDET: slice 0 is the game's own data (SOS-46 M3)
++		affiliation = sosdetSupport;
+ 		prevOwner = init.count.new DataShort("PREVOWVER");
+ 		prevOwnerII = init.count.new DataNibble("PREVOWNER2");
+ 		ownerI = init.count.new DataByte("OWNERI");
+@@ -48,8 +50,8 @@
+ 
+ 					@Override
+ 					public double get(Region t) {
+-						if (t.faction() == FACTIONS.player())
+-							return affiliation.getD(t);
++						if (t.faction() instanceof game.faction.player.Player) // SOSDET: every human's region, its own human's support (SOS-46 M3)
++							return sosdetSupport.getD(sosdet.Hooks.humanIndex(t.faction()), t);
+ 						return 1;
+ 					}
+ 				
+@@ -65,6 +67,9 @@
+ 
+ 	@Override
+ 	public void update(Region reg, double time) {
++		int[] sosdetHs = sosdet.Hooks.humanSlots(); // SOSDET: each human's support, with that human current (SOS-46 M3)
++		for (int sosdetK = 0; sosdetK < sosdetHs.length; sosdetK++) {
++		int sosdetBefore = sosdet.Hooks.currentHumanSwap(sosdetHs[sosdetK]);
+ 		int tar = 255;
+ 		double d = 255.0*time*dTime;
+ 		if (reg.faction() == FACTIONS.player()) {
+@@ -78,6 +83,8 @@
+ 				affiliation.moveTo(reg, 255*time*dTime*dd, 255);
+ 			
+ 		}
++		sosdet.Hooks.currentHumanSwap(sosdetBefore);
++		}
+ 		
+ 		
+ 		if (prevOwner(reg) == null) {
+@@ -97,6 +104,70 @@
+ 		
+ 	}
+ 	
++	/** SOSDET: the support of the human of slice {@code human}, for the engine's save section (SOS-46 M3). */
++	public void sosdetSave(int human, snake2d.util.file.FilePutter file) {
++		file.bsE(sosdetSupport.rest[human]);
++	}
++	
++	public void sosdetLoad(int human, snake2d.util.file.FileGetter file) throws java.io.IOException {
++		file.bsE(sosdetSupport.rest[human]);
++	}
++	
++	/** SOSDET: support kept once per human: slice 0 is the game's own region data, the others bytes here (SOS-46 M3). */
++	private static final class SosdetSupport implements INT_OE<Region> {
++		
++		private final INT_OE<Region> first;
++		private final byte[][] rest = new byte[sosdet.Hooks.HUMANS_MAX][];
++		
++		SosdetSupport(INT_OE<Region> first) {
++			this.first = first;
++			for (int h = 1; h < rest.length; h++)
++				rest[h] = new byte[world.map.regions.WREGIONS.MAX];
++		}
++		
++		int get(int human, Region t) {
++			return human == 0 ? first.get(t) : rest[human][t.index()] & 0x0FF;
++		}
++		
++		double getD(int human, Region t) {
++			return human == 0 ? first.getD(t) : get(human, t)/(double)max(t);
++		}
++		
++		@Override
++		public int get(Region t) {
++			return get(sosdet.Hooks.humanIndex(), t);
++		}
++		
++		@Override
++		public double getD(Region t) {
++			return getD(sosdet.Hooks.humanIndex(), t);
++		}
++		
++		@Override
++		public void set(Region t, int i) {
++			int h = sosdet.Hooks.humanIndex();
++			if (h == 0)
++				first.set(t, i);
++			else
++				rest[h][t.index()] = (byte) snake2d.util.misc.CLAMP.i(i, first.min(t), first.max(t));
++		}
++		
++		@Override
++		public int min(Region t) {
++			return first.min(t);
++		}
++		
++		@Override
++		public int max(Region t) {
++			return first.max(t);
++		}
++		
++		@Override
++		public util.info.INFO info() {
++			return first.info();
++		}
++	}
++	
+ 	public Faction prevOwner(Region reg) {
+ 		int i = prevOwner.get(reg);
+ 		if (i != 0) {
