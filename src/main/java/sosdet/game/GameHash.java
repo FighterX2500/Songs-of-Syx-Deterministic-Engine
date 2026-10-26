@@ -198,7 +198,8 @@ public final class GameHash implements StateSource {
         if (w != null) {
             w.eventHumans = GameEvents.keep(w.events);
         }
-        return part(w, 7, HashLog.mix(h, Double.doubleToLongBits(TIME.currentSecond())));
+        h = part(w, 7, GameDeals.hash(h));
+        return part(w, 8, HashLog.mix(h, Double.doubleToLongBits(TIME.currentSecond())));
     }
 
     private static long part(WorldKept w, int part, long h) {
@@ -212,7 +213,7 @@ public final class GameHash implements StateSource {
     private static final class WorldKept {
         static final int ARMY_FIELDS = 6;
         static final String[] PARTS = {"armies", "entities", "region owners", "factions and stances",
-            "NPC relations per human", "raiders", "events per human", "calendar"};
+            "NPC relations per human", "raiders", "events per human", "deals between humans", "calendar"};
         final long[] parts = new long[PARTS.length];
         final int[] army;
         final long[] armyHash;

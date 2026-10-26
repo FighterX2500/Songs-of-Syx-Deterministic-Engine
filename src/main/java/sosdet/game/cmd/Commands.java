@@ -13,13 +13,13 @@ import sosdet.ai.CmdWriter;
  * Every player command the engine knows (ADR 0002), by id. The hooks in the game's code ask an area class (Laws,
  * Military, ...) whether to capture; the area class encodes the call and hands it here. Each area owns an id range so
  * areas can grow independently: laws 1000, rooms 2000, employment 3000, military 4000, nobles and names 5000, tools
- * 6000 (the copier tools 6100), world 7000, diplomacy 8000, events 9000. An id is never reused.
+ * 6000 (the copier tools 6100), world 7000, diplomacy 8000 (deals between humans 8100), events 9000. An id is never reused.
  */
 public final class Commands {
 
     private static final Map<Integer, Command> BY_ID = index(Laws.ALL, Rooms.ALL, Employment.ALL, Military.ALL,
             Names.ALL, Tools.ALL, CopyTools.ALL, World.ALL, Diplomacy.ALL, Events.ALL, WorldBattles.ALL,
-            MapBattles.ALL, StepPrompts.ALL);
+            MapBattles.ALL, StepPrompts.ALL, HumanDeals.ALL);
 
     private Commands() {
     }

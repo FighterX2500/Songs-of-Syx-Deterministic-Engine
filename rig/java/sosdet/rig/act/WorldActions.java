@@ -22,6 +22,7 @@ import sosdet.Hooks;
 import sosdet.game.cmd.Diplomacy;
 import sosdet.game.cmd.Events;
 import sosdet.game.cmd.World;
+import sosdet.game.deal.DealBook;
 import sosdet.rig.Rig;
 import world.WORLD;
 import world.army.AD;
@@ -559,9 +560,99 @@ public final class WorldActions {
                 }
             });
             return true;
+        case "dealpropose": { // dealpropose <slot> none|peace|trade|pact|ally|cancel <give denari> <ask denari> [<goods>]: a
+            // deal to the human in <slot> (SOS-72); <goods>: that many of the goods this city has most of to trade
+            int slot = Integer.parseInt(a[1]);
+            int treaty = treaty(a[2]);
+            int give = Integer.parseInt(a[3]);
+            int ask = Integer.parseInt(a[4]);
+            int goods = a.length > 5 ? Integer.parseInt(a[5]) : 0;
+            Rig.later(() -> {
+                int[] pairs = goods == 0 ? new int[0] : new int[] {mostTradable().index(), goods};
+                DealBook.Terms t = new DealBook.Terms(treaty, give, ask, pairs, new int[0]);
+                String why = Engine.dealRefusal(slot, t);
+                if (why != null) {
+                    throw new IllegalStateException("deal refused: " + why);
+                }
+                Engine.dealPropose(slot, t);
+                Rig.note("proposed to slot " + slot + ": treaty " + a[2] + ", gives " + give + " denari and "
+                        + (goods == 0 ? "no goods" : goods + " " + TR.ALL().get(pairs[0]).name) + ", asks " + ask + " denari");
+            });
+            return true;
+        }
+        case "dealanswer": { // dealanswer yes|no: answers the oldest open proposal made to this PC's human (SOS-72)
+            boolean yes = a[1].equals("yes");
+            Rig.later(() -> {
+                int me = FACTIONS.player().index();
+                for (DealBook.Proposal p : Engine.deals()) {
+                    if (p.to() == me) {
+                        String why = yes ? Engine.dealAcceptRefusal(p.id()) : null;
+                        Rig.note("answers deal " + p.id() + " from slot " + p.from() + ": " + (yes ? "yes" : "no")
+                                + (why == null ? "" : " (" + why + ")"));
+                        Engine.dealAnswer(p.id(), yes);
+                        return;
+                    }
+                }
+                throw new IllegalStateException("no open proposal to slot " + me);
+            });
+            return true;
+        }
+        case "deals": { // deals: notes the open proposals, the latest answers, this human's treaties with each other
+            // human and its treasury (a probe for the run log, SOS-72)
+            Rig.later(() -> {
+                StringBuilder b = new StringBuilder("deals at second ").append((int) game.time.TIME.currentSecond()).append(": open");
+                for (DealBook.Proposal p : Engine.deals()) {
+                    b.append(" [").append(p.id()).append(' ').append(p.from()).append('>').append(p.to()).append(" treaty ")
+                            .append(p.terms().treaty).append(" expires ").append(p.expires()).append(']');
+                }
+                b.append("; answers");
+                for (DealBook.Answer x : Engine.dealAnswers()) {
+                    b.append(" [").append(x.id()).append(' ').append(x.outcome()).append(']');
+                }
+                game.faction.player.Player me = FACTIONS.player();
+                b.append("; slot ").append(me.index()).append(" treasury ").append((long) me.credits().credits());
+                for (int h : Hooks.humanSlots()) {
+                    if (h != me.index()) {
+                        b.append("; with ").append(h).append(' ').append(DIP.get(me, FACTIONS.getByIndex(h)).key());
+                    }
+                }
+                Rig.note(b.toString());
+            });
+            return true;
+        }
         default:
             return false;
         }
+    }
+
+    private static int treaty(String name) {
+        switch (name) {
+        case "none":
+            return DealBook.NO_TREATY;
+        case "peace":
+            return DealBook.PEACE;
+        case "trade":
+            return DealBook.TRADE;
+        case "pact":
+            return DealBook.PACT;
+        case "ally":
+            return DealBook.ALLY;
+        case "cancel":
+            return DealBook.CANCEL_ALL;
+        default:
+            throw new IllegalArgumentException("no treaty " + name);
+        }
+    }
+
+    /** The goods this PC's city has most of to trade. */
+    private static init.trade.TRADABLE mostTradable() {
+        init.trade.TRADABLE best = null;
+        for (init.trade.TRADABLE t : TR.ALL()) {
+            if (best == null || FACTIONS.player().res().getAvailable(t) > FACTIONS.player().res().getAvailable(best)) {
+                best = t;
+            }
+        }
+        return best;
     }
 
     /** The player's credits by kind: in and out today, then yesterday; kinds with no flow are left out. */

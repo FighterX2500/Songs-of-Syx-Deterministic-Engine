@@ -5,6 +5,7 @@ import sosdet.ai.AiLog;
 import sosdet.ai.AiMode;
 import sosdet.ai.Commanders;
 import java.nio.file.Path;
+import java.util.List;
 
 import sosdet.game.GameAi;
 import sosdet.game.GameHash;
@@ -14,6 +15,8 @@ import sosdet.game.GameResync;
 import sosdet.game.GameWorldLoad;
 import sosdet.game.GameWorldSetup;
 import sosdet.game.OwnArmy;
+import sosdet.game.cmd.HumanDeals;
+import sosdet.game.deal.DealBook;
 import sosdet.report.CityReport;
 import sosdet.hash.Desync;
 import sosdet.report.Shape;
@@ -701,6 +704,52 @@ public final class Engine {
     public static boolean retired(int slot) {
         required();
         return Hooks.retired(slot);
+    }
+
+    // ------------------------------------------------------------ deals between humans (SOS-72, plan 0009)
+
+    /**
+     * Between steps: why this PC's player can't propose {@code terms} to the human in {@code slot} now, as a sentence for
+     * the player, or null. Only this PC's own money and goods can be read here; the other side's are checked when the
+     * deal applies, and a deal that no longer holds then is refused on every PC.
+     */
+    public static String dealRefusal(int slot, DealBook.Terms terms) {
+        required();
+        return HumanDeals.proposeRefusal(slot, terms);
+    }
+
+    /** Between steps: this PC's player proposes {@code terms} to the human in {@code slot}. Check {@link #dealRefusal} first. */
+    public static void dealPropose(int slot, DealBook.Terms terms) {
+        required();
+        String why = HumanDeals.proposeRefusal(slot, terms);
+        if (why != null) {
+            throw new IllegalStateException("SOSDET: a deal refused: " + why);
+        }
+        HumanDeals.propose(slot, terms);
+    }
+
+    /** Between steps: why this PC's player can't accept the proposal {@code id} now, or null. Declining always works. */
+    public static String dealAcceptRefusal(int id) {
+        required();
+        return HumanDeals.acceptRefusal(id);
+    }
+
+    /** Between steps: this PC's player answers the proposal {@code id} made to them. */
+    public static void dealAnswer(int id, boolean accept) {
+        required();
+        HumanDeals.answer(id, accept);
+    }
+
+    /** Every open proposal between humans, oldest first: a live view, read on the game thread. */
+    public static List<DealBook.Proposal> deals() {
+        required();
+        return HumanDeals.open();
+    }
+
+    /** The latest answers to proposals between humans, oldest first: a live view, read on the game thread. */
+    public static List<DealBook.Answer> dealAnswers() {
+        required();
+        return HumanDeals.answers();
     }
 
     /**
