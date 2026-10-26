@@ -597,6 +597,18 @@ public final class WorldActions {
             });
             return true;
         }
+        case "dealcancel": { // dealcancel <slot>: cancels every treaty with the human in <slot> at once (SOS-76)
+            int slot = Integer.parseInt(a[1]);
+            Rig.later(() -> {
+                String why = Engine.dealCancelRefusal(slot);
+                if (why != null) {
+                    throw new IllegalStateException("cancel refused: " + why);
+                }
+                Engine.dealCancel(slot);
+                Rig.note("cancels every treaty with slot " + slot);
+            });
+            return true;
+        }
         case "deals": { // deals: notes the open proposals, the latest answers, this human's treaties with each other
             // human and its treasury (a probe for the run log, SOS-72)
             Rig.later(() -> {

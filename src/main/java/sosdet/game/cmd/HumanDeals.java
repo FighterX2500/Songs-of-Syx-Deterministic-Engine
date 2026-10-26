@@ -35,12 +35,15 @@ public final class HumanDeals {
 
     static final int PROPOSE = 8100;
     static final int ANSWER = 8101;
+    /** Cancelling every treaty with another human at once, with no answer (owner, 2026-10-27; SOS-76). */
+    static final int CANCEL = 8102;
     /** An unanswered proposal expires as declined (mod spec §6). */
     static final int EXPIRES_DAYS = 30;
 
     static final List<Command> ALL = List.of(
             new Command(PROPOSE, "humanDealPropose", HumanDeals::applyPropose),
-            new Command(ANSWER, "humanDealAnswer", HumanDeals::applyAnswer));
+            new Command(ANSWER, "humanDealAnswer", HumanDeals::applyAnswer),
+            new Command(CANCEL, "humanDealCancel", HumanDeals::applyCancel));
 
     private HumanDeals() {
     }
@@ -64,6 +67,19 @@ public final class HumanDeals {
             throw new IllegalStateException("SOSDET: a deal answered outside a session's play");
         }
         Commands.capture(new CmdWriter(ANSWER).i(id).b(accept));
+    }
+
+    /** This PC's player cancels every treaty with the human in slot {@code to}: captured, applied at its step. */
+    public static void cancel(int to) {
+        if (!Commands.capturing()) {
+            throw new IllegalStateException("SOSDET: treaties cancelled outside a session's play");
+        }
+        Commands.capture(new CmdWriter(CANCEL).i(to));
+    }
+
+    /** Why this PC's player can't cancel their treaties with the human in slot {@code to} now; null when they can. */
+    public static String cancelRefusal(int to) {
+        return cancelRefusal(FACTIONS.player(), human(to));
     }
 
     /** Why this PC's player can't propose {@code terms} to the human in slot {@code to} now; null when they can. */
@@ -152,6 +168,21 @@ public final class HumanDeals {
         return true;
     }
 
+    private static boolean applyCancel(CmdReader r) {
+        Faction from = FACTIONS.player();
+        Faction to = human(r.i());
+        if (cancelRefusal(from, to) != null) {
+            return false; // it changed since this PC's UI checked it
+        }
+        int before = Hooks.currentHumanSwap(from); // DIP.set reads the player for its war timer: the canceller's
+        try {
+            DIP.NEUTRAL().set(from, to);
+        } finally {
+            Hooks.currentHumanSwap(before);
+        }
+        return true;
+    }
+
     /** Start of each world part, before the commands: proposals due expire as declined. */
     public static void expire() {
         book().expire((int) TIME.currentSecond());
@@ -224,6 +255,24 @@ public final class HumanDeals {
         }
         why = sideRefusal(from, terms.fromCredits, terms.fromGoods());
         return why != null ? why : sideRefusal(to, terms.toCredits, terms.toGoods());
+    }
+
+    /** Why {@code from} can't cancel every treaty with {@code to} at once; null when they can. */
+    static String cancelRefusal(Faction from, Faction to) {
+        if (!(from instanceof Player) || !(to instanceof Player)) {
+            return "Treaties here are between players.";
+        }
+        if (from == to) {
+            return "A player has no treaties with themselves.";
+        }
+        if (Hooks.retired(from.index()) || Hooks.retired(to.index())) {
+            return "That player was removed from the game.";
+        }
+        DipStance now = DIP.get(from, to);
+        if (now == DIP.WAR()) {
+            return "At war: make peace instead.";
+        }
+        return now == DIP.NEUTRAL() ? "There is no treaty to cancel." : null;
     }
 
     /** Why the treaty term can't be agreed between {@code a} and {@code b}; null when it can. */

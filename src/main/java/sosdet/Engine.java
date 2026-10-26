@@ -18,6 +18,7 @@ import sosdet.game.OwnArmy;
 import sosdet.game.cmd.HumanDeals;
 import sosdet.game.deal.DealBook;
 import sosdet.report.CityReport;
+import sosdet.report.Field;
 import sosdet.hash.Desync;
 import sosdet.report.Shape;
 
@@ -738,6 +739,38 @@ public final class Engine {
     public static void dealAnswer(int id, boolean accept) {
         required();
         HumanDeals.answer(id, accept);
+    }
+
+    /** Between steps: why this PC's player can't cancel every treaty with the human in {@code slot} now, or null. */
+    public static String dealCancelRefusal(int slot) {
+        required();
+        return HumanDeals.cancelRefusal(slot);
+    }
+
+    /**
+     * Between steps: this PC's player cancels every treaty with the human in {@code slot} at once, with no proposal and
+     * no answer (SOS-76). Check {@link #dealCancelRefusal} first.
+     */
+    public static void dealCancel(int slot) {
+        required();
+        String why = HumanDeals.cancelRefusal(slot);
+        if (why != null) {
+            throw new IllegalStateException("SOSDET: a cancel refused: " + why);
+        }
+        HumanDeals.cancel(slot);
+    }
+
+    /**
+     * Outside the step: the stock of the tradable with index {@code tradable} that the human in {@code slot} last
+     * reported, as the world reads it (another player's Goods tab, SOS-76); 0 before that human's first report.
+     */
+    public static int reportedStock(int slot, int tradable) {
+        Session s = required();
+        if (!s.isHuman(slot)) {
+            throw new IllegalArgumentException("SOSDET: slot " + slot + " is not a human in this game");
+        }
+        CityReport r = s.reports(slot).current();
+        return r == null ? 0 : (int) r.get(Field.HELD, tradable);
     }
 
     /** Every open proposal between humans, oldest first: a live view, read on the game thread. */
