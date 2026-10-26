@@ -598,8 +598,8 @@ public final class Engine {
      * and it stays in its slot, retired. Until that step every PC reads the human's last report the host has and waits
      * for no later one, so feed none of that human's reports after the call.
      *
-     * <p>Refused for slot 0 (the host's own) and while a battle waits for that human's PC's battle save, which can't
-     * come: the host returns to the last save then.
+     * <p>Refused for slot 0 and while a battle waits for that human's PC's battle save, which can't come: the host
+     * returns to the last save then. {@link #removeRefusal} says beforehand whether the call would be refused.
      */
     public static void removeHuman(int slot) {
         Session s = required();
@@ -610,17 +610,11 @@ public final class Engine {
             throw new IllegalStateException("SOSDET: a human is removed between steps, not inside one");
         }
         removable(s, slot);
-        OwnBattle b = s.battle;
-        if (b != null && b.awaiting && b.human == slot) {
-            throw new IllegalStateException("SOSDET: the battle of step " + b.step + " waits for the battle save of slot "
-                    + slot + "'s PC, which can't come; return to the last save instead");
+        String battle = battleRefusal(s, slot);
+        if (battle != null) {
+            throw new IllegalStateException("SOSDET: " + battle);
         }
         int pc = s.pcOf(slot);
-        if (s.ai().commandPendingFrom(pc, sosdet.game.cmd.WorldBattles::isEngage)) {
-            // that battle would wait for a battle save from the PC that is gone
-            throw new IllegalStateException("SOSDET: slot " + slot + "'s PC engaged a battle that is still to begin; return"
-                    + " to the last save instead");
-        }
         long cutoff = s.receivedTakenAt[slot];
         s.removing[slot] = true;
         s.removeCutoff[slot] = cutoff;
@@ -647,6 +641,48 @@ public final class Engine {
         s.removing[slot] = true;
         s.removeCutoff[slot] = -1;
         s.removeDue[slot] = true;
+    }
+
+    /**
+     * Host, between steps: why {@link #removeHuman} would refuse the human in {@code slot} now, as a sentence for the
+     * player, or null when it would remove it (SOS-65). With {@code atStart}, why {@link #removeHumanAtStart} would.
+     */
+    public static String removeRefusal(int slot, boolean atStart) {
+        Session s = required();
+        if (!s.ownCity) {
+            return "Removing a player needs own-city mode.";
+        }
+        if (slot == 0) {
+            return "The player in slot 0 can't be removed.";
+        }
+        if (slot < 0 || slot >= Session.SLOTS || !s.isHuman(slot)) {
+            return "Slot " + slot + " is not a player's.";
+        }
+        if (s.retired(slot) || s.removing[slot]) {
+            return "That player is already removed.";
+        }
+        if (atStart) {
+            return s.clock.step() == 0 ? null : "The game has already started.";
+        }
+        if (s.ai().mode() != AiMode.HOST) {
+            return "Only the host removes a player.";
+        }
+        String battle = battleRefusal(s, slot);
+        return battle == null ? null : Character.toUpperCase(battle.charAt(0)) + battle.substring(1) + ".";
+    }
+
+    /** Why a battle keeps the human in {@code slot} from being removed now, or null (SOS-66). */
+    private static String battleRefusal(Session s, int slot) {
+        OwnBattle b = s.battle;
+        if (b != null && b.awaiting && b.human == slot) {
+            return "the battle of step " + b.step + " waits for the battle save of slot " + slot
+                    + "'s PC, which can't come; return to the last save instead";
+        }
+        if (s.ai().commandPendingFrom(s.pcOf(slot), sosdet.game.cmd.WorldBattles::isEngage)) {
+            // that battle would wait for a battle save from the PC that is gone
+            return "slot " + slot + "'s PC engaged a battle that is still to begin; return to the last save instead";
+        }
+        return null;
     }
 
     private static void removable(Session s, int slot) {
