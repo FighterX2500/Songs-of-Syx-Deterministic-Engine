@@ -81,7 +81,12 @@ public final class WorldActions {
                 WArmy t = w.intercepting();
                 Rig.note("army " + w.armyIndex() + " " + w.state().name(w) + " at " + w.ctx() + "," + w.cty() + " path "
                         + (w.path().isValid() ? w.path().destX() + "," + w.path().destY() + " left " + w.path().remaining() : "none")
-                        + (t == null ? "" : " target " + t.armyIndex() + " at " + t.ctx() + "," + t.cty() + " " + t.state().name(t)));
+                        + (t == null ? "" : " target " + t.armyIndex() + " at " + t.ctx() + "," + t.cty() + " " + t.state().name(t))
+                        // SOS-71: whether a world-battle prompt holds it in place, and where it stands below a tile
+                        + " step " + Engine.step() + " held " + Hooks.armyHeld(w) + " prompt "
+                        + (Hooks.worldPrompt() == null ? "none" : Hooks.worldPrompt().getClass().getSimpleName() + " asks " + Hooks.worldPromptHuman())
+                        + " px " + w.body().cX() + "," + w.body().cY() + " next " + w.path().x() + "," + w.path().y()
+                        + " men " + AD.men(null).get(w));
             });
             return true;
         }
