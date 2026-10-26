@@ -149,7 +149,12 @@ diff -ru -U2 a/view/main/VIEW.java b/view/main/VIEW.java
  		}
  
  		if (KEYS.MAIN().SWAP.consumeClick()) {
-@@ -254,7 +256,9 @@
+@@ -250,11 +252,13 @@
+ 		}
+ 		
+-		if (KEYS.MAIN().QUICKLOAD.consumeClick() && GameLoader.quickload()) {
++		if (KEYS.MAIN().QUICKLOAD.consumeClick() && sosdet.Hooks.quickLoadAllowed() && GameLoader.quickload()) { // SOSDET: no quick load in a session (SOS-79)
+ 			SPRITES.loader().minify(true, Dic.¤¤load);
  			return;
  		}
  		

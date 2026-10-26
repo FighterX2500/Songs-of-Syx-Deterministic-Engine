@@ -95,6 +95,14 @@ public final class Hooks {
         return Engine.session() == null;
     }
 
+    /**
+     * No quick load during a session: it would load a save on this PC alone, in the middle of the lockstep. Loads in a
+     * session come through the API (SOS-79).
+     */
+    public static boolean quickLoadAllowed() {
+        return Engine.session() == null;
+    }
+
     /** Whether order writes should be traced: the draw trace is on and this is the simulation thread in the step. */
     public static boolean tracingOrders() {
         Session s = Engine.session();
