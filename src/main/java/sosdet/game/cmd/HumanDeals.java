@@ -20,6 +20,7 @@ import sosdet.game.deal.DealBook;
 import sosdet.game.deal.DealBook.Outcome;
 import sosdet.game.deal.DealBook.Proposal;
 import sosdet.game.deal.DealBook.Terms;
+import sosdet.game.deal.TariffBook;
 import world.WORLD;
 import world.entity.caravan.Shipment;
 
@@ -37,13 +38,16 @@ public final class HumanDeals {
     static final int ANSWER = 8101;
     /** Cancelling every treaty with another human at once, with no answer (owner, 2026-10-27; SOS-76). */
     static final int CANCEL = 8102;
+    /** A human sets their tariff on another at once, with no answer (owner, 2026-10-27; SOS-77). */
+    static final int TARIFF = 8103;
     /** An unanswered proposal expires as declined (mod spec §6). */
     static final int EXPIRES_DAYS = 30;
 
     static final List<Command> ALL = List.of(
             new Command(PROPOSE, "humanDealPropose", HumanDeals::applyPropose),
             new Command(ANSWER, "humanDealAnswer", HumanDeals::applyAnswer),
-            new Command(CANCEL, "humanDealCancel", HumanDeals::applyCancel));
+            new Command(CANCEL, "humanDealCancel", HumanDeals::applyCancel),
+            new Command(TARIFF, "humanTariff", HumanDeals::applyTariff));
 
     private HumanDeals() {
     }
@@ -80,6 +84,19 @@ public final class HumanDeals {
     /** Why this PC's player can't cancel their treaties with the human in slot {@code to} now; null when they can. */
     public static String cancelRefusal(int to) {
         return cancelRefusal(FACTIONS.player(), human(to));
+    }
+
+    /** This PC's player sets their tariff on the human in slot {@code to}: captured, applied at its step. */
+    public static void tariff(int to, int percent) {
+        if (!Commands.capturing()) {
+            throw new IllegalStateException("SOSDET: a tariff set outside a session's play");
+        }
+        Commands.capture(new CmdWriter(TARIFF).i(to).i(percent));
+    }
+
+    /** Why this PC's player can't set a tariff of {@code percent} on the human in slot {@code to} now; null when they can. */
+    public static String tariffRefusal(int to, int percent) {
+        return tariffRefusal(FACTIONS.player(), human(to), percent);
     }
 
     /** Why this PC's player can't propose {@code terms} to the human in slot {@code to} now; null when they can. */
@@ -183,6 +200,29 @@ public final class HumanDeals {
         return true;
     }
 
+    private static boolean applyTariff(CmdReader r) {
+        Faction from = FACTIONS.player();
+        Faction to = human(r.i());
+        int percent = r.i();
+        if (tariffRefusal(from, to, percent) != null) {
+            return false; // it changed since this PC's UI checked it, such as the trade stance ended
+        }
+        tariffs().set(from.index(), to.index(), percent);
+        return true;
+    }
+
+    /**
+     * In the world part, {@code TradeSorter}'s purchase by {@code buyer} from {@code seller} at {@code price}: the
+     * buyer's tariff of it, which the seller doesn't get and the buyer's treasury does (SOS-77). 0 unless both are
+     * humans.
+     */
+    public static int tariffCut(Faction buyer, Faction seller, int price) {
+        if (!(buyer instanceof Player) || !(seller instanceof Player) || buyer == seller) {
+            return 0;
+        }
+        return tariffs().cut(buyer.index(), seller.index(), price, TIME.years().bitsSinceStart());
+    }
+
     /** Start of each world part, before the commands: proposals due expire as declined. */
     public static void expire() {
         book().expire((int) TIME.currentSecond());
@@ -275,6 +315,23 @@ public final class HumanDeals {
         return now == DIP.NEUTRAL() ? "There is no treaty to cancel." : null;
     }
 
+    /** Why {@code from} can't set a tariff of {@code percent} on {@code to}; null when they can. */
+    static String tariffRefusal(Faction from, Faction to, int percent) {
+        if (!(from instanceof Player) || !(to instanceof Player)) {
+            return "Tariffs here are between players.";
+        }
+        if (from == to) {
+            return "A player sets no tariff on themselves.";
+        }
+        if (Hooks.retired(from.index()) || Hooks.retired(to.index())) {
+            return "That player was removed from the game.";
+        }
+        if (!DIP.get(from, to).trades) {
+            return "Needs a trade agreement first.";
+        }
+        return TariffBook.refusal(percent);
+    }
+
     /** Why the treaty term can't be agreed between {@code a} and {@code b}; null when it can. */
     static String treatyRefusal(Faction a, Faction b, int treaty) {
         if (treaty == DealBook.NO_TREATY) {
@@ -353,5 +410,16 @@ public final class HumanDeals {
 
     private static DealBook book() {
         return GameHumans.get().deals().book();
+    }
+
+    /** What {@code buyer}'s tariff on {@code seller} brought in this year or last; with {@code seller} -1, all this year. */
+    public static int tariffRevenue(int buyer, int seller, boolean lastYear) {
+        int now = TIME.years().bitsSinceStart();
+        return seller < 0 ? tariffs().revenue(buyer, now) : tariffs().revenue(buyer, seller, now, lastYear);
+    }
+
+    /** This game's tariffs between humans. */
+    public static TariffBook tariffs() {
+        return GameHumans.get().tariffs().book();
     }
 }

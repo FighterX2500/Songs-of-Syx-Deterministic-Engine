@@ -574,7 +574,7 @@ def scenario_saves(args):
     return saves, autoload
 
 
-def make_humans(game, saves, n, run_dir, new_world=None, difficulty=None):
+def make_humans(game, saves, n, run_dir, new_world=None, difficulty=None, which=None):
     """--humans: copy 1 makes n - 1 NPCs humans in the save and saves it, before the run; every copy then starts from
     that save (SOS-46). With --new-world SEED it builds a fresh world around n humans instead (SOS-55). Returns the saves
     and the human slots, slot 0 first."""
@@ -587,7 +587,7 @@ def make_humans(game, saves, n, run_dir, new_world=None, difficulty=None):
     move_offscreen(1)
     c.send("load sosdet-city", "loaded", 600)
     if new_world is None:
-        made = c.send("makehuman auto %d" % (n - 1), "makehuman", 600)
+        made = c.send("makehuman %s" % (which or "auto %d" % (n - 1)), "makehuman", 600)
     else:
         made = c.send("newworld %d auto %d%s" % (new_world, n, " " + difficulty if difficulty else ""), "newworld", 900)
         log("new world from seed %d: humans at %s" % (new_world, made["locations"]))
@@ -806,6 +806,9 @@ def main():
                     help="city: N humans (SOS-46), one per copy: copy 1 first makes N - 1 NPCs humans and saves; copy k"
                          " then runs human k's city in own-city mode and reads every other copy's reports; the copies"
                          " are compared on the world only")
+    ap.add_argument("--make-humans", default=None,
+                    help="with --humans N: 'A,B,...', the N - 1 NPC slots that become humans, instead of the first ones"
+                         " (SOS-77: NPCs whose land borders the player's, so they are trade partners)")
     ap.add_argument("--new-world", type=int, default=None,
                     help="with --humans N: copy 1 builds a fresh world from this terrain seed around N humans (SOS-55,"
                          " Engine.buildWorld) instead of turning NPCs into humans; every copy then loads it")
@@ -947,7 +950,7 @@ def main():
     if humans_saves:
         human_slots = list(range(args.humans))  # each copy resumes its own game, as the mod's campaign resume does
     elif args.humans:
-        saves, human_slots = make_humans(game, saves, args.humans, run_dir, args.new_world, args.difficulty)
+        saves, human_slots = make_humans(game, saves, args.humans, run_dir, args.new_world, args.difficulty, args.make_humans)
 
     if args.remote and (not REMOTE or not 1 < args.remote <= args.copies):
         fail("--remote needs SOSDET_RIG_REMOTE=user@host and a copy other than copy 1 (the host)")

@@ -117,6 +117,11 @@ public final class RoomActions {
         case "export-resource": // export-resource <res>
             Rig.later(() -> Rooms.exportResource(room("export"), res(a[1])));
             return true;
+        case "export-price": // export-price <res> <denarii>: the export panel's price cap; a city setting, which the
+            // other PCs read from this city's report (SOS-77)
+            Rig.later(() -> game.faction.FACTIONS.player().seller(init.trade.TR.get(res(a[1]))).priceCapsI
+                    .set(Integer.parseInt(a[2])));
+            return true;
         case "export-fetching": // export-fetching 1|0
             Rig.later(() -> ((ExportInstance) room("export")).fetchingSet(on(a[1])));
             return true;
@@ -277,7 +282,13 @@ public final class RoomActions {
         return s.equals("1");
     }
 
+    /** A resource by index, or by key, with or without the trade key's prefix (SOS-77: {@code RES_FURNITURE}). */
     private static RESOURCE res(String s) {
+        for (RESOURCE r : RESOURCES.ALL()) {
+            if (r.key().equals(s) || s.equals("RES_" + r.key())) {
+                return r;
+            }
+        }
         int i = Integer.parseInt(s);
         return i < 0 ? null : RESOURCES.ALL().get(i);
     }
