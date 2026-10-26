@@ -400,6 +400,11 @@ public final class Engine {
         if (s.streams.inStep()) {
             throw new IllegalStateException("SOSDET: a world resync is saved between steps, not inside one");
         }
+        for (boolean removing : s.removing) {
+            if (removing) {
+                throw new IllegalStateException("SOSDET: a world resync waits until the human being removed is retired (SOS-66)");
+            }
+        }
         long step = s.clock.step();
         GameWorldLoad.save(file);
         s.clock.runUntil(step); // the host waits for its own load too
@@ -584,6 +589,82 @@ public final class Engine {
         if (pc == s.ai().localPc()) {
             s.localHuman = slot;
         }
+    }
+
+    /**
+     * Host, own-city mode, between steps: removes the human in {@code slot}, whose PC is gone (mod spec §11, SOS-66).
+     * A removal entry in the log applies at its stamped step on every PC. First a battle that human is in ends with no
+     * result; then each of its armies is disbanded and every region it held is freed, as vanilla destroys a faction,
+     * and it stays in its slot, retired. Until that step every PC reads the human's last report the host has and waits
+     * for no later one, so feed none of that human's reports after the call.
+     *
+     * <p>Refused for slot 0 (the host's own) and while a battle waits for that human's PC's battle save, which can't
+     * come: the host returns to the last save then.
+     */
+    public static void removeHuman(int slot) {
+        Session s = required();
+        if (!s.ownCity || s.ai().mode() != AiMode.HOST) {
+            throw new IllegalStateException("SOSDET: the host removes a human, in own-city mode (mode " + s.ai().mode() + ")");
+        }
+        if (s.streams.inStep()) {
+            throw new IllegalStateException("SOSDET: a human is removed between steps, not inside one");
+        }
+        removable(s, slot);
+        OwnBattle b = s.battle;
+        if (b != null && b.awaiting && b.human == slot) {
+            throw new IllegalStateException("SOSDET: the battle of step " + b.step + " waits for the battle save of slot "
+                    + slot + "'s PC, which can't come; return to the last save instead");
+        }
+        int pc = s.pcOf(slot);
+        if (s.ai().commandPendingFrom(pc, sosdet.game.cmd.WorldBattles::isEngage)) {
+            // that battle would wait for a battle save from the PC that is gone
+            throw new IllegalStateException("SOSDET: slot " + slot + "'s PC engaged a battle that is still to begin; return"
+                    + " to the last save instead");
+        }
+        long cutoff = s.receivedTakenAt[slot];
+        s.removing[slot] = true;
+        s.removeCutoff[slot] = cutoff;
+        s.ai().captureRemove(AiEntry.ints(slot, (int) (cutoff >>> 32), (int) cutoff));
+        s.pacer.drop(pc); // its PC is gone: the host's pace waits for it no more
+        s.ai().pcGone(pc); // and none of its orders still to come goes into the log
+    }
+
+    /**
+     * Every PC, own-city mode, at step 0 before the run: a resumed campaign starts without the human in {@code slot},
+     * whose player is missing (mod spec §11, SOS-66). It is removed as {@link #removeHuman} does, in the first world
+     * part, and no PC waits for its load report.
+     */
+    public static void removeHumanAtStart(int slot) {
+        Session s = required();
+        if (!s.ownCity) {
+            throw new IllegalStateException("SOSDET: removing a human is for own-city mode");
+        }
+        if (s.clock.step() != 0) {
+            throw new IllegalStateException("SOSDET: a human is removed at the start before the run (step "
+                    + s.clock.step() + ")");
+        }
+        removable(s, slot);
+        s.removing[slot] = true;
+        s.removeCutoff[slot] = -1;
+        s.removeDue[slot] = true;
+    }
+
+    private static void removable(Session s, int slot) {
+        if (slot == 0) {
+            throw new IllegalArgumentException("SOSDET: slot 0 is the host's human, which is never removed");
+        }
+        if (slot < 0 || slot >= Session.SLOTS || !s.isHuman(slot)) {
+            throw new IllegalArgumentException("SOSDET: slot " + slot + " is not a human in this game");
+        }
+        if (s.retired(slot) || s.removing[slot]) {
+            throw new IllegalStateException("SOSDET: the human in slot " + slot + " is already removed");
+        }
+    }
+
+    /** True for a slot whose human was removed ({@link #removeHuman}): it owns nothing and nothing runs for it. */
+    public static boolean retired(int slot) {
+        required();
+        return Hooks.retired(slot);
     }
 
     /**

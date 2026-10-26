@@ -33,14 +33,28 @@ final class GameCityDivs extends Savable {
     @Override
     protected void save(FilePutter file) {
         int[] s = humans.slots();
-        file.i(VERSION);
-        file.i(s.length - 1);
+        int n = 0;
         for (int slot : s) {
-            if (slot != 0) {
+            if (stored(slot)) {
+                n++;
+            }
+        }
+        file.i(VERSION);
+        file.i(n);
+        for (int slot : s) {
+            if (stored(slot)) {
                 file.i(slot);
                 call(SAVE, slot, file);
             }
         }
+    }
+
+    /**
+     * Whether the section holds this human's store. A retired human's is left out (SOS-66): its armies are gone, nothing
+     * reads the store, and loading it would read the city report the human no longer has.
+     */
+    private boolean stored(int slot) {
+        return slot != 0 && !humans.retired(slot);
     }
 
     @Override

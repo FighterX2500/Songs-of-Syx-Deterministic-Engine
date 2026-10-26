@@ -173,6 +173,11 @@ public final class GameReport implements CitySource {
     }
 
     @Override
+    public boolean retired(int slot) {
+        return GameHumans.get().retired(slot);
+    }
+
+    @Override
     public void fill(double[] v) {
         ReportLayout l = layout;
         v[l.slot(Field.CREDITS, 0)] = FACTIONS.player().credits().getD();

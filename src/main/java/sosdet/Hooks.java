@@ -184,6 +184,9 @@ public final class Hooks {
         if (s.ownCity && s.clock.step() == 0) {
             s.checkPcHumans();
         }
+        if (s.ownCity) {
+            s.takeRemovals(); // before this PC may run a step: no later report of a removed human is read (SOS-66)
+        }
         if (s.ownCity && s.battle == null && s.reportsFrom < 0 && s.reports(s.localHuman).current() == null
                 && !s.reports(s.localHuman).pending()) {
             // the load report goes out before this PC waits for the others' (SOS-46): with several humans every PC waits
@@ -209,6 +212,10 @@ public final class Hooks {
         }
         s.stepStartNanos = System.nanoTime(); // timing only, never fed to the simulation
         s.ai().stepBegin(s.clock.step());
+        if (s.battle != null && !s.battle.awaiting && s.removeDue[s.battle.human]) {
+            // the battle's human is removed: the battle ends with no result, a step at a time, as its commands would (SOS-66)
+            sosdet.game.cmd.MapBattles.endForRemoval();
+        }
         return true;
     }
 
@@ -261,6 +268,9 @@ public final class Hooks {
                 // the human slots and each PC's: the same table on every PC, or each acts for other humans (SOS-46)
                 for (int h : s.humans()) {
                     clock = HashLog.mix(clock, h);
+                    if (s.retired(h)) {
+                        clock = HashLog.mix(clock, -1); // and which are removed; a game with none hashes as before (SOS-66)
+                    }
                 }
                 for (int pc : s.pcHumans) {
                     clock = HashLog.mix(clock, pc);
@@ -339,8 +349,15 @@ public final class Hooks {
             s.part = part;
             s.streams.reseed(s.worldSeed(step));
             s.streams.worldPart(true);
+            if (!battleRuns) {
+                s.dueWithoutReports();
+                s.retireDue(); // first: a removed human's report is read no more (SOS-66)
+            }
             int[] humans = battleRuns ? Session.NO_ARMIES : s.humans();
             for (int h : humans) {
+                if (s.retired(h) || s.removing[h] && s.reports(h).current() == null && !s.reports(h).pending()) {
+                    continue; // removed, or being removed after a load: it sends no report (SOS-66)
+                }
                 s.currentHuman = h; // a report's inputs act for its own human
                 s.reports(h).applyDue(step, s.inputApplier());
                 if (s.reports(h).current() == null) {
@@ -463,10 +480,28 @@ public final class Hooks {
         return 0;
     }
 
-    /** The human slots, in slot order: slot 0 alone without a session. Not to be changed. */
+    /**
+     * The human slots, in slot order: slot 0 alone without a session. Not to be changed. A removed human keeps its
+     * slot, so every human keeps its place and slices; each per-human loop skips it ({@link #retired}, SOS-66).
+     */
     public static int[] humanSlots() {
         Session s = Engine.session();
         return s == null ? FIRST_HUMAN : s.humans();
+    }
+
+    /** True for the slot of a removed human (SOS-66): nothing runs for it. Per human and step: no allocation. */
+    public static boolean retired(int slot) {
+        Session s = Engine.session();
+        if (s == null || slot < 0 || slot >= Session.SLOTS) {
+            return false;
+        }
+        // while a game loads, the session's lists are the old game's: the loaded flags are read (their section loads first)
+        return s.loading ? sosdet.game.GameHumans.get().retired(slot) : s.retired(slot);
+    }
+
+    /** As the host's removal entry applies, on every PC (SOS-66). */
+    public static void humanRemoved(int slot) {
+        Engine.session().humanRemoved(slot);
     }
 
     /**

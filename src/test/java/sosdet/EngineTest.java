@@ -142,6 +142,11 @@ class EngineTest {
 
     /** CITY with these human slots. */
     private static CitySource humans(int... slots) {
+        return humansAt(slots[0], slots);
+    }
+
+    /** CITY with these human slots, this PC's city {@code own}'s. */
+    private static CitySource humansAt(int own, int... slots) {
         return new CitySource() {
             @Override
             public ReportLayout layout() {
@@ -150,7 +155,7 @@ class EngineTest {
 
             @Override
             public int faction() {
-                return slots[0];
+                return own;
             }
 
             @Override
@@ -598,6 +603,105 @@ class EngineTest {
         s.part = -1;
         assertEquals(7, Hooks.worldInvasionRef(7), "outside the world part a ref is the city's own");
         s.currentHuman = 0;
+    }
+
+    /** Applies the removal entries of a log as the game's applier does (SOS-66); nothing else. */
+    private static final sosdet.ai.AiApplier REMOVALS = e -> {
+        if (e.kind == sosdet.ai.AiEntry.REMOVE) {
+            Hooks.humanRemoved(e.intAt(0));
+        }
+    };
+
+    /**
+     * SOS-66: the host removes a human whose PC is gone. It waits for none of that human's reports past the last one
+     * it has, and at the removal entry's step it retires that human, whose reports it reads no more.
+     */
+    @Test
+    void theHostWaitsNoMoreForARemovedHumanAndRetiresItAtTheEntrysStep() {
+        Session s = ownCity(0);
+        s.city = humans(0, 3);
+        java.util.List<Integer> retired = new java.util.ArrayList<>();
+        s.remover = retired::add;
+        s.ai(sosdet.ai.AiLog.host(1, REMOVALS));
+        Engine.pcHuman(0, 0);
+        Engine.pcHuman(1, 3);
+        Engine.runFreely();
+        Engine.reportsIn(1, reportRecord(3, 1, 1));
+        assertEquals(59, steps(100, 1), "slot 3's last report, taken at 1, is read to step 59");
+        assertThrows(IllegalArgumentException.class, () -> Engine.removeHuman(0), "the host's own human");
+        assertThrows(IllegalArgumentException.class, () -> Engine.removeHuman(5), "no human");
+
+        Engine.removeHuman(3);
+        assertThrows(IllegalStateException.class, () -> Engine.removeHuman(3), "once");
+        assertEquals(30, steps(30, 1), "no more waiting for slot 3; its entry is stamped for step 90");
+        assertTrue(retired.isEmpty(), "nothing retires before the entry's step");
+        assertFalse(Engine.retired(3));
+        boolean[] closed = new boolean[1];
+        s.armyOwner = army -> army == 7 ? 3 : -1;
+        Hooks.worldPromptOpened("a battle of slot 0 against slot 3's army 7", () -> closed[0] = true, () -> { },
+                new int[] { 7 });
+        assertEquals(1, steps(1, 1));
+        assertEquals(java.util.List.of(3), retired, "retired in step 90's world part");
+        assertTrue(closed[0], "a prompt holding one of its armies closes, whoever it asks");
+        assertNull(Hooks.worldPrompt());
+        assertTrue(Engine.retired(3));
+        assertNull(s.reports(3).current(), "its reports are read no more");
+        Engine.reportsIn(1, reportRecord(3, 60, 90));
+        assertNull(s.reports(3).current(), "and a late one is dropped");
+        assertEquals(100, steps(100, 1));
+    }
+
+    /**
+     * SOS-66: a peer held by a removed human's missing report learns the removal from the host's log, reads the same
+     * last report as the host, and retires that human at the same step.
+     */
+    @Test
+    void aPeerFindsTheRemovalInTheLogAndRetiresAtTheSameStep() {
+        sosdet.ai.AiLog host = sosdet.ai.AiLog.host(1, REMOVALS);
+        Session s = ownCity(2);
+        s.city = humansAt(5, 0, 3, 5);
+        java.util.List<Integer> retired = new java.util.ArrayList<>();
+        s.remover = retired::add;
+        s.ai(sosdet.ai.AiLog.peer(1, REMOVALS));
+        Engine.localPc(2);
+        Engine.pcHuman(0, 0);
+        Engine.pcHuman(1, 3);
+        Engine.pcHuman(2, 5);
+        Engine.runFreely();
+        for (long taken = 1; taken < 200; taken = taken == 1 ? 30 : taken + 30) {
+            Engine.reportsIn(0, reportRecord(0, taken, taken == 1 ? 1 : taken + 30));
+        }
+        Engine.reportsIn(1, reportRecord(3, 1, 1));
+        for (long step = 1; step <= 59; step++) {
+            host.stepBegin(step);
+        }
+        Engine.aiLogIn(host.logOut());
+        assertEquals(59, steps(100, 1), "held by slot 3's missing report");
+
+        host.captureRemove(sosdet.ai.AiEntry.ints(3, 0, 1)); // as Engine.removeHuman logs it: slot 3's last report, taken at 1
+        host.stepBegin(60);
+        Engine.aiLogIn(host.logOut());
+        assertEquals(30, steps(30, 1), "the removal in the log: no more waiting for slot 3");
+        assertTrue(retired.isEmpty());
+        assertEquals(1, steps(1, 1), "step 90, as on the host");
+        assertEquals(java.util.List.of(3), retired);
+        assertTrue(Engine.retired(3));
+    }
+
+    /** SOS-66: a resumed campaign starts without a missing player's human: no PC waits for its load report. */
+    @Test
+    void aHumanRemovedAtTheStartSendsNoLoadReport() {
+        Session s = ownCity(0);
+        s.city = humans(0, 3);
+        java.util.List<Integer> retired = new java.util.ArrayList<>();
+        s.remover = retired::add;
+        Engine.pcHuman(0, 0);
+        Engine.removeHumanAtStart(3);
+        Engine.runFreely();
+        assertEquals(50, steps(50, 1), "slot 3 has no PC and sends nothing");
+        assertEquals(java.util.List.of(3), retired, "retired in the first world part");
+        Hooks.stepsFor(0);
+        assertThrows(IllegalStateException.class, () -> Engine.removeHumanAtStart(3), "after the start");
     }
 
     @Test

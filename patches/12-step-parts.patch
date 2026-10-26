@@ -1,6 +1,6 @@
 diff -ru -U2 a/game/events/EVENTS.java b/game/events/EVENTS.java
 --- a/game/events/EVENTS.java	2026-02-17 17:15:30.000000000 +0500
-+++ b/game/events/EVENTS.java	2026-10-25 12:48:43.775012700 +0500
++++ b/game/events/EVENTS.java	2026-10-26 04:19:07.142032400 +0500
 @@ -131,7 +131,7 @@
  			return;
  		prof.logStart(EVENTS.class);
@@ -12,7 +12,7 @@ diff -ru -U2 a/game/events/EVENTS.java b/game/events/EVENTS.java
  	}
 diff -ru -U2 a/game/faction/FACTIONS.java b/game/faction/FACTIONS.java
 --- a/game/faction/FACTIONS.java	2026-03-25 10:31:18.000000000 +0500
-+++ b/game/faction/FACTIONS.java	2026-10-25 12:48:43.779531900 +0500
++++ b/game/faction/FACTIONS.java	2026-10-26 04:19:07.147395900 +0500
 @@ -41,7 +41,7 @@
  
  		@Override
@@ -81,7 +81,7 @@ diff -ru -U2 a/game/faction/FACTIONS.java b/game/faction/FACTIONS.java
  		prof.logStart(player.getClass());
 -		player.updateSpecial(ds, prof);
 +		for (int i = 0; i < all.size(); i++) { // SOSDET: every human's world half, in slot order, each the current human in turn (ADR 0004)
-+			if (all.get(i) instanceof Player && (i == 0 || sosdet.Hooks.everyHuman())) {
++			if (all.get(i) instanceof Player && (i == 0 || sosdet.Hooks.everyHuman()) && !sosdet.Hooks.retired(i)) { // SOSDET: a removed human runs nothing (SOS-66)
 +				sosdet.Hooks.currentHuman(i);
 +				if (sosdet.Hooks.humanSlots().length > 1)
 +					RD.DIST().neighs(); // SOSDET: this human's distances, current for the other humans' reads and the UI (SOS-46 M5)
@@ -101,7 +101,7 @@ diff -ru -U2 a/game/faction/FACTIONS.java b/game/faction/FACTIONS.java
  	}
  
  	public static Faction getByIndex(int index) {
-@@ -286,13 +318,15 @@
+@@ -286,13 +318,16 @@
  	public static LIST<Faction> active(){
  		if (self.dirty) {
  			self.active.clearSloppy();
@@ -116,7 +116,8 @@ diff -ru -U2 a/game/faction/FACTIONS.java b/game/faction/FACTIONS.java
 +			for (int i = 0; i < self.all.size(); i++) { // SOSDET: every human, in slot order with the NPCs; one human: vanilla's order (ADR 0004)
 +				Faction f = self.all.get(i);
 +				if (f instanceof Player) {
-+					self.active.add(f);
++					if (!sosdet.Hooks.retired(i)) // SOSDET: a removed human is in no faction list (SOS-66)
++						self.active.add(f);
 +				}else if (f.realm().capitol() != null) {
 +					self.npcsActive.add((FactionNPC) f);
 +					self.active.add(f);
@@ -125,7 +126,7 @@ diff -ru -U2 a/game/faction/FACTIONS.java b/game/faction/FACTIONS.java
  		}
 diff -ru -U2 a/game/faction/player/Player.java b/game/faction/player/Player.java
 --- a/game/faction/player/Player.java	2026-06-17 10:48:04.000000000 +0500
-+++ b/game/faction/player/Player.java	2026-10-25 12:48:43.776012300 +0500
++++ b/game/faction/player/Player.java	2026-10-26 04:19:07.143757000 +0500
 @@ -6,7 +6,6 @@
  import game.boosting.BOOSTABLE_O;
  import game.boosting.BValue;
