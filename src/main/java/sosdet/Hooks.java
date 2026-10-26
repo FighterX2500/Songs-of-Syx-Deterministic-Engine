@@ -489,6 +489,20 @@ public final class Hooks {
     }
 
     /**
+     * This PC's human: the one whose banner draft and profile this PC's player edits (SOS-78); -1 without a session, or
+     * when several humans share this PC and none is set for it.
+     */
+    public static int localHuman() {
+        Session s = Engine.session();
+        if (s == null) {
+            return -1;
+        }
+        int pc = s.ai().localPc();
+        int h = pc < 0 || pc >= s.pcHumans.length ? -1 : s.pcHumans[pc];
+        return h >= 0 ? h : s.humans().length > 1 ? -1 : 0;
+    }
+
+    /**
      * The human slots, in slot order: slot 0 alone without a session. Not to be changed. A removed human keeps its
      * slot, so every human keeps its place and slices; each per-human loop skips it ({@link #retired}, SOS-66).
      */
@@ -1459,6 +1473,7 @@ public final class Hooks {
         s.promptTimer.close();
         s.stepPrompts.clear(); // the load's questions are not asked again
         s.stepPromptShown = -1;
+        s.bannerDraft.reset(); // the load's banners are every PC's: no draft or Accept of this PC's is over them (SOS-78)
         if (s.plans().inGame()) { // unit tests have no game to reset
             WorldStatics.reset();
             s.dropGameObjects();

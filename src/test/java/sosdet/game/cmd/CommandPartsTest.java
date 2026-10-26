@@ -45,4 +45,24 @@ class CommandPartsTest {
         assertFalse(CommandParts.everyPc(Events.KILLER_SUSPECT));
         assertFalse(CommandParts.everyPc(1000));
     }
+
+    /**
+     * SOS-78: the player's faction name, ruler name and banner reach every PC, in the world part; the other names and
+     * banners stay in the sender's city.
+     */
+    @Test
+    void thePlayersNameAndBannerAreWorldCommands() {
+        assertTrue(CommandParts.world(new CmdWriter(Names.FACTION_NAME).s("Ann's Realm").bytes()));
+        assertTrue(CommandParts.everyPc(Names.RULER_NAME));
+        assertTrue(CommandParts.everyPc(Names.PLAYER_BANNER));
+        assertTrue(CommandParts.everyPc(Names.BANNER));
+        assertTrue(CommandParts.everyPc(Names.BANNER_TYPE));
+
+        assertFalse(CommandParts.everyPc(Names.DIVISION_NAME));
+        assertFalse(CommandParts.everyPc(Names.ROOM_NAME));
+        assertFalse(CommandParts.everyPc(Names.MARK_NAME));
+        assertFalse(CommandParts.everyPc(Names.SUBJECT_NAME));
+        assertFalse(CommandParts.everyPc(Names.DIVISION_BANNER));
+        assertFalse(CommandParts.everyPc(Names.COLOUR));
+    }
 }

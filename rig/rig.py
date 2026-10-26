@@ -85,9 +85,11 @@ class Copy:
         for target, src in saves.items():
             shutil.copy2(src, self.data / "saves" / "saves" / target)
         settings = (REAL / "settings" / "LauncherSettings.txt").read_bytes().decode("utf-8")
-        # Windowed and tiny, muted, never minimised, both mods on; with window=True, the user's own screen and sound;
-        # with a size, a window of that size with sound (another PC's screen)
-        tiny = () if window else (("SCREEN_MODE", "2"), ("WINDOW_WIDTH", "10"), ("WIDOW_HEIGHT", "10"), ("VOLUME_MASTER", "0"))
+        # Windowed and tiny, muted, never minimised, both mods on; with window=True, a 1280x720 window with the user's
+        # sound, never their own full screen (owner, 2026-10-27: the rig runs windowed); with a size, a window of that
+        # size with sound (another PC's screen)
+        tiny = ((("SCREEN_MODE", "2"), ("WINDOW_WIDTH", "1280"), ("WIDOW_HEIGHT", "720")) if window
+                else (("SCREEN_MODE", "2"), ("WINDOW_WIDTH", "10"), ("WIDOW_HEIGHT", "10"), ("VOLUME_MASTER", "0")))
         if size:
             tiny = (("SCREEN_MODE", "2"), ("WINDOW_WIDTH", str(size[0])), ("WIDOW_HEIGHT", str(size[1])))
         for key, value in tiny + (("WIN_AUTO_ICONIFY", "0"),):
@@ -753,7 +755,7 @@ def main():
     ap.add_argument("--battle-save", default="",
                     help="field: start from this battle save in your saves folder instead of generating one (a replayed"
                          " log needs the start it was recorded on; SOS-31)")
-    ap.add_argument("--window", action="store_true", help="the user's own screen and sound settings, to watch a copy")
+    ap.add_argument("--window", action="store_true", help="a 1280x720 window with the user's sound, to watch a copy (always windowed, never full screen)")
     ap.add_argument("--run-on", action="store_true", help="don't stop at the first difference; run the whole length")
     ap.add_argument("--ai", choices=["instep", "host"], default="host",
                     help="host (default, as the engine): copy 1 hosts the AI general and is the reference, the others are"

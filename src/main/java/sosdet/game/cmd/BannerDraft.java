@@ -6,6 +6,7 @@ import game.faction.FACTIONS;
 import game.faction.FBanner;
 import init.sprite.BitmapSprite;
 import snake2d.util.color.ColorImp;
+import sosdet.hash.HashLog;
 
 /**
  * A banner while this PC's player edits it, before it is sent (SOS-32, SOS-40): the player's banner in the profile, or
@@ -13,7 +14,8 @@ import snake2d.util.color.ColorImp;
  * editor change the banner on this PC only, as in vanilla, so the previews and the world map follow a drag at once; the
  * first change keeps the banner as it was. Accept sends the whole banner as one command, which every PC applies at its
  * step; Cancel, or closing the window or popup, puts the kept banner back. No step reads a banner's shape, colours or
- * pixels and the state hash doesn't cover them, so a draft never splits the copies.
+ * pixels. The state hash covers every player's banner (SOS-78), so it reads this PC's player's banner as every PC has
+ * it: the kept one while a draft is open, and the one before the last Accept until that Accept's command applies.
  *
  * <p>One draft at a time, one per session. Game thread only.
  */
@@ -33,6 +35,10 @@ public final class BannerDraft {
 
     private final int[] kept = new int[FACTION_VALUES + PIXELS];
     private int target = NONE;
+    /** The player's banner as every PC has it, while an Accept of it is on its way to its step (SOS-78). */
+    private final int[] confirmed = new int[FACTION_VALUES + PIXELS];
+    /** The player's banner's Accepts sent and not yet applied. */
+    private int inFlight;
 
     /** True while this PC's player has changed a banner and not yet accepted or cancelled. */
     boolean open() {
@@ -52,7 +58,11 @@ public final class BannerDraft {
         if (target != NONE) {
             throw new IllegalStateException("banner draft for " + target + " still open, keeping " + t);
         }
-        read(t, kept);
+        if (t == FACTION && inFlight > 0) {
+            System.arraycopy(confirmed, 0, kept, 0, kept.length); // the banner shows an Accept the others don't have yet
+        } else {
+            read(t, kept);
+        }
         target = t;
     }
 
@@ -60,6 +70,9 @@ public final class BannerDraft {
     int[] take() {
         int[] v = new int[size(target)];
         read(target, v);
+        if (target == FACTION && inFlight++ == 0) {
+            System.arraycopy(kept, 0, confirmed, 0, kept.length);
+        }
         target = NONE;
         return v;
     }
@@ -74,11 +87,66 @@ public final class BannerDraft {
         return true;
     }
 
-    /** A banner command for {@code t} applied over this PC's draft: its values win, and the draft ends. */
-    void drop(int t) {
+    /**
+     * This PC's banner command for {@code t} applied with values {@code v}: they win over this PC's draft, which ends,
+     * and every PC has them now.
+     */
+    void drop(int t, int[] v) {
+        if (t == FACTION && inFlight > 0) {
+            inFlight--;
+            System.arraycopy(v, 0, confirmed, 0, Math.min(v.length, confirmed.length));
+        }
         if (target == t) {
             target = NONE;
         }
+    }
+
+    /** A load built a new game: no draft is open, and no Accept is on its way over it. */
+    public void reset() {
+        target = NONE;
+        inFlight = 0;
+    }
+
+    /**
+     * Mixes the player banner {@code b} into {@code h} as every PC has it (SOS-78): for this PC's own player
+     * ({@code own}), the banner before its open draft or its Accepts on their way; otherwise as it is. The same values,
+     * in the same order, as a command carries. No allocation: the state hash runs every hashed step.
+     */
+    public long hash(long h, FBanner b, boolean own) {
+        if (own && inFlight > 0) {
+            return mixAll(h, confirmed);
+        }
+        if (own && target == FACTION) {
+            return mixAll(h, kept);
+        }
+        h = HashLog.mix(h, b.bannerType());
+        h = mixColour(h, b.colorBG());
+        h = mixColour(h, b.colorFG());
+        h = mixColour(h, b.colorBorder());
+        h = mixColour(h, b.colorPole());
+        for (int i = 0; i < PIXELS; i++) {
+            int bits = 0;
+            for (int p = i * 32; p < Math.min(BitmapSprite.AREA, i * 32 + 32); p++) {
+                if (b.sprite.is(p)) {
+                    bits |= 1 << (p % 32);
+                }
+            }
+            h = HashLog.mix(h, bits);
+        }
+        return h;
+    }
+
+    private static long mixColour(long h, ColorImp c) {
+        h = HashLog.mix(h, c.red() & 0xFF);
+        h = HashLog.mix(h, c.green() & 0xFF);
+        return HashLog.mix(h, c.blue() & 0xFF);
+    }
+
+    private static long mixAll(long h, int[] v) {
+        for (int i = 0; i < FACTION_VALUES + PIXELS; i++) {
+            h = HashLog.mix(h, v[i]);
+        }
+        return h;
     }
 
     /** The values a command carries for {@code t}: the banner's own, then the pixels. */

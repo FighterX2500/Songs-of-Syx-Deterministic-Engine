@@ -293,7 +293,15 @@ diff -ru -U2 a/view/ui/profile/UIFactionBanner.java b/view/ui/profile/UIFactionB
 diff -ru -U2 a/view/ui/profile/UIProfile.java b/view/ui/profile/UIProfile.java
 --- a/view/ui/profile/UIProfile.java	2026-05-23 21:02:52.000000000 +0500
 +++ b/view/ui/profile/UIProfile.java	2026-10-24 20:59:40.247376300 +0500
-@@ -82,11 +82,13 @@
+@@ -69,5 +69,7 @@
+ 			@Override
+ 			protected void clickA() {
++				if (sosdet.game.cmd.Names.profileLoad()) // SOSDET: the profile's name, ruler and banner are commands (SOS-78)
++					return;
+ 				FactionProfileFlusher.load(FACTIONS.player());
+ 			}
+ 			
+@@ -82,11 +84,13 @@
  			
  			@Override
  			public Str text() {
@@ -308,7 +316,7 @@ diff -ru -U2 a/view/ui/profile/UIProfile.java b/view/ui/profile/UIProfile.java
  				if (FACTIONS.player().capitolRegion() != null)
  					FACTIONS.player().capitolRegion().info.name().clear().add(text());
  				super.change();
-@@ -102,7 +104,12 @@
+@@ -102,7 +106,12 @@
  			
  			@Override
  			public Str text() {
