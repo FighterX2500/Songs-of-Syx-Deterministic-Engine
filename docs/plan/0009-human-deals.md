@@ -26,7 +26,7 @@ War, regions and vassalage are SOS-73 and SOS-74. War is not offered against a h
   - it writes the book with a version first and an end marker (vanilla's reader refuses a file's last 8 bytes, see `GameEvents`);
   - a save without the section gives an empty book;
   - its hash is a new part of the world hash.
-- **Commands** (`cmd.HumanDeals`, ids 8100 to 8199, inside diplomacy's world-command range): `PROPOSE` (8100) and `ANSWER` (8101).
+- **Commands** (`cmd.HumanDeals`, ids 8100 to 8199, inside diplomacy's world-command range): `PROPOSE` (8100) and `ANSWER` (8101). SOS-76 adds `CANCEL` (8102): a human cancels every treaty with another at once, with no proposal and no answer (owner, 2026-10-27); refused at war (peace is a proposal) and with no treaty. SOS-76 also adds `Engine.reportedStock(slot, tradable)`: the stock a human last reported, for another player's Goods tab and the Demand side's cap.
   - **Propose** applies in the world part with the proposer as the current human. It is refused when:
     - the other side is not a human, is the proposer, or is retired;
     - the treaty term is not offered (`refusal`);
