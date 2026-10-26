@@ -13,12 +13,14 @@ import game.faction.npc.FactionNPC;
 import game.faction.player.Player;
 import init.race.RACES;
 import init.race.Race;
+import snake2d.util.datatypes.DIR;
 import snake2d.util.file.FileGetter;
 import snake2d.util.file.FilePutter;
 import snake2d.util.misc.ACTION;
 import sosdet.HumanStart;
 import world.WORLD;
 import world.map.regions.centre.WorldCentrePlacablity;
+import world.map.road.WTRAV;
 
 /**
  * World setup with several humans (SOS-55, plan 0005): the confirmed terrain becomes a world with a capital at each
@@ -39,10 +41,42 @@ public final class GameWorldSetup {
     private GameWorldSetup() {
     }
 
-    /** Why a human can't start at {@code tx, ty}: the terrain, as vanilla's location stage checks it, or null. */
+    /**
+     * Why a human can't start at {@code tx, ty}: the terrain, as vanilla's location stage checks it, and a land way out
+     * of the capital's square ({@link #landExit}); or null.
+     */
     public static String terrainProblem(int tx, int ty) {
         CharSequence p = WorldCentrePlacablity.terrain(tx - 1, ty - 1); // vanilla checks the square from (playerX-1, playerY-1)
-        return p == null ? null : p.toString();
+        if (p != null) {
+            return p.toString();
+        }
+        return landExit(tx, ty) ? null : "No road could leave a city here: it needs land beyond its square.";
+    }
+
+    /**
+     * Whether the capital whose centre is {@code tx, ty} has a land way out (mod SOS-75): a good land tile on its 3x3
+     * square's edge whose neighbour straight out is good land too. Vanilla's road generator ({@code GeneratorRoads})
+     * opens only the city map's exits that the world's path network leaves by. Around a capital with only water beyond
+     * its square, that network changes with each world built and sometimes leaves none, and the city gets no roads
+     * (mod twopc run R75B3, 2026-10-26). Terrain only: the network doesn't exist yet when a location is picked.
+     */
+    static boolean landExit(int tx, int ty) {
+        for (int y = ty - 1; y <= ty + 1; y++) {
+            for (int x = tx - 1; x <= tx + 1; x++) {
+                if (!WTRAV.isGoodLandTile(x, y)) {
+                    continue;
+                }
+                for (DIR d : DIR.ORTHO) {
+                    int ox = x + d.x();
+                    int oy = y + d.y();
+                    boolean outside = Math.abs(ox - tx) == 2 || Math.abs(oy - ty) == 2;
+                    if (outside && WTRAV.isGoodLandTile(ox, oy)) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
 
     /**
