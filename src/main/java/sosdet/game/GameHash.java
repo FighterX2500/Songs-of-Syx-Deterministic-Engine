@@ -17,7 +17,9 @@ import settlement.entity.humanoid.Humanoid;
 import settlement.main.SETT;
 import settlement.stats.STATS;
 import snake2d.util.sets.LIST;
+import sosdet.Engine;
 import sosdet.Hooks;
+import sosdet.game.cmd.BannerDraft;
 import sosdet.hash.HashLog;
 import sosdet.hash.StateSource;
 import world.WORLD;
@@ -213,6 +215,9 @@ public final class GameHash implements StateSource {
     private static long identity(long h, Player p) {
         h = text(h, p.name);
         h = text(h, p.rulerName);
+        if (!Engine.active()) { // the rig hashes a world before its session (makehuman, newworld): no draft
+            return BannerDraft.mixBanner(h, p.banner());
+        }
         return Hooks.bannerDraft().hash(h, p.banner(), p.index() == Hooks.localHuman());
     }
 
