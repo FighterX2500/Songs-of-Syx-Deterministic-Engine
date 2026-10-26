@@ -118,7 +118,8 @@ public final class GameHash implements StateSource {
 
     /**
      * The world map: every army's slot, faction, tile, state and men; every world entity; every region's owner; every
-     * faction's credits, overlord and stance with every other (war, peace, pact, ...); every NPC king's opinion of
+     * faction's credits, overlord and stance with every other (war, peace, pact, ...), and each human's name, ruler name
+     * and banner (SOS-78); every NPC king's opinion of
      * every human but slot 0's (SOS-46 M3); every raider's power, defeat and
      * raids, and the raider now raiding (and each other human's, with its war and rebellion timers: SOS-46 M4); the calendar. In own-city mode the humans' credits are their cities' and are
      * left out (ADR 0005, ADR 0004).
@@ -177,6 +178,9 @@ public final class GameHash implements StateSource {
             if (!ownCity || !(f instanceof Player)) {
                 h = HashLog.mix(h, Double.doubleToLongBits(f.credits().getD()));
             }
+            if (f instanceof Player) {
+                h = identity(h, (Player) f); // every PC applies them (SOS-78)
+            }
             Faction overlord = DIP.overlord(f);
             h = HashLog.mix(h, overlord == null ? -1 : overlord.index());
             for (int k = i + 1; k < factions.size(); k++) {
@@ -200,6 +204,24 @@ public final class GameHash implements StateSource {
         }
         h = part(w, 7, GameDeals.hash(h));
         return part(w, 8, HashLog.mix(h, Double.doubleToLongBits(TIME.currentSecond())));
+    }
+
+    /**
+     * A human's faction name, ruler name and banner (SOS-78), the banner as every PC has it: this PC's player's own
+     * draft, and an Accept still on its way, don't count yet.
+     */
+    private static long identity(long h, Player p) {
+        h = text(h, p.name);
+        h = text(h, p.rulerName);
+        return Hooks.bannerDraft().hash(h, p.banner(), p.index() == Hooks.localHuman());
+    }
+
+    private static long text(long h, CharSequence s) {
+        h = HashLog.mix(h, s.length());
+        for (int i = 0; i < s.length(); i++) {
+            h = HashLog.mix(h, s.charAt(i));
+        }
+        return h;
     }
 
     private static long part(WorldKept w, int part, long h) {

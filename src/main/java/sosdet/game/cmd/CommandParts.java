@@ -33,6 +33,16 @@ public final class CommandParts {
 
     static boolean world(int id) {
         return (id >= 7000 && id < StepPrompts.ANSWER) || id == StepPrompts.WORLD_ANSWER || (id >= 8000 && id < 9000)
-                || id == Events.RAIDER_PAY || id == Events.RAIDER_ALLY_HELP;
+                || id == Events.RAIDER_PAY || id == Events.RAIDER_ALLY_HELP || playerIdentity(id);
+    }
+
+    /**
+     * The player's faction name, ruler name and banner (SOS-78): other players see them on the world map and in the
+     * faction window, so every PC applies them, for the human who sent them. The division, room, mark and subject names
+     * stay in the sender's own city.
+     */
+    private static boolean playerIdentity(int id) {
+        return id == Names.FACTION_NAME || id == Names.RULER_NAME || id == Names.BANNER_TYPE || id == Names.BANNER
+                || id == Names.PLAYER_BANNER;
     }
 }

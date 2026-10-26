@@ -10,6 +10,8 @@ import game.battle.util.DIV_SPEC.DIV_SPECE;
 import game.faction.FACTIONS;
 import game.faction.FBanner;
 import game.faction.Faction;
+import game.faction.FactionProfileFlusher;
+import game.faction.player.Player;
 import game.nobility.NOBLES;
 import game.nobility.Noble;
 import game.nobility.NobleOffice;
@@ -274,6 +276,32 @@ public final class Names {
         return true;
     }
 
+    /**
+     * Hook in {@code UIProfile}'s Load (SOS-78): the saved profile's faction name, ruler name and banner become the same
+     * commands as typing them and accepting the banner, so every PC applies them at one step. The profile's colour masks
+     * stay this PC's, as before. True when the hook did the load.
+     */
+    public static boolean profileLoad() {
+        if (!Commands.capturing() || !FactionProfileFlusher.canLoad(FACTIONS.player())) {
+            return false;
+        }
+        bannerCancel(); // an open draft goes back first; the load's banner is a draft of its own
+        Player p = FACTIONS.player();
+        String name = p.name.toString();
+        String ruler = p.rulerName.toString();
+        Hooks.bannerDraft().keep(BannerDraft.FACTION);
+        FactionProfileFlusher.load(p); // the banner as a draft, as the editor would leave it; the names to send
+        String loadedName = p.name.toString();
+        String loadedRuler = p.rulerName.toString();
+        p.name.clear().add(name); // the names change on every PC at the commands' step, not here first
+        p.rulerName.clear().add(ruler);
+        factionName(loadedName);
+        rulerName(loadedRuler);
+        bannerAccept();
+        minimapRedraw();
+        return true;
+    }
+
     /** Hook in {@code UISubjectActions}' rename, given when the rename dialog is accepted. */
     public static boolean subjectName(Humanoid h, String name) {
         if (!Commands.capturing()) {
@@ -423,7 +451,10 @@ public final class Names {
 
     /** A banner command: its values replace the banner, and this PC's draft of it ends (the command wins). */
     private static boolean bannerApply(int banner, int[] v) {
-        Hooks.bannerDraft().drop(banner); // on the PC that accepted, the draft has already ended
+        // the player's banner applies on every PC (SOS-78), for the human who sent it: only that PC's draft is its own
+        if (banner != BannerDraft.FACTION || FACTIONS.player().index() == Hooks.localHuman()) {
+            Hooks.bannerDraft().drop(banner, v); // on the PC that accepted, the draft has already ended
+        }
         BannerDraft.write(banner, v);
         if (banner == BannerDraft.FACTION) {
             minimapRedraw();
