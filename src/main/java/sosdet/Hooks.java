@@ -31,6 +31,7 @@ import sosdet.game.GameReport;
 import sosdet.game.StepParts;
 import sosdet.game.WorldStatics;
 import sosdet.game.cmd.BannerDraft;
+import sosdet.game.cmd.HumanDeals;
 import sosdet.game.cmd.PlanStash;
 import sosdet.hash.HashLog;
 import sosdet.report.CityReport;
@@ -873,6 +874,14 @@ public final class Hooks {
         r.change(step, Field.PROMISED, p.type.index(), 0, amount);
         r.change(step, Field.PROMISED, p.type.index(), type.index + 1, amount);
         return true;
+    }
+
+    /**
+     * {@code TradeSorter.buy}, a purchase by {@code buyer} from {@code seller} at {@code price}: the buyer's tariff of it
+     * when both are humans, which the seller doesn't get and the buyer's treasury does; otherwise 0 (SOS-77).
+     */
+    public static int tariffCut(Faction buyer, Faction seller, int price) {
+        return HumanDeals.tariffCut(buyer, seller, price);
     }
 
     /** {@code PCredits.inc}: true when queued. The treasury counts whole credits ({@code CredHistory}), as here. */

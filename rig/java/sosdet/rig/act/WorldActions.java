@@ -609,6 +609,53 @@ public final class WorldActions {
             });
             return true;
         }
+        case "tariff": { // tariff <slot> <percent>: sets this human's tariff on the human in <slot> at once (SOS-77)
+            int slot = Integer.parseInt(a[1]);
+            int percent = Integer.parseInt(a[2]);
+            Rig.later(() -> {
+                String why = Engine.tariffRefusal(slot, percent);
+                if (why != null) {
+                    throw new IllegalStateException("tariff refused: " + why);
+                }
+                Engine.setTariff(slot, percent);
+                Rig.note("sets the tariff on slot " + slot + " to " + percent + "%");
+            });
+            return true;
+        }
+        case "wtradeinfo": // wtradeinfo: notes this city's goods for sale (amount at price), the goods it would buy below its
+            // price cap, its trade partners with distance and toll, and the goods it owns (SOS-77: to pick an export one human has that another imports)
+            Rig.later(() -> {
+                game.faction.player.Player me = FACTIONS.player();
+                StringBuilder b = new StringBuilder("trade of slot ").append(me.index()).append(": sells");
+                for (init.trade.TRADABLE t : TR.ALL()) {
+                    int n = me.seller(t).removeMax();
+                    if (n > 0) {
+                        b.append(' ').append(t.key()).append(':').append(n).append('@').append(me.seller(t).removePrice(1));
+                    }
+                }
+                b.append("; buys");
+                for (init.trade.TRADABLE t : TR.ALL()) {
+                    if (me.buyer(t).buyPriority(1, 1) > 0) {
+                        b.append(' ').append(t.key()).append("<").append(me.buyer(t).priceCapsI.get()).append(" min$")
+                                .append(me.buyer(t).minMoney.get());
+                    }
+                }
+                b.append("; partners");
+                for (world.map.pathing.WRegFinder.RegDist p : world.region.RD.DIST().tradePartners(me)) {
+                    if (p.reg.faction() != me && p.reg.faction() != null) {
+                        b.append(' ').append(p.reg.faction().index()).append(" at ").append(p.distance).append(" toll ")
+                                .append((int) game.faction.trade.TradeManager.toll(p.reg.faction(), me, p.distance));
+                    }
+                }
+                b.append("; owns");
+                for (init.trade.TRADABLE t : TR.ALL()) {
+                    if (me.seller(t).playerOwned() > 0) {
+                        b.append(' ').append(t.key()).append(':').append(me.seller(t).playerOwned());
+                    }
+                }
+                Rig.note(b.toString());
+            });
+            return true;
         case "deals": { // deals: notes the open proposals, the latest answers, this human's treaties with each other
             // human and its treasury (a probe for the run log, SOS-72)
             Rig.later(() -> {
@@ -626,6 +673,8 @@ public final class WorldActions {
                 for (int h : Hooks.humanSlots()) {
                     if (h != me.index()) {
                         b.append("; with ").append(h).append(' ').append(DIP.get(me, FACTIONS.getByIndex(h)).key());
+                        b.append(" tariff ").append(Engine.tariff(me.index(), h)).append('/').append(Engine.tariff(h, me.index()))
+                                .append(" revenue ").append(Engine.tariffRevenue(me.index(), h, false));
                     }
                 }
                 Rig.note(b.toString());

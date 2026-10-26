@@ -119,6 +119,11 @@ public final class BannerDraft {
         if (own && target == FACTION) {
             return mixAll(h, kept);
         }
+        return mixBanner(h, b);
+    }
+
+    /** Mixes banner {@code b} into {@code h} as it is: what {@link #hash} mixes when no draft is over it. */
+    public static long mixBanner(long h, FBanner b) {
         h = HashLog.mix(h, b.bannerType());
         h = mixColour(h, b.colorBG());
         h = mixColour(h, b.colorFG());

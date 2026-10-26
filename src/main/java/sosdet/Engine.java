@@ -760,6 +760,53 @@ public final class Engine {
         HumanDeals.cancel(slot);
     }
 
+    /** Between steps: why this PC's player can't set a tariff of {@code percent} on the human in {@code slot} now, or null. */
+    public static String tariffRefusal(int slot, int percent) {
+        required();
+        return HumanDeals.tariffRefusal(slot, percent);
+    }
+
+    /**
+     * Between steps: this PC's player sets their tariff on what the human in {@code slot} sells them, at once, with no
+     * answer (SOS-77): 0% to 80% in steps of 5%. Check {@link #tariffRefusal} first.
+     */
+    public static void setTariff(int slot, int percent) {
+        required();
+        String why = HumanDeals.tariffRefusal(slot, percent);
+        if (why != null) {
+            throw new IllegalStateException("SOSDET: a tariff refused: " + why);
+        }
+        HumanDeals.tariff(slot, percent);
+    }
+
+    /** The tariff the human in {@code setter} puts on what the human in {@code other} sells them, in percent. */
+    public static int tariff(int setter, int other) {
+        required();
+        return HumanDeals.tariffs().rate(setter, other);
+    }
+
+    /**
+     * What the tariff of the human in {@code buyer} on the human in {@code seller} brought in this year, or last year;
+     * with {@code seller} -1, all of {@code buyer}'s tariffs this year.
+     */
+    public static int tariffRevenue(int buyer, int seller, boolean lastYear) {
+        required();
+        return HumanDeals.tariffRevenue(buyer, seller, lastYear);
+    }
+
+    /**
+     * Outside the step: the price per item the human in {@code slot} last reported for the tradable with index
+     * {@code tradable}: their lowest export price ({@code sell}), or their highest import price (SOS-77, the Goods tab).
+     */
+    public static int reportedPrice(int slot, int tradable, boolean sell) {
+        Session s = required();
+        if (!s.isHuman(slot)) {
+            throw new IllegalArgumentException("SOSDET: slot " + slot + " is not a human in this game");
+        }
+        CityReport r = s.reports(slot).current();
+        return r == null ? 0 : (int) r.get(sell ? Field.SELL_PRICE_CAP : Field.BUY_PRICE_CAP, tradable);
+    }
+
     /**
      * Outside the step: the stock of the tradable with index {@code tradable} that the human in {@code slot} last
      * reported, as the world reads it (another player's Goods tab, SOS-76); 0 before that human's first report.
