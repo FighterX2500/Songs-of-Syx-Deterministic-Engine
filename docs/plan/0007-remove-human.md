@@ -1,6 +1,6 @@
 # Plan 0007: a removed human's realm becomes free regions (SOS-66)
 
-Card: [SOS-66](https://fighterx2500.atlassian.net/browse/SOS-66) · Date: 2026-10-26 · Status: proposed, waiting for the owner · Mod spec 0.17 §11 (Removing a player, Disconnects); the mod's SOS-65 calls it · Builds on [ADR 0004](../decisions/0004-several-humans.md), [plan 0004](0004-several-humans.md), [plan 0006](0006-own-city-battles.md)
+Card: [SOS-66](https://fighterx2500.atlassian.net/browse/SOS-66) · Date: 2026-10-26 · Status: approved (owner, 2026-10-26), built, smokes passed · Mod spec 0.17 §11 (Removing a player, Disconnects); the mod's SOS-65 calls it · Builds on [ADR 0004](../decisions/0004-several-humans.md), [plan 0004](0004-several-humans.md), [plan 0006](0006-own-city-battles.md)
 
 Game paths are relative to `<game>/info/SongsOfSyx-sources/`. Nothing here has been run yet.
 
@@ -85,3 +85,26 @@ The suite: ask the owner before `suite.py --short`. Nothing changes without a re
 - **Objects that still name the human:** old messages, the trade ledger, battle records. They are harmless if they only show it, and the audit checks that none acts on it.
 - **`FACTIONS.remove` takes a `FactionNPC`.** The removal calls its two parts itself, `disbandAll` and freeing each region, so no vanilla code needs changing for a `Player`.
 - **Size:** about 30 guard sites, plus the battle and prompt handling. One PR, in two or three commits.
+
+## 9. Results (2026-10-26)
+
+Rig, Mogus-72, this PC, three copies at speeds 5, 7 and 8 unless noted:
+
+| Run | What | Result |
+|---|---|---|
+| H66A | `--remove 2:2400 --steps 6000` | Copy 2 stopped at 2,570, removal at 2,609, slot 1 retired at 2,640 on copies 1 and 3 (0 regions, 0 armies, not active); identical to 6,000, no desync |
+| H66B | H66A with `--world-resync 3600` | Retired at 2,640, the world reloaded at 3,600 on copies 1 and 3; identical to 6,000, no desync |
+| H66C | Human 1's field battle (`--engage-copy 2`), `--remove 2:b300 --steps 4500` | Battle loaded at 1,365, copy 2 stopped at 1,782, removal at 1,890; the battle ended with no result and every copy was back in its own city at 1,921; retired at 1,922; identical to 4,500, no desync |
+| One human | `--copies 2 --steps 3000`, this branch and main | The same end hash on both, `cf35feb0794ab7c5` at step 3,000 |
+
+What the smokes found and fixed:
+- **The rig numbered hash peers by copy (1, 2, 3)**, every other rig command from 0 for the host as the engine and the mod do. So `Pacer.drop` dropped the wrong PC, and the host stood still two pace leads past the removed copy's last hash (the first H66A). `hashpeer` now numbers from 0.
+- **A world load read the retired human's city report** while loading its stored city divisions, which retirement clears (the first H66B; a campaign save loaded in a fresh process would crash the same way). The `SOSDET_CITY_DIVS` section now leaves a retired human's store out: its armies are gone, and nothing reads the store.
+
+Not covered, or left as gaps:
+- **A world resync doesn't carry the retired flags.** Every PC already holds them by then, and a resync waits until a removal pending is retired (`worldResyncSave` refuses meanwhile).
+- **The mod must stop relaying a removed player's reports** once it calls `removeHuman`; the engine drops any taken after the cutoff anyway.
+- **A battle awaiting the dropped PC's battle save, or an Engage from it still to begin,** is refused: the host returns to the last save instead.
+- **A battle's other side** keeping its armies as they were is by reasoning: the result prompt closes unaccepted, and casualties apply only on accept. The rig doesn't count armies.
+- **Found in passing, not this card:** a siege by a human other than slot 0 (`2: wbesiegenear 0 stronger`) never arrives. The army stops 9 tiles from the settlement and no "declare war?" question opens, while slot 0's does (H70A). H66C used a field battle instead.
+- The recorded suite (`suite.py --short`) was not run; nothing changes without a removal, and the one-human run matches main.

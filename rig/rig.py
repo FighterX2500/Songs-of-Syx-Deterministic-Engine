@@ -787,6 +787,8 @@ def main():
     ap.add_argument("--engage", type=int, default=-1,
                     help="city: copy 1 fights field battles on the battle map, retreating this many steps after Start "
                          "(0: fights on to the end); default: auto-resolve (SOS-32)")
+    ap.add_argument("--engage-copy", type=int, default=1,
+                    help="with --engage and --humans: this copy's player fights its human's battles, not copy 1's (SOS-66)")
     ap.add_argument("--restart", type=int, default=0,
                     help="with --engage: copy 1 restarts the battle once, this many steps after Start (SOS-41)")
     ap.add_argument("--in-battle", default="",
@@ -814,7 +816,8 @@ def main():
                          " there (beforebattle.save in its rig folder), then lets the step run (SOS-70)")
     ap.add_argument("--remove", default="",
                     help="with --humans: 'K:STEP': copy K stops once copy 1 passes STEP, as a PC that drops out, and copy"
-                         " 1 removes its human (SOS-66); the other copies are compared to the end without it")
+                         " 1 removes its human (SOS-66); the other copies are compared to the end without it. 'K:bN':"
+                         " N steps after copy 1 loads a battle (with --engage)")
     ap.add_argument("--difficulty", default=None,
                     help="with --new-world: every human gets this difficulty mode (a file in the game's player/mode"
                          " folder, e.g. 00_FIRST_NAME), as the mod's world build gives the lobby's (SOS-69)")
@@ -906,12 +909,19 @@ def main():
         fail("--on-desync is for --humans runs, without --world-resync")
     if args.world_resync and not (args.follow or args.humans):
         fail("--world-resync is for --follow or --humans runs; co-op runs use --resync")
-    remove_copy, remove_at = 0, 0
+    remove_copy, remove_at, remove_in_battle = 0, 0, False
     if args.remove:
         k, _, at = args.remove.partition(":")
-        if not (k.isdigit() and at.isdigit()) or not args.humans or not 2 <= int(k) <= args.copies:
-            fail("--remove K:STEP is for --humans runs, K from 2 to %d (copy 1 is the host)" % args.copies)
+        remove_in_battle = at.startswith("b")
+        if remove_in_battle:
+            at = at[1:]
+        if not (k.isdigit() and at.isdigit()) or not args.humans or not 2 <= int(k) <= args.copies \
+                or remove_in_battle and args.engage < 0:
+            fail("--remove K:STEP or K:bN is for --humans runs, K from 2 to %d (copy 1 is the host); bN needs --engage"
+                 % args.copies)
         remove_copy, remove_at = int(k), int(at)
+    if not 1 <= args.engage_copy <= args.copies or args.engage_copy > 1 and not (args.humans and args.engage >= 0):
+        fail("--engage-copy K is for --engage --humans runs, K from 1 to %d" % args.copies)
     follower_saves = [s for s in args.follower_saves.split(",") if s]
     if follower_saves:
         if not args.follow or len(follower_saves) != args.copies - 1:
@@ -1066,7 +1076,7 @@ def main():
         c.send("hashes %s" % (c.rig / "hashes.bin"), "hashes")
         for o in copies:
             if o.k != c.k:
-                c.send("hashpeer %d %s" % (o.k, o.rig / "hashes.bin"), "hashpeer")
+                c.send("hashpeer %d %s" % (o.k - 1, o.rig / "hashes.bin"), "hashpeer")
         if c.k == nudged:
             c.send("nudge %d" % args.nudge, "nudge")
         if c.k == 1 and len(copies) > 1 and args.pace_lead > 0:
@@ -1077,13 +1087,14 @@ def main():
             c.send("watchonly", "watchonly")
         if c.k == 1 and args.commanders:
             c.send("commanders " + args.commanders, "commanders")
-        if c.k == 1 and args.scenario == "city" and not args.play and not args.replay:
-            if args.engage >= 0:  # field battles on the battle map (SOS-32)
-                c.send("answerprompts engage %d%s" % (args.engage, " restart %d" % args.restart if args.restart else ""),
-                       "answerprompts")
-                if args.in_battle:
-                    c.send("inbattle " + args.in_battle, "inbattlearmed")
-            elif args.unanswered:  # nobody answers: each world-battle prompt's time runs out (SOS-45)
+        if c.k == args.engage_copy and args.engage >= 0 and args.scenario == "city" and not args.play \
+                and not args.replay:  # field battles on the battle map (SOS-32)
+            c.send("answerprompts engage %d%s" % (args.engage, " restart %d" % args.restart if args.restart else ""),
+                   "answerprompts")
+            if args.in_battle:
+                c.send("inbattle " + args.in_battle, "inbattlearmed")
+        elif c.k == 1 and args.scenario == "city" and not args.play and not args.replay:
+            if args.unanswered:  # nobody answers: each world-battle prompt's time runs out (SOS-45)
                 c.send("answerprompts wait", "answerprompts")
             else:
                 c.send("answerprompts", "answerprompts")  # nobody clicks the world-battle prompt in a rig run
@@ -1182,8 +1193,10 @@ def main():
                     finished[c.k] = c.find("finished", 0)
                 args.steps = held["holdStep"]
                 break
-        if remove_copy and remove_copy not in finished \
-                and last_logged_step(copies[0].rig / ("%s-c1.csv" % args.tag)) >= remove_at:
+        battle_in = copies[0].find("battlein", 0) if remove_in_battle else None
+        if remove_copy and remove_copy not in finished and (battle_in or not remove_in_battle) \
+                and last_logged_step(copies[0].rig / ("%s-c1.csv" % args.tag)) \
+                >= (battle_in["step"] if battle_in else 0) + remove_at:
             # a PC drops out (SOS-66): its copy stops where it is; once every copy has read its last report, copy 1
             # removes its human, as the mod's host does on Continue without them
             gone = copies[remove_copy - 1]
@@ -1274,6 +1287,8 @@ def main():
         lines.insert(0, "world resync: copy 1 saved at step %s in %s ms (%s bytes)"
                      % (saved and saved["step"], saved and saved["saveMs"], saved and saved["saveBytes"]))
         for c in reversed(copies):
+            if c.k == remove_copy:
+                continue  # stopped before the resync, its human removed
             w = c.find("worldresynced", 0)
             lines.insert(1, "world resync: copy %d loaded the world at step %s in %s ms"
                          % (c.k, w and w["step"], w and w["loadMs"]))
@@ -1311,7 +1326,7 @@ def main():
         d = desyncs[c.k]
         if d:
             summary.append("copy %d: engine desync at step %d against copy %d, noticed at its step %d; sections %s, divisions %s"
-                           % (c.k, d["step"], d["pc"], d["noticedAt"], ",".join(d["sections"]), d["divisions"]))
+                           % (c.k, d["step"], d["pc"] + 1, d["noticedAt"], ",".join(d["sections"]), d["divisions"]))
             shutil.copy2(c.rig / ("%s-c%d-desync.txt" % (args.tag, c.k)), run_dir / ("desync-c%d.txt" % c.k))
             draws = c.rig / ("%s-c%d-draws.txt" % (args.tag, c.k))
             if draws.exists() and draws.stat().st_size:
@@ -1335,7 +1350,7 @@ def main():
         nudge = copies[nudged - 1].find("nudged", 0)
         first_hash = -(-args.nudge // HASH_EVERY) * HASH_EVERY
         found = [k for k, d in desyncs.items() if d and d["step"] == first_hash and "soldiers" in d["sections"]
-                 and (k == nudged or d["pc"] == nudged)]
+                 and (k == nudged or d["pc"] + 1 == nudged)]
         ok = nudge is not None and sorted(found) == [c.k for c in copies]
         summary.append("forced change in copy %d at step %d (division %s); first hash after it: step %d"
                        % (nudged, args.nudge, nudge and nudge["division"], first_hash))
