@@ -2,6 +2,7 @@ package sosdet;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -630,9 +631,14 @@ class EngineTest {
         assertEquals(59, steps(100, 1), "slot 3's last report, taken at 1, is read to step 59");
         assertThrows(IllegalArgumentException.class, () -> Engine.removeHuman(0), "the host's own human");
         assertThrows(IllegalArgumentException.class, () -> Engine.removeHuman(5), "no human");
+        assertNotNull(Engine.removeRefusal(0, false), "slot 0");
+        assertNotNull(Engine.removeRefusal(5, false), "no human");
+        assertNull(Engine.removeRefusal(3, false));
+        assertNotNull(Engine.removeRefusal(3, true), "after the start");
 
         Engine.removeHuman(3);
         assertThrows(IllegalStateException.class, () -> Engine.removeHuman(3), "once");
+        assertEquals("That player is already removed.", Engine.removeRefusal(3, false));
         assertEquals(30, steps(30, 1), "no more waiting for slot 3; its entry is stamped for step 90");
         assertTrue(retired.isEmpty(), "nothing retires before the entry's step");
         assertFalse(Engine.retired(3));
@@ -696,6 +702,7 @@ class EngineTest {
         java.util.List<Integer> retired = new java.util.ArrayList<>();
         s.remover = retired::add;
         Engine.pcHuman(0, 0);
+        assertNull(Engine.removeRefusal(3, true));
         Engine.removeHumanAtStart(3);
         Engine.runFreely();
         assertEquals(50, steps(50, 1), "slot 3 has no PC and sends nothing");
