@@ -20,6 +20,7 @@ import sosdet.ai.AiEntry;
 import sosdet.ai.Commanders;
 import sosdet.game.cmd.CommandParts;
 import sosdet.game.cmd.Commands;
+import sosdet.game.cmd.HumanDeals;
 import sosdet.game.cmd.MapBattles;
 
 /**
@@ -76,6 +77,7 @@ public final class GameAi implements AiApplier {
      */
     @Override
     public void worldPart() {
+        HumanDeals.expire(); // before the commands: an answer at the step a proposal expires is too late (SOS-72)
         WorldCommand c;
         while ((c = worldCommands.poll()) != null) {
             int human = Hooks.humanOf(c.pc);
