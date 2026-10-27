@@ -134,6 +134,29 @@ final class GameRelations extends Savable {
         return h;
     }
 
+    /** For a desync report: each NPC king's opinion terms of every human but slot 0's, as {@link #hash} mixes them. */
+    static String describe() {
+        StringBuilder b = new StringBuilder();
+        int humanCount = Hooks.humanSlots().length;
+        LIST<FactionNPC> npcs = FACTIONS.NPCs();
+        for (int i = 0; i < npcs.size(); i++) {
+            FactionNPC f = npcs.get(i);
+            if (f.court().king() == null || f.court().king().roy() == null) {
+                continue;
+            }
+            for (int k = 1; k < humanCount; k++) {
+                double[] v = values(opinion(f.court().king().roy(), k));
+                for (int j = 0; v != null && j < v.length; j++) {
+                    if (v[j] != 0) {
+                        b.append("  opinion of NPC ").append(f.index()).append(" of human ").append(k).append(", term ")
+                                .append(j).append(": ").append(v[j]).append(System.lineSeparator());
+                    }
+                }
+            }
+        }
+        return b.toString();
+    }
+
     /** The patched {@code Royalty.sosdetData(int)}: a royal's opinion of the human of slice {@code k}. */
     static SuperData opinion(Royalty r, int k) {
         try {

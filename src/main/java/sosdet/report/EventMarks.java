@@ -1,5 +1,8 @@
 package sosdet.report;
 
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
 import java.util.Arrays;
 
 /**
@@ -56,6 +59,30 @@ public final class EventMarks {
         for (int k = 0; k < value.length; k++) {
             value[k] = new int[0];
             inFlight[k] = new int[0];
+        }
+    }
+
+    /** Writes the marks in flight, for the city's state on another PC (a city view, SOS-82). */
+    public void writeTo(DataOutputStream out) throws IOException {
+        for (int k = 0; k < value.length; k++) {
+            out.writeInt(value[k].length);
+            for (int i = 0; i < value[k].length; i++) {
+                out.writeInt(value[k][i]);
+                out.writeInt(inFlight[k][i]);
+            }
+        }
+    }
+
+    /** Replaces the marks in flight with what {@link #writeTo} wrote. */
+    public void readFrom(DataInputStream in) throws IOException {
+        for (int k = 0; k < value.length; k++) {
+            int n = in.readInt();
+            value[k] = new int[n];
+            inFlight[k] = new int[n];
+            for (int i = 0; i < n; i++) {
+                value[k][i] = in.readInt();
+                inFlight[k][i] = in.readInt();
+            }
         }
     }
 

@@ -38,6 +38,8 @@ final class Pacer {
     /** A PC's last step its hashes have reached, or -1 before the first. */
     private final IntToLongFunction reached;
     private int[] peers = new int[0];
+    /** By PC: a viewer the pace doesn't wait for while it views another city (SOS-82). */
+    private final boolean[] away = new boolean[64];
     private long lead;
     private boolean govern;
 
@@ -95,12 +97,26 @@ final class Pacer {
         cap = StepClock.NO_LIMIT;
     }
 
+    /** PC {@code pc} views another city (true) or is back (false): the pace waits for it only when it is back. */
+    void away(int pc, boolean on) {
+        away[pc] = on;
+        cap = StepClock.NO_LIMIT;
+    }
+
     void govern(boolean on) {
         govern = on;
     }
 
     boolean on() {
-        return lead > 0 && peers.length > 0;
+        if (lead <= 0) {
+            return false;
+        }
+        for (int p : peers) {
+            if (!away[p]) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -129,6 +145,9 @@ final class Pacer {
         }
         long slowest = Long.MAX_VALUE;
         for (int pc : peers) {
+            if (away[pc]) {
+                continue;
+            }
             long r = reached.applyAsLong(pc);
             if (r < slowest) {
                 slowest = r;

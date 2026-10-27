@@ -37,14 +37,20 @@ public final class AiEntry {
      * change.
      */
     public static final int REMOVE = 19;
-    static final int KINDS = 20;
+    /**
+     * The host starts or ends a city view (SOS-82): the payload is the viewer's human, the owner's human (-1 to end the
+     * view) and the owner's PC. Every PC freezes or thaws the viewer at the first report step after this entry's step;
+     * not a battle change.
+     */
+    public static final int VIEW = 20;
+    static final int KINDS = 21;
     public static String kindName(int kind) {
         return KIND_NAMES[kind];
     }
 
     private static final String[] KIND_NAMES = {"path", "dest", "task", "guard", "running", "fireAtWill", "formation",
         "artillery", "holdFire", "ammo", "muster", "mopUp", "artilleryMuster", "artilleryFire", "teleport", "speed",
-        "command", "commanders", "hold", "remove"};
+        "command", "commanders", "hold", "remove", "view"};
 
     /** The general, as opposed to a player's PC. */
     public static final int AI = -1;

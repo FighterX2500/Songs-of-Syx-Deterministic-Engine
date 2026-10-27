@@ -20,10 +20,11 @@ import sosdet.game.deal.DealBook;
 import sosdet.report.CityReport;
 import sosdet.report.Field;
 import sosdet.hash.Desync;
+import sosdet.hash.HashLog;
 import sosdet.report.Shape;
 
 /**
- * The engine's API for the mod and the test rig (requirements §3). The patched game calls {@link Hooks}.
+ * The engine's API for the mod and the test rig (requirements В§3). The patched game calls {@link Hooks}.
  *
  * <p>Off by default: with no session, every hook gives the vanilla behaviour, so the mod changes
  * nothing until a session begins.
@@ -74,7 +75,7 @@ public final class Engine {
         return required().clock.step();
     }
 
-    /** Lets the simulation run up to and including this step, then hold (requirements §3). */
+    /** Lets the simulation run up to and including this step, then hold (requirements В§3). */
     public static void runUntil(long lastStep) {
         if (lastStep < 0) {
             throw new IllegalArgumentException("SOSDET: last step " + lastStep);
@@ -87,7 +88,7 @@ public final class Engine {
         required().clock.runUntil(StepClock.NO_LIMIT);
     }
 
-    /** Holds the world map still in the city view, as a battle does (spec §4: battles pause the world). */
+    /** Holds the world map still in the city view, as a battle does (spec В§4: battles pause the world). */
     public static void holdWorld(boolean held) {
         required().worldHeld = held;
     }
@@ -195,7 +196,7 @@ public final class Engine {
         }
     }
 
-    // ------------------------------------------------------------ own city (ADR 0005 §1, §5, §6; SOS-38)
+    // ------------------------------------------------------------ own city (ADR 0005 В§1, В§5, В§6; SOS-38)
 
     /**
      * Own-city mode: this PC's city is its own, and only the world is lockstep. Its city commands apply on this PC
@@ -312,7 +313,7 @@ public final class Engine {
 
     /**
      * Own-city mode, off by default: with it on, every PC holds before a step whose commands engage a battle on the
-     * battle map, so the mod can save the campaign there, before the battle (mod spec §11, SOS-70). The mod lets the
+     * battle map, so the mod can save the campaign there, before the battle (mod spec В§11, SOS-70). The mod lets the
      * step run with {@link #battleGo}.
      */
     public static void battleHold(boolean on) {
@@ -390,6 +391,179 @@ public final class Engine {
         }
     }
 
+    // ------------------------------------------------------------ city views (plan 0012, SOS-82)
+
+    /**
+     * Host, own-city mode, between steps: the human in {@code viewer} views {@code owner}'s city (mod spec В§10). A view
+     * entry in the log applies at its stamped step on every PC; the viewer freezes at the next report step, F. There
+     * every PC cancels the view alike when it can't start ({@link View#reason}); otherwise the owner's PC holds after F
+     * until the mod takes {@link #viewOut}, and the viewer's PC holds after F until the mod gives it to
+     * {@link #viewIn}. No PC waits for the viewer's reports or its pace while it views. The mod asks the owner first.
+     */
+    public static void viewBegin(int viewer, int owner) {
+        Session s = required();
+        if (!s.ownCity || s.ai().mode() != AiMode.HOST) {
+            throw new IllegalStateException("SOSDET: the host starts a view, in own-city mode (mode " + s.ai().mode() + ")");
+        }
+        if (s.streams.inStep()) {
+            throw new IllegalStateException("SOSDET: a view is started between steps, not inside one");
+        }
+        if (viewer == owner || !s.isHuman(viewer) || !s.isHuman(owner)) {
+            throw new IllegalArgumentException("SOSDET: human " + viewer + " can't view human " + owner + "'s city");
+        }
+        View v = s.views[viewer];
+        if (v != null && v.state != View.CANCELLED) {
+            throw new IllegalStateException("SOSDET: human " + viewer + " has a view already: " + v);
+        }
+        s.ai().captureView(AiEntry.ints(viewer, owner, s.pcOf(owner)));
+    }
+
+    /**
+     * Host, between steps: the view of the human in {@code viewer} ends. An end entry in the log applies at its stamped
+     * step on every PC, and the viewer thaws at the next report step: its PC loads its own city back just before, and
+     * every PC reads its reports again from there. A view not yet frozen is cancelled instead.
+     */
+    public static void viewEnd(int viewer) {
+        Session s = required();
+        if (s.ai().mode() != AiMode.HOST) {
+            throw new IllegalStateException("SOSDET: the host ends a view (mode " + s.ai().mode() + ")");
+        }
+        if (s.streams.inStep()) {
+            throw new IllegalStateException("SOSDET: a view is ended between steps, not inside one");
+        }
+        s.ai().captureView(AiEntry.ints(viewer, -1, -1));
+    }
+
+    /** The view of the human in {@code viewer}, the same on every PC: scheduled, loading, running or cancelled; or null. */
+    public static View view(int viewer) {
+        return required().views[viewer];
+    }
+
+    /**
+     * The owner's PC, between steps at a view's freeze step: saves its game and returns it with its city's engine state,
+     * for the mod to send to the viewer's {@link #viewIn}; then this PC runs on. Null when no view waits for its save.
+     */
+    public static byte[] viewOut() {
+        Session s = required();
+        if (s.streams.inStep()) {
+            return null;
+        }
+        for (View v : s.views) {
+            if (v == null || !v.frozen() || v.owner != s.localHuman || v.sent || s.clock.step() != v.freeze) {
+                continue;
+            }
+            byte[] save = sosdet.game.GameView.saveForView();
+            byte[] state = ViewCity.cityState(s);
+            double[] moves = GameWorldLoad.unsaved();
+            v.sent = true;
+            // the owner loads its save too: two PCs that load one save run its city alike, a loaded and an unloaded
+            // game don't (plan 0012, rig run V82D)
+            s.viewLoadStart(state, moves, v.viewer);
+            sosdet.game.GameView.loadSaved();
+            return ViewCity.toBytes(v.freeze, state, moves, save);
+        }
+        return null;
+    }
+
+    /**
+     * The viewer's PC, between steps at its view's freeze step: saves its own game and keeps its city's engine state,
+     * then loads the owner's city from {@link #viewOut}'s bytes. The load keeps the session; from then on this PC runs
+     * the owner's city, in step with the owner's, and its player only watches.
+     */
+    public static void viewIn(byte[] bytes) {
+        Session s = required();
+        View v = s.views[s.localHuman];
+        if (v == null || v.state != View.LOADING) {
+            throw new IllegalStateException("SOSDET: a view's city with no view loading on this PC (" + v + ")");
+        }
+        if (s.streams.inStep()) {
+            throw new IllegalStateException("SOSDET: a view's city is loaded between steps, not inside one");
+        }
+        ViewCity c = ViewCity.fromBytes(bytes);
+        if (c.step != v.freeze || s.clock.step() != v.freeze) {
+            throw new IllegalStateException("SOSDET: the city of step " + c.step + " for the view from step " + v.freeze
+                    + ", loaded at step " + s.clock.step());
+        }
+        sosdet.game.GameView.saveOwn();
+        s.ownCityState = ViewCity.cityState(s);
+        s.ai().watchOnly(true);
+        s.viewLoadStart(c.state, c.moves, s.localHuman);
+        sosdet.game.GameView.loadView(c.save);
+    }
+
+    /**
+     * Debugging, between steps: this PC saves its own game and loads it back as a PC outside a view does, keeping the
+     * session, and runs {@code loaded} once it is set, before any step; {@link #viewLoading()} is true until then
+     * (SOS-82).
+     */
+    public static void reloadOwnForDebug(Runnable loaded) {
+        Session s = required();
+        if (s.streams.inStep() || s.viewLoading) {
+            throw new IllegalStateException("SOSDET: a debug reload is between steps, with no other view load running");
+        }
+        s.viewLoadDone = loaded;
+        s.viewLoadStart(ViewCity.cityState(s), GameWorldLoad.unsaved(), -1);
+        sosdet.game.GameView.reloadOwn();
+    }
+
+    /** Debugging: runs {@code r} once, between steps, right before step {@code step} + 1 begins (SOS-82). */
+    public static void debugAt(long step, Runnable r) {
+        Session s = required();
+        s.debugAtStep = step;
+        s.debugAt = r;
+    }
+
+    /** True while a view load runs on this PC: the owner's save, the viewer's, or this PC's own. */
+    public static boolean viewLoading() {
+        Session s = Engine.session();
+        return s != null && s.viewLoading;
+    }
+
+    /**
+     * How long this PC's last view load took, in ms, its own save included for a PC outside the view: the pause a
+     * view's opening or closing costs it (playtest log).
+     */
+    public static double lastViewLoadMs() {
+        return required().lastViewLoadMs;
+    }
+
+    /** The owner's PC: its city's view hashes for the viewer in {@code viewer} since the last call, for that viewer. */
+    public static byte[] viewHashOut(int viewer) {
+        HashLog h = required().viewHashes[viewer];
+        return h == null ? new byte[0] : h.out();
+    }
+
+    /** The viewer's PC: more of the owner's view hashes, in any pieces; each is compared as this PC reaches its step. */
+    public static void viewHashIn(byte[] bytes) {
+        Session s = required();
+        View v = s.views[s.localHuman];
+        HashLog h = s.viewHashes[s.localHuman];
+        if (v == null || h == null) {
+            throw new IllegalStateException("SOSDET: view hashes with no view running on this PC (" + v + ")");
+        }
+        h.in(v.ownerPc, bytes);
+    }
+
+    /** The viewer's PC: the first difference between its copy of the viewed city and the owner's city, or null. */
+    public static Desync viewDesync() {
+        Session s = required();
+        HashLog h = s.viewHashes[s.localHuman];
+        return h == null ? null : h.desync();
+    }
+
+    /** The viewer's PC: the view hashes compared so far with the owner's. */
+    public static long viewHashesCompared() {
+        Session s = required();
+        HashLog h = s.viewHashes[s.localHuman];
+        return h == null ? 0 : h.compared();
+    }
+
+    /** How many steps this PC is behind the host's last confirmed step (0 on the host): a viewer's catching up. */
+    public static long behindHost() {
+        Session s = required();
+        return s.ai().mode() == AiMode.PEER ? Math.max(0, s.ai().confirmed() - s.clock.step()) : 0;
+    }
+
     /**
      * Host, own-city mode, between steps: saves the world's sections to {@code file} for a world resync at the
      * current step ({@link GameWorldLoad#save}), and
@@ -464,7 +638,7 @@ public final class Engine {
         s.clock.runUntil(r.step);
     }
 
-    // ------------------------------------------------------------ the AI general (requirements §3)
+    // ------------------------------------------------------------ the AI general (requirements В§3)
 
     /** The general runs inside every step: deterministic with no log, for single-PC replays and tests. */
     public static void aiInStep() {
@@ -596,7 +770,7 @@ public final class Engine {
     }
 
     /**
-     * Host, own-city mode, between steps: removes the human in {@code slot}, whose PC is gone (mod spec §11, SOS-66).
+     * Host, own-city mode, between steps: removes the human in {@code slot}, whose PC is gone (mod spec В§11, SOS-66).
      * A removal entry in the log applies at its stamped step on every PC. First a battle that human is in ends with no
      * result; then each of its armies is disbanded and every region it held is freed, as vanilla destroys a faction,
      * and it stays in its slot, retired. Until that step every PC reads the human's last report the host has and waits
@@ -629,7 +803,7 @@ public final class Engine {
 
     /**
      * Every PC, own-city mode, at step 0 before the run: a resumed campaign starts without the human in {@code slot},
-     * whose player is missing (mod spec §11, SOS-66). It is removed as {@link #removeHuman} does, in the first world
+     * whose player is missing (mod spec В§11, SOS-66). It is removed as {@link #removeHuman} does, in the first world
      * part, and no PC waits for its load report.
      */
     public static void removeHumanAtStart(int slot) {
@@ -906,7 +1080,7 @@ public final class Engine {
         s.ai(log);
     }
 
-    // ------------------------------------------------------------ the state hash and desyncs (requirements §3, §4)
+    // ------------------------------------------------------------ the state hash and desyncs (requirements В§3, В§4)
 
     /** Hash the state every this many steps (30 by default: 0.5 s). Every PC must use the same; set it at step 0. */
     public static void hashEvery(int steps) {
@@ -945,7 +1119,7 @@ public final class Engine {
 
     /**
      * Host: run at most {@code lead} steps past the slowest of these PCs, learnt from their hashes, on top of
-     * {@link #runUntil} (mod spec §4: the slowest PC caps the speed; SOS-42). The lead is at least one hash interval; 0
+     * {@link #runUntil} (mod spec В§4: the slowest PC caps the speed; SOS-42). The lead is at least one hash interval; 0
      * turns pacing off.
      */
     public static void pace(int[] pcs, long lead) {
@@ -1060,6 +1234,15 @@ public final class Engine {
     public static void traceDraws(int keepSteps) {
         Session s = required();
         s.streams.trace = keepSteps == 0 ? null : new DrawTrace(keepSteps);
+    }
+
+    /**
+     * Debugging, own-city mode: as {@link #traceDraws}, with the city's draws too, to compare a viewed city with its
+     * viewer's copy (SOS-82).
+     */
+    public static void traceAllDraws(int keepSteps) {
+        traceDraws(keepSteps);
+        required().streams.traceWorldOnly = false;
     }
 
     /**

@@ -282,6 +282,27 @@ public final class Rig implements SCRIPT {
         private boolean wresyncSaver;
         private Path wresyncSave;
         private Path wresyncState;
+        // a city view (SOS-82): the host starts it at viewStep; the owner's copy writes its city to its rig folder, the
+        // viewer's copy loads it and compares the owner's view hashes with its own
+        private long viewStep = -1;
+        /** Debugging (SOS-82): the step to dump the world's state at, reload this copy's game, and dump it again. */
+        private long dumpReloadStep = -1;
+        /** Debugging (SOS-82): the step to dump the world's state after, armed once the engine runs. */
+        private long dumpAtStep = -1;
+        private boolean dumpReloading;
+        /** The path prefixes written back after the reload ({@code StateDump.restore}); none: two dumps instead. */
+        private String[] dumpRestore = new String[0];
+        private java.util.Map<String, Object> dumpSnapshot;
+        private long viewEndStep = -1;
+        private int viewViewer = -1;
+        private int viewOwner = -1;
+        private Path viewDir;
+        private int viewSeen = -1;
+        private long viewHashOffset;
+        private boolean viewDesyncReported;
+        private long viewNextStatus;
+        private boolean viewTraced;
+        private boolean viewTraceOn;
         // the desync flow (SOS-53): what the host chooses at an engine's desync hold ("resync" or "exit"), or null
         private String onDesync;
         private sosdet.DesyncHold seenHold;
@@ -343,6 +364,46 @@ public final class Rig implements SCRIPT {
             }
         }
 
+        /** Debugging (SOS-82): at the step, dumps the world's state, reloads this copy's game, and dumps it again. */
+        private void dumpReload() {
+            if (dumpAtStep >= 0 && Engine.active()) {
+                long step = dumpAtStep;
+                dumpAtStep = -1;
+                Engine.debugAt(step, () -> StateDump.write(dir.resolve(tag + "-at" + step + ".txt")));
+            }
+            if (dumpReloading && !Engine.viewLoading()) {
+                dumpReloading = false;
+                event("dumped", "\"step\":" + Engine.step() + ",\"loadMs\":" + Math.round(Engine.lastViewLoadMs()));
+                return;
+            }
+            if (dumpReloadStep < 0 || !Engine.active() || Engine.step() < dumpReloadStep || Engine.viewLoading()) {
+                return;
+            }
+            dumpReloadStep = -1;
+            if (dumpRestore.length > 0) {
+                dumpSnapshot = StateDump.snapshot();
+            } else {
+                StateDump.write(dir.resolve(tag + "-before.txt"));
+            }
+            long at = Engine.step();
+            Engine.reloadOwnForDebug(() -> {
+                // the load is set and no step has run since: the dump, or the values from before written back
+                if (dumpSnapshot != null) {
+                    String report = "at step " + Engine.step() + " (reloaded at " + at + ")\n"
+                            + StateDump.restore(dumpSnapshot, dumpRestore);
+                    dumpSnapshot = null;
+                    try {
+                        Files.write(dir.resolve(tag + "-restore.txt"), report.getBytes(StandardCharsets.UTF_8));
+                    } catch (IOException e) {
+                        throw new IllegalStateException("SOSDET rig: cannot write the restore report", e);
+                    }
+                } else {
+                    StateDump.write(dir.resolve(tag + "-after.txt"));
+                }
+            });
+            dumpReloading = true;
+        }
+
         private void afterFrame() {
             if (resyncLoadStarted != 0) {
                 resynced();
@@ -350,10 +411,12 @@ public final class Rig implements SCRIPT {
                 battleReturned();
             }
             reloaded = false;
+            dumpReload();
             exchangeAiLog();
             exchangeOrders();
             exchangeReports();
             exchangeBattle();
+            exchangeView();
             retirements();
             exchangeHashes();
             speedEvents();
@@ -523,6 +586,112 @@ public final class Rig implements SCRIPT {
                 event("battlein", String.format(Locale.ROOT, "\"step\":%d,\"human\":%d,\"pc\":%d", b.step, b.human, b.pc));
             } catch (IOException e) {
                 throw new IllegalStateException("SOSDET rig: battle file", e);
+            }
+        }
+
+        /**
+         * A city view (SOS-82): the host logs it at its step; the owner's copy writes its city ({@code view.save},
+         * then {@code view.done} with the freeze step) and its view hashes ({@code view.hash}) to its rig folder; the
+         * viewer's copy loads the city and feeds the hashes. Fixed names, so the relay could mirror them. Between frames.
+         */
+        private void exchangeView() {
+            if (viewViewer < 0 || !Engine.active()) {
+                return;
+            }
+            try {
+                if (viewStep >= 0 && aiHost && Engine.step() >= viewStep) {
+                    Engine.viewBegin(viewViewer, viewOwner);
+                    event("viewbegin", String.format(Locale.ROOT, "\"step\":%d,\"viewer\":%d,\"owner\":%d",
+                            Engine.step(), viewViewer, viewOwner));
+                    viewStep = -1;
+                }
+                if (viewEndStep >= 0 && aiHost && Engine.step() >= viewEndStep) {
+                    Engine.viewEnd(viewViewer);
+                    event("viewend", String.format(Locale.ROOT, "\"step\":%d,\"viewer\":%d", Engine.step(), viewViewer));
+                    viewEndStep = -1;
+                }
+                sosdet.View v = Engine.view(viewViewer);
+                if (v == null) {
+                    return;
+                }
+                int me = sosdet.Hooks.localHuman();
+                if (!viewTraced && (me == viewOwner || me == viewViewer)) {
+                    if (v.state() == sosdet.View.SCHEDULED && !viewTraceOn) {
+                        viewTraceOn = true;
+                        Engine.traceDraws(300); // the world's draws on the owner's and the viewer's PC
+                    }
+                    if (v.frozen() && Engine.step() >= v.freeze + 280) {
+                        viewTraced = true;
+                        Files.write(dir.resolve(tag + "-viewdraws.txt"), Engine.drawTrace(v.freeze, v.freeze + 280)
+                                .getBytes(StandardCharsets.UTF_8));
+                        Engine.traceDraws(0);
+                    }
+                }
+                if (v.state() != viewSeen) {
+                    viewSeen = v.state();
+                    event("viewstate", String.format(Locale.ROOT, "\"step\":%d,\"view\":\"%s\",\"worldLoads\":%d,\"loadMs\":%.0f",
+                            Engine.step(), clean(v.toString()), sosdet.Hooks.worldLoads(), Engine.lastViewLoadMs()));
+                }
+                int local = sosdet.Hooks.localHuman();
+                if (local == viewOwner) {
+                    long t0 = System.nanoTime();
+                    byte[] out = Engine.viewOut();
+                    if (out != null) {
+                        Files.write(viewDir.resolve("view.save"), out);
+                        Files.write(viewDir.resolve("view.done"), Long.toString(v.freeze).getBytes(StandardCharsets.UTF_8));
+                        Files.deleteIfExists(viewDir.resolve("view.hash"));
+                        event("viewout", String.format(Locale.ROOT, "\"step\":%d,\"bytes\":%d,\"ms\":%.1f",
+                                Engine.step(), out.length, (System.nanoTime() - t0) / 1e6));
+                    }
+                    byte[] hashes = Engine.viewHashOut(viewViewer);
+                    if (hashes.length > 0) {
+                        Files.write(viewDir.resolve("view.hash"), hashes, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+                    }
+                    return;
+                }
+                if (local != viewViewer) {
+                    return;
+                }
+                if (v.state() == sosdet.View.LOADING && Engine.step() == v.freeze) {
+                    Path done = viewDir.resolve("view.done");
+                    if (Files.exists(done) && new String(Files.readAllBytes(done), StandardCharsets.UTF_8).trim()
+                            .equals(Long.toString(v.freeze))) {
+                        byte[] city = Files.readAllBytes(viewDir.resolve("view.save"));
+                        Engine.viewIn(city);
+                        event("viewin", String.format(Locale.ROOT, "\"step\":%d,\"bytes\":%d", Engine.step(), city.length));
+                    }
+                    return;
+                }
+                if (v.state() != sosdet.View.RUNNING) {
+                    return;
+                }
+                byte[] in = readNew(viewDir.resolve("view.hash"), viewHashOffset);
+                viewHashOffset += in.length;
+                if (in.length > 0) {
+                    Engine.viewHashIn(in);
+                }
+                Desync d = Engine.viewDesync();
+                if (d != null && !viewDesyncReported) {
+                    viewDesyncReported = true;
+                    StringBuilder sections = new StringBuilder();
+                    for (String name : d.sections()) {
+                        sections.append(sections.length() == 0 ? "\"" : ",\"").append(name).append('"');
+                    }
+                    event("viewdesync", String.format(Locale.ROOT, "\"step\":%d,\"at\":%d,\"sections\":[%s]", d.step,
+                            Engine.step(), sections));
+                }
+                if (Engine.step() >= viewNextStatus) {
+                    viewNextStatus = Engine.step() + 150;
+                    event("viewstatus", String.format(Locale.ROOT, "\"step\":%d,\"compared\":%d,\"behind\":%d",
+                            Engine.step(), Engine.viewHashesCompared(), Engine.behindHost()));
+                }
+            } catch (IOException e) {
+                throw new IllegalStateException("SOSDET rig: view file", e);
+            } catch (RuntimeException e) {
+                java.io.StringWriter w = new java.io.StringWriter();
+                e.printStackTrace(new java.io.PrintWriter(w));
+                event("viewerror", "\"trace\":\"" + clean(w.toString()) + "\""); // the test's view of a crash
+                throw e;
             }
         }
 
@@ -1183,6 +1352,23 @@ public final class Rig implements SCRIPT {
             case "pchuman": // pchuman <pc> <slot>
                 Engine.pcHuman(Integer.parseInt(c[1]), Integer.parseInt(c[2]));
                 event("pchuman", "\"pc\":" + c[1] + ",\"slot\":" + c[2]);
+                return;
+            case "dumpat": // dumpat <step>: the world's state dumped right after step <step> (SOS-82)
+                dumpAtStep = Long.parseLong(c[1]);
+                event("dumpat", "\"step\":" + dumpAtStep);
+                return;
+            case "dumpreload": // dumpreload <step> [prefix,prefix]: this copy reloads its own game, with dumps (SOS-82)
+                dumpReloadStep = Long.parseLong(c[1]);
+                dumpRestore = c.length > 2 ? c[2].split(",") : new String[0];
+                event("dumpreload", "\"step\":" + dumpReloadStep);
+                return;
+            case "viewat": // viewat <step> <viewer slot> <owner slot> <end step or -1> <owner's rig folder>: a city view (SOS-82)
+                viewStep = Long.parseLong(c[1]);
+                viewViewer = Integer.parseInt(c[2]);
+                viewOwner = Integer.parseInt(c[3]);
+                viewEndStep = Long.parseLong(c[4]);
+                viewDir = Paths.get(rest(Arrays.copyOfRange(c, 4, c.length)));
+                event("viewat", "\"step\":" + viewStep);
                 return;
             case "removehuman": // removehuman <slot>: the host removes a human whose copy was held (SOS-66)
                 Engine.removeHuman(Integer.parseInt(c[1]));
