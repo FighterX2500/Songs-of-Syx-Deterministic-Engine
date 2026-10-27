@@ -704,6 +704,30 @@ public final class WorldActions {
                 Rig.note(b.toString());
             });
             return true;
+        case "transfers": { // transfers <step>: notes the kept transfers made up to <step>: how many, a checksum, and
+            // the last 3. Every copy past <step> notes the same (SOS-81)
+            long upTo = Long.parseLong(a[1]);
+            Rig.later(() -> {
+                java.util.List<sosdet.txn.TransferLog.Transfer> out = new java.util.ArrayList<>();
+                Engine.transfers(Math.max(0, Engine.lastTransfer() - sosdet.txn.TransferLog.CAPACITY), out);
+                out.removeIf(t -> t.step() > upTo);
+                long sum = 0;
+                for (sosdet.txn.TransferLog.Transfer t : out) {
+                    sum = 31 * sum + t.txnId() + t.human() * 7L + t.kind().ordinal() + t.goods() * 13L
+                            + Double.doubleToLongBits(t.amount()) + t.price() + t.reason() * 17L + t.other();
+                }
+                StringBuilder b = new StringBuilder("transfers up to step ").append(upTo).append(": ").append(out.size())
+                        .append(", checksum ").append(Long.toHexString(sum)).append(", last");
+                for (int i = Math.max(0, out.size() - 3); i < out.size(); i++) {
+                    sosdet.txn.TransferLog.Transfer t = out.get(i);
+                    b.append(" [").append(t.step()).append(' ').append(t.human()).append(' ').append(t.kind()).append(' ')
+                            .append(t.goods()).append(' ').append((long) t.amount()).append(' ').append(t.price()).append(' ')
+                            .append(t.reason()).append(' ').append(t.other()).append(']');
+                }
+                Rig.note(b.toString());
+            });
+            return true;
+        }
         case "deals": { // deals: notes the open proposals, the latest answers, this human's treaties with each other
             // human and its treasury (a probe for the run log, SOS-72)
             Rig.later(() -> {

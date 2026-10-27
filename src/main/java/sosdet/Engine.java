@@ -1349,6 +1349,20 @@ public final class Engine {
         return s == null ? 0 : s.stepStartNanos;
     }
 
+    /**
+     * Between steps: adds to {@code out} the money and goods transfers of every human made after the one numbered
+     * {@code afterSeq}, oldest first (SOS-81, the playtest log), and returns how many of those were already overwritten.
+     * Every PC records the same. {@link #lastTransfer()} gives the number to read after next time.
+     */
+    public static long transfers(long afterSeq, java.util.List<sosdet.txn.TransferLog.Transfer> out) {
+        return required().transfers.read(afterSeq, out);
+    }
+
+    /** The number of the latest transfer recorded; 0 before the first. */
+    public static long lastTransfer() {
+        return required().transfers.last();
+    }
+
     /** Counters and step times since the session began or {@link #resetStats()}. */
     public static Stats stats() {
         Session s = required();
