@@ -657,6 +657,46 @@ public final class WorldActions {
             });
             return true;
         }
+        case "dealwar": { // dealwar <slot>: declares war on the human in <slot> at once (SOS-74)
+            int slot = Integer.parseInt(a[1]);
+            Rig.later(() -> {
+                String why = Engine.warRefusal(slot);
+                if (why != null) {
+                    throw new IllegalStateException("war refused: " + why);
+                }
+                Engine.declareWar(slot);
+                Rig.note("declares war on slot " + slot);
+            });
+            return true;
+        }
+        case "wbesiegehuman": { // wbesiegehuman <army> <slot> [capitol]: wbesiege on the human in <slot>'s region nearest the
+            // army, one that isn't its capitol (or, with capitol, its capitol: refused, SOS-74)
+            int army = Integer.parseInt(a[1]);
+            int slot = Integer.parseInt(a[2]);
+            boolean capitol = a.length > 3 && a[3].equals("capitol");
+            Rig.later(() -> {
+                WArmy w = army(army);
+                Region best = null;
+                long bestD = Long.MAX_VALUE;
+                for (Region r : WORLD.REGIONS().active()) {
+                    if (r.faction() == null || r.faction().index() != slot || r.capitol() != capitol) {
+                        continue;
+                    }
+                    long dx = r.cx() - w.ctx();
+                    long dy = r.cy() - w.cty();
+                    if (dx * dx + dy * dy < bestD) {
+                        bestD = dx * dx + dy * dy;
+                        best = r;
+                    }
+                }
+                if (best == null) {
+                    throw new IllegalStateException("slot " + slot + " has no such region");
+                }
+                Rig.note("army " + army + " besieges region " + best.index() + " of slot " + slot + (capitol ? " (its capitol)" : ""));
+                w.besiege(best);
+            });
+            return true;
+        }
         case "tariff": { // tariff <slot> <percent>: sets this human's tariff on the human in <slot> at once (SOS-77)
             int slot = Integer.parseInt(a[1]);
             int percent = Integer.parseInt(a[2]);

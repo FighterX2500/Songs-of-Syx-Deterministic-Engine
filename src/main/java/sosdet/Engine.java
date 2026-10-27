@@ -760,6 +760,25 @@ public final class Engine {
         HumanDeals.cancel(slot);
     }
 
+    /** Between steps: why this PC's player can't declare war on the human in {@code slot} now, or null. */
+    public static String warRefusal(int slot) {
+        required();
+        return HumanDeals.warRefusal(slot);
+    }
+
+    /**
+     * Between steps: this PC's player declares war on the human in {@code slot} at once, with no answer (SOS-74). Check
+     * {@link #warRefusal} first.
+     */
+    public static void declareWar(int slot) {
+        required();
+        String why = HumanDeals.warRefusal(slot);
+        if (why != null) {
+            throw new IllegalStateException("SOSDET: a war refused: " + why);
+        }
+        HumanDeals.war(slot);
+    }
+
     /** Between steps: why this PC's player can't set a tariff of {@code percent} on the human in {@code slot} now, or null. */
     public static String tariffRefusal(int slot, int percent) {
         required();
