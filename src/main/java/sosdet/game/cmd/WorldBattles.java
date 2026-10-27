@@ -97,8 +97,14 @@ public final class WorldBattles {
             return true;
         }
         int asked = Hooks.worldPromptHuman();
+        int sallyAgainst = Hooks.worldPromptSally();
+        if (sallyAgainst >= 0 && choice == AUTO) {
+            return false; // a sally against another human is fought or called off (SOS-83)
+        }
         Hooks.worldPromptClose();
-        if (choice == AUTO) {
+        if (sallyAgainst >= 0 && choice == ENGAGE) {
+            Hooks.ownCityEngage(asked, sallyAgainst, spec::engage); // built by the defender's PC; army 1 the besieger's
+        } else if (choice == AUTO) {
             spec.auto();
         } else if (choice == RETREAT) {
             spec.retreat();
@@ -157,7 +163,9 @@ public final class WorldBattles {
      */
     static void timedOut() {
         Object open = Hooks.worldPrompt();
-        if (open instanceof WBattleSpec && Hooks.worldPromptBetweenHumans()) {
+        if (open instanceof WBattleSpec && Hooks.worldPromptSally() >= 0) {
+            applyDecide(RETREAT); // a sally against another human: the garrison stays in, and the siege goes on (SOS-83)
+        } else if (open instanceof WBattleSpec && Hooks.worldPromptBetweenHumans()) {
             Hooks.worldPromptEngageNext(); // between two humans the battle is always fought (spec §8, SOS-83)
         } else if (open instanceof WBattleSiege) {
             applyDecide(WAIT);

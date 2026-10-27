@@ -241,6 +241,35 @@ class EngineTest {
         assertEquals(1, s.heldReports.size(), "kept for after the battle");
     }
 
+    /**
+     * SOS-83: in a battle between two humans each side's own PC starts and retreats its army; another PC can't. Start
+     * waits for both sides. Against an NPC only the battle's human's PC retreats; with no own-city battle it is vanilla's.
+     */
+    @Test
+    void eachSideStartsAndRetreatsOnlyItsOwnArmy() {
+        Session s = ownCity(0);
+        s.city = humans(0, 3, 5);
+        Engine.pcHuman(0, 0);
+        Engine.pcHuman(1, 3);
+        Engine.pcHuman(2, 5);
+        assertEquals(0, s.retreatSide(2), "no own-city battle: vanilla's, army 0");
+        s.battle = new OwnBattle(Engine.step(), 3, s.pcOf(3), 5, s.streams.worldDraws());
+        assertFalse(s.deployReady(1), "army 0's side pressed Start: army 1's hasn't");
+        assertFalse(s.deployReady(0), "a PC commanding neither side doesn't count");
+        assertTrue(s.deployReady(2), "both sides pressed it");
+        assertEquals(-1, s.retreatSide(0), "the host commands neither army");
+        assertFalse(s.battle.army1Retreat);
+        assertEquals(0, s.retreatSide(1), "slot 3's PC retreats army 0");
+        assertFalse(s.battle.army1Retreat);
+        assertEquals(1, s.retreatSide(2), "slot 5's PC retreats army 1");
+        assertTrue(s.battle.army1Retreat, "army 0 wins, army 1 pays the penalty");
+
+        s.battle = new OwnBattle(Engine.step(), 3, s.pcOf(3), -1, s.streams.worldDraws());
+        assertTrue(s.deployReady(1), "against an NPC Start needs one press");
+        assertEquals(-1, s.retreatSide(2), "against an NPC another human can't retreat it");
+        assertEquals(0, s.retreatSide(1));
+    }
+
     /** SOS-46 M3 to M5: a per-human slice is the human's ordinal among the human slots, whoever reads. */
     @Test
     void eachHumanReadsItsOwnSlice() {

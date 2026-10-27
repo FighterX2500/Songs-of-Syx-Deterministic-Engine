@@ -792,6 +792,9 @@ def main():
     ap.add_argument("--engage-copy", default="1",
                     help="with --engage and --humans: this copy's player fights its human's battles, not copy 1's (SOS-66);"
                          " a comma list for several, such as both humans of a battle between players (SOS-83)")
+    ap.add_argument("--retreat-copy", default="",
+                    help="with --engage and several --engage-copy: only these copies retreat after --engage steps, the"
+                         " others fight on (SOS-83: army 1's retreat, between two humans)")
     ap.add_argument("--restart", type=int, default=0,
                     help="with --engage: copy 1 restarts the battle once, this many steps after Start (SOS-41)")
     ap.add_argument("--in-battle", default="",
@@ -1096,7 +1099,8 @@ def main():
             c.send("commanders " + args.commanders, "commanders")
         if c.k in engage_copies and args.engage >= 0 and args.scenario == "city" and not args.play \
                 and not args.replay:  # field battles on the battle map (SOS-32)
-            c.send("answerprompts engage %d%s" % (args.engage, " restart %d" % args.restart if args.restart else ""),
+            retreat = args.engage if not args.retreat_copy or str(c.k) in args.retreat_copy.split(",") else 0
+            c.send("answerprompts engage %d%s" % (retreat, " restart %d" % args.restart if args.restart else ""),
                    "answerprompts")
             if args.in_battle:
                 c.send("inbattle " + args.in_battle, "inbattlearmed")

@@ -53,7 +53,10 @@ public final class MapBattles {
                 if (b == null || b.deploying() || Hooks.battleOver()) {
                     return false;
                 }
-                b.liveRetreat();
+                if (Hooks.battleRetreatSide() < 0) {
+                    return false; // only a side's own commanders retreat it (SOS-83)
+                }
+                b.liveRetreat(); // when army 1 retreats, the patched liveRetreat gives army 0 the victory
                 return true;
             }),
             new Command(CONCLUDE, "battleConclude", r -> {

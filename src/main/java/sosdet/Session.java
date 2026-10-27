@@ -68,6 +68,11 @@ final class Session {
      */
     int worldPromptOther = -1;
     int worldPromptOtherNext = -1;
+    /** The open prompt is a sally against this besieging human, asked of the defender only; -1 for none (SOS-83). */
+    int worldPromptSally = -1;
+    int worldPromptSallyNext = -1;
+    /** The last battle between two humans' outcome, until the mod takes it (SOS-83). */
+    BattleOutcome battleOutcome;
     int worldPromptReady;
     long pvpEngageAt = -1;
     /** Its default answer when its time runs out, the time it has waited, and the armies waiting while it is open (SOS-45). */
@@ -624,6 +629,25 @@ final class Session {
         }
         deployTimer.close();
         return true;
+    }
+
+    /**
+     * Inside the step, the Retreat command from the PC applying it (plan 0006 M2, SOS-83): the army it retreats, 0 or 1,
+     * or -1 when that PC commands neither side. Army 0 is the battle's human's; army 1 retreats only between two humans,
+     * from the other human's PC. With no own-city battle (co-op) it is army 0, as in vanilla.
+     */
+    int retreatSide(int fromPc) {
+        if (battle == null) {
+            return 0;
+        }
+        if (fromPc == battle.pc) {
+            return 0;
+        }
+        if (battle.other >= 0 && fromPc == pcOf(battle.other)) {
+            battle.army1Retreat = true;
+            return 1;
+        }
+        return -1;
     }
 
     /**

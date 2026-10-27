@@ -769,6 +769,29 @@ public final class Hooks {
         return v.vGet(HCLASS_RACE.clP());
     }
 
+    /**
+     * Army 1 of a battle between two humans ({@link #battleArmy1Human} not null): a boost value of the other human, from
+     * its report at Engage. One the report has no slot for counts as a miss and is 0, the same on every PC (SOS-83).
+     */
+    public static double army1Boost(BValue v) {
+        return army1Report(v, Field.BOOST);
+    }
+
+    /** As {@link #army1Boost}, on the other human's city population class ({@link Field#BOOST_CLP}). */
+    public static double army1BoostClP(BValue v) {
+        return army1Report(v, Field.BOOST_CLP);
+    }
+
+    private static double army1Report(BValue v, Field f) {
+        Session s = Engine.session();
+        int i = s.city().indexOf(Field.BOOST, v);
+        if (i >= 0) {
+            return s.battle.otherReport.get(f, i);
+        }
+        s.reportMiss(v);
+        return 0;
+    }
+
     /** A faction value's value: a human's from its report in the world part, otherwise the game's own. */
     public static <T> double reportValue(Value<T> v, T t) {
         if (reportRead() && t instanceof Player) {
@@ -1505,6 +1528,8 @@ public final class Hooks {
         s.worldPromptArmies = Session.NO_ARMIES;
         s.worldPromptOther = -1;
         s.worldPromptOtherNext = -1;
+        s.worldPromptSally = -1;
+        s.worldPromptSallyNext = -1;
         s.worldPromptReady = 0;
         s.pvpEngageAt = -1;
         s.promptTimer.close();
@@ -1671,8 +1696,20 @@ public final class Hooks {
         // a battle's result asks the battle's human on every PC; it opens outside the world part (plan 0006)
         s.worldPromptHuman = s.battle != null ? s.battle.human
                 : s.part == StepParts.WORLD_PART ? s.currentHuman : s.localHuman;
+        if (s.battle != null && s.battle.other >= 0 && decides instanceof world.battle.spec.WBattleResult) {
+            // between two humans the winner chooses (SOS-83): army 0's human on a victory, else the other human
+            world.battle.spec.WBattleResult r = (world.battle.spec.WBattleResult) decides;
+            boolean army0Won = r.result == world.battle.spec.BATTLE_RESULT.VICTORY;
+            s.worldPromptHuman = army0Won ? s.battle.human : s.battle.other;
+            s.battleOutcome = new BattleOutcome(s.clock.step(), army0Won ? s.battle.human : s.battle.other,
+                    army0Won ? s.battle.other : s.battle.human, r.result == world.battle.spec.BATTLE_RESULT.RETREAT
+                            || s.battle.army1Retreat, army0Won ? r.player.losses() : r.enemy.losses(),
+                    army0Won ? r.enemy.losses() : r.player.losses());
+        }
         s.worldPromptOther = s.worldPromptOtherNext;
         s.worldPromptOtherNext = -1;
+        s.worldPromptSally = s.worldPromptSallyNext;
+        s.worldPromptSallyNext = -1;
         s.worldPromptReady = 0;
         s.pvpEngageAt = -1;
         s.promptTimer.open();
@@ -1690,6 +1727,23 @@ public final class Hooks {
         }
     }
 
+    /**
+     * In the world part, just before a human's garrison is asked to sally ({@code Resolver.besige}): the besieger is the
+     * human {@code besieger}, so the sally is a battle between two humans, built by the defender's PC (SOS-83).
+     */
+    public static void worldPromptSallyAgainst(int besieger) {
+        Session s = Engine.session();
+        if (s != null) {
+            s.worldPromptSallyNext = besieger;
+        }
+    }
+
+    /** The besieging human the open sally prompt is against, a battle between two humans; -1 for none (SOS-83). */
+    public static int worldPromptSally() {
+        Session s = Engine.session();
+        return s == null || s.worldPrompt == null ? -1 : s.worldPromptSally;
+    }
+
     /** Inside the Start command: true when the battle may start; between two humans once both pressed it (SOS-83). */
     public static boolean battleDeployReady() {
         Session s = Engine.session();
@@ -1702,10 +1756,54 @@ public final class Hooks {
         return s == null ? -1 : s.worldPromptOther;
     }
 
+    /** Inside the Retreat command: the army it retreats (0 or 1), or -1 when the PC giving it commands neither (SOS-83). */
+    public static int battleRetreatSide() {
+        Session s = Engine.session();
+        return s == null ? 0 : s.retreatSide(s.ai().applyingPc());
+    }
+
+    /** In the battle's result, built inside the step: army 1 retreated, in a battle between two humans (SOS-83). */
+    public static boolean battleArmy1Retreats() {
+        Session s = Engine.session();
+        return s != null && s.battle != null && s.battle.army1Retreat;
+    }
+
+    /**
+     * In the result panel of a battle between two humans: true when {@code army0Lost}, so the second army's human won and
+     * answers it, seeing the result from their own side (SOS-83).
+     */
+    public static boolean resultForArmy1(boolean army0Lost) {
+        return army0Lost && battleBetweenHumans();
+    }
+
+    /**
+     * The battle map's victory or defeat panel, opened inside the step with army 0's {@code title}: on the PC that
+     * commands army 1 in a battle between two humans, the other one, as that player won or lost. Display only (SOS-83).
+     */
+    public static CharSequence concludeTitle(CharSequence title, boolean army0Won, CharSequence victory, CharSequence defeat) {
+        Session s = Engine.session();
+        if (s == null || s.battle == null || s.battle.other < 0 || s.ai().localPc() != s.pcOf(s.battle.other)) {
+            return title;
+        }
+        return army0Won ? defeat : victory;
+    }
+
     /** True while a battle between two humans' armies runs, from Engage to the return (SOS-83). */
     public static boolean battleBetweenHumans() {
         Session s = Engine.session();
         return s != null && s.battle != null && s.battle.other >= 0;
+    }
+
+    /**
+     * In a battle between two humans, loaded: when {@code f} is army 1's faction ({@code FACTIONS.otherFaction()}, an
+     * NPC in vanilla), the other human, whose reported values army 1 fights with; otherwise null (SOS-83).
+     */
+    public static Faction battleArmy1Human(Object f) {
+        Session s = Engine.session();
+        if (s == null || s.battle == null || s.battle.otherReport == null || s.battle.awaiting || f != FACTIONS.otherFaction()) {
+            return null;
+        }
+        return FACTIONS.getByIndex(s.battle.other);
     }
 
     /**
@@ -1899,6 +1997,7 @@ public final class Hooks {
         Session s = Engine.session();
         long step = s.clock.step();
         OwnBattle b = new OwnBattle(step, human, s.pcOf(human), other, s.streams.worldDraws());
+        b.otherReport = other >= 0 ? s.reports(other).current() : null; // a battle load clears the reports (SOS-83)
         s.battle = b;
         s.streams.reseed(s.battleSeed(step));
         try {
@@ -1976,6 +2075,8 @@ public final class Hooks {
         s.worldPromptArmies = Session.NO_ARMIES;
         s.worldPromptOther = -1;
         s.worldPromptOtherNext = -1;
+        s.worldPromptSally = -1;
+        s.worldPromptSallyNext = -1;
         s.worldPromptReady = 0;
         s.pvpEngageAt = -1;
         s.promptTimer.close();

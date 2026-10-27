@@ -17,6 +17,10 @@ public final class OwnBattle {
     public final int other;
     /** Between two humans: which side's commanders pressed Start (bit 0 army 0's, bit 1 army 1's), inside the step. */
     int deployReady;
+    /** Between two humans: the other human's city report at Engage, the same on every PC; army 1 fights with its values. */
+    sosdet.report.CityReport otherReport;
+    /** Between two humans: army 1's commanders retreated it, inside the step; army 0 wins (SOS-83). */
+    boolean army1Retreat;
     /** The world stream's draw count at Engage, the same on every PC; put back after the generation and the battle. */
     final long worldDraws;
     /** The battle PC's battle save is still to be loaded: no step runs past {@link #step} until it is. */

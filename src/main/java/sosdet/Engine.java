@@ -351,6 +351,14 @@ public final class Engine {
         return required().battle;
     }
 
+    /** Once, as a battle between two humans' result prompt opens: who won and lost, and each side's losses; else null. */
+    public static BattleOutcome battleOutcomeTake() {
+        Session s = required();
+        BattleOutcome o = s.battleOutcome;
+        s.battleOutcome = null;
+        return o;
+    }
+
     /**
      * Between steps, on the battle PC (its human's): the battle it generated at Engage, as save bytes for every PC's
      * {@link #battleIn}, once; null on every other PC, before Engage, and after the first call.
