@@ -580,6 +580,54 @@ public final class WorldActions {
             });
             return true;
         }
+        case "dealregions": { // dealregions <slot> give|ask <n>: a deal giving the human in <slot> n of this human's
+            // regions, or asking n of theirs, each the first the rule allows (SOS-73)
+            int slot = Integer.parseInt(a[1]);
+            boolean give = a[2].equals("give");
+            int n = Integer.parseInt(a[3]);
+            Rig.later(() -> {
+                int me = FACTIONS.player().index();
+                int giver = give ? me : slot;
+                int receiver = give ? slot : me;
+                int[] chosen = new int[0];
+                game.faction.Faction g = FACTIONS.getByIndex(giver);
+                for (int i = 0; i < g.realm().regions() && chosen.length < n; i++) {
+                    int r = g.realm().region(i).index();
+                    if (Engine.dealRegionRefusal(giver, receiver, r, chosen) == null) {
+                        chosen = java.util.Arrays.copyOf(chosen, chosen.length + 1);
+                        chosen[chosen.length - 1] = r;
+                    }
+                }
+                if (chosen.length < n) {
+                    throw new IllegalStateException("only " + chosen.length + " of " + n + " regions can be given");
+                }
+                DealBook.Terms t = new DealBook.Terms(DealBook.NO_TREATY, 0, 0, new int[0], new int[0],
+                        give ? chosen : new int[0], give ? new int[0] : chosen, DealBook.DEFAULT_TRIBUTE);
+                String why = Engine.dealRefusal(slot, t);
+                if (why != null) {
+                    throw new IllegalStateException("deal refused: " + why);
+                }
+                Engine.dealPropose(slot, t);
+                Rig.note("proposed to slot " + slot + ": " + (give ? "gives" : "asks") + " regions " + java.util.Arrays.toString(chosen));
+            });
+            return true;
+        }
+        case "dealvassal": { // dealvassal <slot> protector|vassal <percent>: proposes that this human becomes the overlord
+            // (protector) or the vassal of the human in <slot>, with a yearly tribute of <percent> (SOS-73)
+            int slot = Integer.parseInt(a[1]);
+            int treaty = treaty(a[2]);
+            int percent = Integer.parseInt(a[3]);
+            Rig.later(() -> {
+                DealBook.Terms t = new DealBook.Terms(treaty, 0, 0, new int[0], new int[0], new int[0], new int[0], percent);
+                String why = Engine.dealRefusal(slot, t);
+                if (why != null) {
+                    throw new IllegalStateException("deal refused: " + why);
+                }
+                Engine.dealPropose(slot, t);
+                Rig.note("proposed to slot " + slot + ": " + a[2] + " with tribute " + percent + "%");
+            });
+            return true;
+        }
         case "dealanswer": { // dealanswer yes|no: answers the oldest open proposal made to this PC's human (SOS-72)
             boolean yes = a[1].equals("yes");
             Rig.later(() -> {
@@ -670,6 +718,11 @@ public final class WorldActions {
                 }
                 game.faction.player.Player me = FACTIONS.player();
                 b.append("; slot ").append(me.index()).append(" treasury ").append((long) me.credits().credits());
+                b.append(" regions ").append(me.realm().regions());
+                game.faction.Faction lord = DIP.overlord(me);
+                if (lord != null) {
+                    b.append(" vassal of ").append(lord.index()).append(" at ").append(Engine.tributePercent(me.index(), lord.index())).append('%');
+                }
                 for (int h : Hooks.humanSlots()) {
                     if (h != me.index()) {
                         b.append("; with ").append(h).append(' ').append(DIP.get(me, FACTIONS.getByIndex(h)).key());
@@ -700,6 +753,10 @@ public final class WorldActions {
             return DealBook.ALLY;
         case "cancel":
             return DealBook.CANCEL_ALL;
+        case "protector":
+            return DealBook.PROTECTOR;
+        case "vassal":
+            return DealBook.VASSAL;
         default:
             throw new IllegalArgumentException("no treaty " + name);
         }
