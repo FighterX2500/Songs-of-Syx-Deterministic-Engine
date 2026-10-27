@@ -21,6 +21,7 @@ import sosdet.report.Input;
 import sosdet.report.SentSupplies;
 import sosdet.report.Reports;
 import sosdet.txn.Txn;
+import sosdet.txn.TransferLog;
 import sosdet.txn.TxnQueue;
 
 /** The state of one deterministic run: from {@link Engine#begin()} to {@link Engine#end()}. */
@@ -193,6 +194,8 @@ final class Session {
     final sosdet.report.EventMarks eventMarks = new sosdet.report.EventMarks();
     /** The world part's changes to the city, applied in the step's city tail (ADR 0005 §3). */
     final TxnQueue txns = new TxnQueue();
+    /** Every money and goods transaction, for the logs only (SOS-81): not saved, not hashed, never read by the step. */
+    final TransferLog transfers = new TransferLog();
     /** What applies them: the game, made at first use; tests put in their own. */
     java.util.function.Consumer<Txn> txnApplier;
 
