@@ -554,15 +554,23 @@ final class Session {
 
     /** Why a view can't freeze its viewer now, the same on every PC; null when it can. */
     private String viewRefusal(View v) {
-        if (v.viewer == v.owner || !isHuman(v.viewer) || !isHuman(v.owner) || retired(v.viewer) || retired(v.owner)
-                || removing[v.viewer] || removing[v.owner]) {
+        return viewRefusal(v.viewer, v.owner, v);
+    }
+
+    /**
+     * Why the human in {@code viewer} can't view {@code owner}'s city now; null when it can. {@code self} is that view
+     * when it is in the log already, or null for a view still to ask for ({@code Engine.viewRefusal}).
+     */
+    String viewRefusal(int viewer, int owner, View self) {
+        if (viewer == owner || !isHuman(viewer) || !isHuman(owner) || retired(viewer) || retired(owner)
+                || removing[viewer] || removing[owner]) {
             return "That city can't be viewed.";
         }
-        if (frozen(v.owner)) {
+        if (frozen(owner)) {
             return "Its player is viewing another city.";
         }
         for (View o : views) {
-            if (o != null && o != v && o.frozen() && o.owner == v.viewer) {
+            if (o != null && o != self && o.frozen() && o.owner == viewer) {
                 return "Your own city is being viewed.";
             }
         }

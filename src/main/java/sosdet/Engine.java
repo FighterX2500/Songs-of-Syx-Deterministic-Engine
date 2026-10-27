@@ -475,6 +475,30 @@ public final class Engine {
         return required().viewing();
     }
 
+    /**
+     * Host, between steps: why a view of {@code owner}'s city by the human in {@code viewer} would be cancelled if it
+     * began now, as a sentence for the player, or null when it wouldn't: the mod refuses such a request at once (mod
+     * spec §10). A view of that viewer not over yet refuses too.
+     */
+    public static String viewRefusal(int viewer, int owner) {
+        Session s = required();
+        if (!s.ownCity) {
+            return "Views need own-city mode.";
+        }
+        if (viewer < 0 || viewer >= Session.SLOTS || owner < 0 || owner >= Session.SLOTS) {
+            return "That city can't be viewed.";
+        }
+        View v = s.views[viewer];
+        if (v != null && v.state != View.CANCELLED && v.state != View.ENDED) {
+            return "You are viewing a city already.";
+        }
+        View o = s.views[owner];
+        if (o != null && o.state == View.SCHEDULED) {
+            return "Its player is about to view another city.";
+        }
+        return s.viewRefusal(viewer, owner, null);
+    }
+
     /** The view of the human in {@code viewer}, the same on every PC: scheduled, loading, running or cancelled; or null. */
     public static View view(int viewer) {
         return required().views[viewer];
