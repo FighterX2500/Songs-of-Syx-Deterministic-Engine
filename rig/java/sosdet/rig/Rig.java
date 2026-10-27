@@ -303,6 +303,14 @@ public final class Rig implements SCRIPT {
         private long viewNextStatus;
         private boolean viewTraced;
         private boolean viewTraceOn;
+        /** The viewer's copy: it asked the host to end the view for a limit it hit ({@code view.close}). */
+        private boolean viewCloseSent;
+        /** The host's copy: it logged the end the viewer's copy asked for. */
+        private boolean viewCloseTaken;
+        /** The viewer's copy (SOS-82, M2): its frame stalls once for {@link #viewStallMs} at this step, to fall behind. */
+        private long viewStallStep = -1;
+        private long viewStallMs;
+        private double viewCaughtUpSeen = -1;
         // the desync flow (SOS-53): what the host chooses at an engine's desync hold ("resync" or "exit"), or null
         private String onDesync;
         private sosdet.DesyncHold seenHold;
@@ -610,6 +618,18 @@ public final class Rig implements SCRIPT {
                     event("viewend", String.format(Locale.ROOT, "\"step\":%d,\"viewer\":%d", Engine.step(), viewViewer));
                     viewEndStep = -1;
                 }
+                Path close = viewDir.resolve("view.close");
+                if (aiHost && !viewCloseTaken && Files.exists(close)) {
+                    // the viewer's copy hit a limit: the host logs the end, as the mod's host does on VIEW_CLOSE
+                    String why = new String(Files.readAllBytes(close), StandardCharsets.UTF_8).trim();
+                    if (!why.isEmpty()) {
+                        viewCloseTaken = true;
+                        Engine.viewEnd(viewViewer, Integer.parseInt(why));
+                        event("viewend", String.format(Locale.ROOT, "\"step\":%d,\"viewer\":%d,\"why\":%s",
+                                Engine.step(), viewViewer, why));
+                        viewEndStep = -1;
+                    }
+                }
                 sosdet.View v = Engine.view(viewViewer);
                 if (v == null) {
                     return;
@@ -664,6 +684,32 @@ public final class Rig implements SCRIPT {
                 }
                 if (v.state() != sosdet.View.RUNNING) {
                     return;
+                }
+                if (viewStallStep >= 0 && Engine.step() >= viewStallStep && Engine.viewing() != null) {
+                    viewStallStep = -1;
+                    event("viewstall", String.format(Locale.ROOT, "\"step\":%d,\"ms\":%d", Engine.step(), viewStallMs));
+                    try {
+                        Thread.sleep(viewStallMs); // a slow frame: this copy falls behind the host (the keep-up limit)
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        throw new IllegalStateException("SOSDET rig: the view stall was interrupted", e);
+                    }
+                }
+                int limit = Engine.viewLimit();
+                if (limit != sosdet.View.OPEN && !viewCloseSent) {
+                    viewCloseSent = true;
+                    event("viewlimit", String.format(Locale.ROOT, "\"step\":%d,\"why\":%d,\"behind\":%d",
+                            Engine.step(), limit, Engine.behindHost()));
+                    if (aiHost) {
+                        Engine.viewEnd(viewViewer, limit);
+                    } else {
+                        Files.write(viewDir.resolve("view.close"), Integer.toString(limit).getBytes(StandardCharsets.UTF_8));
+                    }
+                }
+                if (Engine.viewCaughtUpSeconds() >= 0 && viewCaughtUpSeen < 0) {
+                    viewCaughtUpSeen = Engine.viewCaughtUpSeconds();
+                    event("viewcaughtup", String.format(Locale.ROOT, "\"step\":%d,\"s\":%.1f", Engine.step(),
+                            viewCaughtUpSeen));
                 }
                 byte[] in = readNew(viewDir.resolve("view.hash"), viewHashOffset);
                 viewHashOffset += in.length;
@@ -1369,6 +1415,15 @@ public final class Rig implements SCRIPT {
                 viewEndStep = Long.parseLong(c[4]);
                 viewDir = Paths.get(rest(Arrays.copyOfRange(c, 4, c.length)));
                 event("viewat", "\"step\":" + viewStep);
+                return;
+            case "viewlimits": // viewlimits <catch-up s> <keep-up s> <steps>: shorter view limits (SOS-82, M2)
+                Engine.viewLimits(Double.parseDouble(c[1]), Double.parseDouble(c[2]), Integer.parseInt(c[3]));
+                event("viewlimits", "\"catchUp\":" + c[1] + ",\"keepUp\":" + c[2] + ",\"steps\":" + c[3]);
+                return;
+            case "viewstall": // viewstall <step> <ms>: the viewer's frame stalls once (SOS-82, M2)
+                viewStallStep = Long.parseLong(c[1]);
+                viewStallMs = Long.parseLong(c[2]);
+                event("viewstall", "\"at\":" + viewStallStep + ",\"ms\":" + viewStallMs);
                 return;
             case "removehuman": // removehuman <slot>: the host removes a human whose copy was held (SOS-66)
                 Engine.removeHuman(Integer.parseInt(c[1]));

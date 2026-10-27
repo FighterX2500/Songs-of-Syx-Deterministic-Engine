@@ -18,6 +18,21 @@ public final class View {
     /** Over: from {@link #thaw} every PC reads the viewer's reports again, and the viewer runs its own city. */
     public static final int ENDED = 4;
 
+    /** Why a view ends ({@link #why}): not ended yet. */
+    public static final int OPEN = -1;
+    /** The viewer closed it ({@link Engine#viewEnd(int)}). */
+    public static final int CLOSED = 0;
+    /** The viewer's PC hadn't caught up with the owner's city a minute after its load (mod spec §10). */
+    public static final int NOT_CAUGHT_UP = 1;
+    /** The viewer's PC fell behind the owner's city for over a minute after catching up (mod spec §10). */
+    public static final int FELL_BEHIND = 2;
+    /** The viewer's copy of the city lost step with the owner's ({@link Engine#viewDesync}). */
+    public static final int DESYNC = 3;
+    /** The game ended it on every PC alike: a battle, a prompt or question for the viewer, or it couldn't start. */
+    public static final int GAME = 4;
+    /** The reasons the viewer's PC asks the host to end a view with ({@link Engine#viewEnd(int, int)}). */
+    static final int LAST_ASKED = DESYNC;
+
     /** The viewer's human and PC. */
     public final int viewer;
     public final int viewerPc;
@@ -34,7 +49,13 @@ public final class View {
     volatile boolean back;
     /** The last freeze or thaw step this PC, neither the owner nor the viewer, reloaded its own world at. */
     long reloaded = -1;
+    /**
+     * A battle began at the freeze step, before any PC loaded for the view: nobody loads for it, the viewer's PC runs
+     * its own city on, and the view thaws after the battle as any other (SOS-82).
+     */
+    boolean loadSkipped;
     volatile int state = SCHEDULED;
+    volatile int why = OPEN;
     volatile String reason;
 
     View(int viewer, int viewerPc, int owner, int ownerPc, long freeze) {
@@ -49,9 +70,36 @@ public final class View {
         return state;
     }
 
-    /** Why the view was cancelled, as a sentence for the player; null otherwise. */
+    /**
+     * Why the view was cancelled or ends, as a sentence for the player: the game's reason, or a limit's. Null while it
+     * is open and when the viewer closed it.
+     */
     public String reason() {
         return reason;
+    }
+
+    /** Why the view ends or was cancelled, the same on every PC: {@link #CLOSED} to {@link #GAME}, or {@link #OPEN}. */
+    public int why() {
+        return why;
+    }
+
+    /** False when a battle at the freeze step ended the view before any PC loaded for it: the viewer saw nothing. */
+    public boolean loaded() {
+        return !loadSkipped;
+    }
+
+    /** The sentence for a view the viewer's PC asked to end: null for {@link #CLOSED}. */
+    static String sentence(int why) {
+        switch (why) {
+        case NOT_CAUGHT_UP:
+            return "Your PC couldn't catch up with the city.";
+        case FELL_BEHIND:
+            return "Your PC fell behind the city for too long.";
+        case DESYNC:
+            return "The view lost step with the city.";
+        default:
+            return null;
+        }
     }
 
     /** The step the viewer thaws at, the same on every PC; -1 while no end is in the log. */

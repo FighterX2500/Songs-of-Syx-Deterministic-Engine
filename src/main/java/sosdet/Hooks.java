@@ -144,6 +144,10 @@ public final class Hooks {
                 && s.ai().confirmed() - s.clock.step() > VIEW_CATCH_UP_LAG) {
             speed *= VIEW_CATCH_UP; // a viewer behind the host runs faster until it has caught up (SOS-82)
         }
+        if (s.viewing() != null && s.ai().mode() == sosdet.ai.AiMode.PEER) {
+            // the viewer's limits, on this PC's clock: they only decide whether it asks the host to end the view
+            s.viewLimit.update(now, Math.max(0, s.ai().confirmed() - s.clock.step()));
+        }
         return s.clock.stepsForFrame(now, gameSeconds, speed);
     }
 
@@ -307,6 +311,7 @@ public final class Hooks {
             s.hashes.take(step, clock, s.reportsHash(), s.source());
             s.viewHashes(step);
         }
+        s.viewsEnd(step); // a thaw due next step is put off while a battle runs or a world prompt is open (SOS-82)
         s.times.record(System.nanoTime() - s.stepStartNanos);
         s.stepStartNanos = 0;
         s.part = -1;
@@ -1676,7 +1681,8 @@ public final class Hooks {
         // a battle's result asks the battle's human on every PC; it opens outside the world part (plan 0006)
         s.worldPromptHuman = s.battle != null ? s.battle.human
                 : s.part == StepParts.WORLD_PART ? s.currentHuman : s.cityHuman();
-        s.endView(s.worldPromptHuman, s.clock.step(), "A battle prompt asks for you."); // the prompt ends a view (SOS-82)
+        // the prompt ends a view (SOS-82)
+        s.endView(s.worldPromptHuman, s.clock.step(), View.GAME, "A battle prompt asks for you.");
         s.promptTimer.open();
         return s.worldPromptHuman == s.localHuman;
     }
@@ -1728,7 +1734,7 @@ public final class Hooks {
         long key = step * 64 + n;
         int human = world ? s.currentHuman : s.cityHuman(); // a viewed city's questions are its owner's (SOS-82)
         if (world) {
-            s.endView(human, step, "A question asks for you."); // a world question ends its human's view
+            s.endView(human, step, View.GAME, "A question asks for you."); // a world question ends its human's view
         }
         s.stepPrompts.put(key, new Object[] {yes, no, human});
         if (human != s.localHuman) {
@@ -1836,6 +1842,7 @@ public final class Hooks {
         long step = s.clock.step();
         OwnBattle b = new OwnBattle(step, human, s.pcOf(human), s.streams.worldDraws());
         s.battle = b;
+        s.battleEndsViews(step); // every PC loads the battle: no view lives through it (SOS-82)
         s.streams.reseed(s.battleSeed(step));
         try {
             engage.run();

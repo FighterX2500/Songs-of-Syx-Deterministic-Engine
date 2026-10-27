@@ -30,6 +30,12 @@ A human (the viewer) watches another human's city (the owner's) live. The viewer
 
 **At T** (M2), on the viewer, between T − 1 and T: it saves the world (`GameWorldLoad.save`), loads `__beforeView`, then loads that world into it keeping its own city (as a world resync does), puts back its own city's engine state and applies the transactions kept since F. From T every PC unfreezes the human: the reports taken from T on apply, and the world reads the frozen report until the report taken at T applies.
 
+**The ends (M2).** Every end is the same on every PC: it applies inside one step, and the viewer thaws at the first report step after it. `View.why()` and `View.reason()` say why, for the mod's message.
+- *The viewer's limits* (mod spec §10): measured on the viewer's PC only, on its own clock (`ViewLimit`, updated with each frame's steps): not caught up (at most 60 steps behind the host's confirmed step) 60 s after its view load (`View.NOT_CAUGHT_UP`), or more than 60 steps behind for over 60 s after catching up (`View.FELL_BEHIND`). `Engine.viewLimit()` reports the limit hit; the mod sends it to the host, whose `Engine.viewEnd(viewer, why)` logs the end with that reason, so the end applies at one host-stamped step everywhere. A view desync ends it the same way (`View.DESYNC`); the viewer's own Close is `View.CLOSED`. `Engine.viewLimits` (test tooling) sets shorter limits for the rig.
+- *A battle* on the battle map (any human's: every PC loads it) ends every view in its Engage step (`View.GAME`, "A battle started."), cancelling those not frozen yet. *A battle prompt or a world question* for the viewer ends its view the same way. While a battle runs or a world prompt or question is open, the thaw is put off by 30 steps; this is decided at the end of the step before the thaw (`Session.viewsEnd`), inside the step, so every PC moves it alike before any acts on it between steps.
+- *Ended in its own freeze step* (a battle, a prompt or the host's end in step F): nobody has loaded yet, as the loads run after step F, so nobody does (`View.loaded()` false). The viewer stays frozen in every world until the thaw, since its report at F went untaken, and its PC runs its own city on, so its player can answer the prompt that ended the view.
+- *The viewer's room plans:* a room the viewer was still drawing in the placer (never built) is lost at the view's load: no save holds it and the load resets the placer, so its own city comes back at the thaw without it. Built plans (construction sites) are in the city's save and come back with it.
+
 ## 3. The owner's city state the save leaves out
 
 Sent with the save in `viewOut`:
@@ -51,14 +57,14 @@ Every raid map (`RaidingMap.AUp`, `dirty`, one per human) is set as a new game's
 
 Every other PC reloads its own world too (`Session.viewWorldReloads`, owner, 2026-10-27): after step F, and before step T where the viewer loads its own city back (the owner too then), each saves its world and loads it back keeping its city, as a world resync does, with the unsaved state above put back. A world load's resets then happen on every PC alike. A whole game's load, as the owner and the viewer do, resets more than the world's alone; the list above carries that too, so the other PCs load only their world (owner, 2026-10-28). Rig run V82AB (3 copies, 3 humans, a view from 2400 to 2900): all copies identical to step 3600. The world reloads took 440 ms and 489 ms on the PC outside the view and 269 ms on the owner at the thaw, three copies sharing one PC; the viewer's load of the owner's save took 8.4 s.
 
-The state dump that found these (`StateDump`, the rig's `--dump-at` and `--dump-reload`) is debugging only.
+The state dump that found these (`StateDump`, the rig's `--dump-at` and `--dump-reload`, with `Engine.reloadOwnForDebug` and `Engine.debugAt`) stays as test tooling in the rig, for the next hunt for what a load resets; the mod never calls it.
 
 The city's own unsaved state shows in the view hash.
 
 ## 4. Milestones
 
 - **M1, the spike:** the view entry, the freeze, `viewOut`/`viewIn`, the view load, the view hash, catching up. The rig runs `--humans 2` (and 3) with `--view STEP:VIEWER:OWNER`. Success: the viewer's city hash matches the owner's at every check for a few thousand steps, and the world hash still matches on every copy.
-- **M2:** the thaw, the limits (not caught up 1 minute after the load, falling behind for 1 minute), a battle or a prompt for the viewer ends the view, the viewer's room plans across the view.
+- **M2:** the thaw, the limits (not caught up 1 minute after the load, falling behind for 1 minute), a battle or a prompt for the viewer ends the view, the viewer's room plans across the view. Built (§2, "The ends"); `ViewTest` covers the limits and each end. The rig reaches each limit with `--view-limits` and `--view-stall`.
 - **M3 and M4** are the mod's: the request and the owner's consent, the screens, the network, two PCs.
 
 ## 5. Known gaps (to check in M1)
