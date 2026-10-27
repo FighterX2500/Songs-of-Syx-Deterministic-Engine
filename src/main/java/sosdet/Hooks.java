@@ -240,6 +240,13 @@ public final class Hooks {
         if (s.battleAhead == step) {
             return true;
         }
+        if (s.pvpEngageAt == step) { // a battle between two humans engages at a step set the step before (SOS-83)
+            s.battleAhead = step;
+            return true;
+        }
+        if (s.worldPromptOther >= 0) { // between two humans one Fight doesn't engage: only pvpEngageAt does
+            return false;
+        }
         if (!s.ai().commandDue(step, sosdet.game.cmd.WorldBattles::isEngage)) {
             return false;
         }
@@ -377,6 +384,9 @@ public final class Hooks {
             }
             s.currentHuman = 0;
             s.ai().worldPart();
+            if (s.pvpEngageAt == step && s.worldPrompt != null) { // both humans answered, or time ran out (SOS-83)
+                sosdet.game.cmd.WorldBattles.pvpEngage();
+            }
             // after the world's commands: an answer given at this step comes first (SOS-45)
             if (s.promptTimer.step(s.clock.stepSeconds(), s.clock.agreedSpeed()) && s.worldPromptTimeout != null) {
                 s.currentHuman = s.worldPromptHuman; // as the human asked, whose answer it stands in for (SOS-46)
@@ -1490,6 +1500,10 @@ public final class Hooks {
         s.worldPromptClose = null;
         s.worldPromptTimeout = null;
         s.worldPromptArmies = Session.NO_ARMIES;
+        s.worldPromptOther = -1;
+        s.worldPromptOtherNext = -1;
+        s.worldPromptReady = 0;
+        s.pvpEngageAt = -1;
         s.promptTimer.close();
         s.stepPrompts.clear(); // the load's questions are not asked again
         s.stepPromptShown = -1;
@@ -1654,8 +1668,50 @@ public final class Hooks {
         // a battle's result asks the battle's human on every PC; it opens outside the world part (plan 0006)
         s.worldPromptHuman = s.battle != null ? s.battle.human
                 : s.part == StepParts.WORLD_PART ? s.currentHuman : s.localHuman;
+        s.worldPromptOther = s.worldPromptOtherNext;
+        s.worldPromptOtherNext = -1;
+        s.worldPromptReady = 0;
+        s.pvpEngageAt = -1;
         s.promptTimer.open();
-        return s.worldPromptHuman == s.localHuman;
+        return s.worldPromptHuman == s.localHuman || s.worldPromptOther == s.localHuman;
+    }
+
+    /**
+     * In the world part, just before a battle between two humans' armies opens its prompt ({@code Resolver}): the
+     * prompt asks {@code other} too, the defender, besides the current human, the attacker (SOS-83).
+     */
+    public static void worldPromptAlsoAsks(int other) {
+        Session s = Engine.session();
+        if (s != null) {
+            s.worldPromptOtherNext = other;
+        }
+    }
+
+    /** True while the open world-battle prompt is a battle between two humans' armies: Fight only (SOS-83). */
+    public static boolean worldPromptBetweenHumans() {
+        Session s = Engine.session();
+        return s != null && s.worldPrompt != null && s.worldPromptOther >= 0;
+    }
+
+    /**
+     * Inside the step: the current human pressed Fight in a battle between two humans. When both have, the battle
+     * engages at the next step, which the hold before battles sees coming (SOS-70, SOS-83).
+     */
+    public static void worldPromptFight() {
+        Session s = Engine.session();
+        s.worldPromptReady |= s.currentHuman == s.worldPromptHuman ? 1 : 2;
+        if (s.worldPromptReady == 3) {
+            worldPromptEngageNext();
+        }
+    }
+
+    /** Inside the step: the battle between two humans engages at the next step, answered or not (SOS-83). */
+    public static void worldPromptEngageNext() {
+        Session s = Engine.session();
+        if (s.pvpEngageAt < 0) {
+            s.pvpEngageAt = s.clock.step() + 1;
+            s.promptTimer.close();
+        }
     }
 
     /**
@@ -1670,13 +1726,13 @@ public final class Hooks {
     /** True when the open world-battle prompt asks this PC's human (the rig answers only those). */
     public static boolean worldPromptHere() {
         Session s = Engine.session();
-        return s == null || s.worldPrompt == null || s.worldPromptHuman == s.localHuman;
+        return s == null || s.worldPrompt == null || s.worldPromptHuman == s.localHuman || s.worldPromptOther == s.localHuman;
     }
 
     /** Inside a command: true when it acts for the human the open world-battle prompt asks (SOS-46). */
     public static boolean worldPromptAnswerer() {
         Session s = Engine.session();
-        return s == null || s.currentHuman == s.worldPromptHuman;
+        return s == null || s.currentHuman == s.worldPromptHuman || (s.worldPromptOther >= 0 && s.currentHuman == s.worldPromptOther);
     }
 
     /** True in a session's step: a yes/no the simulation asks is kept, and answered by command (cmd.StepPrompts). */
@@ -1884,6 +1940,10 @@ public final class Hooks {
         s.worldPromptClose = null;
         s.worldPromptTimeout = null;
         s.worldPromptArmies = Session.NO_ARMIES;
+        s.worldPromptOther = -1;
+        s.worldPromptOtherNext = -1;
+        s.worldPromptReady = 0;
+        s.pvpEngageAt = -1;
         s.promptTimer.close();
         close.run();
     }

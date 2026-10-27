@@ -789,8 +789,9 @@ def main():
     ap.add_argument("--engage", type=int, default=-1,
                     help="city: copy 1 fights field battles on the battle map, retreating this many steps after Start "
                          "(0: fights on to the end); default: auto-resolve (SOS-32)")
-    ap.add_argument("--engage-copy", type=int, default=1,
-                    help="with --engage and --humans: this copy's player fights its human's battles, not copy 1's (SOS-66)")
+    ap.add_argument("--engage-copy", default="1",
+                    help="with --engage and --humans: this copy's player fights its human's battles, not copy 1's (SOS-66);"
+                         " a comma list for several, such as both humans of a battle between players (SOS-83)")
     ap.add_argument("--restart", type=int, default=0,
                     help="with --engage: copy 1 restarts the battle once, this many steps after Start (SOS-41)")
     ap.add_argument("--in-battle", default="",
@@ -925,8 +926,9 @@ def main():
             fail("--remove K:STEP or K:bN is for --humans runs, K from 2 to %d (copy 1 is the host); bN needs --engage"
                  % args.copies)
         remove_copy, remove_at = int(k), int(at)
-    if not 1 <= args.engage_copy <= args.copies or args.engage_copy > 1 and not (args.humans and args.engage >= 0):
-        fail("--engage-copy K is for --engage --humans runs, K from 1 to %d" % args.copies)
+    engage_copies = {int(k) for k in args.engage_copy.split(",")}
+    if any(not 1 <= k <= args.copies for k in engage_copies) or engage_copies != {1} and not (args.humans and args.engage >= 0):
+        fail("--engage-copy K[,K...] is for --engage --humans runs, K from 1 to %d" % args.copies)
     follower_saves = [s for s in args.follower_saves.split(",") if s]
     if follower_saves:
         if not args.follow or len(follower_saves) != args.copies - 1:
@@ -1092,7 +1094,7 @@ def main():
             c.send("watchonly", "watchonly")
         if c.k == 1 and args.commanders:
             c.send("commanders " + args.commanders, "commanders")
-        if c.k == args.engage_copy and args.engage >= 0 and args.scenario == "city" and not args.play \
+        if c.k in engage_copies and args.engage >= 0 and args.scenario == "city" and not args.play \
                 and not args.replay:  # field battles on the battle map (SOS-32)
             c.send("answerprompts engage %d%s" % (args.engage, " restart %d" % args.restart if args.restart else ""),
                    "answerprompts")

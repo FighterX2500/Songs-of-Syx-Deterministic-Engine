@@ -184,13 +184,21 @@ public final class WorldActions {
             });
             return true;
         }
-        case "winterceptnear": { // winterceptnear <army> [stronger] [still]: wintercept on the nearest army at war with the
-            // player (a field battle, SOS-32); stronger: only an army of more power, which fights instead of withdrawing; still:
-            // only a fortified or fortifying army (a chase after a marching army re-paths and never closes)
+        case "winterceptnear": { // winterceptnear <army> [stronger] [still] [slot=<n>]: wintercept on the nearest army at war
+            // with the player (a field battle, SOS-32); stronger: only an army of more power, which fights instead of
+            // withdrawing; still: only a fortified or fortifying army (a chase after a marching army re-paths and never
+            // closes); slot=<n>: only an army of the faction in slot n, such as another human's (SOS-83)
             int army = Integer.parseInt(a[1]);
             java.util.List<String> flags = java.util.Arrays.asList(a).subList(2, a.length);
             boolean stronger = flags.contains("stronger");
             boolean still = flags.contains("still");
+            int slot = -1;
+            for (String f : flags) {
+                if (f.startsWith("slot=")) {
+                    slot = Integer.parseInt(f.substring(5));
+                }
+            }
+            int onlySlot = slot;
             Rig.later(() -> {
                 WArmy w = army(army);
                 WArmy best = null;
@@ -198,6 +206,7 @@ public final class WorldActions {
                 for (int i = 0; i < WORLD.ENTITIES().armies.max(); i++) {
                     WArmy e = WORLD.ENTITIES().armies.tryGet(i);
                     if (e == null || e.faction() == FACTIONS.player() || AD.men(null).get(e) == 0
+                            || (onlySlot >= 0 && (e.faction() == null || e.faction().index() != onlySlot))
                             || (e.faction() != null && !DIP.WAR().is(e.faction(), FACTIONS.player()))
                             || (stronger && AD.power().get(e) <= AD.power().get(w))
                             || (still && e.state() != WArmyState.fortified && e.state() != WArmyState.fortifying)) {

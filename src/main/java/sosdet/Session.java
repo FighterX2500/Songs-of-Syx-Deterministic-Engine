@@ -61,6 +61,15 @@ final class Session {
     Runnable worldPromptClose;
     /** The human it asks: only that human's PC shows it, and only that human's answer applies (SOS-46). */
     int worldPromptHuman;
+    /**
+     * A battle between two humans' armies (SOS-83): the other human it asks too, or -1; the next prompt's, set just
+     * before it opens; which of the two pressed Fight (bit 0 the asked, bit 1 the other); and the step its battle
+     * engages at, once both did or the time ran out, or -1. All set inside the step, alike on every PC.
+     */
+    int worldPromptOther = -1;
+    int worldPromptOtherNext = -1;
+    int worldPromptReady;
+    long pvpEngageAt = -1;
     /** Its default answer when its time runs out, the time it has waited, and the armies waiting while it is open (SOS-45). */
     Runnable worldPromptTimeout;
     final PromptTimer promptTimer = new PromptTimer();
