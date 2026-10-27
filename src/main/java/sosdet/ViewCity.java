@@ -10,7 +10,7 @@ import sosdet.report.Input;
 import sosdet.report.InputKind;
 
 /**
- * A city as it moves to another PC for a view (plan 0012, SOS-82): the owner's game save, and the engine's state of
+ * A city as it moves to another PC for a view (plan 0013, SOS-82): the owner's game save, and the engine's state of
  * that city the save leaves out. The same state keeps the viewer's own city while it is unloaded. Protocol version 1.
  */
 final class ViewCity {

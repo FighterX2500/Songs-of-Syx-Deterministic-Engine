@@ -232,7 +232,7 @@ final class Session {
         }
     };
 
-    // ------------------------------------------------------------ city views (plan 0012, SOS-82)
+    // ------------------------------------------------------------ city views (plan 0013, SOS-82)
 
     /** The city views in the log, by the viewer's slot: the same on every PC; null where there is none. */
     final View[] views = new View[SLOTS];

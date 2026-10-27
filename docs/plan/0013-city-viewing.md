@@ -1,4 +1,4 @@
-# Plan 0012: viewing another human's city (SOS-82)
+# Plan 0013: viewing another human's city (SOS-82)
 
 Card: [SOS-82](https://fighterx2500.atlassian.net/browse/SOS-82). Mod spec §10 and ADR 0006 (SOSGSGMP). The mod's half is SOSGSGMP `docs/plan/city-viewing.md`. Approved by the owner on 2026-10-27, with option A for the host's own view.
 

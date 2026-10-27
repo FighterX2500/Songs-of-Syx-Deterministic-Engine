@@ -391,7 +391,7 @@ public final class Engine {
         }
     }
 
-    // ------------------------------------------------------------ city views (plan 0012, SOS-82)
+    // ------------------------------------------------------------ city views (plan 0013, SOS-82)
 
     /**
      * Host, own-city mode, between steps: the human in {@code viewer} views {@code owner}'s city (mod spec §10). A view
@@ -449,7 +449,7 @@ public final class Engine {
      * The viewer's PC, between steps: the limit it hit ({@link View#NOT_CAUGHT_UP}: not caught up with the owner's city
      * a minute after the view load; {@link View#FELL_BEHIND}: more than 60 steps behind the host for a minute after
      * that), for the mod to send to the host's {@link #viewEnd(int, int)}; {@link View#OPEN} while none is hit, and
-     * once the view's end is in the log. Measured on this PC's clock (mod spec §10, plan 0012 M2).
+     * once the view's end is in the log. Measured on this PC's clock (mod spec §10, plan 0013 M2).
      */
     public static int viewLimit() {
         Session s = required();
@@ -522,7 +522,7 @@ public final class Engine {
             double[] moves = GameWorldLoad.unsaved();
             v.sent = true;
             // the owner loads its save too: two PCs that load one save run its city alike, a loaded and an unloaded
-            // game don't (plan 0012, rig run V82D)
+            // game don't (plan 0013, rig run V82D)
             s.viewLoadStart(state, moves, v.viewer);
             sosdet.game.GameView.loadSaved();
             return ViewCity.toBytes(v.freeze, state, moves, save);
@@ -536,7 +536,7 @@ public final class Engine {
      * the owner's city, in step with the owner's, and its player only watches.
      *
      * <p>A room plan the viewer was still drawing (the placer's, never built) is gone: no save holds it, and the load
-     * resets the placer, so the own city that comes back at the thaw has none (plan 0012 M2).
+     * resets the placer, so the own city that comes back at the thaw has none (plan 0013 M2).
      */
     public static void viewIn(byte[] bytes) {
         Session s = required();
@@ -562,7 +562,7 @@ public final class Engine {
     /**
      * Test tooling, for the rig's state dumps only (never the mod): between steps, this PC saves its own game and loads
      * it back as a PC outside a view does, keeping the session, and runs {@code loaded} once it is set, before any
-     * step; {@link #viewLoading()} is true until then. It found what a load resets (SOS-82, plan 0012 §3).
+     * step; {@link #viewLoading()} is true until then. It found what a load resets (SOS-82, plan 0013 §3).
      */
     public static void reloadOwnForDebug(Runnable loaded) {
         Session s = required();

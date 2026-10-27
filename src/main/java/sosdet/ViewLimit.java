@@ -1,7 +1,7 @@
 package sosdet;
 
 /**
- * The viewer's limits (mod spec §10, plan 0012 M2, SOS-82): the view ends when the viewer's PC hasn't caught up with
+ * The viewer's limits (mod spec §10, plan 0013 M2, SOS-82): the view ends when the viewer's PC hasn't caught up with
  * the owner's city a minute after its view load, or, once caught up, stays behind for over a minute. Caught up means
  * at most {@link #DEFAULT_STEPS} steps behind the host's confirmed step, where the catch-up speed stops.
  *

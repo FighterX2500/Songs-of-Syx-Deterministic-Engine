@@ -16,7 +16,7 @@ import sosdet.report.Field;
 import sosdet.report.ReportLayout;
 
 /**
- * A city view's limits and ends (plan 0012 M2, SOS-82): every PC ends a view at one step alike, with a reason the mod
+ * A city view's limits and ends (plan 0013 M2, SOS-82): every PC ends a view at one step alike, with a reason the mod
  * shows; the viewer's PC measures its own limits only to ask the host for that end.
  */
 class ViewTest {

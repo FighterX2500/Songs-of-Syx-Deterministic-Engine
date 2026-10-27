@@ -152,7 +152,7 @@ public final class Hooks {
         return s.clock.stepsForFrame(now, gameSeconds, speed);
     }
 
-    /** A viewer more than this many steps behind the host's confirmed step catches up (plan 0012). */
+    /** A viewer more than this many steps behind the host's confirmed step catches up (plan 0013). */
     static final int VIEW_CATCH_UP_LAG = 60;
     /** How much faster a viewer runs while it catches up: a 5-second gap closes in about 2 seconds (mod spec §10). */
     static final double VIEW_CATCH_UP = 3.5;

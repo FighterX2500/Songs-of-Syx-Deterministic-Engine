@@ -1,7 +1,7 @@
 package sosdet;
 
 /**
- * A human viewing another human's city (mod spec §10, plan 0012, SOS-82): from the view entry's step until the viewer's
+ * A human viewing another human's city (mod spec §10, plan 0013, SOS-82): from the view entry's step until the viewer's
  * own city is back. Every PC keeps each view alike: from {@link #freeze} the viewer's human is frozen in every world,
  * and only the viewer's and the owner's PCs do more. What the mod reads; the engine's own state.
  */

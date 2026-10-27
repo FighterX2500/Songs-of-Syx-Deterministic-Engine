@@ -8,7 +8,7 @@ import game.save.GameLoader;
 import init.paths.PATHS;
 
 /**
- * The game's side of a city view (plan 0012, SOS-82): the owner's save, the viewer's own save while it views, and
+ * The game's side of a city view (plan 0013, SOS-82): the owner's save, the viewer's own save while it views, and
  * loading either. The files live in the saves folder, under names no player picks.
  */
 public final class GameView {
