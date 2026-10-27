@@ -9,6 +9,7 @@ import game.faction.diplomacy.deal.Deal;
 import game.faction.diplomacy.deal.DealParty;
 import game.faction.diplomacy.deal.DealRegs.DealReg;
 import game.faction.npc.FactionNPC;
+import game.faction.player.Player;
 import game.faction.player.emmi.EmiType;
 import game.faction.player.emmi.EmiTypeReg;
 import game.faction.player.emmi.EmiTypeRoy;
@@ -87,7 +88,8 @@ public final class Diplomacy {
                 if (!royalty) {
                     Region reg = Args.region(r);
                     int value = r.i();
-                    if (reg == null || !(type instanceof EmiTypeReg)) {
+                    if (reg == null || !(type instanceof EmiTypeReg) || reg.faction() instanceof Player) {
+                        // no emissary works in a human's region (owner, 2026-10-27; SOS-73)
                         return false;
                     }
                     ((EmiTypeReg) type).set(reg, value);

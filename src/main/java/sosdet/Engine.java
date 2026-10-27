@@ -779,6 +779,22 @@ public final class Engine {
         HumanDeals.tariff(slot, percent);
     }
 
+    /**
+     * Between steps: why the human in {@code giver} can't give {@code region} (a region index) to the human in
+     * {@code receiver} in one deal with the regions {@code chosen}, or null (SOS-73, the region picker). Regions are
+     * world state, so both sides can be checked on any PC.
+     */
+    public static String dealRegionRefusal(int giver, int receiver, int region, int[] chosen) {
+        required();
+        return HumanDeals.regionRefusal(giver, receiver, region, chosen);
+    }
+
+    /** The yearly tribute, in percent of its worth, the human in {@code vassal} pays the human in {@code overlord} (SOS-73). */
+    public static int tributePercent(int vassal, int overlord) {
+        required();
+        return HumanDeals.tributePercent(vassal, overlord);
+    }
+
     /** The tariff the human in {@code setter} puts on what the human in {@code other} sells them, in percent. */
     public static int tariff(int setter, int other) {
         required();

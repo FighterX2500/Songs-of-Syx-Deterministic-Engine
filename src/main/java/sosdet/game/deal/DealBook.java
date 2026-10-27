@@ -9,7 +9,8 @@ import java.util.List;
 import sosdet.hash.HashLog;
 
 /**
- * The deals between humans (SOS-72, plan 0009): the open proposals and the latest answers. World state: every PC
+ * The deals between humans (SOS-72, plan 0009; regions and vassalage SOS-73): the open proposals, the latest answers
+ * and the tribute rate of each vassalage between humans. World state: every PC
  * changes it at the same steps, it is saved with the world ({@code GameDeals}) and it is in the world hash. Plain
  * Java, no game classes; the commands ({@code cmd.HumanDeals}) check the terms against the game.
  */
@@ -20,11 +21,21 @@ public final class DealBook {
     /** The answers kept for the UIs to tell the proposer. */
     public static final int ANSWERS_KEPT = 16;
 
-    /** The treaty term: none, or the treaty both sides have after an accept. */
-    public static final int NO_TREATY = 0, PEACE = 1, TRADE = 2, PACT = 3, ALLY = 4, CANCEL_ALL = 5;
-    private static final int TREATIES = 6;
+    /**
+     * The treaty term: none, or the treaty both sides have after an accept. With {@code PROTECTOR} the proposer becomes
+     * the receiver's overlord; with {@code VASSAL} the proposer becomes the receiver's vassal (SOS-73).
+     */
+    public static final int NO_TREATY = 0, PEACE = 1, TRADE = 2, PACT = 3, ALLY = 4, CANCEL_ALL = 5, PROTECTOR = 6,
+            VASSAL = 7;
+    private static final int TREATIES = 8;
 
-    private static final int VERSION = 1;
+    /** A vassal's yearly tribute, in percent of its worth, unless the deal sets another (owner, 2026-10-27). */
+    public static final int DEFAULT_TRIBUTE = 10;
+    /** The regions one side may give in one deal. */
+    public static final int MAX_REGIONS = 16;
+
+    /** 2 (SOS-73): regions and the tribute rate in the terms, and the tributes. Version 1 still loads. */
+    private static final int VERSION = 2;
 
     /** What became of a proposal. The code is saved: never reuse one. */
     public enum Outcome {
@@ -47,8 +58,9 @@ public final class DealBook {
     }
 
     /**
-     * A deal's terms: the treaty, the money each side gives, and the goods each side gives as (tradable index, amount)
-     * pairs. Immutable.
+     * A deal's terms: the treaty, the money each side gives, the goods each side gives as (tradable index, amount)
+     * pairs, the regions each side gives as region indices, and the vassal's yearly tribute in percent when the treaty
+     * is {@link #PROTECTOR} or {@link #VASSAL}. Immutable.
      */
     public static final class Terms {
         public final int treaty;
@@ -56,19 +68,56 @@ public final class DealBook {
         public final int toCredits;
         private final int[] fromGoods;
         private final int[] toGoods;
+        private final int[] fromRegions;
+        private final int[] toRegions;
+        public final int tributePercent;
 
+        /** Terms with no regions and the default tribute. */
         public Terms(int treaty, int fromCredits, int toCredits, int[] fromGoods, int[] toGoods) {
+            this(treaty, fromCredits, toCredits, fromGoods, toGoods, new int[0], new int[0], DEFAULT_TRIBUTE);
+        }
+
+        public Terms(int treaty, int fromCredits, int toCredits, int[] fromGoods, int[] toGoods, int[] fromRegions,
+                int[] toRegions, int tributePercent) {
             if (treaty < 0 || treaty >= TREATIES) {
                 throw new IllegalArgumentException("SOSDET: a treaty term of " + treaty);
             }
             if (fromCredits < 0 || toCredits < 0) {
                 throw new IllegalArgumentException("SOSDET: deal money of " + fromCredits + " and " + toCredits);
             }
+            if (tributePercent < 0 || tributePercent > 100) {
+                throw new IllegalArgumentException("SOSDET: a tribute of " + tributePercent + "%");
+            }
             this.treaty = treaty;
             this.fromCredits = fromCredits;
             this.toCredits = toCredits;
             this.fromGoods = goods(fromGoods);
             this.toGoods = goods(toGoods);
+            this.fromRegions = regions(fromRegions, new int[0]);
+            this.toRegions = regions(toRegions, fromRegions);
+            this.tributePercent = vassalage() ? tributePercent : DEFAULT_TRIBUTE;
+        }
+
+        private static int[] regions(int[] regions, int[] other) {
+            if (regions.length > MAX_REGIONS) {
+                throw new IllegalArgumentException("SOSDET: " + regions.length + " regions on one side of a deal");
+            }
+            for (int i = 0; i < regions.length; i++) {
+                if (regions[i] < 0) {
+                    throw new IllegalArgumentException("SOSDET: a deal region of index " + regions[i]);
+                }
+                for (int j = 0; j < i; j++) {
+                    if (regions[j] == regions[i]) {
+                        throw new IllegalArgumentException("SOSDET: deal regions name region " + regions[i] + " twice");
+                    }
+                }
+                for (int o : other) {
+                    if (o == regions[i]) {
+                        throw new IllegalArgumentException("SOSDET: region " + o + " on both sides of a deal");
+                    }
+                }
+            }
+            return regions.clone();
         }
 
         private static int[] goods(int[] pairs) {
@@ -98,9 +147,25 @@ public final class DealBook {
             return toGoods.clone();
         }
 
+        /** The regions the proposer gives, as region indices. */
+        public int[] fromRegions() {
+            return fromRegions.clone();
+        }
+
+        /** The regions the receiver gives, as region indices. */
+        public int[] toRegions() {
+            return toRegions.clone();
+        }
+
+        /** True when the treaty makes one side the other's vassal. */
+        public boolean vassalage() {
+            return treaty == PROTECTOR || treaty == VASSAL;
+        }
+
         /** True when the deal asks nothing of anyone. */
         public boolean empty() {
-            return treaty == NO_TREATY && fromCredits == 0 && toCredits == 0 && fromGoods.length == 0 && toGoods.length == 0;
+            return treaty == NO_TREATY && fromCredits == 0 && toCredits == 0 && fromGoods.length == 0 && toGoods.length == 0
+                    && fromRegions.length == 0 && toRegions.length == 0;
         }
 
         @Override
@@ -110,13 +175,16 @@ public final class DealBook {
             }
             Terms t = (Terms) o;
             return treaty == t.treaty && fromCredits == t.fromCredits && toCredits == t.toCredits
-                    && Arrays.equals(fromGoods, t.fromGoods) && Arrays.equals(toGoods, t.toGoods);
+                    && Arrays.equals(fromGoods, t.fromGoods) && Arrays.equals(toGoods, t.toGoods)
+                    && Arrays.equals(fromRegions, t.fromRegions) && Arrays.equals(toRegions, t.toRegions)
+                    && tributePercent == t.tributePercent;
         }
 
         @Override
         public int hashCode() {
-            return 31 * (31 * (31 * (31 * treaty + fromCredits) + toCredits) + Arrays.hashCode(fromGoods))
+            int h = 31 * (31 * (31 * (31 * treaty + fromCredits) + toCredits) + Arrays.hashCode(fromGoods))
                     + Arrays.hashCode(toGoods);
+            return 31 * (31 * (31 * h + Arrays.hashCode(fromRegions)) + Arrays.hashCode(toRegions)) + tributePercent;
         }
     }
 
@@ -128,8 +196,13 @@ public final class DealBook {
     public record Answer(int id, int from, int to, Outcome outcome) {
     }
 
+    /** A vassalage between humans and its yearly tribute in percent of the vassal's worth (SOS-73). */
+    public record Tribute(int vassal, int overlord, int percent) {
+    }
+
     private final List<Proposal> open = new ArrayList<>();
     private final List<Answer> answers = new ArrayList<>();
+    private final List<Tribute> tributes = new ArrayList<>();
     private int nextId = 1;
 
     /** Opens a proposal; null when {@code to} already has {@link #MAX_OPEN_TO} open. */
@@ -206,6 +279,45 @@ public final class DealBook {
                 answered(p, Outcome.DROPPED);
             }
         }
+        for (int i = 0; i < tributes.size(); i++) {
+            Tribute t = tributes.get(i);
+            if (t.vassal == slot || t.overlord == slot) {
+                tributes.remove(i--);
+            }
+        }
+    }
+
+    /** A vassalage between humans begins: {@code vassal}'s tribute to {@code overlord}, replacing any it had. */
+    public void tribute(int vassal, int overlord, int percent) {
+        if (vassal == overlord || percent < 0 || percent > 100) {
+            throw new IllegalArgumentException("SOSDET: a tribute of " + percent + "% from slot " + vassal + " to " + overlord);
+        }
+        endTribute(vassal);
+        tributes.add(new Tribute(vassal, overlord, percent));
+    }
+
+    /** {@code vassal}'s tribute in percent to {@code overlord}, or {@link #DEFAULT_TRIBUTE} when the book has none. */
+    public int tributePercent(int vassal, int overlord) {
+        for (Tribute t : tributes) {
+            if (t.vassal == vassal && t.overlord == overlord) {
+                return t.percent;
+            }
+        }
+        return DEFAULT_TRIBUTE;
+    }
+
+    /** {@code vassal}'s vassalage ended: its tribute goes. */
+    public void endTribute(int vassal) {
+        for (int i = 0; i < tributes.size(); i++) {
+            if (tributes.get(i).vassal == vassal) {
+                tributes.remove(i--);
+            }
+        }
+    }
+
+    /** The tributes, oldest first. */
+    public List<Tribute> tributes() {
+        return Collections.unmodifiableList(tributes);
     }
 
     /** The open proposals, oldest first. */
@@ -237,6 +349,9 @@ public final class DealBook {
             w.add(t.toCredits);
             w.addAll(t.fromGoods);
             w.addAll(t.toGoods);
+            w.addList(t.fromRegions);
+            w.addList(t.toRegions);
+            w.add(t.tributePercent);
         }
         w.add(answers.size());
         for (Answer a : answers) {
@@ -245,15 +360,21 @@ public final class DealBook {
             w.add(a.to);
             w.add(a.outcome.code);
         }
+        w.add(tributes.size());
+        for (Tribute t : tributes) {
+            w.add(t.vassal);
+            w.add(t.overlord);
+            w.add(t.percent);
+        }
         return w.toArray();
     }
 
-    /** A book from {@link #toInts}. */
+    /** A book from {@link #toInts}, of this version or version 1 (no regions, no tributes). */
     public static DealBook fromInts(int[] v) throws IOException {
         IntReader r = new IntReader(v);
         int version = r.next();
-        if (version != VERSION) {
-            throw new IOException("SOSDET: a deal book of version " + version + ", this engine reads " + VERSION);
+        if (version != 1 && version != VERSION) {
+            throw new IOException("SOSDET: a deal book of version " + version + ", this engine reads 1 to " + VERSION);
         }
         DealBook b = new DealBook();
         b.nextId = r.next();
@@ -264,7 +385,8 @@ public final class DealBook {
             int to = r.next();
             int expires = r.next();
             try {
-                Terms t = new Terms(r.next(), r.next(), r.next(), r.goods(), r.goods());
+                Terms t = version == 1 ? new Terms(r.next(), r.next(), r.next(), r.goods(), r.goods())
+                        : new Terms(r.next(), r.next(), r.next(), r.goods(), r.goods(), r.list(), r.list(), r.next());
                 b.open.add(new Proposal(id, from, to, expires, t));
             } catch (IllegalArgumentException e) {
                 throw new IOException("SOSDET: deal " + id + " in the save: " + e.getMessage(), e);
@@ -273,6 +395,18 @@ public final class DealBook {
         int a = r.count();
         for (int i = 0; i < a; i++) {
             b.answers.add(new Answer(r.next(), r.next(), r.next(), Outcome.of(r.next())));
+        }
+        if (version >= 2) {
+            int t = r.count();
+            for (int i = 0; i < t; i++) {
+                int vassal = r.next();
+                int overlord = r.next();
+                int percent = r.next();
+                if (vassal == overlord || percent < 0 || percent > 100) {
+                    throw new IOException("SOSDET: a tribute of " + percent + "% from slot " + vassal + " to " + overlord);
+                }
+                b.tributes.add(new Tribute(vassal, overlord, percent));
+            }
         }
         r.end();
         return b;
@@ -300,6 +434,13 @@ public final class DealBook {
         void addAll(int[] pairs) {
             add(pairs.length / 2);
             for (int i : pairs) {
+                add(i);
+            }
+        }
+
+        void addList(int[] list) {
+            add(list.length);
+            for (int i : list) {
                 add(i);
             }
         }
@@ -339,6 +480,14 @@ public final class DealBook {
                 pairs[i] = next();
             }
             return pairs;
+        }
+
+        int[] list() throws IOException {
+            int[] list = new int[count()];
+            for (int i = 0; i < list.length; i++) {
+                list[i] = next();
+            }
+            return list;
         }
 
         void end() throws IOException {

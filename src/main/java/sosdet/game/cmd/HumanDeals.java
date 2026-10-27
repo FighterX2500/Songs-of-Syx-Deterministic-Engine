@@ -21,8 +21,14 @@ import sosdet.game.deal.DealBook.Outcome;
 import sosdet.game.deal.DealBook.Proposal;
 import sosdet.game.deal.DealBook.Terms;
 import sosdet.game.deal.TariffBook;
+import snake2d.util.sets.LIST;
 import world.WORLD;
 import world.entity.caravan.Shipment;
+import world.map.pathing.WRegFinder.RegDist;
+import world.map.pathing.WRegFinder.Treaty;
+import world.map.pathing.WRegSel;
+import world.map.regions.Region;
+import world.region.RD;
 
 /**
  * Deals between humans (ids 8100-8199, SOS-72, plan 0009): a proposal and its answer, world commands applied in the
@@ -30,7 +36,9 @@ import world.entity.caravan.Shipment;
  * deal between humans has none, so whatever both agree applies, with vanilla's own calls for each term
  * ({@code DealParty.execute}, {@code DealBools}). No NPC's opinion changes: vanilla's betrayal lives in
  * {@code OpsStance.setNewStance}, which takes NPCs only. War is not offered between humans until they can fight
- * (owner, 2026-10-26).
+ * (owner, 2026-10-26). SOS-73 adds regions other than capitals, vassalage with a tribute rate set in the deal, and
+ * the rules the patches ask about: an overlord stays out of its vassal's wars, and trade crosses a human's land at
+ * peace.
  */
 public final class HumanDeals {
 
@@ -62,6 +70,9 @@ public final class HumanDeals {
         CmdWriter w = new CmdWriter(PROPOSE).i(to).i(terms.treaty).i(terms.fromCredits).i(terms.toCredits);
         goods(w, terms.fromGoods());
         goods(w, terms.toGoods());
+        list(w, terms.fromRegions());
+        list(w, terms.toRegions());
+        w.i(terms.tributePercent);
         Commands.capture(w);
     }
 
@@ -116,6 +127,21 @@ public final class HumanDeals {
         return refusal(human(p.from()), FACTIONS.player(), p.terms());
     }
 
+    /**
+     * Why the human in slot {@code giver} can't give {@code region} to the one in slot {@code receiver} along with the
+     * regions {@code chosen} already; null when they can. For the UI's region picker.
+     */
+    public static String regionRefusal(int giver, int receiver, int region, int[] chosen) {
+        int[] all = java.util.Arrays.copyOf(chosen, chosen.length + 1);
+        all[chosen.length] = region;
+        return regionsRefusal(human(giver), human(receiver), all);
+    }
+
+    /** {@code vassal}'s yearly tribute in percent to the human in slot {@code overlord}, as the deal set it. */
+    public static int tributePercent(int vassal, int overlord) {
+        return book().tributePercent(vassal, overlord);
+    }
+
     /** The open proposals, oldest first: a live view, read on the game thread. */
     public static List<Proposal> open() {
         return book().open();
@@ -133,13 +159,20 @@ public final class HumanDeals {
         }
     }
 
+    private static void list(CmdWriter w, int[] list) {
+        w.i(list.length);
+        for (int v : list) {
+            w.i(v);
+        }
+    }
+
     // ---------------------------------------------------------------- inside the step, on every PC
 
     private static boolean applyPropose(CmdReader r) {
         int to = r.i();
         Terms terms;
         try {
-            terms = new Terms(r.i(), r.i(), r.i(), goods(r), goods(r));
+            terms = new Terms(r.i(), r.i(), r.i(), goods(r), goods(r), regions(r), regions(r), r.i());
         } catch (IllegalArgumentException e) {
             return false; // a PC can't send this; skipped everywhere alike
         }
@@ -161,6 +194,18 @@ public final class HumanDeals {
             pairs[i] = r.i();
         }
         return pairs;
+    }
+
+    private static int[] regions(CmdReader r) {
+        int n = r.i();
+        if (n < 0 || n > DealBook.MAX_REGIONS) {
+            throw new IllegalArgumentException("SOSDET: " + n + " regions in a deal");
+        }
+        int[] list = new int[n];
+        for (int i = 0; i < n; i++) {
+            list[i] = r.i();
+        }
+        return list;
     }
 
     private static boolean applyAnswer(CmdReader r) {
@@ -223,14 +268,55 @@ public final class HumanDeals {
         return tariffs().cut(buyer.index(), seller.index(), price, TIME.years().bitsSinceStart());
     }
 
-    /** Start of each world part, before the commands: proposals due expire as declined. */
+    /**
+     * Start of each world part, before the commands: proposals due expire as declined, and the tribute of a vassalage
+     * that ended (cancelled, or ended by vanilla) goes.
+     */
     public static void expire() {
         book().expire((int) TIME.currentSecond());
+        List<DealBook.Tribute> tributes = book().tributes();
+        for (int i = tributes.size() - 1; i >= 0; i--) {
+            DealBook.Tribute t = tributes.get(i);
+            Faction vassal = human(t.vassal());
+            if (vassal == null || DIP.overlord(vassal) != human(t.overlord())) {
+                book().endTribute(t.vassal());
+            }
+        }
+    }
+
+    /**
+     * In the world part, {@code UpVassal}'s yearly tribute of the human {@code vassal} to {@code overlord}: the deal's
+     * rate in percent when the overlord is a human too, else -1 (vanilla's own rule and NPC overlord).
+     */
+    public static int tributePercent(Faction vassal, Faction overlord) {
+        if (!(vassal instanceof Player) || !(overlord instanceof Player)) {
+            return -1;
+        }
+        return book().tributePercent(vassal.index(), overlord.index());
+    }
+
+    /**
+     * In {@code DIP.ally}: true when {@code f}'s war must not pull in {@code f2}, because {@code f} is a human and
+     * {@code f2} its human overlord. The vassal joins its overlord's wars; the overlord does not join a war its vassal
+     * starts (mod spec §6).
+     */
+    public static boolean overlordStaysOut(Faction f, Faction f2) {
+        return f instanceof Player && f2 instanceof Player && DIP.overlord(f) == f2;
+    }
+
+    /**
+     * In a human's trade walk ({@code WRegFinder}): true when the trade of {@code trader} may cross {@code land}'s
+     * regions: both are humans, not at war (owner, 2026-10-27; mod spec §7).
+     */
+    public static boolean tradePasses(Faction trader, Faction land) {
+        return trader instanceof Player && land instanceof Player && trader != land && !DIP.WAR().is(trader, land);
     }
 
     private static void execute(Faction from, Faction to, Terms t) {
         give(from, to, t.fromCredits, t.fromGoods());
         give(to, from, t.toCredits, t.toGoods());
+        regions(to, t.fromRegions());
+        regions(from, t.toRegions());
         if (t.treaty != DealBook.NO_TREATY) {
             int before = Hooks.currentHumanSwap(from); // DIP.set reads the player for its war timer: the proposer's
             try {
@@ -238,6 +324,28 @@ public final class HumanDeals {
             } finally {
                 Hooks.currentHumanSwap(before);
             }
+        }
+        if (t.vassalage()) {
+            Faction vassal = t.treaty == DealBook.PROTECTOR ? to : from;
+            book().tribute(vassal.index(), (vassal == to ? from : to).index(), t.tributePercent);
+        }
+    }
+
+    /**
+     * The regions go to {@code receiver}, as {@code DealParty.execute} hands them over, with the receiver current: the
+     * game's owner-change listeners act for "the player", and in the step that is the receiver on every PC.
+     */
+    private static void regions(Faction receiver, int[] regions) {
+        if (regions.length == 0) {
+            return;
+        }
+        int before = Hooks.currentHumanSwap(receiver);
+        try {
+            for (int i : regions) {
+                RD.setFaction(WORLD.REGIONS().getByIndex(i), receiver, true);
+            }
+        } finally {
+            Hooks.currentHumanSwap(before);
         }
     }
 
@@ -293,8 +401,74 @@ public final class HumanDeals {
         if (why != null) {
             return why;
         }
+        why = regionsRefusal(from, to, terms.fromRegions());
+        if (why != null) {
+            return why;
+        }
+        why = regionsRefusal(to, from, terms.toRegions());
+        if (why != null) {
+            return why;
+        }
         why = sideRefusal(from, terms.fromCredits, terms.fromGoods());
         return why != null ? why : sideRefusal(to, terms.toCredits, terms.toGoods());
+    }
+
+    /**
+     * Why {@code giver} can't give {@code regions} to {@code receiver}; null when it can. As vanilla's deal
+     * ({@code DealRegs}): each is the giver's and not its capital, and each borders the receiver's land, reached from
+     * the receiver's capital, or another of these regions that does.
+     */
+    static String regionsRefusal(Faction giver, Faction receiver, int[] regions) {
+        if (regions.length == 0) {
+            return null;
+        }
+        if (regions.length > DealBook.MAX_REGIONS) {
+            return "At most " + DealBook.MAX_REGIONS + " regions in one deal.";
+        }
+        boolean[] chosen = new boolean[WORLD.REGIONS().all().size()];
+        for (int i : regions) {
+            Region reg = i >= 0 && i < chosen.length ? WORLD.REGIONS().getByIndex(i) : null;
+            if (reg == null || !reg.active()) {
+                return "No such region.";
+            }
+            if (reg.faction() != giver) {
+                return reg.info.name() + " isn't " + giver.name + "'s.";
+            }
+            if (reg.capitol()) {
+                return "A capital can't be given.";
+            }
+            if (reg.besieged()) {
+                return reg.info.name() + " is under siege.";
+            }
+            chosen[i] = true;
+        }
+        Treaty reach = new Treaty() {
+            @Override
+            public boolean can(Region origin, Region prevReg, Region to, int tx, int ty, double dist) {
+                if (to == null) {
+                    return true;
+                }
+                if (prevReg == null) {
+                    return false;
+                }
+                if (prevReg.faction() == receiver || prevReg == to) {
+                    return true;
+                }
+                return to.faction() == giver && chosen[prevReg.index()];
+            }
+        };
+        WRegSel sel = new WRegSel() {
+            @Override
+            public boolean is(Region t) {
+                return chosen[t.index()];
+            }
+        };
+        LIST<RegDist> reached = WORLD.PATH().regFinder.all(receiver.capitolRegion(), reach, sel);
+        int n = 0;
+        for (int i = 0; i < reached.size(); i++) {
+            n += chosen[reached.get(i).reg.index()] ? 1 : 0;
+        }
+        return n == regions.length ? null : "Each region must border " + receiver.name + "'s land, or another region given with it.";
     }
 
     /** Why {@code from} can't cancel every treaty with {@code to} at once; null when they can. */
@@ -399,6 +573,10 @@ public final class HumanDeals {
             return DIP.PACT();
         case DealBook.ALLY:
             return DIP.ALLY();
+        case DealBook.PROTECTOR:
+            return DIP.OVERLORD(); // DIP.set(instigator, accepter, OVERLORD): the proposer is the overlord
+        case DealBook.VASSAL:
+            return DIP.VASSAL();
         default:
             throw new IllegalArgumentException("SOSDET: a treaty term of " + treaty);
         }

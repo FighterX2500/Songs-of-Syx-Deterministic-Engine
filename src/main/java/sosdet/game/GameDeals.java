@@ -58,7 +58,7 @@ public final class GameDeals extends Savable {
     /** Mixes the book into {@code h}; a game with no deals hashes as before SOS-72. */
     static long hash(long h) {
         DealBook b = GameHumans.get().deals().book();
-        if (b.open().isEmpty() && b.answers().isEmpty()) {
+        if (b.open().isEmpty() && b.answers().isEmpty() && b.tributes().isEmpty()) {
             return h;
         }
         return b.hash(h);
