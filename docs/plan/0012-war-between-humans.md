@@ -33,3 +33,13 @@ Card: [SOS-74](https://fighterx2500.atlassian.net/browse/SOS-74). The mod's plan
   - peace with 100 denari;
   - every copy identical.
 - **twopc** with `--war`: both PCs at war at the same step, hashes agree.
+
+## Results (2026-10-27)
+
+- **W74A** (14,000 steps): copies identical, 932 hashes, none missed. Slot 0 allied with slot 2; slot 24 declared war on slot 2, and slot 0 stayed NEUTRAL with slot 24 (the ally rule). The siege of slot 2's capitol was refused: the army stayed fortified. Slot 2 has no other region, and the peace came after the run's last step, so W74B followed.
+- **W74B** (26,000 steps): copies identical, 1,732 hashes, none missed.
+  - slot 24 declared war on slots 2 and 0;
+  - the siege of slot 0's capitol was refused;
+  - slot 24's army went to slot 0's other region (region 100), arrived and opened the siege battle prompt for slot 24;
+  - slot 24 offered slot 2 peace with 100 denari, accepted: slots 2 and 24 NEUTRAL, while slot 0 (slot 2's ally) stayed at war with slot 24.
+- **Not run:** the siege prompt's outcome and a capture of the region (the prompt timed out to its default, no probe after it); peace with an NPC while at war with a human (the guard is vanilla-path code checked by reading).
