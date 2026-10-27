@@ -178,8 +178,9 @@ public final class WorldBattles {
     public static void pvpEngage() {
         WBattleSpec spec = (WBattleSpec) Hooks.worldPrompt();
         int attacker = Hooks.worldPromptHuman();
+        int defender = Hooks.worldPromptOther();
         Hooks.worldPromptClose();
-        Hooks.ownCityEngage(attacker, spec::engage);
+        Hooks.ownCityEngage(attacker, defender, spec::engage);
     }
 
     /**

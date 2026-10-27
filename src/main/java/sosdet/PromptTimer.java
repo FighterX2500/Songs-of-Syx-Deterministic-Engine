@@ -9,6 +9,18 @@ final class PromptTimer {
 
     /** How long a prompt waits for an answer, in real seconds at the agreed speed. */
     static final double LIMIT_SECONDS = 30;
+    /** How long a battle between two humans waits for both to press Start (owner, 2026-10-27; SOS-83). */
+    static final double DEPLOY_SECONDS = 120;
+
+    private final double limit;
+
+    PromptTimer() {
+        this(LIMIT_SECONDS);
+    }
+
+    PromptTimer(double limit) {
+        this.limit = limit;
+    }
 
     /** Seconds waited for the open prompt; negative while none is open. */
     private double waited = -1;
@@ -36,7 +48,7 @@ final class PromptTimer {
             return false;
         }
         waited += speed > 0 ? stepSeconds / speed : stepSeconds;
-        if (waited < LIMIT_SECONDS) {
+        if (waited < limit) {
             return false;
         }
         waited = -1;

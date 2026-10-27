@@ -224,7 +224,7 @@ class EngineTest {
         Engine.reportsIn(1, reportRecord(3, 1, 1));
         steps(20, 1);
         long step = Engine.step();
-        s.battle = new OwnBattle(step, 3, s.pcOf(3), s.streams.worldDraws());
+        s.battle = new OwnBattle(step, 3, s.pcOf(3), -1, s.streams.worldDraws());
         assertEquals(1, s.battle.pc, "slot 3's PC");
         assertEquals(0, steps(10, 1), "every PC holds until the battle is loaded");
         assertNull(Engine.battleOut(), "this PC isn't the battle PC");

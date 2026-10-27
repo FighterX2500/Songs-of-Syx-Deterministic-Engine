@@ -222,6 +222,9 @@ public final class Hooks {
         }
         s.stepStartNanos = System.nanoTime(); // timing only, never fed to the simulation
         s.ai().stepBegin(s.clock.step());
+        if (s.battle != null && !s.battle.awaiting && s.deployTimer.step(s.clock.stepSeconds(), s.clock.agreedSpeed())) {
+            sosdet.game.cmd.MapBattles.deployForAll(); // a human between two didn't press Start in time (SOS-83)
+        }
         if (s.battle != null && !s.battle.awaiting && s.removeDue[s.battle.human]) {
             // the battle's human is removed: the battle ends with no result, a step at a time, as its commands would (SOS-66)
             sosdet.game.cmd.MapBattles.endForRemoval();
@@ -1687,6 +1690,32 @@ public final class Hooks {
         }
     }
 
+    /** Inside the Start command: true when the battle may start; between two humans once both pressed it (SOS-83). */
+    public static boolean battleDeployReady() {
+        Session s = Engine.session();
+        return s == null || s.deployReady(s.ai().applyingPc());
+    }
+
+    /** The other human the open world-battle prompt asks, between two humans; -1 for none (SOS-83). */
+    public static int worldPromptOther() {
+        Session s = Engine.session();
+        return s == null ? -1 : s.worldPromptOther;
+    }
+
+    /** True while a battle between two humans' armies runs, from Engage to the return (SOS-83). */
+    public static boolean battleBetweenHumans() {
+        Session s = Engine.session();
+        return s != null && s.battle != null && s.battle.other >= 0;
+    }
+
+    /**
+     * In the battle's placer: whether army 1 may stand on tile {@code tx, ty} while deploying, in a battle between two
+     * humans: inside army 0's deployment area turned about the map's centre (owner, 2026-10-27; SOS-83).
+     */
+    public static boolean deployMirrorHolds(snake2d.util.datatypes.RECTANGLE bounds, int tx, int ty) {
+        return bounds.holdsPoint(2 * settlement.main.SETT.TILE_BOUNDS.cX() - tx, 2 * settlement.main.SETT.TILE_BOUNDS.cY() - ty);
+    }
+
     /** True while the open world-battle prompt is a battle between two humans' armies: Fight only (SOS-83). */
     public static boolean worldPromptBetweenHumans() {
         Session s = Engine.session();
@@ -1862,9 +1891,14 @@ public final class Hooks {
      * its draw count put back. No step runs past this one until the battle is loaded.
      */
     public static void ownCityEngage(int human, Runnable engage) {
+        ownCityEngage(human, -1, engage);
+    }
+
+    /** {@link #ownCityEngage(int, Runnable)} for a battle between two humans: {@code other} commands army 1 (SOS-83). */
+    public static void ownCityEngage(int human, int other, Runnable engage) {
         Session s = Engine.session();
         long step = s.clock.step();
-        OwnBattle b = new OwnBattle(step, human, s.pcOf(human), s.streams.worldDraws());
+        OwnBattle b = new OwnBattle(step, human, s.pcOf(human), other, s.streams.worldDraws());
         s.battle = b;
         s.streams.reseed(s.battleSeed(step));
         try {

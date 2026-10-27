@@ -13,6 +13,10 @@ public final class OwnBattle {
     public final int human;
     /** That human's PC, which generated the battle and sends it. */
     public final int pc;
+    /** In a battle between two humans' armies, the other human, whose PC commands army 1; -1 against NPCs (SOS-83). */
+    public final int other;
+    /** Between two humans: which side's commanders pressed Start (bit 0 army 0's, bit 1 army 1's), inside the step. */
+    int deployReady;
     /** The world stream's draw count at Engage, the same on every PC; put back after the generation and the battle. */
     final long worldDraws;
     /** The battle PC's battle save is still to be loaded: no step runs past {@link #step} until it is. */
@@ -20,10 +24,11 @@ public final class OwnBattle {
     /** The battle PC's engine has handed out its battle save. */
     boolean sent;
 
-    OwnBattle(long step, int human, int pc, long worldDraws) {
+    OwnBattle(long step, int human, int pc, int other, long worldDraws) {
         this.step = step;
         this.human = human;
         this.pc = pc;
+        this.other = other;
         this.worldDraws = worldDraws;
     }
 
@@ -34,6 +39,7 @@ public final class OwnBattle {
 
     @Override
     public String toString() {
-        return "battle of human " + human + " (PC " + pc + ") from step " + step + (awaiting ? ", awaiting its save" : "");
+        return "battle of human " + human + " (PC " + pc + ")" + (other >= 0 ? " against human " + other : "") + " from step "
+                + step + (awaiting ? ", awaiting its save" : "");
     }
 }
