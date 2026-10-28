@@ -37,6 +37,7 @@ import sosdet.hash.HashLog;
 import sosdet.report.CityReport;
 import sosdet.report.Field;
 import sosdet.report.Reports;
+import sosdet.txn.TransferLog;
 import sosdet.txn.Txn;
 import sosdet.txn.TxnKind;
 import util.data.DOUBLE_O;
@@ -841,6 +842,8 @@ public final class Hooks {
         r.change(step, Field.CREDITS, 0, -price);
         r.change(step, Field.QUEUED, b.tradable.index(), 0, amount);
         r.change(step, Field.QUEUED, b.tradable.index(), type.index + 1, amount);
+        s.transfers.record(step, t.id(), t.human, TransferLog.Kind.BOUGHT, b.tradable.index(), amount, price, type.index,
+                seller == null ? -1 : seller.index());
         return true;
     }
 
@@ -853,6 +856,9 @@ public final class Hooks {
         t.a = b;
         t.b = type;
         t.i = amount;
+        Session s = Engine.session();
+        s.transfers.record(s.clock.step(), t.id(), t.human, TransferLog.Kind.DELIVERED, b.tradable.index(), amount, 0,
+                type.index, -1);
         return true;
     }
 
@@ -873,6 +879,8 @@ public final class Hooks {
         r.change(step, Field.CREDITS, 0, price);
         r.change(step, Field.PROMISED, p.type.index(), 0, amount);
         r.change(step, Field.PROMISED, p.type.index(), type.index + 1, amount);
+        s.transfers.record(step, t.id(), t.human, TransferLog.Kind.SOLD, p.type.index(), amount, price, type.index,
+                buyer == null ? -1 : buyer.index());
         return true;
     }
 
@@ -896,6 +904,7 @@ public final class Hooks {
         Session s = Engine.session();
         t.human = creditsOwner(s, c);
         s.reports(t.human).change(s.clock.step(), Field.CREDITS, 0, (int) amount);
+        s.transfers.record(s.clock.step(), t.id(), t.human, TransferLog.Kind.MONEY, -1, amount, 0, type.ordinal(), -1);
         return true;
     }
 
@@ -913,6 +922,8 @@ public final class Hooks {
         Session s = Engine.session();
         t.human = creditsOwner(s, c);
         s.reports(t.human).change(s.clock.step(), Field.CREDITS, 0, (int) amount);
+        s.transfers.record(s.clock.step(), t.id(), t.human, TransferLog.Kind.MONEY_FOR_GOODS, res.index(), amount, resAm,
+                type.ordinal(), -1);
         return true;
     }
 
