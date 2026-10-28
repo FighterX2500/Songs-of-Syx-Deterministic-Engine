@@ -120,19 +120,18 @@ final class Pacer {
     }
 
     /**
-     * Every frame: the step the host may run to (NO_LIMIT: no cap). A frame that found the host at the cap, short of
-     * {@code limit} (the mod's last step), counts as held.
+     * Every frame, on every PC: the step the host may run to (NO_LIMIT: no cap). A frame that found the host at the cap,
+     * short of {@code limit} (the mod's last step), counts as held, as does one whose steps {@code waited} for another
+     * PC's report or the host's log (SOS-90).
      */
-    long frame(long now, long step, long limit) {
-        if (!on()) {
-            return StepClock.NO_LIMIT;
-        }
+    long frame(long now, long step, long limit, boolean waited) {
         long gap = lastFrame == 0 ? 0 : now - lastFrame;
         lastFrame = now;
+        boolean atCap = on() && cap != StepClock.NO_LIMIT && step >= cap && (limit == StepClock.NO_LIMIT || cap < limit);
         if (gap > GAP_NANOS) {
             heldSince = -1;
             windowStart = -1;
-        } else if (cap != StepClock.NO_LIMIT && step >= cap && (limit == StepClock.NO_LIMIT || cap < limit)) {
+        } else if (atCap || waited) {
             heldFrames++;
             heldNanos += gap;
             windowHeld += gap;
@@ -142,6 +141,9 @@ final class Pacer {
             longestHold = Math.max(longestHold, now - heldSince);
         } else {
             heldSince = -1;
+        }
+        if (!on()) {
+            return StepClock.NO_LIMIT;
         }
         long slowest = Long.MAX_VALUE;
         for (int pc : peers) {

@@ -116,6 +116,44 @@ class AiLogTest {
         assertFalse(peer.mayRun(11 + AiLog.DELAY_STEPS));
     }
 
+    /** SOS-90: a longer delay at a high speed moves the peers' horizon; a shorter one never stamps at or behind it. */
+    @Test
+    void theDelayFollowsTheSpeedAndNeverStampsBehindTheHorizon() throws InterruptedException {
+        Recorder hr = new Recorder();
+        AiLog host = AiLog.host(START, hr);
+        AiLog peer = AiLog.peer(START, new Recorder());
+        host.delay(200);
+        captureOnGeneralThread(host, AiEntry.GUARD, 7, 1);
+        runStep(host, hr, 1);
+        peer.logIn(host.logOut());
+        assertTrue(peer.mayRun(201));
+        assertFalse(peer.mayRun(202));
+        host.delay(AiLog.DELAY_STEPS);
+        captureOnGeneralThread(host, AiEntry.GUARD, 7, 2);
+        runStep(host, hr, 2);
+        assertEquals(201, host.horizon(), "the horizon never goes back");
+        for (long s = 3; s <= 202; s++) {
+            runStep(host, hr, s);
+        }
+        assertEquals(List.of("201:0:3:7:1", "202:1:3:7:2"), hr.applied, "after the horizon, not at step 32");
+        assertEquals(232, host.horizon());
+        assertThrows(IllegalArgumentException.class, () -> host.delay(AiLog.DELAY_STEPS - 1));
+        assertThrows(IllegalArgumentException.class, () -> host.delay(AiLog.MAX_DELAY_STEPS + 1));
+    }
+
+    /** SOS-90: a confirmation of format 7 or older is the step alone: the horizon is the least delay past it. */
+    @Test
+    void anOlderConfirmationMeansTheLeastDelay() {
+        AiLog peer = AiLog.peer(START, new Recorder());
+        java.nio.ByteBuffer b = java.nio.ByteBuffer.allocate(AiLog.HEADER_BYTES + 1 + 4 + 8);
+        b.putInt(AiLog.MAGIC).putInt(7).putInt(AiLog.DELAY_STEPS).putLong(START);
+        b.put(AiLog.CONFIRM).putInt(8).putLong(100);
+        peer.logIn(b.array());
+        assertEquals(100 + AiLog.DELAY_STEPS, peer.horizon());
+        assertTrue(peer.mayRun(130));
+        assertFalse(peer.mayRun(131));
+    }
+
     @Test
     void theLogArrivesInAnyPieces() throws InterruptedException {
         Recorder hr = new Recorder();

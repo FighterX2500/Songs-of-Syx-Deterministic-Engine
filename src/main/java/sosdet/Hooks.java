@@ -195,7 +195,7 @@ public final class Hooks {
 
     /**
      * Starts a step; false when the session may not run further (the frame's other steps are dropped): at its last
-     * step, while a map battle's end loads the game saved before it, as a peer that is already 30 steps past the host's last confirmed step, or as a follower whose source's
+     * step, while a map battle's end loads the game saved before it, as a peer already at the host's horizon, or as a follower whose source's
      * report for the step has not come in (ADR 0005 §4). This PC's room plan is lifted out
      * of the simulation before the frame's first step (ADR 0003). The AI log entries due at this step are applied
      * first, before anything else runs.
@@ -226,8 +226,12 @@ public final class Hooks {
         s.viewBackStart(); // a viewer before its thaw step loads its own city back (SOS-82)
         s.viewWorldReloads(); // every other PC reloads its world where the owner and the viewer load
         boolean battleAwaited = s.battle != null && s.battle.awaiting; // the battle PC's battle isn't loaded yet
-        if (s.battleLeaving || battleAwaited || !s.ai().mayRun(s.clock.step() + 1) || !s.worldMayRun(s.clock.step() + 1)
-                || battleAhead(s, s.clock.step() + 1) || s.viewHolds(s.clock.step() + 1)) {
+        boolean waits = !s.ai().mayRun(s.clock.step() + 1) || !s.worldMayRun(s.clock.step() + 1);
+        if (waits) {
+            s.waited = true; // waiting for another PC: counted as held (SOS-90)
+        }
+        if (s.battleLeaving || battleAwaited || waits || battleAhead(s, s.clock.step() + 1)
+                || s.viewHolds(s.clock.step() + 1)) {
             s.clock.hold();
             return false;
         }
@@ -388,7 +392,7 @@ public final class Hooks {
                 s.takeReport(step, step);
             }
             if (!battleRuns && Reports.takenAt(step) && !s.frozen(s.localHuman)) {
-                s.takeReport(step, step + Reports.DELAY); // a viewer takes none: its city is unloaded (SOS-82)
+                s.takeReport(step, s.reportAppliesAt(step)); // a viewer takes none: its city is unloaded (SOS-82)
             }
             s.part = part;
             s.streams.reseed(s.worldSeed(step));

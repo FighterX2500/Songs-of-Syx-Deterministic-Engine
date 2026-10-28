@@ -19,7 +19,8 @@ import sosdet.hash.HashLog;
 public final class CityReport {
 
     static final int MAGIC = 0x53444352; // "SDCR"
-    public static final int PROTOCOL_VERSION = 5;
+    /** 6: the next report's first step ({@link #nextAt}, SOS-90). */
+    public static final int PROTOCOL_VERSION = 6;
 
     /** The faction whose city this is. */
     public final int faction;
@@ -27,6 +28,11 @@ public final class CityReport {
     public final long takenAt;
     /** The first step whose world part reads it. */
     public final long appliesAt;
+    /**
+     * Its city's promise: no report taken after it applies before this step, so another PC's world part may run up to
+     * the step before without waiting for one (SOS-90).
+     */
+    public final long nextAt;
     final ReportLayout layout;
     private final double[] values;
     /** What the city part did to the world since its last report, in order (B1, B2). */
@@ -36,7 +42,14 @@ public final class CityReport {
         this(layout, faction, takenAt, appliesAt, values, Collections.emptyList());
     }
 
+    /** A report whose next applies after the least delay ({@link Reports#lastReadableStep}). */
     public CityReport(ReportLayout layout, int faction, long takenAt, long appliesAt, double[] values,
+            List<Input> inputs) {
+        this(layout, faction, takenAt, appliesAt, Math.max(Reports.lastReadableStep(takenAt), appliesAt) + 1, values,
+                inputs);
+    }
+
+    public CityReport(ReportLayout layout, int faction, long takenAt, long appliesAt, long nextAt, double[] values,
             List<Input> inputs) {
         if (values.length != layout.size()) {
             throw new IllegalArgumentException(
@@ -45,10 +58,14 @@ public final class CityReport {
         if (appliesAt < takenAt) {
             throw new IllegalArgumentException("SOSDET: a report taken at " + takenAt + " applies at " + appliesAt);
         }
+        if (nextAt <= appliesAt) {
+            throw new IllegalArgumentException("SOSDET: a report applying at " + appliesAt + " promises the next at " + nextAt);
+        }
         this.layout = layout;
         this.faction = faction;
         this.takenAt = takenAt;
         this.appliesAt = appliesAt;
+        this.nextAt = nextAt;
         this.values = values.clone();
         this.inputs = Collections.unmodifiableList(new ArrayList<>(inputs));
     }
@@ -68,8 +85,8 @@ public final class CityReport {
     public byte[] toBytes() {
         ByteArrayOutputStream out = new ByteArrayOutputStream(64 + values.length * 2);
         int[] sizes = layout.sizes();
-        ByteBuffer head = ByteBuffer.allocate(4 + 4 + 4 + 8 + 8 + 4 + 4 + sizes.length * 4 + 4);
-        head.putInt(MAGIC).putInt(PROTOCOL_VERSION).putInt(faction).putLong(takenAt).putLong(appliesAt)
+        ByteBuffer head = ByteBuffer.allocate(4 + 4 + 4 + 8 + 8 + 8 + 4 + 4 + sizes.length * 4 + 4);
+        head.putInt(MAGIC).putInt(PROTOCOL_VERSION).putInt(faction).putLong(takenAt).putLong(appliesAt).putLong(nextAt)
                 .putInt(Field.values().length).putInt(sizes.length);
         for (int n : sizes) {
             head.putInt(n);
@@ -111,6 +128,7 @@ public final class CityReport {
             int faction = b.getInt();
             long takenAt = b.getLong();
             long appliesAt = b.getLong();
+            long nextAt = b.getLong();
             int fields = b.getInt();
             int[] sizes = new int[b.getInt()];
             for (int i = 0; i < sizes.length; i++) {
@@ -147,7 +165,7 @@ public final class CityReport {
             if (b.hasRemaining()) {
                 throw new IllegalArgumentException("SOSDET: " + b.remaining() + " bytes after the city report");
             }
-            return new CityReport(layout, faction, takenAt, appliesAt, values, inputs);
+            return new CityReport(layout, faction, takenAt, appliesAt, nextAt, values, inputs);
         } catch (BufferUnderflowException | NegativeArraySizeException e) {
             throw new IllegalArgumentException("SOSDET: city report cut short (" + bytes.length + " bytes)", e);
         }
@@ -179,7 +197,8 @@ public final class CityReport {
             return false;
         }
         CityReport r = (CityReport) o;
-        if (r.faction != faction || r.takenAt != takenAt || r.appliesAt != appliesAt || r.values.length != values.length
+        if (r.faction != faction || r.takenAt != takenAt || r.appliesAt != appliesAt || r.nextAt != nextAt
+                || r.values.length != values.length
                 || !r.layout.sameSizes(layout.sizes())) {
             return false;
         }

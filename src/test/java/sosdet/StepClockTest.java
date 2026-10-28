@@ -9,6 +9,17 @@ import org.junit.jupiter.api.Test;
 
 class StepClockTest {
 
+    /** SOS-90: the lockstep window is half a second of real time, 30 steps at the least and 400 at the most. */
+    @Test
+    void theWindowIsHalfASecondAtEverySpeed() {
+        assertEquals(30, Session.windowSteps(1));
+        assertEquals(30, Session.windowSteps(2), "16 steps would be under the least");
+        assertEquals(40, Session.windowSteps(5));
+        assertEquals(200, Session.windowSteps(25));
+        assertEquals(400, Session.windowSteps(50));
+        assertEquals(400, Session.windowSteps(100), "the log's longest delay");
+    }
+
     @Test
     void holdsAtStepZeroUntilToldToRun() {
         StepClock clock = new StepClock();
