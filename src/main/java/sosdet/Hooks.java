@@ -479,6 +479,17 @@ public final class Hooks {
         throw new IllegalStateException("SOSDET: slot " + slot + " is this PC's or the current human, but no human (ADR 0004)");
     }
 
+    /**
+     * Whether a game message sent now is this PC's player's to see (SOS-89): {@code FACTIONS.player()} at the send is
+     * this PC's human. The world part runs every human's raids, events and diplomacy on every PC, each with its human
+     * current, and a viewer's PC runs the viewed city: their messages are for another PC's player. Without a session,
+     * and while a game loads, every message is.
+     */
+    public static boolean messageHere() {
+        Session s = Engine.session();
+        return s == null || s.loading || s.humanNow() == s.localHuman;
+    }
+
     /** True when the world part runs every human's world half: in a session; without one only slot 0's, as in vanilla. */
     public static boolean everyHuman() {
         return Engine.session() != null;
