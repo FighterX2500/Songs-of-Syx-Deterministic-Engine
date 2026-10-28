@@ -155,6 +155,7 @@ class ViewTest {
         View v = frozenView(s);
         s.viewEntry(61, 3, -1, View.CLOSED);
         assertEquals(View.CLOSED, v.why());
+        assertNull(v.reason(), "the viewer closed an open view: no reason");
         assertEquals(90, v.thaw());
 
         s.viewsAt(90);
@@ -167,6 +168,7 @@ class ViewTest {
         s.viewEntry(12, 3, -1, -1); // an end entry of M1, without a reason
         assertEquals(View.CANCELLED, s.views[3].state(), "not frozen yet: cancelled");
         assertEquals(View.CLOSED, s.views[3].why());
+        assertEquals("Closed before it opened.", s.views[3].reason());
     }
 
     @Test

@@ -434,7 +434,7 @@ final class Session {
     void viewEntry(long step, int viewer, int owner, int ownerPc) {
         if (owner < 0) {
             int why = ownerPc < 0 || ownerPc > View.LAST_ASKED ? View.CLOSED : ownerPc;
-            endView(viewer, step, why, why == View.CLOSED ? "Closed before it opened." : View.sentence(why));
+            endView(viewer, step, why, View.sentence(why));
             return;
         }
         views[viewer] = new View(viewer, pcOf(viewer), owner, ownerPc, nextReportStep(step));
@@ -458,6 +458,9 @@ final class Session {
         v.why = why;
         v.reason = reason;
         if (v.state == View.SCHEDULED) {
+            if (why == View.CLOSED) {
+                v.reason = "Closed before it opened.";
+            }
             v.state = View.CANCELLED;
             return;
         }
