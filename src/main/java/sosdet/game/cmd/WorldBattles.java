@@ -17,6 +17,7 @@ import world.battle.spec.BATTLE_RESULT;
 import world.battle.spec.WBattleResult;
 import world.battle.spec.WBattleSiege;
 import world.battle.spec.WBattleSpec;
+import world.entity.army.WArmy;
 
 /**
  * The world-battle prompt's decisions (ids 7900-7999). The world step opens the prompt on every PC alike (the
@@ -88,9 +89,22 @@ public final class WorldBattles {
             return false;
         }
         WBattleSpec spec = (WBattleSpec) open;
+        if (Hooks.worldPromptBetweenHumans()) { // Fight only; the battle engages once both pressed it (SOS-83)
+            if (choice != ENGAGE) {
+                return false;
+            }
+            Hooks.worldPromptFight();
+            return true;
+        }
         int asked = Hooks.worldPromptHuman();
+        int sallyAgainst = Hooks.worldPromptSally();
+        if (sallyAgainst >= 0 && choice == AUTO) {
+            return false; // a sally against another human is fought or called off (SOS-83)
+        }
         Hooks.worldPromptClose();
-        if (choice == AUTO) {
+        if (sallyAgainst >= 0 && choice == ENGAGE) {
+            Hooks.ownCityEngage(asked, sallyAgainst, spec::engage); // built by the defender's PC; army 1 the besieger's
+        } else if (choice == AUTO) {
             spec.auto();
         } else if (choice == RETREAT) {
             spec.retreat();
@@ -149,7 +163,11 @@ public final class WorldBattles {
      */
     static void timedOut() {
         Object open = Hooks.worldPrompt();
-        if (open instanceof WBattleSiege) {
+        if (open instanceof WBattleSpec && Hooks.worldPromptSally() >= 0) {
+            applyDecide(RETREAT); // a sally against another human: the garrison stays in, and the siege goes on (SOS-83)
+        } else if (open instanceof WBattleSpec && Hooks.worldPromptBetweenHumans()) {
+            Hooks.worldPromptEngageNext(); // between two humans the battle is always fought (spec §8, SOS-83)
+        } else if (open instanceof WBattleSiege) {
             applyDecide(WAIT);
         } else if (open instanceof WBattleSpec) {
             applyDecide(AUTO);
@@ -159,6 +177,27 @@ public final class WorldBattles {
         } else if (open instanceof WBattleSiege.Result) {
             applySiegeResult(OCCUPY, 0.1, 0.1, new int[RACES.all().size()], new int[TR.ALL().size()], 0);
         }
+    }
+
+    /**
+     * In the world part, at the step set when both humans pressed Fight or the time ran out: the battle between two
+     * humans engages, built by the PC of the human asked first, the attacker (SOS-83).
+     */
+    public static void pvpEngage() {
+        WBattleSpec spec = (WBattleSpec) Hooks.worldPrompt();
+        int attacker = Hooks.worldPromptHuman();
+        int defender = Hooks.worldPromptOther();
+        Hooks.worldPromptClose();
+        Hooks.ownCityEngage(attacker, defender, spec::engage);
+    }
+
+    /**
+     * In {@code Resolver.init}, two humans' armies in contact: true when the second side's army is the attacker, the
+     * one moving while the first side's stands (owner, 2026-10-27; SOS-83). Otherwise the first side's, the army that
+     * reported the contact, is. Read from world state alike on every PC.
+     */
+    public static boolean secondAttacks(WArmy first, WArmy second) {
+        return second != null && second.path().isValid() && (first == null || !first.path().isValid());
     }
 
     // ------------------------------------------------------------------ hooks (this PC's player, outside the step)

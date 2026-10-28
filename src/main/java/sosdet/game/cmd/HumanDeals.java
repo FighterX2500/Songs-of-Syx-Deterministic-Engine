@@ -35,8 +35,9 @@ import world.region.RD;
  * world part as their issuer on every PC. Vanilla's {@code Deal} always has an NPC side, which prices and judges it; a
  * deal between humans has none, so whatever both agree applies, with vanilla's own calls for each term
  * ({@code DealParty.execute}, {@code DealBools}). No NPC's opinion changes: vanilla's betrayal lives in
- * {@code OpsStance.setNewStance}, which takes NPCs only. War is not offered between humans until they can fight
- * (owner, 2026-10-26). SOS-73 adds regions other than capitals, vassalage with a tribute rate set in the deal, and
+ * {@code OpsStance.setNewStance}, which takes NPCs only. SOS-74 adds war between humans: declared at once, with no
+ * answer and no NPC's opinion changing; an ally's war never makes two humans enemies, only a declaration does
+ * (plan 0004), though a human vassal follows its overlord. SOS-73 adds regions other than capitals, vassalage with a tribute rate set in the deal, and
  * the rules the patches ask about: an overlord stays out of its vassal's wars, and trade crosses a human's land at
  * peace.
  */
@@ -48,6 +49,8 @@ public final class HumanDeals {
     static final int CANCEL = 8102;
     /** A human sets their tariff on another at once, with no answer (owner, 2026-10-27; SOS-77). */
     static final int TARIFF = 8103;
+    /** A human declares war on another at once, with no answer (mod spec §6; SOS-74). */
+    static final int WAR = 8104;
     /** An unanswered proposal expires as declined (mod spec §6). */
     static final int EXPIRES_DAYS = 30;
 
@@ -55,7 +58,8 @@ public final class HumanDeals {
             new Command(PROPOSE, "humanDealPropose", HumanDeals::applyPropose),
             new Command(ANSWER, "humanDealAnswer", HumanDeals::applyAnswer),
             new Command(CANCEL, "humanDealCancel", HumanDeals::applyCancel),
-            new Command(TARIFF, "humanTariff", HumanDeals::applyTariff));
+            new Command(TARIFF, "humanTariff", HumanDeals::applyTariff),
+            new Command(WAR, "humanWar", HumanDeals::applyWar));
 
     private HumanDeals() {
     }
@@ -95,6 +99,19 @@ public final class HumanDeals {
     /** Why this PC's player can't cancel their treaties with the human in slot {@code to} now; null when they can. */
     public static String cancelRefusal(int to) {
         return cancelRefusal(FACTIONS.player(), human(to));
+    }
+
+    /** This PC's player declares war on the human in slot {@code to}: captured, applied at its step. */
+    public static void war(int to) {
+        if (!Commands.capturing()) {
+            throw new IllegalStateException("SOSDET: war declared outside a session's play");
+        }
+        Commands.capture(new CmdWriter(WAR).i(to));
+    }
+
+    /** Why this PC's player can't declare war on the human in slot {@code to} now; null when they can. */
+    public static String warRefusal(int to) {
+        return warRefusal(FACTIONS.player(), human(to));
     }
 
     /** This PC's player sets their tariff on the human in slot {@code to}: captured, applied at its step. */
@@ -245,6 +262,32 @@ public final class HumanDeals {
         return true;
     }
 
+    private static boolean applyWar(CmdReader r) {
+        Faction from = FACTIONS.player();
+        Faction to = human(r.i());
+        if (warRefusal(from, to) != null) {
+            return false; // it changed since this PC's UI checked it
+        }
+        declareWar(from, to);
+        return true;
+    }
+
+    /**
+     * In the world part: {@code from} declares war on the human {@code to}, whatever their treaties; a vassalage between
+     * them ends ({@code DIP.set}). The war command is the one way war between two humans starts: a besiege of a human's
+     * region and a garrison's attack on a human's army need the war first ({@code World}). No NPC's opinion changes
+     * (mod spec §6): {@code DIP} directly, not {@code OpsStance.setNewStance}. Their allies join as in vanilla, but
+     * never as one human against another ({@link #allyFollows}).
+     */
+    private static void declareWar(Faction from, Faction to) {
+        int before = Hooks.currentHumanSwap(from); // DIP.set reads the player for its war timer: the declarer's
+        try {
+            DIP.WAR().set(from, to);
+        } finally {
+            Hooks.currentHumanSwap(before);
+        }
+    }
+
     private static boolean applyTariff(CmdReader r) {
         Faction from = FACTIONS.player();
         Faction to = human(r.i());
@@ -302,6 +345,15 @@ public final class HumanDeals {
      */
     public static boolean overlordStaysOut(Faction f, Faction f2) {
         return f instanceof Player && f2 instanceof Player && DIP.overlord(f) == f2;
+    }
+
+    /**
+     * In {@code DIP.ally}: true when {@code f}'s change of stance with {@code f3} may carry its ally {@code f2} along,
+     * into war or out of it. Never between two humans, unless {@code f2} is {@code f}'s vassal: a war between two
+     * humans starts only when one declares it (plan 0004, mod spec §6), and a vassal shares its overlord's wars.
+     */
+    public static boolean allyFollows(Faction f, Faction f2, Faction f3) {
+        return !(f2 instanceof Player && f3 instanceof Player) || DIP.overlord(f2) == f;
     }
 
     /**
@@ -487,6 +539,20 @@ public final class HumanDeals {
             return "At war: make peace instead.";
         }
         return now == DIP.NEUTRAL() ? "There is no treaty to cancel." : null;
+    }
+
+    /** Why {@code from} can't declare war on {@code to}; null when they can. */
+    static String warRefusal(Faction from, Faction to) {
+        if (!(from instanceof Player) || !(to instanceof Player)) {
+            return "War here is between players.";
+        }
+        if (from == to) {
+            return "A player can't declare war on themselves.";
+        }
+        if (Hooks.retired(from.index()) || Hooks.retired(to.index())) {
+            return "That player was removed from the game.";
+        }
+        return DIP.WAR().is(from, to) ? "Already at war." : null;
     }
 
     /** Why {@code from} can't set a tariff of {@code percent} on {@code to}; null when they can. */

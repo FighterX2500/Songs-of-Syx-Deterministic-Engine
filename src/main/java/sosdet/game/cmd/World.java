@@ -95,7 +95,7 @@ public final class World {
             new Command(ARMY_BESIEGE, "armyBesiege", r -> {
                 WArmy a = Args.ownArmy(r);
                 Region reg = Args.region(r);
-                if (a == null || reg == null || otherHumans(reg, a)) {
+                if (a == null || reg == null || otherHumanRefused(reg, a)) {
                     return false;
                 }
                 a.besiege(reg);
@@ -345,8 +345,12 @@ public final class World {
                 Region reg = Args.region(r);
                 WArmy a = Args.army(r); // the intruder its garrison attacks: not the issuer's army
                 boolean declareWar = r.b();
-                // the issuer's own region, and never another human's army: battles between humans are outside SOS-46
-                if (reg == null || a == null || reg.faction() != FACTIONS.player() || a.faction() instanceof Player) {
+                // the issuer's own region; another human's army only when the two are at war already: between humans
+                // only the war command declares it (SOS-74)
+                if (reg == null || a == null || reg.faction() != FACTIONS.player()) {
+                    return false;
+                }
+                if (a.faction() instanceof Player && (declareWar || !DIP.WAR().is(reg.faction(), a.faction()))) {
                     return false;
                 }
                 if (declareWar) {
@@ -360,11 +364,13 @@ public final class World {
     }
 
     /**
-     * True for a region of another human: battles and sieges between humans are not this engine's yet (plan 0004,
-     * "Outside this card"), and a human's lost capitol would leave it without one (audit B1 to B4).
+     * True for another human's region that can't be besieged: its capitol, which falls only to the assault of mod spec
+     * §9, not built yet (a human's lost capitol would leave it without one, audit B1 to B4), and any region while the
+     * two aren't at war: between humans only the war command declares it, not the siege question (SOS-74).
      */
-    private static boolean otherHumans(Region reg, WArmy a) {
-        return reg.faction() instanceof Player && reg.faction() != a.faction();
+    private static boolean otherHumanRefused(Region reg, WArmy a) {
+        return reg.faction() instanceof Player && reg.faction() != a.faction()
+                && (reg.capitol() || !DIP.WAR().is(reg.faction(), a.faction()));
     }
 
     // ---------------------------------------------------------------- capture (hooks)

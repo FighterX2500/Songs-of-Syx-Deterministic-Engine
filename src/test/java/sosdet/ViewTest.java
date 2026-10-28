@@ -195,7 +195,7 @@ class ViewTest {
         View v = frozenView(s);
         s.viewEntry(35, 0, 3, 1); // a second view, of human 3's city by human 0, freezing at 60
         View w = s.views[0];
-        s.battle = new OwnBattle(40, 5, 2, 0);
+        s.battle = new OwnBattle(40, 5, 2, -1, 0);
         s.battleEndsViews(40);
         assertEquals(View.CANCELLED, w.state());
         assertEquals("A battle started.", w.reason());
@@ -241,7 +241,7 @@ class ViewTest {
         assertEquals("Your own city is being viewed.", Engine.viewRefusal(5, 0));
         assertEquals("That city can't be viewed.", Engine.viewRefusal(0, 0));
         assertEquals("That city can't be viewed.", Engine.viewRefusal(0, 7), "not a human");
-        s.battle = new OwnBattle(40, 0, 0, 0);
+        s.battle = new OwnBattle(40, 0, 0, -1, 0);
         assertEquals("A battle is running.", Engine.viewRefusal(0, 5));
     }
 

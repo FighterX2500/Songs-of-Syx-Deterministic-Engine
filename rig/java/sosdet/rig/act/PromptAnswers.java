@@ -175,6 +175,32 @@ public final class PromptAnswers {
                 + others;
     }
 
+    /**
+     * A probe (SOS-83): the battle boosts of army 1's first division with men, beside the same boosts of the NPC army 1
+     * would be in vanilla ({@code FACTIONS.otherFaction()}), and of army 0's first division.
+     */
+    private static String army1Boosts() {
+        game.battle.div.Div d1 = firstManned(game.GAME.ARMIES().enemy());
+        game.battle.div.Div d0 = firstManned(game.GAME.ARMIES().player());
+        StringBuilder b = new StringBuilder("army1Human=").append(Hooks.battleArmy1Human(game.faction.FACTIONS.otherFaction()));
+        for (game.boosting.Boostable bo : game.boosting.BOOSTABLES.BATTLE().all()) {
+            b.append(' ').append(bo.key).append('=')
+                    .append(d1 == null ? "-" : String.format(java.util.Locale.ROOT, "%.3f", bo.get(d1))).append('/')
+                    .append(String.format(java.util.Locale.ROOT, "%.3f", bo.get(game.faction.FACTIONS.otherFaction()))).append('/')
+                    .append(d0 == null ? "-" : String.format(java.util.Locale.ROOT, "%.3f", bo.get(d0)));
+        }
+        return b.toString();
+    }
+
+    private static game.battle.div.Div firstManned(game.battle.Army a) {
+        for (int i = 0; i < a.divisions().size(); i++) {
+            if (a.divisions().get(i).menNrOf() > 0) {
+                return a.divisions().get(i);
+            }
+        }
+        return null;
+    }
+
     /** On the battle map: Start, then Retreat after the set steps, and Close once the battle is won or lost. */
     private String battle(BattleState battle) {
         sosdet.OwnBattle own = Engine.battle();
@@ -195,6 +221,9 @@ public final class PromptAnswers {
         }
         if (battleFrom < 0) {
             battleFrom = Engine.step();
+            if (Hooks.battleBetweenHumans()) {
+                return "battle probe " + army1Boosts(); // SOS-83: army 1 fights with the other human's values
+            }
         }
         if (Hooks.battleConcludeOpen() && !closeAsked) {
             closeAsked = true;

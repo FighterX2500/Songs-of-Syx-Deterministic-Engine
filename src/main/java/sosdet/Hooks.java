@@ -244,6 +244,9 @@ public final class Hooks {
         }
         s.stepStartNanos = System.nanoTime(); // timing only, never fed to the simulation
         s.ai().stepBegin(s.clock.step());
+        if (s.battle != null && !s.battle.awaiting && s.deployTimer.step(s.clock.stepSeconds(), s.clock.agreedSpeed())) {
+            sosdet.game.cmd.MapBattles.deployForAll(); // a human between two didn't press Start in time (SOS-83)
+        }
         if (s.battle != null && !s.battle.awaiting && s.removeDue[s.battle.human]) {
             // the battle's human is removed: the battle ends with no result, a step at a time, as its commands would (SOS-66)
             sosdet.game.cmd.MapBattles.endForRemoval();
@@ -261,6 +264,13 @@ public final class Hooks {
         }
         if (s.battleAhead == step) {
             return true;
+        }
+        if (s.pvpEngageAt == step) { // a battle between two humans engages at a step set the step before (SOS-83)
+            s.battleAhead = step;
+            return true;
+        }
+        if (s.worldPromptOther >= 0) { // between two humans one Fight doesn't engage: only pvpEngageAt does
+            return false;
         }
         if (!s.ai().commandDue(step, sosdet.game.cmd.WorldBattles::isEngage)) {
             return false;
@@ -401,6 +411,9 @@ public final class Hooks {
             }
             s.currentHuman = 0;
             s.ai().worldPart();
+            if (s.pvpEngageAt == step && s.worldPrompt != null) { // both humans answered, or time ran out (SOS-83)
+                sosdet.game.cmd.WorldBattles.pvpEngage();
+            }
             // after the world's commands: an answer given at this step comes first (SOS-45)
             if (s.promptTimer.step(s.clock.stepSeconds(), s.clock.agreedSpeed()) && s.worldPromptTimeout != null) {
                 s.currentHuman = s.worldPromptHuman; // as the human asked, whose answer it stands in for (SOS-46)
@@ -786,6 +799,29 @@ public final class Hooks {
         }
         s.reportMiss(v);
         return v.vGet(HCLASS_RACE.clP());
+    }
+
+    /**
+     * Army 1 of a battle between two humans ({@link #battleArmy1Human} not null): a boost value of the other human, from
+     * its report at Engage. One the report has no slot for counts as a miss and is 0, the same on every PC (SOS-83).
+     */
+    public static double army1Boost(BValue v) {
+        return army1Report(v, Field.BOOST);
+    }
+
+    /** As {@link #army1Boost}, on the other human's city population class ({@link Field#BOOST_CLP}). */
+    public static double army1BoostClP(BValue v) {
+        return army1Report(v, Field.BOOST_CLP);
+    }
+
+    private static double army1Report(BValue v, Field f) {
+        Session s = Engine.session();
+        int i = s.city().indexOf(Field.BOOST, v);
+        if (i >= 0) {
+            return s.battle.otherReport.get(f, i);
+        }
+        s.reportMiss(v);
+        return 0;
     }
 
     /** A faction value's value: a human's from its report in the world part, otherwise the game's own. */
@@ -1522,6 +1558,12 @@ public final class Hooks {
         s.worldPromptClose = null;
         s.worldPromptTimeout = null;
         s.worldPromptArmies = Session.NO_ARMIES;
+        s.worldPromptOther = -1;
+        s.worldPromptOtherNext = -1;
+        s.worldPromptSally = -1;
+        s.worldPromptSallyNext = -1;
+        s.worldPromptReady = 0;
+        s.pvpEngageAt = -1;
         s.promptTimer.close();
         s.stepPrompts.clear(); // the load's questions are not asked again
         s.stepPromptShown = -1;
@@ -1692,10 +1734,154 @@ public final class Hooks {
         // a battle's result asks the battle's human on every PC; it opens outside the world part (plan 0006)
         s.worldPromptHuman = s.battle != null ? s.battle.human
                 : s.part == StepParts.WORLD_PART ? s.currentHuman : s.cityHuman();
-        // the prompt ends a view (SOS-82)
+        if (s.battle != null && s.battle.other >= 0 && decides instanceof world.battle.spec.WBattleResult) {
+            // between two humans the winner chooses (SOS-83): army 0's human on a victory, else the other human
+            world.battle.spec.WBattleResult r = (world.battle.spec.WBattleResult) decides;
+            boolean army0Won = r.result == world.battle.spec.BATTLE_RESULT.VICTORY;
+            s.worldPromptHuman = army0Won ? s.battle.human : s.battle.other;
+            s.battleOutcome = new BattleOutcome(s.clock.step(), army0Won ? s.battle.human : s.battle.other,
+                    army0Won ? s.battle.other : s.battle.human, r.result == world.battle.spec.BATTLE_RESULT.RETREAT
+                            || s.battle.army1Retreat, army0Won ? r.player.losses() : r.enemy.losses(),
+                    army0Won ? r.enemy.losses() : r.player.losses());
+        }
+        s.worldPromptOther = s.worldPromptOtherNext;
+        s.worldPromptOtherNext = -1;
+        s.worldPromptSally = s.worldPromptSallyNext;
+        s.worldPromptSallyNext = -1;
+        s.worldPromptReady = 0;
+        s.pvpEngageAt = -1;
+        // the prompt ends a view (SOS-82): both humans' between two humans (SOS-83)
         s.endView(s.worldPromptHuman, s.clock.step(), View.GAME, "A battle prompt asks for you.");
+        if (s.worldPromptOther >= 0) {
+            s.endView(s.worldPromptOther, s.clock.step(), View.GAME, "A battle prompt asks for you.");
+        }
         s.promptTimer.open();
-        return s.worldPromptHuman == s.localHuman;
+        return s.worldPromptHuman == s.localHuman || s.worldPromptOther == s.localHuman;
+    }
+
+    /**
+     * In the world part, just before a battle between two humans' armies opens its prompt ({@code Resolver}): the
+     * prompt asks {@code other} too, the defender, besides the current human, the attacker (SOS-83).
+     */
+    public static void worldPromptAlsoAsks(int other) {
+        Session s = Engine.session();
+        if (s != null) {
+            s.worldPromptOtherNext = other;
+        }
+    }
+
+    /**
+     * In the world part, just before a human's garrison is asked to sally ({@code Resolver.besige}): the besieger is the
+     * human {@code besieger}, so the sally is a battle between two humans, built by the defender's PC (SOS-83).
+     */
+    public static void worldPromptSallyAgainst(int besieger) {
+        Session s = Engine.session();
+        if (s != null) {
+            s.worldPromptSallyNext = besieger;
+        }
+    }
+
+    /** The besieging human the open sally prompt is against, a battle between two humans; -1 for none (SOS-83). */
+    public static int worldPromptSally() {
+        Session s = Engine.session();
+        return s == null || s.worldPrompt == null ? -1 : s.worldPromptSally;
+    }
+
+    /** Inside the Start command: true when the battle may start; between two humans once both pressed it (SOS-83). */
+    public static boolean battleDeployReady() {
+        Session s = Engine.session();
+        return s == null || s.deployReady(s.ai().applyingPc());
+    }
+
+    /** The other human the open world-battle prompt asks, between two humans; -1 for none (SOS-83). */
+    public static int worldPromptOther() {
+        Session s = Engine.session();
+        return s == null ? -1 : s.worldPromptOther;
+    }
+
+    /** Inside the Retreat command: the army it retreats (0 or 1), or -1 when the PC giving it commands neither (SOS-83). */
+    public static int battleRetreatSide() {
+        Session s = Engine.session();
+        return s == null ? 0 : s.retreatSide(s.ai().applyingPc());
+    }
+
+    /** In the battle's result, built inside the step: army 1 retreated, in a battle between two humans (SOS-83). */
+    public static boolean battleArmy1Retreats() {
+        Session s = Engine.session();
+        return s != null && s.battle != null && s.battle.army1Retreat;
+    }
+
+    /**
+     * In the result panel of a battle between two humans: true when {@code army0Lost}, so the second army's human won and
+     * answers it, seeing the result from their own side (SOS-83).
+     */
+    public static boolean resultForArmy1(boolean army0Lost) {
+        return army0Lost && battleBetweenHumans();
+    }
+
+    /**
+     * The battle map's victory or defeat panel, opened inside the step with army 0's {@code title}: on the PC that
+     * commands army 1 in a battle between two humans, the other one, as that player won or lost. Display only (SOS-83).
+     */
+    public static CharSequence concludeTitle(CharSequence title, boolean army0Won, CharSequence victory, CharSequence defeat) {
+        Session s = Engine.session();
+        if (s == null || s.battle == null || s.battle.other < 0 || s.ai().localPc() != s.pcOf(s.battle.other)) {
+            return title;
+        }
+        return army0Won ? defeat : victory;
+    }
+
+    /** True while a battle between two humans' armies runs, from Engage to the return (SOS-83). */
+    public static boolean battleBetweenHumans() {
+        Session s = Engine.session();
+        return s != null && s.battle != null && s.battle.other >= 0;
+    }
+
+    /**
+     * In a battle between two humans, loaded: when {@code f} is army 1's faction ({@code FACTIONS.otherFaction()}, an
+     * NPC in vanilla), the other human, whose reported values army 1 fights with; otherwise null (SOS-83).
+     */
+    public static Faction battleArmy1Human(Object f) {
+        Session s = Engine.session();
+        if (s == null || s.battle == null || s.battle.otherReport == null || s.battle.awaiting || f != FACTIONS.otherFaction()) {
+            return null;
+        }
+        return FACTIONS.getByIndex(s.battle.other);
+    }
+
+    /**
+     * In the battle's placer: whether army 1 may stand on tile {@code tx, ty} while deploying, in a battle between two
+     * humans: inside army 0's deployment area turned about the map's centre (owner, 2026-10-27; SOS-83).
+     */
+    public static boolean deployMirrorHolds(snake2d.util.datatypes.RECTANGLE bounds, int tx, int ty) {
+        return bounds.holdsPoint(2 * settlement.main.SETT.TILE_BOUNDS.cX() - tx, 2 * settlement.main.SETT.TILE_BOUNDS.cY() - ty);
+    }
+
+    /** True while the open world-battle prompt is a battle between two humans' armies: Fight only (SOS-83). */
+    public static boolean worldPromptBetweenHumans() {
+        Session s = Engine.session();
+        return s != null && s.worldPrompt != null && s.worldPromptOther >= 0;
+    }
+
+    /**
+     * Inside the step: the current human pressed Fight in a battle between two humans. When both have, the battle
+     * engages at the next step, which the hold before battles sees coming (SOS-70, SOS-83).
+     */
+    public static void worldPromptFight() {
+        Session s = Engine.session();
+        s.worldPromptReady |= s.currentHuman == s.worldPromptHuman ? 1 : 2;
+        if (s.worldPromptReady == 3) {
+            worldPromptEngageNext();
+        }
+    }
+
+    /** Inside the step: the battle between two humans engages at the next step, answered or not (SOS-83). */
+    public static void worldPromptEngageNext() {
+        Session s = Engine.session();
+        if (s.pvpEngageAt < 0) {
+            s.pvpEngageAt = s.clock.step() + 1;
+            s.promptTimer.close();
+        }
     }
 
     /**
@@ -1710,13 +1896,13 @@ public final class Hooks {
     /** True when the open world-battle prompt asks this PC's human (the rig answers only those). */
     public static boolean worldPromptHere() {
         Session s = Engine.session();
-        return s == null || s.worldPrompt == null || s.worldPromptHuman == s.localHuman;
+        return s == null || s.worldPrompt == null || s.worldPromptHuman == s.localHuman || s.worldPromptOther == s.localHuman;
     }
 
     /** Inside a command: true when it acts for the human the open world-battle prompt asks (SOS-46). */
     public static boolean worldPromptAnswerer() {
         Session s = Engine.session();
-        return s == null || s.currentHuman == s.worldPromptHuman;
+        return s == null || s.currentHuman == s.worldPromptHuman || (s.worldPromptOther >= 0 && s.currentHuman == s.worldPromptOther);
     }
 
     /** True in a session's step: a yes/no the simulation asks is kept, and answered by command (cmd.StepPrompts). */
@@ -1849,9 +2035,15 @@ public final class Hooks {
      * its draw count put back. No step runs past this one until the battle is loaded.
      */
     public static void ownCityEngage(int human, Runnable engage) {
+        ownCityEngage(human, -1, engage);
+    }
+
+    /** {@link #ownCityEngage(int, Runnable)} for a battle between two humans: {@code other} commands army 1 (SOS-83). */
+    public static void ownCityEngage(int human, int other, Runnable engage) {
         Session s = Engine.session();
         long step = s.clock.step();
-        OwnBattle b = new OwnBattle(step, human, s.pcOf(human), s.streams.worldDraws());
+        OwnBattle b = new OwnBattle(step, human, s.pcOf(human), other, s.streams.worldDraws());
+        b.otherReport = other >= 0 ? s.reports(other).current() : null; // a battle load clears the reports (SOS-83)
         s.battle = b;
         s.battleEndsViews(step); // every PC loads the battle: no view lives through it (SOS-82)
         s.streams.reseed(s.battleSeed(step));
@@ -1928,6 +2120,12 @@ public final class Hooks {
         s.worldPromptClose = null;
         s.worldPromptTimeout = null;
         s.worldPromptArmies = Session.NO_ARMIES;
+        s.worldPromptOther = -1;
+        s.worldPromptOtherNext = -1;
+        s.worldPromptSally = -1;
+        s.worldPromptSallyNext = -1;
+        s.worldPromptReady = 0;
+        s.pvpEngageAt = -1;
         s.promptTimer.close();
         close.run();
     }

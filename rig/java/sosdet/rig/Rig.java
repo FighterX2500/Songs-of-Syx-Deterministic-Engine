@@ -1059,6 +1059,12 @@ public final class Rig implements SCRIPT {
                 notCommandedSeen = notCommanded;
                 event("notcommanded", "\"skipped\":" + notCommanded + ",\"step\":" + Engine.step());
             }
+            sosdet.BattleOutcome outcome = Engine.battleOutcomeTake();
+            if (outcome != null) { // SOS-83: a battle between two humans ended
+                event("outcome", "\"winner\":" + outcome.winner + ",\"loser\":" + outcome.loser + ",\"retreat\":"
+                        + outcome.retreat + ",\"winnerLosses\":" + outcome.winnerLosses + ",\"loserLosses\":"
+                        + outcome.loserLosses + ",\"step\":" + outcome.step);
+            }
             double agreed = Engine.stats().agreedSpeed;
             if (agreed != speedSeen) {
                 speedSeen = agreed;

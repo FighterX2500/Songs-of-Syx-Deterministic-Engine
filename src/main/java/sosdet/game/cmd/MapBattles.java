@@ -43,7 +43,9 @@ public final class MapBattles {
                 if (b == null || !b.deploying()) {
                     return false;
                 }
-                b.deploy();
+                if (Hooks.battleDeployReady()) { // between two humans once both pressed Start (SOS-83)
+                    b.deploy();
+                }
                 return true;
             }),
             new Command(RETREAT, "battleRetreat", r -> {
@@ -51,7 +53,10 @@ public final class MapBattles {
                 if (b == null || b.deploying() || Hooks.battleOver()) {
                     return false;
                 }
-                b.liveRetreat();
+                if (Hooks.battleRetreatSide() < 0) {
+                    return false; // only a side's own commanders retreat it (SOS-83)
+                }
+                b.liveRetreat(); // when army 1 retreats, the patched liveRetreat gives army 0 the victory
                 return true;
             }),
             new Command(CONCLUDE, "battleConclude", r -> {
@@ -73,6 +78,14 @@ public final class MapBattles {
             }));
 
     private MapBattles() {
+    }
+
+    /** Every PC, at a step's start: the deployment of a battle between two humans ran out of time, so it starts (SOS-83). */
+    public static void deployForAll() {
+        BattleState b = VIEW.b().state();
+        if (b != null && b.deploying()) {
+            b.deploy();
+        }
     }
 
     /**

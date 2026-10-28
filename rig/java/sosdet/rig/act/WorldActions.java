@@ -184,13 +184,21 @@ public final class WorldActions {
             });
             return true;
         }
-        case "winterceptnear": { // winterceptnear <army> [stronger] [still]: wintercept on the nearest army at war with the
-            // player (a field battle, SOS-32); stronger: only an army of more power, which fights instead of withdrawing; still:
-            // only a fortified or fortifying army (a chase after a marching army re-paths and never closes)
+        case "winterceptnear": { // winterceptnear <army> [stronger] [still] [slot=<n>]: wintercept on the nearest army at war
+            // with the player (a field battle, SOS-32); stronger: only an army of more power, which fights instead of
+            // withdrawing; still: only a fortified or fortifying army (a chase after a marching army re-paths and never
+            // closes); slot=<n>: only an army of the faction in slot n, such as another human's (SOS-83)
             int army = Integer.parseInt(a[1]);
             java.util.List<String> flags = java.util.Arrays.asList(a).subList(2, a.length);
             boolean stronger = flags.contains("stronger");
             boolean still = flags.contains("still");
+            int slot = -1;
+            for (String f : flags) {
+                if (f.startsWith("slot=")) {
+                    slot = Integer.parseInt(f.substring(5));
+                }
+            }
+            int onlySlot = slot;
             Rig.later(() -> {
                 WArmy w = army(army);
                 WArmy best = null;
@@ -198,6 +206,7 @@ public final class WorldActions {
                 for (int i = 0; i < WORLD.ENTITIES().armies.max(); i++) {
                     WArmy e = WORLD.ENTITIES().armies.tryGet(i);
                     if (e == null || e.faction() == FACTIONS.player() || AD.men(null).get(e) == 0
+                            || (onlySlot >= 0 && (e.faction() == null || e.faction().index() != onlySlot))
                             || (e.faction() != null && !DIP.WAR().is(e.faction(), FACTIONS.player()))
                             || (stronger && AD.power().get(e) <= AD.power().get(w))
                             || (still && e.state() != WArmyState.fortified && e.state() != WArmyState.fortifying)) {
@@ -654,6 +663,46 @@ public final class WorldActions {
                 }
                 Engine.dealCancel(slot);
                 Rig.note("cancels every treaty with slot " + slot);
+            });
+            return true;
+        }
+        case "dealwar": { // dealwar <slot>: declares war on the human in <slot> at once (SOS-74)
+            int slot = Integer.parseInt(a[1]);
+            Rig.later(() -> {
+                String why = Engine.warRefusal(slot);
+                if (why != null) {
+                    throw new IllegalStateException("war refused: " + why);
+                }
+                Engine.declareWar(slot);
+                Rig.note("declares war on slot " + slot);
+            });
+            return true;
+        }
+        case "wbesiegehuman": { // wbesiegehuman <army> <slot> [capitol]: wbesiege on the human in <slot>'s region nearest the
+            // army, one that isn't its capitol (or, with capitol, its capitol: refused, SOS-74)
+            int army = Integer.parseInt(a[1]);
+            int slot = Integer.parseInt(a[2]);
+            boolean capitol = a.length > 3 && a[3].equals("capitol");
+            Rig.later(() -> {
+                WArmy w = army(army);
+                Region best = null;
+                long bestD = Long.MAX_VALUE;
+                for (Region r : WORLD.REGIONS().active()) {
+                    if (r.faction() == null || r.faction().index() != slot || r.capitol() != capitol) {
+                        continue;
+                    }
+                    long dx = r.cx() - w.ctx();
+                    long dy = r.cy() - w.cty();
+                    if (dx * dx + dy * dy < bestD) {
+                        bestD = dx * dx + dy * dy;
+                        best = r;
+                    }
+                }
+                if (best == null) {
+                    throw new IllegalStateException("slot " + slot + " has no such region");
+                }
+                Rig.note("army " + army + " besieges region " + best.index() + " of slot " + slot + (capitol ? " (its capitol)" : ""));
+                w.besiege(best);
             });
             return true;
         }
