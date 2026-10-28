@@ -420,7 +420,7 @@ public final class Engine {
             throw new IllegalArgumentException("SOSDET: human " + viewer + " can't view human " + owner + "'s city");
         }
         View v = s.views[viewer];
-        if (v != null && v.state != View.CANCELLED) {
+        if (v != null && v.state != View.CANCELLED && v.state != View.ENDED) {
             throw new IllegalStateException("SOSDET: human " + viewer + " has a view already: " + v);
         }
         s.ai().captureView(AiEntry.ints(viewer, owner, s.pcOf(owner)));

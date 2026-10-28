@@ -246,6 +246,18 @@ class ViewTest {
     }
 
     @Test
+    void aViewerWhoseViewEndedCanAskAgain() {
+        Session s = session(0); // the host
+        s.ai(sosdet.ai.AiLog.host(0, e -> { }));
+        View v = frozenView(s);
+        s.viewEntry(47, 3, -1, View.CLOSED);
+        s.viewsAt(60);
+        assertEquals(View.ENDED, v.state());
+        assertNull(Engine.viewRefusal(3, 5));
+        Engine.viewBegin(3, 5); // the host's second view of a playtest crashed here: "has a view already"
+    }
+
+    @Test
     void theOwnerHoldsForNoSaveOfAViewEndedInItsFreezeStep() {
         Session s = session(5); // the owner's PC
         View v = frozenView(s);
