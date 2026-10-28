@@ -630,6 +630,11 @@ public final class AiLog {
         return localPc;
     }
 
+    /** While an entry is being applied: the PC that gave it ({@link AiEntry#AI} for the general); else a value below. */
+    public int applyingPc() {
+        return applyingPc;
+    }
+
     /** While an entry is being applied: whether this PC's player gave it (feedback such as sounds only for them). */
     public boolean issuedHere() {
         return applyingPc != NOT_APPLYING && applyingPc == localPc;

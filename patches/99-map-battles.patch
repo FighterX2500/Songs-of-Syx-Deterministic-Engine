@@ -1,6 +1,6 @@
 diff -ru -U2 a/game/battle/state/BattleState.java b/game/battle/state/BattleState.java
 --- a/game/battle/state/BattleState.java	2026-01-31 08:38:56.000000000 +0500
-+++ b/game/battle/state/BattleState.java	2026-10-24 21:18:49.185189900 +0500
++++ b/game/battle/state/BattleState.java	2026-10-28 03:13:52.477400700 +0500
 @@ -94,7 +94,8 @@
  	
  	private void view() {
@@ -30,7 +30,18 @@ diff -ru -U2 a/game/battle/state/BattleState.java b/game/battle/state/BattleStat
  				
  			}
  			
-@@ -230,11 +234,18 @@
+@@ -163,6 +167,10 @@
+ 	
+ 	
+ 	public void liveRetreat() {
++		if (sosdet.Hooks.battleArmy1Retreats()) { // SOSDET: army 1 retreats, between two humans: army 0 wins (SOS-83)
++			liveResolve(false, true);
++			return;
++		}
+ 		liveResolve(true, false);
+ 	}
+ 	
+@@ -230,11 +238,18 @@
  		ILiveConclude(CharSequence title, boolean retreat, boolean win){
  			pin();
  			persistantSet();
@@ -40,7 +51,8 @@ diff -ru -U2 a/game/battle/state/BattleState.java b/game/battle/state/BattleStat
 +				liveResolve(retreat, win);
 +			});
  			
- 			section = new UIBattleResult(title) {
+-			section = new UIBattleResult(title) {
++			section = new UIBattleResult(sosdet.Hooks.concludeTitle(title, win, Dic.¤¤Victory, Dic.¤¤Defeat)) { // SOSDET: the second army's PC reads it from its own side, between two humans (SOS-83)
  
  				@Override
  				protected void close() {
@@ -49,7 +61,7 @@ diff -ru -U2 a/game/battle/state/BattleState.java b/game/battle/state/BattleStat
  					hide();
  					liveResolve(retreat, win);
  				}
-@@ -273,7 +284,8 @@
+@@ -273,7 +288,8 @@
  
  		@Override
  		protected boolean update(float ds) {
@@ -61,7 +73,7 @@ diff -ru -U2 a/game/battle/state/BattleState.java b/game/battle/state/BattleStat
  //			if (timer >= 10) {
 diff -ru -U2 a/game/battle/state/BattleStateExiter.java b/game/battle/state/BattleStateExiter.java
 --- a/game/battle/state/BattleStateExiter.java	2025-08-29 11:08:26.000000000 +0500
-+++ b/game/battle/state/BattleStateExiter.java	2026-10-24 21:18:49.181664700 +0500
++++ b/game/battle/state/BattleStateExiter.java	2026-10-28 03:13:52.473380500 +0500
 @@ -10,12 +10,13 @@
  	
  	public void exit(BATTLE_RESULT res, int plosses, int elosses) {
@@ -77,9 +89,46 @@ diff -ru -U2 a/game/battle/state/BattleStateExiter.java b/game/battle/state/Batt
  
  			}
  			
+diff -ru -U2 a/game/battle/state/BattleStateResult.java b/game/battle/state/BattleStateResult.java
+--- a/game/battle/state/BattleStateResult.java	2026-06-17 10:48:06.000000000 +0500
++++ b/game/battle/state/BattleStateResult.java	2026-10-28 03:13:52.474378400 +0500
+@@ -49,6 +49,19 @@
+ 				playerSurvivors[d.indexArmy()] = new Induvidual[STATS.BATTLE().DIV.stat().div().get(d)];
+ 			}
+ 		}
++		// SOSDET: army 1 retreated (a battle between two humans, SOS-83): vanilla's retreat penalty, mirrored, and no captives
++		final boolean sosdetRetreat = result == BATTLE_RESULT.VICTORY && sosdet.Hooks.battleArmy1Retreats();
++		final int[] sosdetCut = Alloc.ii(Config.battle().DIVISIONS_PER_ARMY);
++		if (sosdetRetreat) {
++			int losses = (int) Math.ceil(GAME.ARMIES().player().men()*WBattles.retreatPenalty);
++			double dlosses = (double)losses/(GAME.ARMIES().enemy().men()+1.0);
++			for (Div d : GAME.ARMIES().enemy().divisions()) {
++				int am = (int) (STATS.BATTLE().DIV.stat().div().get(d)*dlosses);
++				if (d.status().isFighting())
++					am += (STATS.BATTLE().DIV.stat().div().get(d)*0.75);
++				sosdetCut[d.indexArmy()] = CLAMP.i(am, 0, STATS.BATTLE().DIV.stat().div().get(d));
++			}
++		}
+ 		
+ 		
+ 		
+@@ -65,7 +78,12 @@
+ 					
+ 					if (d.index() >= Config.battle().DIVISIONS_PER_ARMY) {
+ 						
+-						if (result == BATTLE_RESULT.VICTORY && RND.rBoolean()) {
++						if (sosdetRetreat) { // SOSDET: (SOS-83)
++							if (sosdetCut[d.indexArmy()] > 0)
++								sosdetCut[d.indexArmy()]--;
++							else
++								enemySurvivors[d.indexArmy()] ++;
++						}else if (result == BATTLE_RESULT.VICTORY && RND.rBoolean()) {
+ 							enemyCaptured[h.race().index]++;
+ 						}else {
+ 							enemySurvivors[d.indexArmy()] ++;
 diff -ru -U2 a/view/battle/IDeploy.java b/view/battle/IDeploy.java
 --- a/view/battle/IDeploy.java	2025-09-12 16:12:40.000000000 +0500
-+++ b/view/battle/IDeploy.java	2026-10-24 21:18:49.181664700 +0500
++++ b/view/battle/IDeploy.java	2026-10-28 03:13:52.474378400 +0500
 @@ -17,7 +17,8 @@
  	private final GButt.ButtPanel butt = new GButt.ButtPanel(Dic.¤¤Start) {
  		@Override

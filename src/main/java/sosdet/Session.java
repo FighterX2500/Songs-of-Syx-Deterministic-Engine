@@ -61,9 +61,25 @@ final class Session {
     Runnable worldPromptClose;
     /** The human it asks: only that human's PC shows it, and only that human's answer applies (SOS-46). */
     int worldPromptHuman;
+    /**
+     * A battle between two humans' armies (SOS-83): the other human it asks too, or -1; the next prompt's, set just
+     * before it opens; which of the two pressed Fight (bit 0 the asked, bit 1 the other); and the step its battle
+     * engages at, once both did or the time ran out, or -1. All set inside the step, alike on every PC.
+     */
+    int worldPromptOther = -1;
+    int worldPromptOtherNext = -1;
+    /** The open prompt is a sally against this besieging human, asked of the defender only; -1 for none (SOS-83). */
+    int worldPromptSally = -1;
+    int worldPromptSallyNext = -1;
+    /** The last battle between two humans' outcome, until the mod takes it (SOS-83). */
+    BattleOutcome battleOutcome;
+    int worldPromptReady;
+    long pvpEngageAt = -1;
     /** Its default answer when its time runs out, the time it has waited, and the armies waiting while it is open (SOS-45). */
     Runnable worldPromptTimeout;
     final PromptTimer promptTimer = new PromptTimer();
+    /** A battle between two humans' deployment: Start for both when it runs out (SOS-83). */
+    final PromptTimer deployTimer = new PromptTimer(PromptTimer.DEPLOY_SECONDS);
     int[] worldPromptArmies = NO_ARMIES;
     static final int[] NO_ARMIES = new int[0];
     /**
@@ -562,9 +578,76 @@ final class Session {
         if (battle.awaiting) {
             battle.awaiting = false;
             hashes.worldOnly(false);
+            if (ai().mode() == sosdet.ai.AiMode.HOST) {
+                commandBattle();
+            }
+            if (battle.other >= 0) {
+                deployTimer.open();
+            }
         } else {
+            deployTimer.close();
             hashes.worldOnly(true);
         }
+    }
+
+    /**
+     * Host, as the battle loads (plan 0006 M2, SOS-83): who commands it, through the log, so every PC applies it at the
+     * step the host stamps. Army 0, the battle's human's, goes to that human's PC; army 1 to the other human's PC in a
+     * battle between two humans, else to the host's AI general. Divisions come in army order, split evenly.
+     */
+    private void commandBattle() {
+        int divisions = sosdet.game.OwnArmy.divisions();
+        int armies = sosdet.game.OwnArmy.armies();
+        int army1 = battle.other >= 0 ? pcOf(battle.other) : sosdet.ai.AiEntry.AI;
+        int[] byDivision = new int[divisions];
+        for (int i = 0; i < divisions; i++) {
+            int army = i / (divisions / armies);
+            byDivision[i] = army == 0 ? battle.pc : army == 1 ? army1 : sosdet.ai.AiEntry.AI;
+        }
+        int[] artillery = new int[armies];
+        for (int a = 0; a < armies; a++) {
+            artillery[a] = a == 0 ? battle.pc : a == 1 ? army1 : sosdet.ai.AiEntry.AI;
+        }
+        ai().captureCommanders(sosdet.ai.Commanders.payload(byDivision, artillery));
+    }
+
+    /**
+     * Inside the step, the Start command from the PC applying it (SOS-83): true when the battle may start now. Between
+     * two humans it waits for both sides' commanders, each PC pressing for its own army; any other battle starts at once.
+     */
+    boolean deployReady(int fromPc) {
+        if (battle == null || battle.other < 0) {
+            return true;
+        }
+        if (fromPc == battle.pc) {
+            battle.deployReady |= 1;
+        } else if (fromPc == pcOf(battle.other)) {
+            battle.deployReady |= 2;
+        }
+        if (battle.deployReady != 3) {
+            return false;
+        }
+        deployTimer.close();
+        return true;
+    }
+
+    /**
+     * Inside the step, the Retreat command from the PC applying it (plan 0006 M2, SOS-83): the army it retreats, 0 or 1,
+     * or -1 when that PC commands neither side. Army 0 is the battle's human's; army 1 retreats only between two humans,
+     * from the other human's PC. With no own-city battle (co-op) it is army 0, as in vanilla.
+     */
+    int retreatSide(int fromPc) {
+        if (battle == null) {
+            return 0;
+        }
+        if (fromPc == battle.pc) {
+            return 0;
+        }
+        if (battle.other >= 0 && fromPc == pcOf(battle.other)) {
+            battle.army1Retreat = true;
+            return 1;
+        }
+        return -1;
     }
 
     /**

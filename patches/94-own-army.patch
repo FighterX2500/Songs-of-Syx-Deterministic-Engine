@@ -1,6 +1,18 @@
+diff -ru -U2 a/game/battle/Armies.java b/game/battle/Armies.java
+--- a/game/battle/Armies.java	2026-06-17 10:48:06.000000000 +0500
++++ b/game/battle/Armies.java	2026-10-28 00:23:07.486317800 +0500
+@@ -60,6 +60,8 @@
+ 				if (VIEW.b().state() != null && VIEW.b().state().deploying()) {
+ 					if (a == GAME.ARMIES().player())
+ 						return !VIEW.b().state().deploymentBounds().holdsPoint(x>>C.T_SCROLL, y>>C.T_SCROLL);
++					if (sosdet.Hooks.battleBetweenHumans()) // SOSDET: between two players army 1 deploys in army 0's area turned about the centre (SOS-83)
++						return !sosdet.Hooks.deployMirrorHolds(VIEW.b().state().deploymentBounds(), x>>C.T_SCROLL, y>>C.T_SCROLL);
+ 					return VIEW.b().state().deploymentBounds().holdsPoint(x>>C.T_SCROLL, y>>C.T_SCROLL);
+ 				}
+ 				return false;
 diff -ru -U2 a/view/battle/BattlePlacer.java b/view/battle/BattlePlacer.java
---- a/view/battle/BattlePlacer.java	2026-10-24 23:39:03.934220600 +0500
-+++ b/view/battle/BattlePlacer.java	2026-10-24 23:39:28.204101500 +0500
+--- a/view/battle/BattlePlacer.java	2026-06-17 10:48:06.000000000 +0500
++++ b/view/battle/BattlePlacer.java	2026-10-28 00:23:07.465486300 +0500
 @@ -81,8 +81,8 @@
  			action.clicked = false;
  			s.clear();
@@ -13,8 +25,8 @@ diff -ru -U2 a/view/battle/BattlePlacer.java b/view/battle/BattlePlacer.java
  					s.select(d);
  				}
 diff -ru -U2 a/view/battle/BattlePlacerSelect.java b/view/battle/BattlePlacerSelect.java
---- a/view/battle/BattlePlacerSelect.java	2026-10-24 23:39:04.022038100 +0500
-+++ b/view/battle/BattlePlacerSelect.java	2026-10-24 23:39:28.204101500 +0500
+--- a/view/battle/BattlePlacerSelect.java	2025-12-01 10:02:18.000000000 +0500
++++ b/view/battle/BattlePlacerSelect.java	2026-10-28 00:23:07.466478000 +0500
 @@ -61,7 +61,7 @@
  					Div d = ((Humanoid) e).division();
  
@@ -70,8 +82,8 @@ diff -ru -U2 a/view/battle/BattlePlacerSelect.java b/view/battle/BattlePlacerSel
  							text.text(sSelect);
  							
 diff -ru -U2 a/view/battle/BattleRenderer.java b/view/battle/BattleRenderer.java
---- a/view/battle/BattleRenderer.java	2026-10-24 23:39:04.109444900 +0500
-+++ b/view/battle/BattleRenderer.java	2026-10-24 23:39:28.204101500 +0500
+--- a/view/battle/BattleRenderer.java	2025-11-25 09:18:46.000000000 +0500
++++ b/view/battle/BattleRenderer.java	2026-10-28 00:23:07.467965500 +0500
 @@ -63,7 +63,7 @@
  				if (e instanceof Humanoid) {
  					Div d = ((Humanoid) e).division();
@@ -100,8 +112,8 @@ diff -ru -U2 a/view/battle/BattleRenderer.java b/view/battle/BattleRenderer.java
  				if ( S.get().developer)
  					DivRenderer.render(ren, d.position(), data);
 diff -ru -U2 a/view/battle/CatSelection.java b/view/battle/CatSelection.java
---- a/view/battle/CatSelection.java	2026-10-24 23:39:04.282749800 +0500
-+++ b/view/battle/CatSelection.java	2026-10-24 23:39:28.205110400 +0500
+--- a/view/battle/CatSelection.java	2024-11-19 19:12:04.000000000 +0500
++++ b/view/battle/CatSelection.java	2026-10-28 00:23:07.469454400 +0500
 @@ -31,7 +31,7 @@
  	}
  	
@@ -112,8 +124,8 @@ diff -ru -U2 a/view/battle/CatSelection.java b/view/battle/CatSelection.java
  			selection.add(s);
  		}
 diff -ru -U2 a/view/battle/DivSelection.java b/view/battle/DivSelection.java
---- a/view/battle/DivSelection.java	2026-10-24 23:39:04.196671000 +0500
-+++ b/view/battle/DivSelection.java	2026-10-24 23:39:28.205110400 +0500
+--- a/view/battle/DivSelection.java	2025-11-20 16:50:58.000000000 +0500
++++ b/view/battle/DivSelection.java	2026-10-28 00:23:07.470446200 +0500
 @@ -23,7 +23,7 @@
  	private final DivFormationImp tmp = new DivFormationImp();
  	
@@ -133,8 +145,8 @@ diff -ru -U2 a/view/battle/DivSelection.java b/view/battle/DivSelection.java
  				return true;
  		}
 diff -ru -U2 a/view/battle/UIPanelArtillery.java b/view/battle/UIPanelArtillery.java
---- a/view/battle/UIPanelArtillery.java	2026-10-24 23:39:04.366817200 +0500
-+++ b/view/battle/UIPanelArtillery.java	2026-10-24 23:39:28.206106300 +0500
+--- a/view/battle/UIPanelArtillery.java	2025-09-26 15:18:32.000000000 +0500
++++ b/view/battle/UIPanelArtillery.java	2026-10-28 00:23:07.472430800 +0500
 @@ -43,7 +43,7 @@
  					upI = GAME.updateI();
  					all.clearSoft();
