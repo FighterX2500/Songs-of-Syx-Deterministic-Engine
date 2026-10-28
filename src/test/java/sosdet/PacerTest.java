@@ -35,7 +35,7 @@ class PacerTest {
         double peerOwed = 0;
         for (long f = 0; f < seconds * 60; f++) {
             now += FRAME;
-            long cap = p.frame(now, step, StepClock.NO_LIMIT);
+            long cap = p.frame(now, step, StepClock.NO_LIMIT, false);
             hostOwed += hostRate / 60;
             while (hostOwed >= 1 && step < cap) {
                 step++;
@@ -57,14 +57,28 @@ class PacerTest {
         return change;
     }
 
+    /** SOS-90: a frame whose steps waited for another PC's report or the host's log is held, on a PC pacing nobody too. */
+    @Test
+    void aFrameThatWaitedForAnotherPcCountsAsHeld() {
+        Pacer p = new Pacer(pc -> -1);
+        long now = 1_000_000_000L;
+        assertEquals(StepClock.NO_LIMIT, p.frame(now, 0, StepClock.NO_LIMIT, false));
+        p.frame(now + FRAME, 0, StepClock.NO_LIMIT, true);
+        p.frame(now + 2 * FRAME, 0, StepClock.NO_LIMIT, true);
+        p.frame(now + 3 * FRAME, 5, StepClock.NO_LIMIT, false);
+        assertEquals(2, p.heldFrames());
+        assertEquals(2.0 * FRAME / Pacer.SECOND, p.heldSeconds(), 1e-9);
+        assertEquals(2.0 * FRAME / Pacer.SECOND, p.longestHoldSeconds(), 1e-9);
+    }
+
     @Test
     void theHostRunsAtMostTheLeadPastTheSlowestPeer() {
         Pacer p = pacer(5);
         peerStep = 300;
-        assertEquals(360, p.frame(now, 300, StepClock.NO_LIMIT));
-        assertEquals(400, p.frame(now + FRAME, 400, StepClock.NO_LIMIT), "never behind its own step");
+        assertEquals(360, p.frame(now, 300, StepClock.NO_LIMIT, false));
+        assertEquals(400, p.frame(now + FRAME, 400, StepClock.NO_LIMIT, false), "never behind its own step");
         Pacer off = new Pacer(pc -> peerStep);
-        assertEquals(StepClock.NO_LIMIT, off.frame(now, 300, StepClock.NO_LIMIT), "no peers: no cap");
+        assertEquals(StepClock.NO_LIMIT, off.frame(now, 300, StepClock.NO_LIMIT, false), "no peers: no cap");
     }
 
     @Test

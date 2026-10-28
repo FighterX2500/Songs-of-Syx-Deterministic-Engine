@@ -51,6 +51,17 @@ class CityReportTest {
     }
 
     /** B1, B2: what the city did to the world travels in the report, in order, and is part of its hash. */
+    /** SOS-90: the next report's promise reads back, and is the least delay's unless given. */
+    @Test
+    void theNextReportsPromiseReadsBack() {
+        CityReport r = new CityReport(V71, 0, 3_000, 3_200, 3_230, values(V71), java.util.List.of());
+        assertEquals(3_230, CityReport.fromBytes(r.toBytes(), V71).nextAt);
+        assertEquals(r, CityReport.fromBytes(r.toBytes(), V71));
+        assertEquals(3_060, new CityReport(V71, 0, 3_000, 3_030, values(V71)).nextAt);
+        assertThrows(IllegalArgumentException.class,
+                () -> new CityReport(V71, 0, 3_000, 3_200, 3_200, values(V71), java.util.List.of()));
+    }
+
     @Test
     void inputsReadBackInOrderAndChangeTheHash() {
         List<Input> inputs = new ArrayList<>();

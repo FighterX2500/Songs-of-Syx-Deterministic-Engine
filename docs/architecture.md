@@ -24,6 +24,7 @@ A short map for an AI agent (or a person) about to change SOSDET. Read it first,
 4. **The step itself:** the city part, then the world part (patch `12`), each updating the game's resources by the step length; or the battle.
    - The world part never reads a live city: it reads the city report (patches `13`, `14`, `98`; `GameReport`) and changes the city only through transactions applied exactly once (`sosdet/txn`, `GameTxns`).
    - In own-city mode (`Engine.ownCity`) each PC runs its own human's city, and the world reads each human's reports from that human's PC. The world part runs each human's world half in slot order, with that human as `FACTIONS.player()` (several humans, [ADR 0004](decisions/0004-several-humans.md), [requirements](requirements.md) §2).
+   - The lockstep windows stay half a second of real time at every speed (SOS-90): a report applies at least 30 steps after it is taken, more at high speeds, and promises the step its city's next report applies at, at the earliest (`CityReport.nextAt`). Another PC's world runs to the step before without waiting. The host's AI log delay grows the same way; a peer runs to the host's horizon, which never goes back. A frame that waited for another PC counts as held, in the status line and for the speed governor.
    - A removed human stays in its slot, retired (SOS-66, [plan 0007](plan/0007-remove-human.md)). The host logs a REMOVE entry (`Engine.removeHuman`) that carries the step of the last report it read from that human's PC. At the entry's step, by when every PC has that report, the human's battle ends with no result, its regions go free and its armies disband. From then on it runs nothing: `FACTIONS.active()` and every per-human loop skip it (`Hooks.retired`), and the world waits for no more of its reports. Its slices keep their index.
    - Battle jobs run inside the step, not on their threads (patch `30`).
    - Path jobs queued in the step run at its end, before the hash: share 0 on the simulation thread, shares 1 and 2 on path threads, job i always on share i % 3 (patch `35`, `PathWorkers`).
@@ -72,7 +73,7 @@ A player's action never changes state on the PC where it was clicked. It becomes
 | `sosdet/Engine.java` | The API the mod calls |
 | `sosdet/Hooks.java` | Every call the patches make into the engine |
 | `sosdet/Session.java`, `StepClock`, `Streams` | One session's state, the fixed step, the simulation and cosmetic random streams |
-| `sosdet/ai/` | The log: `AiLog` (host and peer, stamping, confirmations, the 30-step delay), `AiEntry`, `CmdWriter`/`CmdReader` |
+| `sosdet/ai/` | The log: `AiLog` (host and peer, stamping, confirmations, the delay: 30 steps at 1x, half a second of real time at higher speeds, SOS-90), `AiEntry`, `CmdWriter`/`CmdReader` |
 | `sosdet/game/` | Everything that touches game classes: `GameAi` (applies log entries), `GameHash`, `GameResync`, `AiHooks`, world fixes; the city↔world link: `StepParts`, `GameReport`, `GameTxns`, `GameSoldiers`, `GameWorldLoad` (the world resync); several humans: `GameHumans` (the human slots, spares, `SOSDET_HUMANS`), `GameCityDivs`, `GameRelations` (NPC relations per human), `GameEvents` (event timers and raids per human) |
 | `sosdet/txn/` | Transactions: the world's changes to a city, each applied exactly once |
 | `sosdet/game/cmd/` | Commands per area, room-plan records (`Plan*`) |

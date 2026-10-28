@@ -11,6 +11,7 @@ import java.util.function.Consumer;
 public final class Reports {
 
     public static final int EVERY = 30;
+    /** The least delay: from 1x down; at higher speeds a report applies half a second of real time later (SOS-90). */
     public static final int DELAY = 30;
 
     private CityReport current;
