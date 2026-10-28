@@ -1,5 +1,8 @@
 package sosdet.report;
 
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
 import java.util.Arrays;
 
 /**
@@ -61,5 +64,29 @@ public final class SentSupplies {
     public void clear() {
         Arrays.fill(amount, 0);
         slotsUsed = 0;
+    }
+
+    /** Writes what is in flight, for the city's state on another PC (a city view, SOS-82). */
+    public void writeTo(DataOutputStream out) throws IOException {
+        out.writeInt(armies);
+        out.writeInt(slotsUsed);
+        out.writeInt(amount.length);
+        for (int i = 0; i < amount.length; i++) {
+            out.writeInt(amount[i]);
+            out.writeInt(iteration[i]);
+        }
+    }
+
+    /** Replaces what is in flight with what {@link #writeTo} wrote. */
+    public void readFrom(DataInputStream in) throws IOException {
+        armies = in.readInt();
+        slotsUsed = in.readInt();
+        int n = in.readInt();
+        amount = new int[n];
+        iteration = new int[n];
+        for (int i = 0; i < n; i++) {
+            amount[i] = in.readInt();
+            iteration[i] = in.readInt();
+        }
     }
 }

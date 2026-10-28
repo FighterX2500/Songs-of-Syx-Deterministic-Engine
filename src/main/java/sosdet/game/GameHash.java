@@ -180,6 +180,11 @@ public final class GameHash implements StateSource {
             if (!ownCity || !(f instanceof Player)) {
                 h = HashLog.mix(h, Double.doubleToLongBits(f.credits().getD()));
             }
+            if (w != null && i < w.faction.length) {
+                w.faction[i] = f.index();
+                w.credits[i] = f.credits().getD();
+                w.factions = i + 1;
+            }
             if (f instanceof Player) {
                 h = identity(h, (Player) f); // every PC applies them (SOS-78)
             }
@@ -248,6 +253,10 @@ public final class GameHash implements StateSource {
         /** From the second human on: war timer, rebellion timer, current raider's power. */
         final double[] events = new double[3 * (Hooks.HUMANS_MAX - 1)];
         int eventHumans;
+        /** Each active faction's index and credits, as the factions part mixes them. */
+        final int[] faction = new int[FACTIONS.MAX()];
+        final double[] credits = new double[FACTIONS.MAX()];
+        int factions;
 
         WorldKept(int maxArmies) {
             army = new int[maxArmies * ARMY_FIELDS];
@@ -263,6 +272,9 @@ public final class GameHash implements StateSource {
                 int o = k * ARMY_FIELDS;
                 b.append(String.format(Locale.ROOT, "  army %d: faction %d at %d,%d, state %d, men %d, running hash %016x%n",
                         army[o], army[o + 1], army[o + 2], army[o + 3], army[o + 4], army[o + 5], armyHash[k]));
+            }
+            for (int k = 0; k < factions; k++) {
+                b.append(String.format(Locale.ROOT, "  faction %d: credits %s%n", faction[k], credits[k]));
             }
             for (int k = 0; k < eventHumans; k++) {
                 b.append(String.format(Locale.ROOT, "  human %d: war timer %s, rebellion timer %s, raider power %s%n",
@@ -358,7 +370,7 @@ public final class GameHash implements StateSource {
     public String describeWorld(long step) {
         for (int slot = 0; kept != null && slot < KEPT; slot++) {
             if (keptCount > slot && keptStep[slot] == step && world[slot] != null) {
-                return world[slot].describe();
+                return world[slot].describe() + GameRelations.describe(); // the opinions now, not at the step
             }
         }
         return "  (not kept)" + System.lineSeparator();

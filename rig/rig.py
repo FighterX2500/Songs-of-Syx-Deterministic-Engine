@@ -48,7 +48,7 @@ REMOTE_WINDOW = (1600, 900)  # a watched remote copy's window (the laptop: 1920x
 RELAY, RELAY_SRC, RELAY_PORT = BUILD / "rig" / "relay", ROOT / "rig" / "relay" / "Relay.java", 47710
 # what a remote copy reads from the copies on this PC; everything else stays here
 SHARED = ("hashes.bin,ai-host.log,reports.bin,resync.save,resync.state,wresync.save,wresync.state,wresync.state.done,"
-          "battle.save,battle.done")
+          "battle.save,battle.done,view.save,view.done,view.hash,view.close")
 
 
 def log(msg):
@@ -823,6 +823,24 @@ def main():
     ap.add_argument("--battle-hold", action="store_true",
                     help="with --humans: every copy holds before a step whose commands engage a battle, saves its game"
                          " there (beforebattle.save in its rig folder), then lets the step run (SOS-70)")
+    ap.add_argument("--dump-at", default="",
+                    help="'STEP:K,K': copies K dump the world's state right after STEP (<tag>-at<STEP>.txt) (SOS-82)")
+    ap.add_argument("--dump-reload", default="",
+                    help="'STEP:K[:PREFIXES]': copy K reloads its own game at STEP; with no PREFIXES it dumps the"
+                         " world's state before and after (<tag>-before.txt, <tag>-after.txt), with PREFIXES (comma"
+                         " separated, e.g. FACTIONS.npcManager) it writes their values from before back after the"
+                         " load (<tag>-restore.txt), to find what a load resets (SOS-82)")
+    ap.add_argument("--view", default="",
+                    help="with --humans: 'STEP:V:O[:END]': copy 1 starts a city view at STEP, copy V's human viewing"
+                         " copy O's city, and ends it at END; the owner's copy sends its city through its rig folder"
+                         " and the viewer's copy compares its copy of that city with the owner's view hashes (SOS-82)")
+    ap.add_argument("--view-limits", default="",
+                    help="with --view: 'CATCHUP:KEEPUP:STEPS': the viewer's limits in seconds and steps instead of the"
+                         " spec's 60:60:60, so a short run hits one; the viewer's copy asks copy 1 to end the view"
+                         " (view.close), as the mod's VIEW_CLOSE does (SOS-82, M2)")
+    ap.add_argument("--view-stall", default="",
+                    help="with --view: 'STEP:MS': the viewer's copy stalls one frame for MS ms at STEP while it views,"
+                         " to fall behind the host after catching up (the keep-up limit) (SOS-82, M2)")
     ap.add_argument("--remove", default="",
                     help="with --humans: 'K:STEP': copy K stops once copy 1 passes STEP, as a PC that drops out, and copy"
                          " 1 removes its human (SOS-66); the other copies are compared to the end without it. 'K:bN':"
@@ -919,6 +937,18 @@ def main():
     if args.world_resync and not (args.follow or args.humans):
         fail("--world-resync is for --follow or --humans runs; co-op runs use --resync")
     remove_copy, remove_at, remove_in_battle = 0, 0, False
+    view = None
+    if args.view:
+        parts = args.view.split(":")
+        if len(parts) not in (3, 4) or not all(p.isdigit() for p in parts) or not args.humans \
+                or not all(1 <= int(p) <= args.copies for p in parts[1:3]) or parts[1] == parts[2]:
+            fail("--view STEP:V:O[:END] is for --humans runs, V and O two copies from 1 to %d" % args.copies)
+        view = [int(p) for p in parts] + ([] if len(parts) == 4 else [-1])
+    if args.view_limits and (not view or len(args.view_limits.split(":")) != 3):
+        fail("--view-limits CATCHUP:KEEPUP:STEPS is for --view runs")
+    if args.view_stall and (not view or len(args.view_stall.split(":")) != 2
+                            or not all(p.isdigit() for p in args.view_stall.split(":"))):
+        fail("--view-stall STEP:MS is for --view runs")
     if args.remove:
         k, _, at = args.remove.partition(":")
         remove_in_battle = at.startswith("b")
@@ -1061,6 +1091,19 @@ def main():
                 c.send("battledir %d %s" % (o.k - 1, o.rig), "battledir")
             if args.battle_hold:
                 c.send("battlehold", "battlehold")
+            if args.dump_at and str(c.k) in args.dump_at.split(":")[1].split(","):
+                c.send("dumpat %s" % args.dump_at.split(":")[0], "dumpat")
+            if args.dump_reload and c.k == int(args.dump_reload.split(":")[1]):
+                parts = args.dump_reload.split(":")
+                c.send("dumpreload %s" % " ".join([parts[0]] + parts[2:3]), "dumpreload")
+            if view:
+                owner = copies[view[2] - 1]
+                c.send("viewat %d %d %d %d %s" % (view[0], human_slots[view[1] - 1], human_slots[view[2] - 1], view[3],
+                                                  owner.rig), "viewat")
+                if c.k == view[1] and args.view_limits:
+                    c.send("viewlimits %s" % " ".join(args.view_limits.split(":")), "viewlimits")
+                if c.k == view[1] and args.view_stall:
+                    c.send("viewstall %s" % " ".join(args.view_stall.split(":")), "viewstall")
         if args.follow:
             # copy 1's city reports go to the followers through a file, as the mod will send them over the network
             if c.k == 1:

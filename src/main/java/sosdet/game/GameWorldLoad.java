@@ -1,39 +1,55 @@
 package sosdet.game;
 
 import java.io.IOException;
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.IdentityHashMap;
 import java.util.List;
 
 import game.GAME;
 import game.boosting.tmp.TmpBoostable;
 import game.boosting.tmp.TmpBoosting;
 import game.events.EVENTS;
+import game.events.faction.EventFactionWar;
 import game.faction.FACTIONS;
 import game.faction.FactionResource;
+import game.faction.npc.FactionNPC;
 import game.faction.player.PLevels;
 import game.faction.player.PTech;
 import game.faction.player.PTitles;
 import game.faction.player.PTrade;
 import game.faction.player.Player;
 import game.faction.player.PlayerColors;
+import game.faction.royalty.NPCCourt;
+import game.raiding.RAIDING;
+import game.raiding.RaidingMap;
 import game.save.GameSaver;
 import game.save.Savable;
 import settlement.main.SETT;
+import settlement.recipe.Recipe;
 import snake2d.util.file.FileGetter;
 import snake2d.util.file.FilePutter;
 import snake2d.util.file.SAVABLE;
 import snake2d.util.misc.ACTION;
 import snake2d.util.sets.KeyMap;
 import snake2d.util.sets.LIST;
+import snake2d.util.sets.Stack;
 import util.data.DataO;
 import util.keymap.RMAPS;
 import world.WORLD;
 import world.entity.WEntity;
+import world.entity.army.WArmy;
+import world.entity.army.WArmyConstructor;
+import world.entity.caravan.Shipment;
+import world.entity.caravan.Shipments;
+import world.entity.haven.WHaven;
+import world.entity.haven.WHavens;
 import world.map.pathing.WPath;
 
 /**
@@ -83,6 +99,25 @@ public final class GameWorldLoad {
     private static final int KEEP_BYTES = 1 << 24;
     /** An entity's sub-pixel move remainder, which no save holds and a load leaves as it was (SOS-52). */
     private static final Field MOVEMENT = field(WPath.class, "movement");
+    /** The pooled entities' makers, which reuse a removed entity before they make one: caravans, armies, camps. */
+    private static final Constructor<?>[] POOLS = {constructor(Shipment.class), constructor(WArmy.class),
+            constructor(WHaven.class)};
+    private static final Field[] POOL_FIELDS = {field(Shipments.class, "free"), field(WArmyConstructor.class, "free"),
+            field(WHavens.class, "free")};
+    private static final Field STACK_ITEMS = field(Stack.class, "ints");
+    /** The faction war event's timer, which its load sets to 16 seconds. */
+    private static final Field WAR_TIMER = field(EventFactionWar.class, "timer");
+    /** An NPC court's day counter: a day ages its royals and may draw a successor (V82X). */
+    private static final Field COURT_DAY = field(NPCCourt.class, "addT");
+    /** Every human's raid map ({@code RAIDING}, patch 16), whose army power and regions are kept between updates. */
+    private static final Field RAID_MAPS = field(RAIDING.class, "sosdetEntries");
+    private static final Field RAID_ARMY_UPDATED = field(RaidingMap.class, "AUp");
+    private static final Field RAID_DIRTY = field(RaidingMap.class, "dirty");
+    /**
+     * A recipe's NPC production boost, which a new game draws: the slave recipes' aren't in {@code Recipes.fboosts}, so
+     * no save holds them, and a whole game's load draws them anew (V82AA).
+     */
+    private static final Field FBOOST_MUL = field(fboostClass(), "mul");
 
     private GameWorldLoad() {
     }
@@ -238,6 +273,224 @@ public final class GameWorldLoad {
     }
 
     /**
+     * The world's state no save holds, which a viewer keeps across its loads (SOS-82): every world entity's move
+     * remainder, fast entities first; then for each entity pool ({@link #POOLS}) its size and its entities' move
+     * remainders, bottom first; last the faction war event's timer. A loaded game's pools aren't the running game's:
+     * where one reuses a pooled caravan, the other makes a new one, whose path draws its direction (rig run V82E), and a
+     * reused one keeps the move remainder of its last trip (V82F). The war event's load sets its timer to 16 seconds,
+     * whatever was saved (V82I). Then each NPC court's day counter (V82X) and each recipe's NPC production boost
+     * ({@link #FBOOST_MUL}), which no save holds either.
+     */
+    public static double[] unsaved() {
+        LIST<WEntity> fast = WORLD.ENTITIES().allFast();
+        LIST<WEntity> slow = WORLD.ENTITIES().allSlow();
+        LIST<FactionNPC> npcs = FACTIONS.NPCs();
+        List<Object> fboosts = fboosts();
+        int n = fast.size() + slow.size();
+        int size = n + 1 + npcs.size() + fboosts.size();
+        for (int k = 0; k < POOLS.length; k++) {
+            size += 1 + pool(k).size();
+        }
+        double[] m = new double[size];
+        for (int i = 0; i < n; i++) {
+            m[i] = remainder(i < fast.size() ? fast.get(i) : slow.get(i - fast.size()));
+        }
+        int at = n;
+        for (int k = 0; k < POOLS.length; k++) {
+            Stack<Object> pool = pool(k);
+            Object[] in = pooled(pool);
+            m[at++] = pool.size();
+            for (int i = 0; i < pool.size(); i++) {
+                m[at++] = remainder((WEntity) in[i]);
+            }
+        }
+        m[at++] = warTimer();
+        for (int i = 0; i < npcs.size(); i++) {
+            m[at++] = courtDay(npcs.get(i).court());
+        }
+        for (Object b : fboosts) {
+            m[at++] = fboostMul(b);
+        }
+        return m;
+    }
+
+    /**
+     * Puts back what {@link #unsaved} took, in a world of the same entities, outside a step: each pool holds new
+     * entities with the remainders taken (their constructors' draws are cosmetic there). Every raid map is then set as
+     * a new game's, so it works its army power and regions out afresh: a loaded game's are, and a running game's
+     * were last worked out up to 100 seconds before (V82X).
+     */
+    public static void unsaved(double[] m) {
+        LIST<WEntity> fast = WORLD.ENTITIES().allFast();
+        LIST<WEntity> slow = WORLD.ENTITIES().allSlow();
+        int n = fast.size() + slow.size();
+        if (m.length < n + POOLS.length + 1) {
+            throw new IllegalStateException("SOSDET: " + m.length + " unsaved values for " + n + " world entities");
+        }
+        for (int i = 0; i < n; i++) {
+            remainder(i < fast.size() ? fast.get(i) : slow.get(i - fast.size()), (float) m[i]);
+        }
+        int at = n;
+        for (int k = 0; k < POOLS.length; k++) {
+            Stack<Object> pool = pool(k);
+            pool.clear();
+            int size = (int) m[at++];
+            for (int i = 0; i < size; i++) {
+                WEntity e;
+                try {
+                    e = (WEntity) POOLS[k].newInstance();
+                } catch (ReflectiveOperationException ex) {
+                    throw new IllegalStateException("SOSDET: cannot make a " + POOLS[k].getDeclaringClass().getName()
+                            + VERSION, ex);
+                }
+                remainder(e, (float) m[at++]);
+                pool.push(e);
+            }
+        }
+        warTimer(m[at++]);
+        LIST<FactionNPC> npcs = FACTIONS.NPCs();
+        for (int i = 0; i < npcs.size(); i++) {
+            courtDay(npcs.get(i).court(), m[at++]);
+        }
+        for (Object b : fboosts()) {
+            fboostMul(b, m[at++]);
+        }
+        resetRaidMaps();
+        if (at != m.length) {
+            throw new IllegalStateException("SOSDET: " + m.length + " unsaved values, " + at + " for this world");
+        }
+    }
+
+    private static float remainder(WEntity e) {
+        WPath p = e.path();
+        return p == null ? 0 : getFloat(p);
+    }
+
+    private static void remainder(WEntity e, float m) {
+        WPath p = e.path();
+        if (p == null) {
+            return;
+        }
+        try {
+            MOVEMENT.setFloat(p, m);
+        } catch (IllegalAccessException ex) {
+            throw new IllegalStateException("SOSDET: cannot write WPath.movement" + VERSION, ex);
+        }
+    }
+
+    private static double warTimer() {
+        try {
+            return WAR_TIMER.getDouble(GAME.events().world.war);
+        } catch (IllegalAccessException e) {
+            throw new IllegalStateException("SOSDET: cannot read EventFactionWar.timer" + VERSION, e);
+        }
+    }
+
+    private static void warTimer(double t) {
+        try {
+            WAR_TIMER.setDouble(GAME.events().world.war, t);
+        } catch (IllegalAccessException e) {
+            throw new IllegalStateException("SOSDET: cannot write EventFactionWar.timer" + VERSION, e);
+        }
+    }
+
+    private static double courtDay(NPCCourt c) {
+        try {
+            return COURT_DAY.getDouble(c);
+        } catch (IllegalAccessException e) {
+            throw new IllegalStateException("SOSDET: cannot read NPCCourt.addT" + VERSION, e);
+        }
+    }
+
+    private static void courtDay(NPCCourt c, double t) {
+        try {
+            COURT_DAY.setDouble(c, t);
+        } catch (IllegalAccessException e) {
+            throw new IllegalStateException("SOSDET: cannot write NPCCourt.addT" + VERSION, e);
+        }
+    }
+
+    /** Every recipe's NPC production boost, in recipe order, each once. */
+    private static List<Object> fboosts() {
+        Class<?> c = FBOOST_MUL.getDeclaringClass();
+        IdentityHashMap<Object, Boolean> seen = new IdentityHashMap<>();
+        List<Object> all = new ArrayList<>();
+        for (Recipe r : SETT.RECIPES().all()) {
+            for (int i = 0; i < r.bo.all().size(); i++) {
+                Object b = r.bo.all().get(i);
+                if (b.getClass() == c && seen.put(b, Boolean.TRUE) == null) {
+                    all.add(b);
+                }
+            }
+        }
+        return all;
+    }
+
+    private static double fboostMul(Object b) {
+        try {
+            return FBOOST_MUL.getDouble(b);
+        } catch (IllegalAccessException e) {
+            throw new IllegalStateException("SOSDET: cannot read FBoost.mul" + VERSION, e);
+        }
+    }
+
+    private static void fboostMul(Object b, double mul) {
+        try {
+            FBOOST_MUL.setDouble(b, mul);
+        } catch (IllegalAccessException e) {
+            throw new IllegalStateException("SOSDET: cannot write FBoost.mul" + VERSION, e);
+        }
+    }
+
+    private static Class<?> fboostClass() {
+        try {
+            return Class.forName("settlement.recipe.FBoost");
+        } catch (ClassNotFoundException e) {
+            throw new IllegalStateException("SOSDET: no class settlement.recipe.FBoost in this game build" + VERSION, e);
+        }
+    }
+
+    /** As {@code RaidingMap}'s field initialisers: its army power is old, and its regions are to be worked out. */
+    private static void resetRaidMaps() {
+        try {
+            for (RaidingMap r : (RaidingMap[]) RAID_MAPS.get(GAME.raiders())) {
+                RAID_ARMY_UPDATED.setDouble(r, -100);
+                RAID_DIRTY.setBoolean(r, true);
+            }
+        } catch (IllegalAccessException e) {
+            throw new IllegalStateException("SOSDET: cannot reset RAIDING.sosdetEntries" + VERSION, e);
+        }
+    }
+
+    /** A pool's entities, bottom first, up to its size. */
+    private static Object[] pooled(Stack<Object> pool) {
+        try {
+            return (Object[]) STACK_ITEMS.get(pool);
+        } catch (IllegalAccessException e) {
+            throw new IllegalStateException("SOSDET: cannot read Stack.ints" + VERSION, e);
+        }
+    }
+
+    private static float getFloat(WPath p) {
+        try {
+            return MOVEMENT.getFloat(p);
+        } catch (IllegalAccessException e) {
+            throw new IllegalStateException("SOSDET: cannot read WPath.movement" + VERSION, e);
+        }
+    }
+
+    /** The world entity pools, as {@link #POOLS}: the caravans', the armies', the camps'. */
+    @SuppressWarnings("unchecked") // each is a Stack of its constructor's entities
+    private static Stack<Object> pool(int k) {
+        try {
+            return (Stack<Object>) POOL_FIELDS[k].get(k == 0 ? WORLD.ENTITIES().caravans
+                    : k == 1 ? WORLD.ENTITIES().armies : WORLD.ENTITIES().havens);
+        } catch (IllegalAccessException e) {
+            throw new IllegalStateException("SOSDET: cannot read " + POOL_FIELDS[k] + VERSION, e);
+        }
+    }
+
+    /**
      * Zeroes every world entity's move remainder (armies, caravans). The save doesn't hold it, so a load into the
      * running game would keep each PC's own, and a remainder that differs between PCs (the PT3 kind of desync) would
      * outlive the resync. Every PC, the host included, loads the resync, so every PC then has 0 (owner, 2026-10-25).
@@ -365,6 +618,16 @@ public final class GameWorldLoad {
             return f;
         } catch (ReflectiveOperationException | RuntimeException e) {
             throw new IllegalStateException("SOSDET: no field " + owner.getName() + "." + name + " in this game build" + VERSION, e);
+        }
+    }
+
+    private static Constructor<?> constructor(Class<?> owner) {
+        try {
+            Constructor<?> c = owner.getDeclaredConstructor();
+            c.setAccessible(true);
+            return c;
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            throw new IllegalStateException("SOSDET: no constructor " + owner.getName() + "() in this game build" + VERSION, e);
         }
     }
 

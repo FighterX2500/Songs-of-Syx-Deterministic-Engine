@@ -27,10 +27,10 @@ public final class AiLog {
     /** Steps between the host taking a change and every PC applying it: 0.5 s at 1x. */
     public static final int DELAY_STEPS = 30;
     /**
-     * 6: the remove entry (SOS-66). 5: the hold entry (SOS-53). 4: the commanders entry (SOS-15). A format 3 to 5 log
-     * is a format 6 log without the newer entries, so it is read too.
+     * 7: the view entry (SOS-82). 6: the remove entry (SOS-66). 5: the hold entry (SOS-53). 4: the commanders entry (SOS-15). A format 3 to 5 log
+     * is a format 7 log without the newer entries, so it is read too.
      */
-    static final int FORMAT_VERSION = 6;
+    static final int FORMAT_VERSION = 7;
     static final int OLDEST_FORMAT = 3;
     static final int MAGIC = 0x53444149; // "SDAI"
     static final int HEADER_BYTES = 4 + 4 + 4 + 8;
@@ -219,6 +219,17 @@ public final class AiLog {
         captured.add(new AiEntry(-1, -1, AiEntry.REMOVE, -1, 0, payload.clone()));
     }
 
+    /**
+     * Host: a city view's start or end ({@link AiEntry#VIEW}) into the log, applied at the step it stamps on every PC.
+     * It comes from the mod, not a player, so watch-only never drops it (SOS-82).
+     */
+    public void captureView(byte[] payload) {
+        if (mode != AiMode.HOST) {
+            throw new IllegalStateException("SOSDET: only the host starts or ends a view (mode " + mode + ")");
+        }
+        captured.add(new AiEntry(-1, -1, AiEntry.VIEW, -1, 0, payload.clone()));
+    }
+
     public Commanders commanders() {
         return commanders;
     }
@@ -354,7 +365,7 @@ public final class AiLog {
             applied++;
             appliedByKind[due.kind]++;
             if (due.pc != AiEntry.AI && !skipped && due.kind != AiEntry.COMMANDERS && due.kind != AiEntry.HOLD
-                    && due.kind != AiEntry.REMOVE) { // the mod's or the engine's, no order
+                    && due.kind != AiEntry.REMOVE && due.kind != AiEntry.VIEW) { // the mod's or the engine's, no order
                 appliedOrders++;
             }
             if (mode == AiMode.PEER) {
@@ -642,6 +653,11 @@ public final class AiLog {
 
     public long applied() {
         return applied;
+    }
+
+    /** Host: the last step stamped. Peer: the host's last confirmed step, as far as its log has come in. */
+    public long confirmed() {
+        return confirmed;
     }
 
     /** The players' orders applied (speed changes included). */

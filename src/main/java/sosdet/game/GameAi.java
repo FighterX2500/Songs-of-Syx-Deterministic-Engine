@@ -127,6 +127,9 @@ public final class GameAi implements AiApplier {
         case AiEntry.REMOVE:
             Hooks.humanRemoved(e.intAt(0)); // SOS-66
             return;
+        case AiEntry.VIEW:
+            Hooks.viewEntry(e.step, e.intAt(0), e.intAt(1), e.intAt(2)); // SOS-82
+            return;
         case AiEntry.TELEPORT:
             ArrayList<Div> divs = new ArrayList<>(e.ints());
             Commanders c = Hooks.commanders();

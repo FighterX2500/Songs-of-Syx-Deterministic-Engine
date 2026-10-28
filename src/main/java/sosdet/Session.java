@@ -236,12 +236,432 @@ final class Session {
     /** The world resyncs loaded: a game cache made from the world before one starts again after it (SOS-32). */
     int worldLoads;
 
-    /** The city tail applies the transactions of this PC's human only: every other human's city is its own PC's. */
+    /**
+     * The city tail applies the transactions of the city this PC runs only: every other human's city is its own PC's.
+     * While this PC views another human's city, its own human's wait until its city is back (SOS-82).
+     */
     final java.util.function.Consumer<Txn> ownTxns = t -> {
-        if (t.human == localHuman) {
+        if (t.human == cityHuman()) {
             txnApplier().accept(t);
+        } else if (t.human == localHuman && frozen(localHuman)) {
+            this.heldTxns.add(t);
         }
     };
+
+    // ------------------------------------------------------------ city views (plan 0013, SOS-82)
+
+    /** The city views in the log, by the viewer's slot: the same on every PC; null where there is none. */
+    final View[] views = new View[SLOTS];
+    /** This PC as a viewer: the transactions for its own city since the freeze, applied when the city is back. */
+    final java.util.ArrayList<Txn> heldTxns = new java.util.ArrayList<>();
+    /** This PC as a viewer: its own city's engine state at the freeze ({@link ViewCity#cityState}), or null. */
+    byte[] ownCityState;
+    /** The owner's city's engine state, put in by the view load on the owner's and the viewer's PC, then cleared. */
+    byte[] viewLoad;
+    /** A view load runs: the owner's save loading on the owner's or the viewer's PC, or another PC's own game. */
+    boolean viewLoading;
+    /** When the running view load started ({@code System.nanoTime}), and how long the last one took, in ms. */
+    private long viewLoadStarted;
+    double lastViewLoadMs;
+    /** Test tooling (rig dumps): run once the next view load is set, before any step ({@code reloadOwnForDebug}). */
+    Runnable viewLoadDone;
+    /** Test tooling (rig dumps): run once between steps, after step {@link #debugAtStep} ({@code Engine.debugAt}). */
+    long debugAtStep = -1;
+    Runnable debugAt;
+    /** The viewer whose view hashes start once the view load is set. */
+    int viewHashFor = -1;
+    /** The view hashes: the viewer's copy of the owner's city, or the owner's city for one viewer, by viewer slot. */
+    final HashLog[] viewHashes = new HashLog[SLOTS];
+    /** The city's draws at the freeze step, by viewer slot, so both PCs count from there alike. */
+    final long[] viewDrawsBase = new long[SLOTS];
+    /** This PC as a viewer: its limits' clock, from its view load (M2). */
+    final ViewLimit viewLimit = new ViewLimit();
+
+    /** True from a view's freeze step: the human in {@code slot} views another city, and every world reads it frozen. */
+    boolean frozen(int slot) {
+        View v = views[slot];
+        return v != null && v.frozen();
+    }
+
+    /** This PC's view as the viewer, running: the owner's city is the one this PC runs. Null otherwise. */
+    View viewing() {
+        View v = views[localHuman];
+        return v != null && v.state == View.RUNNING && !v.back ? v : null;
+    }
+
+    /** This PC as a viewer: the world saved at the step before the thaw, loaded into its own game once that is back. */
+    java.nio.file.Path viewWorld;
+    /** The world's move remainders, which no save holds: put back after a view load or the load back. */
+    double[] viewMoves;
+
+    /**
+     * Between steps, before a view load (the owner's save, on the owner's or the viewer's PC): the city's engine state
+     * and the world's move remainders the load puts in, and the viewer whose view hashes start after it.
+     */
+    void viewLoadStart(byte[] state, double[] moves, int hashesFor) {
+        viewLoadStarted = System.nanoTime();
+        viewLoad = state;
+        viewMoves = moves;
+        viewHashFor = hashesFor;
+        viewLoading = true;
+    }
+
+    /** The view load is set: the world's move remainders go back, and the view's hashes count from here. */
+    void viewLoadEnd() {
+        sosdet.game.GameWorldLoad.unsaved(viewMoves);
+        viewMoves = null;
+        if (viewHashFor >= 0) {
+            viewHashesFrom(viewHashFor);
+        }
+        lastViewLoadMs = (System.nanoTime() - viewLoadStarted) / 1e6;
+        if (viewing() != null) {
+            viewLimit.start(System.nanoTime()); // catching up starts: the save, the download and the load don't count
+        }
+        if (viewLoadDone != null) {
+            Runnable r = viewLoadDone;
+            viewLoadDone = null;
+            r.run(); // debugging: the rig's restore, before any step (SOS-82)
+        }
+        viewHashFor = -1;
+        viewLoading = false;
+    }
+    /** This PC's own game is loading back for the thaw. */
+    boolean viewBackLoading;
+
+    /**
+     * Between steps, before each step: the viewer at the step before its thaw saves the world it runs and loads its
+     * own game back; the world goes into it once it is set ({@link #viewBackWorld}).
+     */
+    void viewBackStart() {
+        View v = viewing();
+        if (v == null || v.thaw < 0 || viewBackLoading || clock.step() != v.thaw - 1) {
+            return; // a thaw put off (a prompt open, a battle) moved at the end of this step already (viewsEnd)
+        }
+        try {
+            viewWorld = java.nio.file.Files.createTempFile("sosdet-viewworld", ".save");
+        } catch (java.io.IOException e) {
+            throw new IllegalStateException("SOSDET: no file for the world a view leaves", e);
+        }
+        sosdet.game.GameWorldLoad.save(viewWorld);
+        viewMoves = sosdet.game.GameWorldLoad.unsaved();
+        viewBackLoading = true;
+        sosdet.game.GameView.loadOwn();
+    }
+
+    /**
+     * The viewer's own game is set again: the world it ran while viewing goes into it, keeping its city, with the
+     * world's move remainders; then the transactions its city missed apply, and its player acts again.
+     */
+    void viewBackWorld() {
+        View v = views[localHuman];
+        viewBackLoading = false;
+        v.back = true; // FACTIONS.player() is this PC's own human again: the world load keeps its city's part
+        loadWorld(viewWorld, viewMoves);
+        viewWorld = null;
+        viewMoves = null;
+        part = StepParts.CITY; // the city tail's work, before the thaw step's report is taken
+        for (int i = 0; i < heldTxns.size(); i++) {
+            txnApplier().accept(heldTxns.get(i));
+        }
+        part = -1;
+        heldTxns.clear();
+        ai().watchOnly(false);
+        viewLimit.stop();
+    }
+
+    /**
+     * Between steps, before each step: every PC but a view's owner and viewer saves its own world and loads it back
+     * after the view's freeze step, and the owner too before its thaw step, where the viewer loads, as the owner loads
+     * its save for the view. A load resets world state no save holds; so it does on every PC alike, and the world
+     * stays the same everywhere. What a whole game's load resets beyond the world's ({@code GameWorldLoad.unsaved},
+     * rig runs V82N to V82X) is carried or reset alike, so these PCs load only their world (owner, 2026-10-28).
+     */
+    void viewWorldReloads() {
+        for (View v : views) {
+            if (v == null || !v.frozen() || v.viewer == localHuman || v.loadSkipped) {
+                continue; // a view a battle ended before its load: nobody loaded, so nobody reloads
+            }
+            boolean atFreeze = v.owner != localHuman && clock.step() == v.freeze;
+            boolean atThaw = v.thaw >= 0 && clock.step() == v.thaw - 1;
+            long at = atFreeze ? v.freeze : atThaw ? v.thaw : -1;
+            if (at < 0 || v.reloaded == at) {
+                continue;
+            }
+            v.reloaded = at;
+            long started = System.nanoTime();
+            java.nio.file.Path file;
+            try {
+                file = java.nio.file.Files.createTempFile("sosdet-viewreload", ".save");
+            } catch (java.io.IOException e) {
+                throw new IllegalStateException("SOSDET: no file for this PC's world reload", e);
+            }
+            double[] unsaved = sosdet.game.GameWorldLoad.unsaved();
+            sosdet.game.GameWorldLoad.save(file);
+            loadWorld(file, unsaved);
+            lastViewLoadMs = (System.nanoTime() - started) / 1e6;
+        }
+    }
+
+    /** Loads the world saved in {@code file} into this PC's game, keeping its city, with {@code unsaved} put back. */
+    private void loadWorld(java.nio.file.Path file, double[] unsaved) {
+        java.nio.file.Path scratch;
+        try {
+            scratch = java.nio.file.Files.createTempFile("sosdet-city", ".bin");
+        } catch (java.io.IOException e) {
+            throw new IllegalStateException("SOSDET: no scratch file for the city's part of the player faction", e);
+        }
+        worldLoading = true;
+        try {
+            sosdet.game.GameWorldLoad.load(file, scratch);
+        } finally {
+            worldLoading = false;
+        }
+        worldLoads++;
+        sosdet.game.GameWorldLoad.unsaved(unsaved);
+        try {
+            java.nio.file.Files.deleteIfExists(file);
+        } catch (java.io.IOException e) {
+            throw new IllegalStateException("SOSDET: cannot delete " + file, e);
+        }
+    }
+
+    /** The human whose city this PC runs: its own, or while it views another's, that owner's (SOS-82). */
+    int cityHuman() {
+        View v = viewing();
+        return v != null ? v.owner : localHuman;
+    }
+
+    /** The PC whose city this PC runs: its own, or the viewed city's owner's PC. */
+    int cityPc() {
+        View v = viewing();
+        return v != null ? v.ownerPc : ai().localPc();
+    }
+
+    /** The city's own draws so far: every draw since the load but the world part's. */
+    long cityDraws() {
+        return streams.drawsSinceLoad() - streams.worldDraws();
+    }
+
+    /**
+     * Every PC, as a view entry applies at {@code step}: the viewer's human freezes at the next report step, or with
+     * {@code owner} -1, the view ends (M2), {@code ownerPc} then holding why ({@link View#CLOSED} to
+     * {@link View#DESYNC}; below 0 for closed).
+     */
+    void viewEntry(long step, int viewer, int owner, int ownerPc) {
+        if (owner < 0) {
+            int why = ownerPc < 0 || ownerPc > View.LAST_ASKED ? View.CLOSED : ownerPc;
+            endView(viewer, step, why, View.sentence(why));
+            return;
+        }
+        views[viewer] = new View(viewer, pcOf(viewer), owner, ownerPc, nextReportStep(step));
+    }
+
+    /** The first report step after {@code step}: where a view freezes or thaws its viewer. */
+    private static long nextReportStep(long step) {
+        return (step / Reports.EVERY + 1) * Reports.EVERY;
+    }
+
+    /**
+     * Every PC alike at {@code step}: the view of the human in {@code viewer} ends at the next report step, or, not
+     * frozen yet, is cancelled; {@code why} and {@code reason} say why ({@link View#why}, {@link View#reason}). Nothing
+     * for a view already ending or over. A view ended in its own freeze step loads nothing ({@link #skipLoad}).
+     */
+    void endView(int viewer, long step, int why, String reason) {
+        View v = views[viewer];
+        if (v == null || v.thaw >= 0 || v.state == View.CANCELLED || v.state == View.ENDED) {
+            return;
+        }
+        v.why = why;
+        v.reason = reason;
+        if (v.state == View.SCHEDULED) {
+            if (why == View.CLOSED) {
+                v.reason = "Closed before it opened.";
+            }
+            v.state = View.CANCELLED;
+            return;
+        }
+        v.thaw = nextReportStep(step);
+        if (step == v.freeze) {
+            skipLoad(v);
+        }
+    }
+
+    /**
+     * A view ended in its freeze step, before any PC loaded for it (the loads run after that step): nobody loads. Its
+     * viewer stays frozen in every world until the thaw, as its report at the freeze step went untaken, while its PC
+     * runs its own city on, and its player can answer what ended the view (a prompt) there.
+     */
+    private void skipLoad(View v) {
+        v.loadSkipped = true;
+        v.sent = true; // the owner holds for no save
+        v.reloaded = v.freeze; // no other PC reloads its world
+        viewHashes[v.viewer] = null;
+        if (v.viewer == localHuman) {
+            v.state = View.RUNNING;
+            v.back = true; // its own city never left
+        }
+    }
+
+    /**
+     * Every PC, own-city mode, inside the step that engages a battle on the battle map (plan 0006): every PC loads that
+     * battle and later its own city back, so no view lives through it (mod spec §10: a battle ends the view). The views
+     * not frozen yet are cancelled; the others thaw at the first report step after the battle ({@link #viewsEnd}), and
+     * their hashes stop here, as the battle's loads start every PC's draws again.
+     */
+    void battleEndsViews(long step) {
+        for (View v : views) {
+            if (v == null) {
+                continue;
+            }
+            endView(v.viewer, step, View.GAME, "A battle started.");
+            if (v.frozen()) {
+                viewHashes[v.viewer] = null;
+            }
+        }
+    }
+
+    /**
+     * Every PC, at the end of each step: a view due to thaw at the next step is put off by a report interval while a
+     * battle runs or a world prompt or question is open, whose actions are game objects the viewer's load back would
+     * lose. Decided here, inside the step, so every PC moves it alike before any of them acts on it between steps.
+     */
+    void viewsEnd(long step) {
+        for (View v : views) {
+            if (v != null && v.frozen() && v.thaw == step + 1 && (battle != null || worldPromptOrQuestion() != null)) {
+                v.thaw += Reports.EVERY;
+            }
+        }
+    }
+
+    /**
+     * Every PC, at the start of each step: the views whose freeze step it is freeze their viewer, or are cancelled
+     * alike on every PC when the view can't start now.
+     */
+    void viewsAt(long step) {
+        for (View v : views) {
+            if (v != null && v.frozen() && v.thaw == step) {
+                thaw(v, step);
+            }
+            if (v == null || v.state != View.SCHEDULED || v.freeze != step) {
+                continue;
+            }
+            String why = viewRefusal(v);
+            if (why != null) {
+                v.why = View.GAME;
+                v.reason = why;
+                v.state = View.CANCELLED;
+                continue;
+            }
+            v.state = v.viewer == localHuman ? View.LOADING : View.RUNNING;
+            pacer.away(v.viewerPc, true); // the host's pace waits for no viewer
+        }
+    }
+
+    /**
+     * Every PC at a view's thaw step: the viewer's reports are read again from the one it takes now, and the pace
+     * waits for it again. Until that report applies, every world reads the frozen one, as no PC holds an earlier one.
+     */
+    private void thaw(View v, long step) {
+        if (v.viewer == localHuman && !v.back) {
+            throw new IllegalStateException("SOSDET: " + v + " thaws at step " + step + ", but this PC's own city isn't back");
+        }
+        v.state = View.ENDED;
+        viewHashes[v.viewer] = null;
+        pacer.away(v.viewerPc, false);
+        if (v.viewer != localHuman) {
+            // the world reads the frozen report through the step before the thaw report applies (ADR 0005 §4)
+            receivedTakenAt[v.viewer] = Math.max(receivedTakenAt[v.viewer], step - Reports.EVERY);
+        }
+    }
+
+    /** Why a view can't freeze its viewer now, the same on every PC; null when it can. */
+    private String viewRefusal(View v) {
+        return viewRefusal(v.viewer, v.owner, v);
+    }
+
+    /**
+     * Why the human in {@code viewer} can't view {@code owner}'s city now; null when it can. {@code self} is that view
+     * when it is in the log already, or null for a view still to ask for ({@code Engine.viewRefusal}).
+     */
+    String viewRefusal(int viewer, int owner, View self) {
+        if (viewer == owner || !isHuman(viewer) || !isHuman(owner) || retired(viewer) || retired(owner)
+                || removing[viewer] || removing[owner]) {
+            return "That city can't be viewed.";
+        }
+        if (frozen(owner)) {
+            return "Its player is viewing another city.";
+        }
+        for (View o : views) {
+            if (o != null && o != self && o.frozen() && o.owner == viewer) {
+                return "Your own city is being viewed.";
+            }
+        }
+        if (battle != null) {
+            return "A battle is running.";
+        }
+        return worldPromptOrQuestion();
+    }
+
+    /**
+     * Why no view may freeze or thaw now, the same on every PC: a world prompt or a world question is open, whose
+     * actions are game objects a viewer's load would lose. Null when none is.
+     */
+    private String worldPromptOrQuestion() {
+        if (worldPrompt != null) {
+            return "A battle prompt is open.";
+        }
+        for (Long key : stepPrompts.keySet()) {
+            if (Hooks.stepPromptWorld(key)) {
+                return "A question is open on the world map.";
+            }
+        }
+        return null;
+    }
+
+    /** Before step {@code step}: true while this PC, the viewer or the owner of a view, holds at its freeze step. */
+    boolean viewHolds(long step) {
+        if (viewLoading) {
+            return true; // a view load runs: the owner's, the viewer's or another PC's own
+        }
+        for (View v : views) {
+            if (v == null || step <= v.freeze) {
+                continue;
+            }
+            if (v.state == View.LOADING && v.viewer == localHuman) {
+                return true; // until the owner's city is loaded
+            }
+            if (v.viewer == localHuman && v.thaw >= 0 && step >= v.thaw && !v.back) {
+                return true; // until its own city is loaded back
+            }
+            if (v.frozen() && v.owner == localHuman && (!v.sent || viewLoading)) {
+                return true; // until the mod has taken its save (Engine.viewOut) and this PC has loaded it
+            }
+        }
+        return false;
+    }
+
+    /** End of a step: each view this PC is part of hashes the city it runs, at the hash steps after the freeze. */
+    void viewHashes(long step) {
+        for (View v : views) {
+            if (v == null || !v.frozen()) {
+                continue;
+            }
+            HashLog h = viewHashes[v.viewer];
+            if (h == null || !h.due(step) || step <= v.freeze) {
+                continue;
+            }
+            long clock = HashLog.mix(HashLog.mix(HashLog.start(), step), cityDraws() - viewDrawsBase[v.viewer]);
+            h.take(step, clock, 0, source());
+        }
+    }
+
+    /** A view's hash log for the city this PC runs, from now: the owner's, or the viewer's copy. */
+    void viewHashesFrom(int viewer) {
+        HashLog h = new HashLog();
+        h.every(hashes.interval());
+        viewHashes[viewer] = h;
+        viewDrawsBase[viewer] = cityDraws();
+    }
 
     private static long[] none() {
         long[] l = new long[SLOTS];
@@ -397,7 +817,7 @@ final class Session {
         if (part == StepParts.WORLD_PART) {
             return currentHuman;
         }
-        return viewHuman >= 0 ? viewHuman : localHuman;
+        return viewHuman >= 0 ? viewHuman : cityHuman(); // a viewed city's player is its owner (SOS-82)
     }
 
     /** The ordinal of the human in {@code slot} among the human slots; 0 for slot 0 and while a game loads (SOS-46). */
@@ -472,8 +892,9 @@ final class Session {
         if (!ownCity || battle != null) {
             return stepSeed(step); // in a battle every PC runs the same game (plan 0006)
         }
+        // a viewed city draws on its viewer's PC as on its owner's (SOS-82)
         long h = HashLog.mix(HashLog.mix(HashLog.mix(HashLog.mix(HashLog.start(), seed), step), CITY_STREAM),
-                ai().localPc());
+                cityPc());
         return (int) (h ^ (h >>> 32));
     }
 
@@ -510,6 +931,14 @@ final class Session {
      * state the save leaves out (B14).
      */
     void afterLoad() {
+        if (viewLoad != null) {
+            viewLoaded();
+            return;
+        }
+        if (viewBackLoading) {
+            ownCityBack();
+            return;
+        }
         playerUpdateAcc = 0;
         viewHuman = -1; // a read as another human never outlives a load (SOS-46)
         for (Reports r : reports) {
@@ -565,6 +994,38 @@ final class Session {
         hashes = new HashLog();
         hashes.every(interval);
         hashes.worldOnly(ownCity);
+    }
+
+    /**
+     * A viewer loads the owner's city (SOS-82): only this PC loads, at the freeze step every PC has reached alike, so
+     * the session goes on as it was. The reports, the feeds, the log, the hashes and the clock stay; the city's engine
+     * state is the owner's from now, and so is the city this PC runs.
+     */
+    private void viewLoaded() {
+        byte[] state = viewLoad;
+        viewLoad = null;
+        viewHuman = -1;
+        humans = null;
+        currentHuman = 0;
+        battleConclude = null;
+        resyncDraws = streams.drawsSinceLoad(); // the load's own draws don't count, as in a resync
+        ViewCity.restoreCity(this, state);
+        View v = views[localHuman];
+        if (v != null && v.state == View.LOADING) {
+            v.state = View.RUNNING; // the viewer; the owner runs its own city still
+        }
+    }
+
+    /** The viewer's own game loads back: as a view load, with its own city's engine state from the freeze step. */
+    private void ownCityBack() {
+        viewHuman = -1;
+        humans = null;
+        currentHuman = 0;
+        battleConclude = null;
+        resyncDraws = streams.drawsSinceLoad();
+        ViewCity.restoreCity(this, ownCityState);
+        ownCityState = null;
+        viewHashes[localHuman] = null;
     }
 
     /**
@@ -659,7 +1120,7 @@ final class Session {
             return true; // co-op: every PC takes the same reports itself; in a battle the world stands still
         }
         for (int h : humans()) {
-            if (!remote(h) || retired(h)
+            if (!remote(h) || retired(h) || frozen(h) // a viewer's world reads its last report (SOS-82)
                     || receivedTakenAt[h] >= 0 && step <= Reports.lastReadableStep(receivedTakenAt[h])) {
                 continue;
             }
@@ -679,6 +1140,9 @@ final class Session {
         }
         if (r.takenAt <= receivedTakenAt[r.faction]) {
             return; // a repeat changes nothing
+        }
+        if (frozen(r.faction) && r.takenAt >= views[r.faction].freeze) {
+            return; // a viewer sends none from its freeze step; every PC reads its last one before (SOS-82)
         }
         if (retired(r.faction) || removing[r.faction] && r.takenAt > removeCutoff[r.faction]) {
             return; // past its human's last report every PC reads (SOS-66)
@@ -907,7 +1371,7 @@ final class Session {
     /** Makes the city's inputs and applies them in the world part: the game, made at first use. */
     GameInputs inputs() {
         if (inputs == null) {
-            inputs = new GameInputs(sentSupplies, eventMarks, () -> reportsFrom < 0 && currentHuman == localHuman);
+            inputs = new GameInputs(sentSupplies, eventMarks, () -> reportsFrom < 0 && currentHuman == cityHuman());
         }
         return inputs;
     }

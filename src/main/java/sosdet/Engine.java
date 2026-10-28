@@ -20,6 +20,7 @@ import sosdet.game.deal.DealBook;
 import sosdet.report.CityReport;
 import sosdet.report.Field;
 import sosdet.hash.Desync;
+import sosdet.hash.HashLog;
 import sosdet.report.Shape;
 
 /**
@@ -396,6 +397,255 @@ public final class Engine {
         } finally {
             s.battleLoading = false;
         }
+    }
+
+    // ------------------------------------------------------------ city views (plan 0013, SOS-82)
+
+    /**
+     * Host, own-city mode, between steps: the human in {@code viewer} views {@code owner}'s city (mod spec §10). A view
+     * entry in the log applies at its stamped step on every PC; the viewer freezes at the next report step, F. There
+     * every PC cancels the view alike when it can't start ({@link View#reason}); otherwise the owner's PC holds after F
+     * until the mod takes {@link #viewOut}, and the viewer's PC holds after F until the mod gives it to
+     * {@link #viewIn}. No PC waits for the viewer's reports or its pace while it views. The mod asks the owner first.
+     */
+    public static void viewBegin(int viewer, int owner) {
+        Session s = required();
+        if (!s.ownCity || s.ai().mode() != AiMode.HOST) {
+            throw new IllegalStateException("SOSDET: the host starts a view, in own-city mode (mode " + s.ai().mode() + ")");
+        }
+        if (s.streams.inStep()) {
+            throw new IllegalStateException("SOSDET: a view is started between steps, not inside one");
+        }
+        if (viewer == owner || !s.isHuman(viewer) || !s.isHuman(owner)) {
+            throw new IllegalArgumentException("SOSDET: human " + viewer + " can't view human " + owner + "'s city");
+        }
+        View v = s.views[viewer];
+        if (v != null && v.state != View.CANCELLED && v.state != View.ENDED) {
+            throw new IllegalStateException("SOSDET: human " + viewer + " has a view already: " + v);
+        }
+        s.ai().captureView(AiEntry.ints(viewer, owner, s.pcOf(owner)));
+    }
+
+    /** Host, between steps: the viewer closes the view of the human in {@code viewer} ({@link #viewEnd(int, int)}). */
+    public static void viewEnd(int viewer) {
+        viewEnd(viewer, View.CLOSED);
+    }
+
+    /**
+     * Host, between steps: the view of the human in {@code viewer} ends, for {@code why}: {@link View#CLOSED}, or a
+     * limit the viewer's PC hit ({@link #viewLimit}: {@link View#NOT_CAUGHT_UP}, {@link View#FELL_BEHIND}), or
+     * {@link View#DESYNC}. An end entry in the log applies at its stamped step on every PC, with its reason
+     * ({@link View#why}, {@link View#reason}), and the viewer thaws at the next report step: its PC loads its own city
+     * back just before, and every PC reads its reports again from there. A view not yet frozen is cancelled instead.
+     */
+    public static void viewEnd(int viewer, int why) {
+        Session s = required();
+        if (s.ai().mode() != AiMode.HOST) {
+            throw new IllegalStateException("SOSDET: the host ends a view (mode " + s.ai().mode() + ")");
+        }
+        if (s.streams.inStep()) {
+            throw new IllegalStateException("SOSDET: a view is ended between steps, not inside one");
+        }
+        if (why < View.CLOSED || why > View.LAST_ASKED) {
+            throw new IllegalArgumentException("SOSDET: a view's end for reason " + why + ", not " + View.CLOSED
+                    + " to " + View.LAST_ASKED);
+        }
+        s.ai().captureView(AiEntry.ints(viewer, -1, why));
+    }
+
+    /**
+     * The viewer's PC, between steps: the limit it hit ({@link View#NOT_CAUGHT_UP}: not caught up with the owner's city
+     * a minute after the view load; {@link View#FELL_BEHIND}: more than 60 steps behind the host for a minute after
+     * that), for the mod to send to the host's {@link #viewEnd(int, int)}; {@link View#OPEN} while none is hit, and
+     * once the view's end is in the log. Measured on this PC's clock (mod spec §10, plan 0013 M2).
+     */
+    public static int viewLimit() {
+        Session s = required();
+        View v = s.viewing();
+        return v == null || v.thaw >= 0 ? View.OPEN : s.viewLimit.hit();
+    }
+
+    /** The viewer's PC: seconds from its view load to catching up with the owner's city (playtest log), or -1. */
+    public static double viewCaughtUpSeconds() {
+        return required().viewLimit.caughtUpSeconds();
+    }
+
+    /**
+     * Test tooling (the rig's {@code --view-limits}): other limits than the spec's minute and 60 steps, so a short run
+     * reaches each one. Never called by the mod.
+     */
+    public static void viewLimits(double catchUpSeconds, double behindSeconds, int behindSteps) {
+        required().viewLimit.limits(catchUpSeconds, behindSeconds, behindSteps);
+    }
+
+    /** This PC's view as the viewer while it runs the owner's city, or null: its own city is the one it runs. */
+    public static View viewing() {
+        return required().viewing();
+    }
+
+    /**
+     * Host, between steps: why a view of {@code owner}'s city by the human in {@code viewer} would be cancelled if it
+     * began now, as a sentence for the player, or null when it wouldn't: the mod refuses such a request at once (mod
+     * spec §10). A view of that viewer not over yet refuses too.
+     */
+    public static String viewRefusal(int viewer, int owner) {
+        Session s = required();
+        if (!s.ownCity) {
+            return "Views need own-city mode.";
+        }
+        if (viewer < 0 || viewer >= Session.SLOTS || owner < 0 || owner >= Session.SLOTS) {
+            return "That city can't be viewed.";
+        }
+        View v = s.views[viewer];
+        if (v != null && v.state != View.CANCELLED && v.state != View.ENDED) {
+            return "You are viewing a city already.";
+        }
+        View o = s.views[owner];
+        if (o != null && o.state == View.SCHEDULED) {
+            return "Its player is about to view another city.";
+        }
+        return s.viewRefusal(viewer, owner, null);
+    }
+
+    /** The view of the human in {@code viewer}, the same on every PC: scheduled, loading, running or cancelled; or null. */
+    public static View view(int viewer) {
+        return required().views[viewer];
+    }
+
+    /**
+     * The owner's PC, between steps at a view's freeze step: saves its game and returns it with its city's engine state,
+     * for the mod to send to the viewer's {@link #viewIn}; then this PC runs on. Null when no view waits for its save.
+     */
+    public static byte[] viewOut() {
+        Session s = required();
+        if (s.streams.inStep()) {
+            return null;
+        }
+        for (View v : s.views) {
+            if (v == null || !v.frozen() || v.owner != s.localHuman || v.sent || s.clock.step() != v.freeze) {
+                continue;
+            }
+            byte[] save = sosdet.game.GameView.saveForView();
+            byte[] state = ViewCity.cityState(s);
+            double[] moves = GameWorldLoad.unsaved();
+            v.sent = true;
+            // the owner loads its save too: two PCs that load one save run its city alike, a loaded and an unloaded
+            // game don't (plan 0013, rig run V82D)
+            s.viewLoadStart(state, moves, v.viewer);
+            sosdet.game.GameView.loadSaved();
+            return ViewCity.toBytes(v.freeze, state, moves, save);
+        }
+        return null;
+    }
+
+    /**
+     * The viewer's PC, between steps at its view's freeze step: saves its own game and keeps its city's engine state,
+     * then loads the owner's city from {@link #viewOut}'s bytes. The load keeps the session; from then on this PC runs
+     * the owner's city, in step with the owner's, and its player only watches.
+     *
+     * <p>A room plan the viewer was still drawing (the placer's, never built) is gone: no save holds it, and the load
+     * resets the placer, so the own city that comes back at the thaw has none (plan 0013 M2).
+     */
+    public static void viewIn(byte[] bytes) {
+        Session s = required();
+        View v = s.views[s.localHuman];
+        if (v == null || v.state != View.LOADING) {
+            throw new IllegalStateException("SOSDET: a view's city with no view loading on this PC (" + v + ")");
+        }
+        if (s.streams.inStep()) {
+            throw new IllegalStateException("SOSDET: a view's city is loaded between steps, not inside one");
+        }
+        ViewCity c = ViewCity.fromBytes(bytes);
+        if (c.step != v.freeze || s.clock.step() != v.freeze) {
+            throw new IllegalStateException("SOSDET: the city of step " + c.step + " for the view from step " + v.freeze
+                    + ", loaded at step " + s.clock.step());
+        }
+        sosdet.game.GameView.saveOwn();
+        s.ownCityState = ViewCity.cityState(s);
+        s.ai().watchOnly(true);
+        s.viewLoadStart(c.state, c.moves, s.localHuman);
+        sosdet.game.GameView.loadView(c.save);
+    }
+
+    /**
+     * Test tooling, for the rig's state dumps only (never the mod): between steps, this PC saves its own game and loads
+     * it back as a PC outside a view does, keeping the session, and runs {@code loaded} once it is set, before any
+     * step; {@link #viewLoading()} is true until then. It found what a load resets (SOS-82, plan 0013 §3).
+     */
+    public static void reloadOwnForDebug(Runnable loaded) {
+        Session s = required();
+        if (s.streams.inStep() || s.viewLoading) {
+            throw new IllegalStateException("SOSDET: a debug reload is between steps, with no other view load running");
+        }
+        s.viewLoadDone = loaded;
+        s.viewLoadStart(ViewCity.cityState(s), GameWorldLoad.unsaved(), -1);
+        sosdet.game.GameView.reloadOwn();
+    }
+
+    /**
+     * Test tooling, for the rig's state dumps only (never the mod): runs {@code r} once, between steps, right before
+     * step {@code step} + 1 begins (SOS-82).
+     */
+    public static void debugAt(long step, Runnable r) {
+        Session s = required();
+        s.debugAtStep = step;
+        s.debugAt = r;
+    }
+
+    /** True while a view load runs on this PC: the owner's save, the viewer's, or this PC's own. */
+    public static boolean viewLoading() {
+        Session s = Engine.session();
+        return s != null && s.viewLoading;
+    }
+
+    /**
+     * How long this PC's last view load took, in ms, its own save included for a PC outside the view: the pause a
+     * view's opening or closing costs it (playtest log).
+     */
+    public static double lastViewLoadMs() {
+        return required().lastViewLoadMs;
+    }
+
+    /** The owner's PC: its city's view hashes for the viewer in {@code viewer} since the last call, for that viewer. */
+    public static byte[] viewHashOut(int viewer) {
+        HashLog h = required().viewHashes[viewer];
+        return h == null ? new byte[0] : h.out();
+    }
+
+    /**
+     * The viewer's PC: more of the owner's view hashes, in any pieces; each is compared as this PC reaches its step.
+     * Hashes that come in after the view stopped hashing (its end, a battle) are dropped.
+     */
+    public static void viewHashIn(byte[] bytes) {
+        Session s = required();
+        View v = s.views[s.localHuman];
+        if (v == null) {
+            throw new IllegalStateException("SOSDET: view hashes with no view of this PC's human");
+        }
+        HashLog h = s.viewHashes[s.localHuman];
+        if (h != null) {
+            h.in(v.ownerPc, bytes);
+        }
+    }
+
+    /** The viewer's PC: the first difference between its copy of the viewed city and the owner's city, or null. */
+    public static Desync viewDesync() {
+        Session s = required();
+        HashLog h = s.viewHashes[s.localHuman];
+        return h == null ? null : h.desync();
+    }
+
+    /** The viewer's PC: the view hashes compared so far with the owner's. */
+    public static long viewHashesCompared() {
+        Session s = required();
+        HashLog h = s.viewHashes[s.localHuman];
+        return h == null ? 0 : h.compared();
+    }
+
+    /** How many steps this PC is behind the host's last confirmed step (0 on the host): a viewer's catching up. */
+    public static long behindHost() {
+        Session s = required();
+        return s.ai().mode() == AiMode.PEER ? Math.max(0, s.ai().confirmed() - s.clock.step()) : 0;
     }
 
     /**
@@ -1087,6 +1337,15 @@ public final class Engine {
     public static void traceDraws(int keepSteps) {
         Session s = required();
         s.streams.trace = keepSteps == 0 ? null : new DrawTrace(keepSteps);
+    }
+
+    /**
+     * Test tooling, own-city mode: as {@link #traceDraws}, with the city's draws too, to compare a viewed city with its
+     * viewer's copy in the rig (SOS-82).
+     */
+    public static void traceAllDraws(int keepSteps) {
+        traceDraws(keepSteps);
+        required().streams.traceWorldOnly = false;
     }
 
     /**

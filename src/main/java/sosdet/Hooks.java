@@ -140,8 +140,22 @@ public final class Hooks {
         Session s = Engine.session();
         s.speedSeen(setSpeed);
         s.pace(now);
-        return s.clock.stepsForFrame(now, gameSeconds, setSpeed);
+        double speed = setSpeed;
+        if (s.viewing() != null && s.ai().mode() == sosdet.ai.AiMode.PEER
+                && s.ai().confirmed() - s.clock.step() > VIEW_CATCH_UP_LAG) {
+            speed *= VIEW_CATCH_UP; // a viewer behind the host runs faster until it has caught up (SOS-82)
+        }
+        if (s.viewing() != null && s.ai().mode() == sosdet.ai.AiMode.PEER) {
+            // the viewer's limits, on this PC's clock: they only decide whether it asks the host to end the view
+            s.viewLimit.update(now, Math.max(0, s.ai().confirmed() - s.clock.step()));
+        }
+        return s.clock.stepsForFrame(now, gameSeconds, speed);
     }
+
+    /** A viewer more than this many steps behind the host's confirmed step catches up (plan 0013). */
+    static final int VIEW_CATCH_UP_LAG = 60;
+    /** How much faster a viewer runs while it catches up: a 5-second gap closes in about 2 seconds (mod spec §10). */
+    static final double VIEW_CATCH_UP = 3.5;
 
     /**
      * A speed change from the log, at its step: the step length from the next step on, the speed line (with the host
@@ -204,15 +218,23 @@ public final class Hooks {
             // taken at the last step run, so a regular report the next step takes is never a repeat of it
             s.takeReport(s.clock.step(), s.clock.step() + 1);
         }
+        if (s.debugAt != null && s.clock.step() == s.debugAtStep) {
+            Runnable r = s.debugAt;
+            s.debugAt = null;
+            r.run(); // debugging: the rig's state dump at an exact step (SOS-82)
+        }
+        s.viewBackStart(); // a viewer before its thaw step loads its own city back (SOS-82)
+        s.viewWorldReloads(); // every other PC reloads its world where the owner and the viewer load
         boolean battleAwaited = s.battle != null && s.battle.awaiting; // the battle PC's battle isn't loaded yet
         if (s.battleLeaving || battleAwaited || !s.ai().mayRun(s.clock.step() + 1) || !s.worldMayRun(s.clock.step() + 1)
-                || battleAhead(s, s.clock.step() + 1)) {
+                || battleAhead(s, s.clock.step() + 1) || s.viewHolds(s.clock.step() + 1)) {
             s.clock.hold();
             return false;
         }
         if (!s.clock.begin()) {
             return false;
         }
+        s.viewsAt(s.clock.step()); // before anything of the step: a view freezes its viewer from here (SOS-82)
         s.plans().lift();
         s.streams.enter();
         // Reseeded every step: the stream depends only on the seed and the step, so a resync needs no random state
@@ -298,7 +320,9 @@ public final class Hooks {
             }
             s.part = -1; // the same part on every PC, whether or not this one ran city paths or a city tail (SOS-46)
             s.hashes.take(step, clock, s.reportsHash(), s.source());
+            s.viewHashes(step);
         }
+        s.viewsEnd(step); // a thaw due next step is put off while a battle runs or a world prompt is open (SOS-82)
         s.times.record(System.nanoTime() - s.stepStartNanos);
         s.stepStartNanos = 0;
         s.part = -1;
@@ -363,8 +387,8 @@ public final class Hooks {
             if (!battleRuns && s.reports(s.localHuman).current() == null && !s.reports(s.localHuman).pending()) {
                 s.takeReport(step, step);
             }
-            if (!battleRuns && Reports.takenAt(step)) {
-                s.takeReport(step, step + Reports.DELAY);
+            if (!battleRuns && Reports.takenAt(step) && !s.frozen(s.localHuman)) {
+                s.takeReport(step, step + Reports.DELAY); // a viewer takes none: its city is unloaded (SOS-82)
             }
             s.part = part;
             s.streams.reseed(s.worldSeed(step));
@@ -413,11 +437,19 @@ public final class Hooks {
         return s != null && pc == s.ai().localPc();
     }
 
-    /** Whether a city command PC {@code pc} gave applies here: always in co-op; an own city's only on its own PC. */
+    /**
+     * Whether a city command PC {@code pc} gave applies here: always in co-op; an own city's only on its own PC, and on
+     * a PC viewing that city (SOS-82).
+     */
     public static boolean cityCommandHere(int pc) {
         Session s = Engine.session();
         // in a battle every PC runs the battle PC's game, so its commands apply everywhere (plan 0006)
-        return s == null || !s.ownCity || pc == s.ai().localPc() || s.battle != null && !s.battle.awaiting;
+        return s == null || !s.ownCity || pc == s.cityPc() || s.battle != null && !s.battle.awaiting;
+    }
+
+    /** A city view's start or end in the log, at its step (SOS-82). */
+    public static void viewEntry(long step, int viewer, int owner, int ownerPc) {
+        Engine.session().viewEntry(step, viewer, owner, ownerPc);
     }
 
     /** True when the resource updates in this part of the step. */
@@ -1567,6 +1599,12 @@ public final class Hooks {
         if (s.resyncDraws >= 0) {
             s.streams.drawsSinceLoad(s.resyncDraws);
             s.resyncDraws = -1;
+            if (s.viewLoading) {
+                s.viewLoadEnd(); // the world's move remainders back, the view's hashes from here (SOS-82)
+            }
+            if (s.viewBackLoading) {
+                s.viewBackWorld(); // the viewer's own city is back: the world it ran goes into it (SOS-82)
+            }
             if (s.plans().inGame()) {
                 // a map battle's end or a resync: the session goes on at this step, with no "click to continue" (SOS-41)
                 VIEW.inters().load.deactivate();
@@ -1695,7 +1733,7 @@ public final class Hooks {
         s.worldPromptArmies = armies;
         // a battle's result asks the battle's human on every PC; it opens outside the world part (plan 0006)
         s.worldPromptHuman = s.battle != null ? s.battle.human
-                : s.part == StepParts.WORLD_PART ? s.currentHuman : s.localHuman;
+                : s.part == StepParts.WORLD_PART ? s.currentHuman : s.cityHuman();
         if (s.battle != null && s.battle.other >= 0 && decides instanceof world.battle.spec.WBattleResult) {
             // between two humans the winner chooses (SOS-83): army 0's human on a victory, else the other human
             world.battle.spec.WBattleResult r = (world.battle.spec.WBattleResult) decides;
@@ -1712,6 +1750,11 @@ public final class Hooks {
         s.worldPromptSallyNext = -1;
         s.worldPromptReady = 0;
         s.pvpEngageAt = -1;
+        // the prompt ends a view (SOS-82): both humans' between two humans (SOS-83)
+        s.endView(s.worldPromptHuman, s.clock.step(), View.GAME, "A battle prompt asks for you.");
+        if (s.worldPromptOther >= 0) {
+            s.endView(s.worldPromptOther, s.clock.step(), View.GAME, "A battle prompt asks for you.");
+        }
         s.promptTimer.open();
         return s.worldPromptHuman == s.localHuman || s.worldPromptOther == s.localHuman;
     }
@@ -1886,7 +1929,10 @@ public final class Hooks {
             throw new IllegalStateException("SOSDET: more than 32 " + (world ? "world" : "city") + " questions in step " + step);
         }
         long key = step * 64 + n;
-        int human = world ? s.currentHuman : s.localHuman;
+        int human = world ? s.currentHuman : s.cityHuman(); // a viewed city's questions are its owner's (SOS-82)
+        if (world) {
+            s.endView(human, step, View.GAME, "A question asks for you."); // a world question ends its human's view
+        }
         s.stepPrompts.put(key, new Object[] {yes, no, human});
         if (human != s.localHuman) {
             return -1;
@@ -1999,6 +2045,7 @@ public final class Hooks {
         OwnBattle b = new OwnBattle(step, human, s.pcOf(human), other, s.streams.worldDraws());
         b.otherReport = other >= 0 ? s.reports(other).current() : null; // a battle load clears the reports (SOS-83)
         s.battle = b;
+        s.battleEndsViews(step); // every PC loads the battle: no view lives through it (SOS-82)
         s.streams.reseed(s.battleSeed(step));
         try {
             engage.run();
