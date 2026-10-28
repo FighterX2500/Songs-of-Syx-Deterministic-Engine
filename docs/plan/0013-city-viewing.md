@@ -71,3 +71,16 @@ The city's own unsaved state shows in the view hash.
 
 - A city question open on the owner's PC at F (`cmd.StepPrompts`, its actions are game objects): the viewer's copy has none, and the owner's answer is skipped there. The view hash shows it.
 - The game's caches that a load starts fresh. A load-only difference shows in the view hash; one in the world part shows in the viewer's world hash.
+
+## 6. Results of M4 (2026-10-28)
+
+Rig, Mogus-72 with 3 humans, every copy identical to its last step, engine hashes agree, none missed:
+
+| Run | What | Result |
+|---|---|---|
+| V82AC | human 1 (copy 2) views human 0's city from 2400 and closes it at 2900 | caught up in 1.6 s; the view load 7.9 s on the viewer, world reloads 0.3 s elsewhere |
+| V82AD | `--view-limits 1:60:60` | the catch-up limit (why 1) at 2510, the view ended at 2610 on every copy |
+| V82AE | `--view-limits 60:2:60 --view-stall 3300:8000` | caught up at 2572 (1.7 s), stalled at 3300; the keep-up limit (why 2) at 3798, ended at 4096 |
+| V82AF | the host views (option A) | identical; the view ended with no reason, as a close should |
+
+One bug was found and fixed: a view the viewer closed after it opened reported "Closed before it opened." (V82AC). Only a view closed while still scheduled says that now (`ViewTest`).
