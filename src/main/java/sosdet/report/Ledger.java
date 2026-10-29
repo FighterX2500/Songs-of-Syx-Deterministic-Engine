@@ -7,8 +7,8 @@ import java.util.Arrays;
 /**
  * The world's own changes to the city that the report it reads doesn't show yet (ADR 0005 §3). A transaction made at
  * world step N applies at the end of step N, so the first report to show it is one taken after N. Until that report
- * applies, the world part reads the report's value plus the change. So a report up to 60 steps old is never spent
- * twice. Changes are whole numbers (credits and goods), kept as longs so the sums are exact.
+ * applies, the world part reads the report's value plus the change. So a report of any age, however long it is in
+ * flight at a high speed (SOS-90), is never spent twice. Changes are whole numbers (credits and goods), kept as longs so the sums are exact.
  */
 final class Ledger {
 

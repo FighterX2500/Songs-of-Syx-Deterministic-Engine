@@ -211,6 +211,29 @@ class EngineTest {
     }
 
     /**
+     * SOS-90: another PC's world runs to the step before a report's promise without the next; at 25x this PC's report
+     * applies 200 steps after it is taken and promises the next 200 steps after the next report step.
+     */
+    @Test
+    void aReportsPromiseSetsHowFarTheWorldRunsWithoutTheNext() {
+        Session s = ownCity(0);
+        s.city = humans(0, 3);
+        Engine.pcHuman(0, 0);
+        Engine.pcHuman(1, 3);
+        Engine.runFreely();
+        s.clock.agreedSpeed(25);
+        ReportFeed f = new ReportFeed();
+        f.write(new CityReport(SMALL, 3, 1, 1, 300, new double[SMALL.size()], java.util.List.of()).toBytes());
+        Engine.reportsIn(1, f.drain());
+        assertEquals(299, steps(400, 1), "slot 3 promised no report before step 300");
+        java.util.List<byte[]> out = new ReportFeed().read(Engine.reportsOut());
+        CityReport last = CityReport.fromBytes(out.get(out.size() - 1), SMALL);
+        assertEquals(270, last.takenAt);
+        assertEquals(470, last.appliesAt);
+        assertEquals(500, last.nextAt);
+    }
+
+    /**
      * Plan 0006: a battle holds every PC at its Engage step until the battle PC's battle is loaded; while it runs, every
      * PC draws the step's seed, acts as the battle's human, takes no reports and keeps the others' for after it.
      */

@@ -230,6 +230,15 @@ final class Session {
     private final java.util.Map<Integer, sosdet.report.ReportFeed> feedsIn = new java.util.HashMap<>();
     /** By human slot: the step the last report from another PC was taken at (-1: none since the load). */
     final long[] receivedTakenAt = none();
+    /**
+     * By human slot: the first step a report from another PC not yet in may apply at, from the last one's promise
+     * (SOS-90); the world part runs to the step before without waiting (-1: none since the load).
+     */
+    final long[] receivedNextAt = none();
+    /** The step this PC's last report promised its next would apply at, at the earliest (SOS-90). */
+    private long reportPromise;
+    /** This frame's steps stopped to wait for another PC's report or the host's log (SOS-90). */
+    boolean waited;
     long reportsReceived;
     /** A world resync's load is running: its resets of the world never reach the city (SOS-38). */
     boolean worldLoading;
@@ -456,6 +465,27 @@ final class Session {
         views[viewer] = new View(viewer, pcOf(viewer), owner, ownerPc, nextReportStep(step));
     }
 
+    /**
+     * The step a regular report taken at {@code step} applies at: a window later at the agreed speed, never before the
+     * last report's promise (SOS-90).
+     */
+    long reportAppliesAt(long step) {
+        return Math.max(step + windowSteps(clock.agreedSpeed()), reportPromise);
+    }
+
+    /** How long a regular report and a log entry stay in flight: half a second of real time (SOS-90). */
+    static final double WINDOW_SECONDS = 0.5;
+
+    /**
+     * The lockstep window at this agreed speed, in steps: {@link #WINDOW_SECONDS} of real time, 30 steps at 1x and at
+     * least that, at most the log's longest delay (SOS-90).
+     */
+    static int windowSteps(double speed) {
+        double perSecond = speed / StepClock.stepSecondsAt(speed);
+        long steps = (long) Math.ceil(WINDOW_SECONDS * perSecond - 1e-9);
+        return (int) Math.max(AiLog.DELAY_STEPS, Math.min(AiLog.MAX_DELAY_STEPS, steps));
+    }
+
     /** The first report step after {@code step}: where a view freezes or thaws its viewer. */
     private static long nextReportStep(long step) {
         return (step / Reports.EVERY + 1) * Reports.EVERY;
@@ -571,6 +601,8 @@ final class Session {
         if (v.viewer != localHuman) {
             // the world reads the frozen report through the step before the thaw report applies (ADR 0005 §4)
             receivedTakenAt[v.viewer] = Math.max(receivedTakenAt[v.viewer], step - Reports.EVERY);
+            // the thaw report applies at the least delay after it, or later (SOS-90)
+            receivedNextAt[v.viewer] = Math.max(receivedNextAt[v.viewer], step + Reports.DELAY);
         }
     }
 
@@ -953,6 +985,8 @@ final class Session {
             f.clear();
         }
         java.util.Arrays.fill(receivedTakenAt, -1);
+        java.util.Arrays.fill(receivedNextAt, -1);
+        reportPromise = 0;
         for (int slot = 0; slot < SLOTS; slot++) {
             if (removing[slot]) {
                 removeCutoff[slot] = -1; // a human being removed sends no load report: no PC waits for one (SOS-66)
@@ -1121,7 +1155,7 @@ final class Session {
         }
         for (int h : humans()) {
             if (!remote(h) || retired(h) || frozen(h) // a viewer's world reads its last report (SOS-82)
-                    || receivedTakenAt[h] >= 0 && step <= Reports.lastReadableStep(receivedTakenAt[h])) {
+                    || receivedTakenAt[h] >= 0 && step < receivedNextAt[h]) {
                 continue;
             }
             // a human being removed is waited for only until its last report every PC reads is in (SOS-66)
@@ -1149,6 +1183,7 @@ final class Session {
         }
         reports(r.faction).stamp(r);
         receivedTakenAt[r.faction] = r.takenAt;
+        receivedNextAt[r.faction] = Math.max(receivedNextAt[r.faction], r.nextAt);
         reportsLost[r.faction] = false;
         reportsReceived++;
     }
@@ -1162,7 +1197,9 @@ final class Session {
         CitySource c = city();
         double[] v = new double[c.layout().size()];
         c.fill(v);
-        CityReport r = new CityReport(c.layout(), c.faction(), step, appliesAt, v, cityInputs);
+        // the next regular report applies a window after its step at the earliest, whatever the speed is then
+        reportPromise = Math.max(nextReportStep(step) + windowSteps(clock.agreedSpeed()), appliesAt + 1);
+        CityReport r = new CityReport(c.layout(), c.faction(), step, appliesAt, reportPromise, v, cityInputs);
         inputsSent += cityInputs.size();
         cityInputs.clear();
         byte[] bytes = r.toBytes();
@@ -1277,11 +1314,15 @@ final class Session {
 
     /** Host, every frame outside the step: the cap the slowest PC sets, and the governor's speed change (SOS-42). */
     void pace(long now) {
+        boolean w = waited;
+        waited = false;
         if (ai().mode() != AiMode.HOST) {
+            pacer.frame(now, clock.step(), clock.lastStep(), w); // only counts this PC's waits as held (SOS-90)
             return;
         }
         holdForDesync();
-        clock.paceCap(pacer.frame(now, clock.step(), clock.lastStep()));
+        ai().delay(windowSteps(clock.agreedSpeed())); // orders stay in flight the same real time at every speed
+        clock.paceCap(pacer.frame(now, clock.step(), clock.lastStep(), w));
         double speed = pacer.speed(now);
         if (speed > 0) {
             logSpeed(speed, pacer.wantedSpeed(), pacer.slowPc());

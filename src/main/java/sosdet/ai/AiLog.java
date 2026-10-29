@@ -14,23 +14,27 @@ import java.util.concurrent.ConcurrentLinkedQueue;
  *
  * <p>Host: the general's changes are captured from its own thread; the host's player's orders from the game's UI,
  * outside the step; a peer's player's orders arrive through {@link #ordersIn}. At the start of step N the simulation
- * thread stamps them N + {@link #DELAY_STEPS}, numbers them, and writes them to the outgoing log. Peer: its player's
- * orders go out through {@link #ordersOut}; the host's log comes in, and the peer never runs past the host's last
- * confirmed step + {@link #DELAY_STEPS}. Every PC, host included, applies each entry at its step, in sequence order,
- * from the same bytes.
+ * thread stamps them N + the delay ({@link #delay}: {@link #DELAY_STEPS} at 1x, more at high speeds, SOS-90), numbers
+ * them, and writes them to the outgoing log. Peer: its player's orders go out through {@link #ordersOut}; the host's
+ * log comes in, and the peer never runs past the host's horizon, the last step it has every entry of. Every PC, host
+ * included, applies each entry at its step, in sequence order, from the same bytes.
  *
  * <p>The log as bytes: a header (magic, format version, delay, start ID), then records of a tag, a length and a body:
- * an entry (step, sequence, kind, division, PC, payload) or a confirmation (the host's last drained step).
+ * an entry (step, sequence, kind, division, PC, payload) or a confirmation (the host's last drained step, and since
+ * format 8 its horizon).
  */
 public final class AiLog {
 
-    /** Steps between the host taking a change and every PC applying it: 0.5 s at 1x. */
+    /** Steps between the host taking a change and every PC applying it: 0.5 s at 1x, and the least delay. */
     public static final int DELAY_STEPS = 30;
+    /** The most delay the host stamps with, at the highest speeds (SOS-90). */
+    public static final int MAX_DELAY_STEPS = 400;
     /**
+     * 8: a confirmation carries the host's horizon too (SOS-90); one without it means a delay of {@link #DELAY_STEPS}.
      * 7: the view entry (SOS-82). 6: the remove entry (SOS-66). 5: the hold entry (SOS-53). 4: the commanders entry (SOS-15). A format 3 to 5 log
-     * is a format 7 log without the newer entries, so it is read too.
+     * is a format 8 log without the newer entries, so it is read too.
      */
-    static final int FORMAT_VERSION = 7;
+    static final int FORMAT_VERSION = 8;
     static final int OLDEST_FORMAT = 3;
     static final int MAGIC = 0x53444149; // "SDAI"
     static final int HEADER_BYTES = 4 + 4 + 4 + 8;
@@ -39,7 +43,7 @@ public final class AiLog {
     /** Applied entries kept for a desync report, the general's and the players' each. */
     static final int RECENT = 32;
     /** Applied entries kept for a resync to an earlier step: a peer is never more than the delay past the host. */
-    static final int HISTORY_STEPS = 4 * DELAY_STEPS;
+    static final int HISTORY_STEPS = 4 * MAX_DELAY_STEPS;
 
     private final AiMode mode;
     private final long startId;
@@ -63,6 +67,13 @@ public final class AiLog {
     private int nextSeq;
     /** Host: the last step drained. Peer: the host's last confirmed step. */
     private long confirmed;
+    /** Host: the delay it stamps with now (SOS-90). */
+    private volatile int delay = DELAY_STEPS;
+    /**
+     * The last step a peer may run: every entry stamped at or before it is in the log so far. It never goes back, and
+     * every later entry is stamped after it, whatever the delay does meanwhile (SOS-90).
+     */
+    private long horizon = DELAY_STEPS;
     private long applied;
     /** The mod's number for this PC (the host is 0), and the issuer of the entry being applied, if any. */
     private int localPc;
@@ -258,9 +269,26 @@ public final class AiLog {
 
     // ------------------------------------------------------------ the step (simulation thread)
 
-    /** Whether a peer may run this step: never past the host's last confirmed step + the delay. */
+    /** Whether a peer may run this step: never past the host's horizon. */
     public boolean mayRun(long step) {
-        return mode != AiMode.PEER || step <= confirmed + DELAY_STEPS;
+        return mode != AiMode.PEER || step <= horizon;
+    }
+
+    /**
+     * Host: the delay to stamp with from the next step on, {@link #DELAY_STEPS} to {@link #MAX_DELAY_STEPS}: about the
+     * same real time at every speed (SOS-90). Only the host chooses it; the stamps and the horizon carry it.
+     */
+    public void delay(int steps) {
+        if (steps < DELAY_STEPS || steps > MAX_DELAY_STEPS) {
+            throw new IllegalArgumentException("SOSDET: an AI log delay of " + steps + " steps, not " + DELAY_STEPS
+                    + " to " + MAX_DELAY_STEPS);
+        }
+        delay = steps;
+    }
+
+    /** The host's horizon as this PC knows it: the last step every entry is in for (SOS-90). */
+    public long horizon() {
+        return horizon;
     }
 
     /**
@@ -321,9 +349,11 @@ public final class AiLog {
             return;
         }
         if (mode == AiMode.HOST) {
+            // never at or before a horizon already sent, whatever the delay is now: the peers may have run to it
+            long at = Math.max(step + delay, horizon + 1);
             synchronized (aiBatch) {
                 for (AiEntry b : aiBatch.values()) {
-                    AiEntry stamped = b.stamped(step + DELAY_STEPS, nextSeq++);
+                    AiEntry stamped = b.stamped(at, nextSeq++);
                     writeEntry(stamped);
                     pending.add(stamped);
                 }
@@ -331,11 +361,12 @@ public final class AiLog {
             }
             AiEntry e;
             while ((e = captured.poll()) != null) {
-                AiEntry stamped = e.stamped(step + DELAY_STEPS, nextSeq++);
+                AiEntry stamped = e.stamped(at, nextSeq++);
                 writeEntry(stamped);
                 pending.add(stamped);
             }
             confirmed = step;
+            horizon = Math.max(horizon, step + delay);
         }
         while (!pending.isEmpty() && pending.peekFirst().step <= step) {
             AiEntry due = pending.pollFirst();
@@ -392,8 +423,8 @@ public final class AiLog {
             throw new IllegalStateException("SOSDET: logOut in mode " + mode);
         }
         ensureHeader();
-        ensureOut(1 + 4 + 8);
-        out.put(CONFIRM).putInt(8).putLong(confirmed);
+        ensureOut(1 + 4 + 16);
+        out.put(CONFIRM).putInt(16).putLong(confirmed).putLong(horizon);
         byte[] bytes = Arrays.copyOf(out.array(), out.position());
         out.clear();
         return bytes;
@@ -431,6 +462,8 @@ public final class AiLog {
                     readEntry();
                 } else if (tag == CONFIRM) {
                     confirmed = Math.max(confirmed, in.getLong());
+                    // before format 8 a confirmation was the step alone, with the delay fixed
+                    horizon = Math.max(horizon, length >= 16 ? in.getLong() : confirmed + DELAY_STEPS);
                 } else {
                     throw new IllegalStateException("SOSDET: AI log record tag " + tag);
                 }
@@ -551,6 +584,7 @@ public final class AiLog {
         ByteBuffer b = ByteBuffer.wrap(bytes);
         int hostNextSeq = b.getInt();
         confirmed = Math.max(confirmed, b.getLong());
+        horizon = Math.max(horizon, confirmed + DELAY_STEPS); // the least delay, until the host's next confirmation
         applied = b.getLong();
         for (int k = 0; k < appliedByKind.length; k++) {
             appliedByKind[k] = b.getLong();
