@@ -90,6 +90,8 @@ import view.main.VIEW;
  *   hashes &lt;file&gt;                      after the load: append this copy's state hashes to the file every frame
  *   hashpeer &lt;pc&gt; &lt;file&gt;               and read another copy's; on the first desync the engine finds, write
  *                                       &lt;tag&gt;-desync.txt (the engine's report) and a desync event
+ *   link &lt;ms&gt; &lt;jitter ms&gt;               what this copy reads from the others (AI log, orders, reports, hashes)
+ *                                       arrives that late, plus up to the jitter, in order: a slow link (SOS-94)
  *   pace &lt;steps&gt;                        host: run at most that many steps past the slowest hashpeer (0: off);
  *                                       the slowest PC caps the speed (mod spec §4; the engine's, since SOS-42)
  *   followspeed                         every copy: its game speed follows the agreed one, and the host's governor
@@ -235,6 +237,8 @@ public final class Rig implements SCRIPT {
         private long nudgeStep = -1;
         // pacing (SOS-38, in the engine since SOS-42): the host runs at most that many steps past its slowest peer
         private long paceLead;
+        /** A slow link to the other copies (SOS-94): what this copy reads from them arrives late. */
+        private final Link link = new Link();
         /** The speed line and the agreed speed last logged as events, and when the speed was last looked at. */
         private String speedNoticeSeen;
         private double speedSeen = -1;
@@ -485,6 +489,7 @@ public final class Rig implements SCRIPT {
                 }
                 byte[] in = readNew(aiFile, aiOffset);
                 aiOffset += in.length;
+                in = link.pass("ai", in, System.nanoTime());
                 if (in.length > 0) {
                     Engine.aiLogIn(in);
                 }
@@ -508,6 +513,7 @@ public final class Rig implements SCRIPT {
                 for (int i = 0; i < ordersPeers.size(); i++) {
                     byte[] in = readNew(ordersPeers.get(i), ordersOffsets[i]);
                     ordersOffsets[i] += in.length;
+                    in = link.pass("orders" + i, in, System.nanoTime());
                     if (in.length > 0) {
                         Engine.ordersIn(ordersPeerPcs.get(i), in);
                     }
@@ -532,6 +538,7 @@ public final class Rig implements SCRIPT {
                 for (int i = 0; i < reportsIn.size(); i++) {
                     byte[] in = readNew(reportsIn.get(i), reportsOffsets[i]);
                     reportsOffsets[i] += in.length;
+                    in = link.pass("reports" + i, in, System.nanoTime());
                     if (in.length > 0) {
                         Engine.reportsIn(reportsInPcs.get(i), in);
                     }
@@ -762,6 +769,7 @@ public final class Rig implements SCRIPT {
                 for (int i = 0; i < hashPeers.size(); i++) {
                     byte[] in = readNew(hashPeers.get(i), hashOffsets[i]);
                     hashOffsets[i] += in.length;
+                    in = link.pass("hashes" + i, in, System.nanoTime());
                     if (in.length > 0) {
                         Engine.hashIn(hashPeerPcs.get(i), in);
                     }
@@ -1284,6 +1292,10 @@ public final class Rig implements SCRIPT {
             case "resyncload":
                 loadResync(Paths.get(c[1]), Files.readAllBytes(Paths.get(c[2])));
                 return;
+            case "link":
+                link.set(Long.parseLong(c[1]), Long.parseLong(c[2]));
+                event("link", "\"delayMs\":" + c[1] + ",\"jitterMs\":" + c[2]);
+                return;
             case "pace":
                 paceLead = Long.parseLong(c[1]);
                 int[] pcs = new int[hashPeerPcs.size()];
@@ -1636,9 +1648,9 @@ public final class Rig implements SCRIPT {
                 return;
             }
             event("finished", String.format(Locale.ROOT, "\"tag\":\"%s\",\"endStep\":%d,\"endHash\":\"%s\",\"men\":%d,\"wallSeconds\":%.1f,"
-                    + "\"pacedFrames\":%d,\"pacedSeconds\":%.1f,\"longestHoldSeconds\":%.2f,\"stats\":%s", tag, Engine.step(),
-                    end, men(), (System.nanoTime() - started) / 1e9, Engine.heldFrames(), Engine.heldSeconds(),
-                    Engine.longestHoldSeconds(), Engine.stats().toJson()));
+                    + "\"pacedFrames\":%d,\"pacedSeconds\":%.1f,\"longestHoldSeconds\":%.2f,\"capacity\":%d,\"stats\":%s", tag,
+                    Engine.step(), end, men(), (System.nanoTime() - started) / 1e9, Engine.heldFrames(), Engine.heldSeconds(),
+                    Engine.longestHoldSeconds(), Engine.capacity(), Engine.stats().toJson()));
         }
 
         /** Step 1: the debug panel's invasion. Step 2: its launch (the end of the warning): the army enters the city. */

@@ -11,14 +11,25 @@ import java.util.function.IntToLongFunction;
  * of its last hash). The cap moves on every frame, so the host slows evenly to the slowest peer instead of running to
  * the cap and standing still until the next hash.
  *
- * <p>Governor (only when every PC runs at the agreed speed): once a second it looks at how long the host was held, and
- * how far ahead of the slowest peer it is. Held for over a tenth of that second, with the slowest peer running under
- * {@link #KEEPS_PACE} of the agreed speed's steps a second (a peer that keeps pace was held up by the link, not its
- * speed) and {@link #SETTLE_NANOS} after the last change, the agreed speed becomes the fastest one, up to the host
- * player's, whose steps per second the slowest peer ran with a tenth to spare, if that is fewer steps a second than now.
- * Unheld for {@link #CALM_NANOS} below the host player's speed, its lead over the slowest peer
- * grown by less than half the pacing lead, it tries a quarter faster; a try held again within {@link #MAX_WAIT_NANOS}
- * doubles the wait before the next one, up to that.
+ * <p>Capacity (every PC, SOS-94): the steps a second this PC could run, measured over about a second of the frames
+ * that didn't wait for another PC: the time a step takes, and the time a frame takes besides its steps (drawing), at
+ * no fewer than {@link #FPS_FLOOR} frames a second. Each PC sends it with its hashes, so the host knows how fast
+ * every PC could go, not only how fast it went: a PC that waited for the link ran slowly but could have run faster.
+ *
+ * <p>Governor (only when every PC runs at the agreed speed): once a second, {@link #SETTLE_NANOS} after the last
+ * change,
+ * <ul>
+ * <li>the slowest capacity, the host's own included, under {@link #KEEPS_PACE} of the agreed speed's steps a second
+ * lowers the agreed speed to the fastest one, up to the host player's, whose steps that capacity runs with a tenth to
+ * spare;
+ * <li>with every PC able to run the speed, waits for the link over {@link #LINK_HELD} of the time for
+ * {@link #LINK_SECONDS} seconds in a row lower it one step (a quarter), the link named as the reason ({@link #LINK});
+ * <li>calm ({@link #HELD_CALM}) for a second, {@link #CALM_NANOS} after the last change, below the host player's
+ * speed, the lead over the slowest peer grown by less than half the pacing lead, it goes up to the fastest speed every
+ * capacity allows, and at least a quarter faster. A capacity drop within {@link #MAX_WAIT_NANOS} of a raise doubles
+ * the wait before the next one, up to that; a link step down waits the calm time only.
+ * </ul>
+ * A capacity counts after {@link #CAPACITY_WARMUP} samples, and the link is judged only once every PC's is known.
  */
 final class Pacer {
 
@@ -27,16 +38,33 @@ final class Pacer {
     static final long MAX_WAIT_NANOS = 80 * SECOND;
     /** A frame gap longer than this is a pause or a load, not a hold. */
     static final long GAP_NANOS = SECOND / 2;
-    static final double HELD_TOO_LONG = 0.1;
     static final double KEEPS_PACE = 0.95;
     /** After a change, the peer's measured pace still shows the old speed for a while. */
     static final long SETTLE_NANOS = 2 * SECOND;
     static final double MARGIN = 0.9;
     static final double RAISE = 1.25;
     static final double MIN_SPEED = 0.25;
+    /** A link too slow for the speed: held over this share of a second, for this many seconds in a row (SOS-94). */
+    static final double LINK_HELD = 1.0 / 3;
+    static final int LINK_SECONDS = 5;
+    /** A second held at most this share of the time counts as calm, for a raise: a link always has some jitter. */
+    static final double HELD_CALM = 0.05;
+    /** The reason {@link #slowPc} gives for a speed the link lowered, not a PC. */
+    static final int LINK = -2;
+    /** The host's own PC number: its own capacity counts with its peers'. */
+    static final int HOST_PC = 0;
+    /** A capacity leaves this many frames a second for drawing (SOS-94). */
+    static final double FPS_FLOOR = 30;
+    /** A capacity sample needs this many steps, and this much time not waiting, in its window. */
+    static final int CAPACITY_MIN_STEPS = 10;
+    static final long CAPACITY_MIN_ACTIVE = SECOND / 5;
+    /** A capacity counts after this many samples: the first frames after a load run slow (L94A, SOS-94). */
+    static final int CAPACITY_WARMUP = 3;
 
     /** A PC's last step its hashes have reached, or -1 before the first. */
     private final IntToLongFunction reached;
+    /** A peer's capacity from its hashes (steps a second), or -1 before the first (SOS-94). */
+    private final IntToLongFunction capacityOf;
     private int[] peers = new int[0];
     /** By PC: a viewer the pace doesn't wait for while it views another city (SOS-82). */
     private final boolean[] away = new boolean[64];
@@ -69,9 +97,22 @@ final class Pacer {
     private long lagAtChange;
     private long raisedAt = -1;
     private long wait = CALM_NANOS;
+    /** Seconds in a row the link held the host too long, with every PC able to run the speed. */
+    private int linkSeconds;
 
-    Pacer(IntToLongFunction reached) {
+    /** This PC's capacity (steps a second, -1 unknown), and the window it is measured over. */
+    private double capacity = -1;
+    private int capSamples;
+    private long capStart = -1;
+    private long capLastStep = -1;
+    private long capActive;
+    private long capFrames;
+    private long capSteps;
+    private long capStepNanos;
+
+    Pacer(IntToLongFunction reached, IntToLongFunction capacityOf) {
         this.reached = reached;
+        this.capacityOf = capacityOf;
     }
 
     /** Pace by these PCs, at most {@code lead} steps ahead of the slowest; lead 0 is off. */
@@ -122,12 +163,13 @@ final class Pacer {
     /**
      * Every frame, on every PC: the step the host may run to (NO_LIMIT: no cap). A frame that found the host at the cap,
      * short of {@code limit} (the mod's last step), counts as held, as does one whose steps {@code waited} for another
-     * PC's report or the host's log (SOS-90).
+     * PC's report or the host's log (SOS-90). {@code stepNanos} is the time the frame's steps took, for the capacity.
      */
-    long frame(long now, long step, long limit, boolean waited) {
+    long frame(long now, long step, long limit, boolean waited, long stepNanos) {
         long gap = lastFrame == 0 ? 0 : now - lastFrame;
         lastFrame = now;
         boolean atCap = on() && cap != StepClock.NO_LIMIT && step >= cap && (limit == StepClock.NO_LIMIT || cap < limit);
+        measure(now, gap, step, atCap || waited, stepNanos);
         if (gap > GAP_NANOS) {
             heldSince = -1;
             windowStart = -1;
@@ -167,6 +209,54 @@ final class Pacer {
     }
 
     /**
+     * This PC's capacity, from the frames that didn't wait: a window of about a second, a moving average over windows.
+     * A long gap (a pause, a load) or a step going back (a resync) starts a new window; a window with too few steps
+     * (paused, or always waiting) leaves the capacity as it was.
+     */
+    private void measure(long now, long gap, long step, boolean held, long stepNanos) {
+        if (gap > GAP_NANOS || capStart < 0 || step < capLastStep) {
+            capStart = now;
+            capLastStep = step;
+            capActive = capFrames = capSteps = capStepNanos = 0;
+            return;
+        }
+        if (!held) {
+            capActive += gap;
+            capFrames++;
+            capSteps += step - capLastStep;
+            capStepNanos += stepNanos;
+        }
+        capLastStep = step;
+        if (now - capStart < SECOND) {
+            return;
+        }
+        if (capSteps >= CAPACITY_MIN_STEPS && capActive >= CAPACITY_MIN_ACTIVE) {
+            double sample = capacitySample(capActive, capFrames, capSteps, capStepNanos);
+            capacity = capacity < 0 ? sample : capacity * 0.5 + sample * 0.5;
+            capSamples++;
+        }
+        capStart = now;
+        capActive = capFrames = capSteps = capStepNanos = 0;
+    }
+
+    /**
+     * The steps a second a PC could run: each step takes {@code stepNanos / steps}, and each frame besides its steps
+     * the rest of the {@code active} time over {@code frames}, at the frame rate it ran or {@link #FPS_FLOOR},
+     * whichever is lower.
+     */
+    static double capacitySample(long active, long frames, long steps, long stepNanos) {
+        double perStep = Math.max(1, stepNanos) / 1e9 / steps;
+        double perFrame = Math.max(0, active - stepNanos) / 1e9 / Math.max(1, frames);
+        double fps = Math.min(FPS_FLOOR, frames / (active / 1e9));
+        return Math.max(0, 1 - fps * perFrame) / perStep;
+    }
+
+    /** This PC's capacity in steps a second, or -1 before the first measure. */
+    int capacity() {
+        return capacity < 0 || capSamples < CAPACITY_WARMUP ? -1 : (int) Math.min(Integer.MAX_VALUE, Math.round(capacity));
+    }
+
+    /**
      * The slowest peer's steps per second, from the hashes it sends (one every hash interval): a moving average, so one
      * late hash moves it a little. Reset when that peer's step goes back.
      */
@@ -198,6 +288,7 @@ final class Pacer {
         raisedAt = -1;
         wait = CALM_NANOS;
         windowStart = -1;
+        linkSeconds = 0;
     }
 
     /** After every frame: a new agreed speed, or 0 for none. */
@@ -217,31 +308,83 @@ final class Pacer {
         double held = (double) windowHeld / w;
         windowStart = now;
         windowHeld = 0;
-        if (held > HELD_TOO_LONG && peerRate > 0 && peerRate < KEEPS_PACE * agreed / StepClock.stepSecondsAt(agreed)
-                && now - changedAt >= SETTLE_NANOS) {
-            double s = fastestFor(peerRate * MARGIN);
-            if (s / StepClock.stepSecondsAt(s) >= agreed / StepClock.stepSecondsAt(agreed)) {
-                return 0; // held, so only a speed with fewer steps a second (a peer catching up measures fast)
+        if (now - changedAt < SETTLE_NANOS) {
+            linkSeconds = 0;
+            return 0;
+        }
+        double rate = agreed / StepClock.stepSecondsAt(agreed);
+        int slowCapPc = slowestCapacityPc();
+        double slowCap = slowCapPc == -1 ? -1 : capacityOfPc(slowCapPc);
+        if (slowCap >= 0 && slowCap < KEEPS_PACE * rate) {
+            linkSeconds = 0;
+            double s = fastestFor(slowCap * MARGIN);
+            if (s >= agreed) {
+                return 0;
             }
             if (raisedAt >= 0 && now - raisedAt < MAX_WAIT_NANOS) {
-                // the last try didn't hold (a peer a little too slow takes a while to use up the lead)
-                wait = Math.min(wait * 2, MAX_WAIT_NANOS);
+                wait = Math.min(wait * 2, MAX_WAIT_NANOS); // the last raise was too much for that PC
             }
             raisedAt = -1;
-            return change(s, slowestPc, now);
+            return change(s, slowCapPc, now);
         }
-        if (held == 0 && agreed < wanted && now - changedAt >= wait && lag - lagAtChange < lead / 2) {
+        // the link is judged once every PC's capacity is known: before that a PC still loading holds the others too
+        linkSeconds = held > LINK_HELD && everyCapacityKnown() ? linkSeconds + 1 : 0;
+        if (linkSeconds >= LINK_SECONDS) {
+            linkSeconds = 0;
+            double s = Math.max(MIN_SPEED, Math.round(agreed / RAISE * 10) / 10.0);
+            if (s >= agreed) {
+                return 0;
+            }
+            raisedAt = -1;
+            wait = CALM_NANOS; // the link, not a PC: come back after the calm time, never later
+            return change(s, LINK, now);
+        }
+        if (held <= HELD_CALM && agreed < wanted && now - changedAt >= wait && lag - lagAtChange < lead / 2) {
+            // at least a quarter faster: a PC that draws slowly measures little more than the speed it runs (L94A)
+            double s = Math.min(wanted, Math.round(agreed * RAISE * 10) / 10.0);
+            if (slowCap >= 0) {
+                s = Math.max(s, fastestFor(slowCap * MARGIN));
+            }
+            if (s <= agreed) {
+                return 0;
+            }
             if (raisedAt >= 0) {
-                wait = CALM_NANOS; // the last try held
+                wait = CALM_NANOS; // the last raise held
             }
             raisedAt = now;
-            double s = Math.min(wanted, Math.round(agreed * RAISE * 10) / 10.0);
-            if (s <= agreed) {
-                s = wanted;
-            }
-            return change(s, s >= wanted ? -1 : slowPc, now);
+            return change(s, s >= wanted ? -1 : slowCap >= 0 ? slowCapPc : slowPc, now);
         }
         return 0;
+    }
+
+    /** The PC with the lowest known capacity, the host's own among them, or -1 while none is known. */
+    private int slowestCapacityPc() {
+        double low = capacity();
+        int pc = low >= 0 ? HOST_PC : -1;
+        for (int p : peers) {
+            long c = away[p] ? -1 : capacityOf.applyAsLong(p);
+            if (c >= 0 && (pc == -1 || c < low)) {
+                pc = p;
+                low = c;
+            }
+        }
+        return pc;
+    }
+
+    private boolean everyCapacityKnown() {
+        if (capacity() < 0) {
+            return false;
+        }
+        for (int p : peers) {
+            if (!away[p] && capacityOf.applyAsLong(p) < 0) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private double capacityOfPc(int pc) {
+        return pc == HOST_PC ? capacity() : capacityOf.applyAsLong(pc);
     }
 
     private double change(double s, int pc, long now) {

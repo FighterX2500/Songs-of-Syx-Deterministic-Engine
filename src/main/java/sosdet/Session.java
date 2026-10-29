@@ -100,7 +100,7 @@ final class Session {
     /** Host: the game speed last seen, so a change goes into the log once (B16). */
     double seenSpeed;
     /** Host: the pacing by the slowest PC and the speed governor (SOS-42). */
-    final Pacer pacer = new Pacer(pc -> hashes.reached(pc));
+    final Pacer pacer = new Pacer(pc -> hashes.reached(pc), pc -> hashes.capacityOf(pc));
     /** Every PC's game speed follows the agreed one, and the host's governor runs (SOS-42). */
     boolean followSpeed;
     /** The desync every PC holds for, from the host's hold entry, until a resync loads it (SOS-53); or null. */
@@ -148,6 +148,8 @@ final class Session {
     boolean loading;
     /** When the running step started (0 between steps); read by the rig's stall sampler on another thread. */
     volatile long stepStartNanos;
+    /** The time this frame's steps took, for this PC's capacity (SOS-94); timing only. */
+    long frameStepNanos;
     long pathJobs;
     long pathNanos;
     /** Runs the path jobs a step queued, at its end (SOS-37). */
@@ -1316,13 +1318,17 @@ final class Session {
     void pace(long now) {
         boolean w = waited;
         waited = false;
+        long stepNanos = frameStepNanos;
+        frameStepNanos = 0;
         if (ai().mode() != AiMode.HOST) {
-            pacer.frame(now, clock.step(), clock.lastStep(), w); // only counts this PC's waits as held (SOS-90)
+            pacer.frame(now, clock.step(), clock.lastStep(), w, stepNanos); // only counts this PC's waits as held (SOS-90)
+            hashes.ownCapacity(pacer.capacity()); // goes to the host with this PC's next hash (SOS-94)
             return;
         }
         holdForDesync();
         ai().delay(windowSteps(clock.agreedSpeed())); // orders stay in flight the same real time at every speed
-        clock.paceCap(pacer.frame(now, clock.step(), clock.lastStep(), w));
+        clock.paceCap(pacer.frame(now, clock.step(), clock.lastStep(), w, stepNanos));
+        hashes.ownCapacity(pacer.capacity());
         double speed = pacer.speed(now);
         if (speed > 0) {
             logSpeed(speed, pacer.wantedSpeed(), pacer.slowPc());
@@ -1369,6 +1375,10 @@ final class Session {
         if (slowPc >= 0 && speed < wanted) {
             speedNoticeUntil = 0;
             speedNotice = "SOSDET: speed " + speedText(speed) + ", PC " + slowPc + " can't keep up (host set "
+                    + speedText(wanted) + ")";
+        } else if (slowPc == Pacer.LINK && speed < wanted) {
+            speedNoticeUntil = 0;
+            speedNotice = "SOSDET: speed " + speedText(speed) + ", the connection between the PCs can't keep up (host set "
                     + speedText(wanted) + ")";
         } else if (speedNotice != null && speedNoticeUntil == 0) {
             speedNoticeUntil = now + 5 * Pacer.SECOND;
