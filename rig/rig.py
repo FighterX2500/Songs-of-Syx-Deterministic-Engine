@@ -877,6 +877,9 @@ def main():
     ap.add_argument("--govern", action="store_true",
                     help="every copy follows the agreed speed, and the host lowers it to what the slowest copy holds"
                          " (SOS-42); every copy starts at copy 1's speed")
+    ap.add_argument("--link-delay", default="",
+                    help="MS[:JITTER]: what each copy reads from the others arrives MS ms late, plus up to JITTER ms, in"
+                         " order: a slow link between PCs (SOS-94)")
     ap.add_argument("--pace-lead", type=int, default=60,
                     help="copy 1 (the host) runs at most this many steps past the slowest copy, as the mod will (spec"
                          " section 4: the slowest PC caps the speed); at least the hash interval (%d); 0: off" % HASH_EVERY)
@@ -923,6 +926,12 @@ def main():
                         or args.follow or args.replay or args.resync or args.resync_on_desync):
         fail("--humans N needs N copies (2 or more), a city run with the AI on the host, without --follow, --replay"
              " or --resync")
+    link_delay = (0, 0)
+    if args.link_delay:
+        parts = args.link_delay.split(":")
+        if len(parts) > 2 or not all(p.isdigit() for p in parts):
+            fail("--link-delay MS[:JITTER], whole milliseconds")
+        link_delay = (int(parts[0]), int(parts[1]) if len(parts) > 1 else 0)
     if 0 < args.pace_lead < HASH_EVERY:
         fail("--pace-lead %d: the host learns a copy's step from its hashes, every %d steps; use 0 or at least %d"
              % (args.pace_lead, HASH_EVERY, HASH_EVERY))
@@ -1132,6 +1141,8 @@ def main():
                 c.send("hashpeer %d %s" % (o.k - 1, o.rig / "hashes.bin"), "hashpeer")
         if c.k == nudged:
             c.send("nudge %d" % args.nudge, "nudge")
+        if args.link_delay:
+            c.send("link %d %d" % link_delay, "link")
         if c.k == 1 and len(copies) > 1 and args.pace_lead > 0:
             c.send("pace %d" % args.pace_lead, "pace")
         if args.govern:
@@ -1360,6 +1371,8 @@ def main():
         summary.append("pacing: copy 1 ran at most %d steps past the slowest copy; held by the others in %d frames, %.1f s,"
                        " the longest hold %.2f s" % (args.pace_lead, f.get("pacedFrames", 0), f.get("pacedSeconds", 0),
                                                      f.get("longestHoldSeconds", 0)))
+        summary.append("capacity at the end, steps a second: " + ", ".join(
+            "copy %d %d" % (c.k, finished[c.k].get("capacity", -1)) for c in copies))
     if args.govern:
         for c in copies:
             changes = ["%.2fx at %d" % (e["agreed"], e["step"]) for e in c.all_of("agreedspeed")]

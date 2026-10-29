@@ -327,7 +327,9 @@ public final class Hooks {
             s.viewHashes(step);
         }
         s.viewsEnd(step); // a thaw due next step is put off while a battle runs or a world prompt is open (SOS-82)
-        s.times.record(System.nanoTime() - s.stepStartNanos);
+        long stepNanos = System.nanoTime() - s.stepStartNanos;
+        s.times.record(stepNanos);
+        s.frameStepNanos += stepNanos; // this PC's capacity (SOS-94): timing only, never fed to the simulation
         s.stepStartNanos = 0;
         s.part = -1;
         s.streams.leave();

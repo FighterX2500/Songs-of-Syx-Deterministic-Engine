@@ -1344,6 +1344,19 @@ public final class Engine {
     }
 
     /**
+     * The steps a second this PC could run, from its frames that didn't wait for another PC, or -1 before the first
+     * measure (SOS-94). Each PC sends it with its hashes; the host's governor lowers the speed only for a PC under it.
+     */
+    public static int capacity() {
+        return required().pacer.capacity();
+    }
+
+    /** Another PC's capacity, from its last hash, or -1 before the first (SOS-94). */
+    public static int capacity(int pc) {
+        return (int) required().hashes.capacityOf(pc);
+    }
+
+    /**
      * The desync every PC holds for (SOS-53), or null. The host logs the hold when its hashes first differ; every PC
      * applies it at the same step and stops there, while the mod's window names the PC and the host chooses: a world
      * resync at {@link DesyncHold#holdStep} ({@link #worldResyncSave}, then {@link #worldResyncLoad} on every PC, which

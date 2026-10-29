@@ -12,7 +12,8 @@ import java.util.List;
  * same steps; the first difference is kept as a {@link Desync}.
  *
  * <p>The hashes as bytes: a header (magic, format version, interval, sections, divisions), then one record per hash:
- * step, epoch, total, the sections, one hash per division's soldiers. The epoch counts resyncs: hashes taken before
+ * step, epoch, the PC's capacity (steps a second it could run, -1 unknown; SOS-94), total, the sections, one hash per
+ * division's soldiers. The epoch counts resyncs: hashes taken before
  * the last resync are never compared with those taken after it.
  *
  * <p>Taking a hash ({@link #take}) runs in the step: no allocation, except once for the ring and on a desync.
@@ -37,7 +38,7 @@ public final class HashLog {
     static final String[] SECTION_NAMES = {"clock", "soldiers", "divisions", "projectiles", "entities", "world",
             "report"};
 
-    static final int FORMAT_VERSION = 7; // 7: the world section mixes every stance and overlord (SOS-46)
+    static final int FORMAT_VERSION = 8; // 8: each record carries its PC's capacity (SOS-94)
     static final int MAGIC = 0x53444853; // "SDHS"
     static final int HEADER_BYTES = 4 * 5;
     static final long FNV_OFFSET = 0xcbf29ce484222325L;
@@ -53,6 +54,8 @@ public final class HashLog {
     private int taken;
     private long lastStep;
     private int epoch;
+    /** This PC's capacity, written with each hash (SOS-94). */
+    private int capacity = -1;
 
     private ByteBuffer out;
     private boolean headerWritten;
@@ -202,7 +205,7 @@ public final class HashLog {
     // ------------------------------------------------------------ the hashes as bytes
 
     private int recordBytes() {
-        return 8 + 4 + 8 + 8 * SECTIONS + 8 * divisions;
+        return 8 + 4 + 4 + 8 + 8 * SECTIONS + 8 * divisions;
     }
 
     /** The hashes taken since the last call (the header first); empty before the first hash. */
@@ -223,7 +226,7 @@ public final class HashLog {
         if (out.remaining() < recordBytes()) {
             return; // nobody has read this PC's hashes for a whole ring (single player): they count as missed there
         }
-        out.putLong(steps[slot]).putInt(epoch).putLong(total(sections[slot]));
+        out.putLong(steps[slot]).putInt(epoch).putInt(capacity).putLong(total(sections[slot]));
         for (long s : sections[slot]) {
             out.putLong(s);
         }
@@ -253,6 +256,21 @@ public final class HashLog {
                 compare(r.pc, rec);
             }
         }
+    }
+
+    /** This PC's capacity, in steps a second (-1 unknown), for the hashes it takes from now on (SOS-94). */
+    public void ownCapacity(int stepsPerSecond) {
+        capacity = stepsPerSecond;
+    }
+
+    /** Another PC's capacity from its last record, or -1 before the first (SOS-94). */
+    public long capacityOf(int pc) {
+        for (int i = 0; i < remotes.size(); i++) {
+            if (remotes.get(i).pc == pc) {
+                return remotes.get(i).capacity;
+            }
+        }
+        return -1;
     }
 
     /** The last step another PC's hashes have reached, or -1 before its first or before this PC's own first hash. */
@@ -318,6 +336,7 @@ public final class HashLog {
         int theirDivisions;
         final ArrayDeque<long[]> waiting = new ArrayDeque<>();
         long reached = -1;
+        int capacity = -1;
 
         Remote(int pc) {
             this.pc = pc;
@@ -356,6 +375,7 @@ public final class HashLog {
                 long[] rec = new long[3 + SECTIONS + divisions];
                 rec[0] = in.getLong();
                 rec[1] = in.getInt();
+                capacity = in.getInt();
                 for (int i = 2; i < rec.length; i++) {
                     rec[i] = in.getLong();
                 }
