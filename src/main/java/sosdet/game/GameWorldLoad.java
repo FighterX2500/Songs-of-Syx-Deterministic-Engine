@@ -65,10 +65,10 @@ public final class GameWorldLoad {
      * The sections the world is in: the map's resources, every faction, the raiders (the world-load spike); the
      * calendar, which the world's events and wars count by; the temporary boosts of regions and factions; and the
      * world's events, without the city's ({@link #EVENTS_KEY}) (SOS-32); and the engine's stores, relations and event
-     * timers of every human but slot 0 (SOS-52). Not the human slots: they are set once, and a resync checks they match.
+     * timers of every human but slot 0 (SOS-52); the sieges of the humans' capitals, with vanilla's sieges in WORLD (SOS-92). Not the human slots: they are set once, and a resync checks they match.
      */
     public static final List<String> KEYS = Arrays.asList("TIME", "WORLD", "FACTIONS", "RAIDING", "TEMP_EVENTS", "EVENTS",
-            GameCityDivs.KEY, GameRelations.KEY, GameEvents.KEY);
+            GameCityDivs.KEY, GameRelations.KEY, GameEvents.KEY, GameSieges.KEY);
     /** Saved and loaded with only the world's events ({@link StepParts#worldEvent}): the city's are each PC's own. */
     private static final String EVENTS_KEY = "EVENTS";
 

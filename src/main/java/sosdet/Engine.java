@@ -16,6 +16,7 @@ import sosdet.game.GameWorldLoad;
 import sosdet.game.GameWorldSetup;
 import sosdet.game.OwnArmy;
 import sosdet.game.cmd.HumanDeals;
+import sosdet.game.cmd.Sieges;
 import sosdet.game.deal.DealBook;
 import sosdet.report.CityReport;
 import sosdet.report.Field;
@@ -1016,6 +1017,44 @@ public final class Engine {
             throw new IllegalStateException("SOSDET: a cancel refused: " + why);
         }
         HumanDeals.cancel(slot);
+    }
+
+    /**
+     * Between steps: the game second the siege of the capital of the human in {@code slot} began, or -1 when it isn't
+     * besieged (SOS-92). A new siege has a new start, so the mod tells each one from the last.
+     */
+    public static int besiegedSince(int slot) {
+        required();
+        return Sieges.besiegedSince(slot);
+    }
+
+    /**
+     * Between steps: the game days left before the capital of the human in {@code slot} may be assaulted, 0 once the
+     * wait has passed, or -1 when it isn't besieged (mod spec §9, SOS-92).
+     */
+    public static int assaultInDays(int slot) {
+        required();
+        return Sieges.assaultInDays(slot);
+    }
+
+    /** Between steps: why this PC's player can't sally out of their besieged capital now, or null (SOS-92). */
+    public static String sallyRefusal() {
+        required();
+        return Sieges.sallyRefusal();
+    }
+
+    /**
+     * Between steps: this PC's player sallies out of their besieged capital: at its step the siege asks them, as at the
+     * siege's start, to fight the besiegers (mod spec §9: at any time during the siege, SOS-92). Check
+     * {@link #sallyRefusal} first.
+     */
+    public static void sallyOut() {
+        required();
+        String why = Sieges.sallyRefusal();
+        if (why != null) {
+            throw new IllegalStateException("SOSDET: a sally refused: " + why);
+        }
+        Sieges.sally();
     }
 
     /** Between steps: why this PC's player can't declare war on the human in {@code slot} now, or null. */

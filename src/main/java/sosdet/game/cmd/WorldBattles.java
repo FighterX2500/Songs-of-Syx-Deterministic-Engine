@@ -101,6 +101,9 @@ public final class WorldBattles {
         if (sallyAgainst >= 0 && choice == AUTO) {
             return false; // a sally against another human is fought or called off (SOS-83)
         }
+        if (choice == AUTO && spec instanceof WBattleSiege && Sieges.stormRefusal(((WBattleSiege) spec).besiged) != null) {
+            return false; // a human's capital is stormed only after its wait, by the assault (SOS-92)
+        }
         Hooks.worldPromptClose();
         if (sallyAgainst >= 0 && choice == ENGAGE) {
             Hooks.ownCityEngage(asked, sallyAgainst, spec::engage); // built by the defender's PC; army 1 the besieger's
