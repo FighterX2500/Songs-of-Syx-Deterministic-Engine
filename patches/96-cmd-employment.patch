@@ -1,6 +1,6 @@
 diff -ru -U2 a/settlement/room/main/employment/RoomEmployment.java b/settlement/room/main/employment/RoomEmployment.java
 --- a/settlement/room/main/employment/RoomEmployment.java	2026-06-20 10:20:06.000000000 +0500
-+++ b/settlement/room/main/employment/RoomEmployment.java	2026-10-23 02:19:14.704260800 +0500
++++ b/settlement/room/main/employment/RoomEmployment.java	2026-10-28 22:57:54.146501900 +0500
 @@ -184,6 +184,8 @@
  
  		@Override
@@ -12,7 +12,7 @@ diff -ru -U2 a/settlement/room/main/employment/RoomEmployment.java b/settlement/
  				prio = i;
 diff -ru -U2 a/settlement/room/main/employment/RoomEmployments.java b/settlement/room/main/employment/RoomEmployments.java
 --- a/settlement/room/main/employment/RoomEmployments.java	2026-06-20 09:00:50.000000000 +0500
-+++ b/settlement/room/main/employment/RoomEmployments.java	2026-10-23 02:19:14.705250200 +0500
++++ b/settlement/room/main/employment/RoomEmployments.java	2026-10-28 22:57:54.146501900 +0500
 @@ -126,6 +126,8 @@
  	}
  	
@@ -22,9 +22,32 @@ diff -ru -U2 a/settlement/room/main/employment/RoomEmployments.java b/settlement
  		employer.updateAll();
  	}
  	
+diff -ru -U2 a/util/gui/slider/GSliderInt.java b/util/gui/slider/GSliderInt.java
+--- a/util/gui/slider/GSliderInt.java	2025-11-25 08:18:46.000000000 +0500
++++ b/util/gui/slider/GSliderInt.java	2026-10-28 22:57:54.153106400 +0500
+@@ -74,7 +74,8 @@
+ 						clickSpeed1 += ds;
+ 						if (clickSpeed1 > 10)
+ 							clickSpeed1 = 10;
+-						in.inc(-(int)clickSpeed1);
++						if ((int)clickSpeed1 != 0) // SOSDET: inc(0) would send the value as it reads before the click applies, undoing it (SOS-88)
++							in.inc(-(int)clickSpeed1);
+ 						
+ 					}else {
+ 						clickSpeed1 = 0;
+@@ -112,7 +113,8 @@
+ 						clickSpeed2 += ds*2;
+ 						if (clickSpeed2 > 10)
+ 							clickSpeed2 = 10;
+-						in.inc((int)clickSpeed2);
++						if ((int)clickSpeed2 != 0) // SOSDET: inc(0) would send the value as it reads before the click applies, undoing it (SOS-88)
++							in.inc((int)clickSpeed2);
+ 						
+ 					}else {
+ 						clickSpeed2 = 0;
 diff -ru -U2 a/view/sett/ui/room/ModuleEmployment.java b/view/sett/ui/room/ModuleEmployment.java
 --- a/view/sett/ui/room/ModuleEmployment.java	2026-06-18 19:47:24.000000000 +0500
-+++ b/view/sett/ui/room/ModuleEmployment.java	2026-10-23 02:19:14.719252300 +0500
++++ b/view/sett/ui/room/ModuleEmployment.java	2026-10-28 22:57:54.146501900 +0500
 @@ -202,42 +202,48 @@
  				
  				@Override
@@ -154,7 +177,7 @@ diff -ru -U2 a/view/sett/ui/room/ModuleEmployment.java b/view/sett/ui/room/Modul
  					protected void renAction() {
 diff -ru -U2 a/view/sett/ui/room/UIPanelWorkTools.java b/view/sett/ui/room/UIPanelWorkTools.java
 --- a/view/sett/ui/room/UIPanelWorkTools.java	2026-02-05 16:12:22.000000000 +0500
-+++ b/view/sett/ui/room/UIPanelWorkTools.java	2026-10-23 02:19:14.728769500 +0500
++++ b/view/sett/ui/room/UIPanelWorkTools.java	2026-10-28 22:57:54.147498700 +0500
 @@ -79,7 +79,7 @@
  					}
  				});
@@ -186,7 +209,7 @@ diff -ru -U2 a/view/sett/ui/room/UIPanelWorkTools.java b/view/sett/ui/room/UIPan
  						}
 diff -ru -U2 a/view/sett/ui/room/UIRoomTable.java b/view/sett/ui/room/UIRoomTable.java
 --- a/view/sett/ui/room/UIRoomTable.java	2026-01-31 09:04:10.000000000 +0500
-+++ b/view/sett/ui/room/UIRoomTable.java	2026-10-23 02:19:14.729767500 +0500
++++ b/view/sett/ui/room/UIRoomTable.java	2026-10-28 22:57:54.147498700 +0500
 @@ -346,7 +346,7 @@
  					
  					s.add(e.resource.icon(), 0, 0);
@@ -198,7 +221,7 @@ diff -ru -U2 a/view/sett/ui/room/UIRoomTable.java b/view/sett/ui/room/UIRoomTabl
  					
 diff -ru -U2 a/view/sett/ui/room/priority/Row.java b/view/sett/ui/room/priority/Row.java
 --- a/view/sett/ui/room/priority/Row.java	2026-06-20 10:30:04.000000000 +0500
-+++ b/view/sett/ui/room/priority/Row.java	2026-10-23 02:19:14.721766600 +0500
++++ b/view/sett/ui/room/priority/Row.java	2026-10-28 22:57:54.148495800 +0500
 @@ -123,7 +123,8 @@
  			protected void clickA() {
  				for (Card c : cardsSmall) {
@@ -231,7 +254,7 @@ diff -ru -U2 a/view/sett/ui/room/priority/Row.java b/view/sett/ui/room/priority/
  				dragging = null;
 diff -ru -U2 a/view/sett/ui/room/priority/Table.java b/view/sett/ui/room/priority/Table.java
 --- a/view/sett/ui/room/priority/Table.java	2026-05-20 09:41:50.000000000 +0500
-+++ b/view/sett/ui/room/priority/Table.java	2026-10-23 02:19:14.722768100 +0500
++++ b/view/sett/ui/room/priority/Table.java	2026-10-28 22:57:54.148495800 +0500
 @@ -66,7 +66,8 @@
  							if (fRoom.active(e)) {
  								for (FilterEntry<WGROUP> g : filterGroup.all) {
@@ -254,7 +277,7 @@ diff -ru -U2 a/view/sett/ui/room/priority/Table.java b/view/sett/ui/room/priorit
  						}
 diff -ru -U2 a/view/sett/ui/room/priority/UIWorkPrio.java b/view/sett/ui/room/priority/UIWorkPrio.java
 --- a/view/sett/ui/room/priority/UIWorkPrio.java	2026-05-17 09:15:54.000000000 +0500
-+++ b/view/sett/ui/room/priority/UIWorkPrio.java	2026-10-23 02:19:14.723768500 +0500
++++ b/view/sett/ui/room/priority/UIWorkPrio.java	2026-10-28 22:57:54.148495800 +0500
 @@ -112,7 +112,8 @@
  						if (fRoom.active(e)) {
  							for (FilterEntry<WGROUP> g : filterGroup.all) {

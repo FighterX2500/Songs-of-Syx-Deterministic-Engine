@@ -293,6 +293,30 @@ class EngineTest {
         assertEquals(0, s.retreatSide(1));
     }
 
+    /** SOS-89: a message is shown on the PC of the human FACTIONS.player() is when it is sent, and nowhere else. */
+    @Test
+    void aMessageShowsOnlyOnItsHumansPc() {
+        assertTrue(Hooks.messageHere(), "without a session: every message");
+        begin();
+        Session s = Engine.session();
+        s.city = humans(0, 3);
+        s.localHuman = 3;
+        assertTrue(Hooks.messageHere(), "outside the step: this PC's player's");
+        s.part = StepParts.WORLD_PART;
+        s.currentHuman = 0;
+        assertFalse(Hooks.messageHere(), "the world part working on slot 0, a raid on the host: not here");
+        s.currentHuman = 3;
+        assertTrue(Hooks.messageHere(), "the world part working on this PC's human");
+        s.part = -1;
+        s.viewHuman = 0;
+        assertFalse(Hooks.messageHere(), "the viewed city's messages: its owner's");
+        s.viewHuman = -1;
+        s.loading = true;
+        s.part = StepParts.WORLD_PART;
+        s.currentHuman = 0;
+        assertTrue(Hooks.messageHere(), "while a game loads: every message");
+    }
+
     /** SOS-46 M3 to M5: a per-human slice is the human's ordinal among the human slots, whoever reads. */
     @Test
     void eachHumanReadsItsOwnSlice() {
