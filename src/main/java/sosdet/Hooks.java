@@ -301,6 +301,10 @@ public final class Hooks {
             s.part = StepParts.CITY; // the city tail: the world part's changes to the city apply (ADR 0005 §3)
             s.txns.apply(s.ownTxns); // this PC's human's only (ADR 0004)
         }
+        if ((step & 1) == 0 && (s.battle == null || s.battle.awaiting)) {
+            s.part = StepParts.CITY;
+            sosdet.game.GameProduction.refresh(); // the goods window's rates: the scan vanilla's UI drove (SOS-102)
+        }
         if (s.hashes.due(step)) {
             // an own city's draws are its own: the world part's alone are counted (ADR 0005 §1); in a battle every PC
             // runs the same game, its draws counted from the battle's load (plan 0006)
