@@ -71,6 +71,7 @@ public final class GameHumans extends Savable {
     private final boolean[] retired = new boolean[FACTIONS.MAX()];
     private final GameDeals deals = new GameDeals();
     private final GameTariffs tariffs = new GameTariffs();
+    private final GameSieges sieges = new GameSieges();
 
     /** {@code FACTIONS}'s constructor, at its end: {@code all} and {@code npcs} are its own lists. */
     public GameHumans(ArrayList<Faction> all, ArrayList<FactionNPC> npcs) throws IOException {
@@ -86,6 +87,7 @@ public final class GameHumans extends Savable {
         GAME.saver().add(new GameEvents(this)); // the other humans' event timers and raids, after EVENTS's and RAIDING's (SOS-46 M4)
         GAME.saver().add(deals); // the deals between humans (SOS-72)
         GAME.saver().add(tariffs); // the tariffs between humans (SOS-77)
+        GAME.saver().add(sieges); // the sieges of the humans' capitals (SOS-92)
     }
 
     /** This game's humans: the {@code GameHumans} its {@code FACTIONS} holds. */
@@ -105,6 +107,11 @@ public final class GameHumans extends Savable {
     /** The tariffs between this game's humans (SOS-77). */
     public GameTariffs tariffs() {
         return tariffs;
+    }
+
+    /** The sieges of this game's humans' capitals (SOS-92). */
+    public GameSieges sieges() {
+        return sieges;
     }
 
     /** True for a human faction: every Player in the game is one (the spares are in no slot). */
@@ -162,6 +169,7 @@ public final class GameHumans extends Savable {
         retired[slot] = true;
         deals.book().dropHuman(slot); // their open deals close as dropped (SOS-72)
         tariffs.book().dropHuman(slot); // and their tariffs go, both ways (SOS-77)
+        sieges.book().dropHuman(slot); // and the siege of their capital (SOS-92)
         Faction f = all.get(slot);
         try {
             RAID_RETIRE.invoke(GAME.raiders(), sosdet.Hooks.humanIndex(f)); // its raider leaves; its other slices stand still

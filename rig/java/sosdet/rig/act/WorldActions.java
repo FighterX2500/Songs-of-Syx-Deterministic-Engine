@@ -45,6 +45,28 @@ public final class WorldActions {
     private WorldActions() {
     }
 
+    /** sallyother: waiting for a world prompt that asks another human (test tooling: one rig process, one run). */
+    private static boolean sallyAwaiting;
+
+    /**
+     * After each frame, outside the step, as the prompt answers: with {@code sallyother} queued, sallies out once a
+     * world-battle prompt that asks another human is open, such as the besieger's siege window (SOS-92).
+     */
+    public static void afterFrame() {
+        if (!sallyAwaiting || Hooks.worldPrompt() == null || Hooks.worldPromptHuman() == FACTIONS.player().index()) {
+            return;
+        }
+        sallyAwaiting = false;
+        String why = Engine.sallyRefusal();
+        if (why != null) {
+            Rig.note("sally during slot " + Hooks.worldPromptHuman() + "'s prompt refused: " + why);
+            return;
+        }
+        Engine.sallyOut();
+        Rig.note("sallies out during slot " + Hooks.worldPromptHuman() + "'s prompt "
+                + Hooks.worldPrompt().getClass().getName() + " at step " + Engine.step());
+    }
+
     /** Queues the action named by {@code a[0]} to run outside the step; false if this area has no such action. */
     public static boolean run(String[] a) {
         switch (a[0]) {
@@ -666,6 +688,22 @@ public final class WorldActions {
             });
             return true;
         }
+        case "wsiege": // wsiege: notes each human's capital siege: since, days to the assault, Storm's refusal, and this human's sally (SOS-92)
+            Rig.later(() -> Rig.note(siege()));
+            return true;
+        case "sally": // sally: this human sallies out of its besieged capital (SOS-92); refused when it can't
+            Rig.later(() -> {
+                String why = Engine.sallyRefusal();
+                if (why != null) {
+                    throw new IllegalStateException("sally refused: " + why);
+                }
+                Engine.sallyOut();
+                Rig.note("sallies out");
+            });
+            return true;
+        case "sallyother": // sallyother: this human sallies out once a world prompt asking another human is open (SOS-92)
+            sallyAwaiting = true;
+            return true;
         case "dealwar": { // dealwar <slot>: declares war on the human in <slot> at once (SOS-74)
             int slot = Integer.parseInt(a[1]);
             Rig.later(() -> {
@@ -862,6 +900,24 @@ public final class WorldActions {
     }
 
     /** The player's state in one line: what an agent player reads before it acts. */
+    /** Each human's capital siege (SOS-92), and whether a goods deal with each could go now. */
+    private static String siege() {
+        StringBuilder b = new StringBuilder("siege:");
+        for (int slot : Hooks.humanSlots()) {
+            Region cap = FACTIONS.getByIndex(slot).capitolRegion();
+            b.append(" slot ").append(slot).append(" since ").append(Engine.besiegedSince(slot)).append(" assault in ")
+                    .append(Engine.assaultInDays(slot)).append(" days, storm: ")
+                    .append(cap == null ? "no capital" : sosdet.game.cmd.Sieges.stormRefusal(cap));
+            if (slot != FACTIONS.player().index()) {
+                DealBook.Terms goods = new DealBook.Terms(DealBook.NO_TREATY, 0, 0, new int[] {0, 1}, new int[0]);
+                b.append(", a goods deal: ").append(Engine.dealRefusal(slot, goods));
+            }
+            b.append(';');
+        }
+        return b.append(" sally: ").append(Engine.sallyRefusal()).append(", prompt open: ")
+                .append(Hooks.worldPrompt() == null ? "none" : Hooks.worldPrompt().getClass().getSimpleName()).toString();
+    }
+
     private static String status() {
         game.faction.player.Player p = FACTIONS.player();
         StringBuilder b = new StringBuilder("status slot ").append(p.index())

@@ -364,13 +364,12 @@ public final class World {
     }
 
     /**
-     * True for another human's region that can't be besieged: its capitol, which falls only to the assault of mod spec
-     * §9, not built yet (a human's lost capitol would leave it without one, audit B1 to B4), and any region while the
-     * two aren't at war: between humans only the war command declares it, not the siege question (SOS-74).
+     * True for another human's region that can't be besieged: any region while the two aren't at war, since between
+     * humans only the war command declares it, not the siege question (SOS-74). At war a human's capital may be
+     * besieged too (SOS-92): it falls only to the assault of mod spec §9, after the siege's wait ({@link Sieges}).
      */
     private static boolean otherHumanRefused(Region reg, WArmy a) {
-        return reg.faction() instanceof Player && reg.faction() != a.faction()
-                && (reg.capitol() || !DIP.WAR().is(reg.faction(), a.faction()));
+        return reg.faction() instanceof Player && reg.faction() != a.faction() && !DIP.WAR().is(reg.faction(), a.faction());
     }
 
     // ---------------------------------------------------------------- capture (hooks)

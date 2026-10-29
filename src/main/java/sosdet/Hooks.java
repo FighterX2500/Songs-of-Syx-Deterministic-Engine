@@ -679,6 +679,15 @@ public final class Hooks {
         return before;
     }
 
+    /**
+     * True for a human whose capital is besieged (mod spec §9, SOS-92): the market brings it nothing and takes nothing
+     * from it, from NPCs or other humans. World state, the same on every PC. Per good and trade partner: no allocation.
+     */
+    public static boolean humanBlockaded(Object faction) {
+        return Engine.session() != null && faction instanceof Player
+                && sosdet.game.GameHumans.get().sieges().book().besieged(((Player) faction).index());
+    }
+
     /** True when the world part's faction updater runs this faction: no human's own in a session. */
     public static boolean worldUpdatesFaction(Object faction) {
         return Engine.session() == null || StepParts.worldUpdatesFaction(faction);

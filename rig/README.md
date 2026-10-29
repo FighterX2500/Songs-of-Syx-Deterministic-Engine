@@ -109,7 +109,7 @@ Probes for a player. Each notes what it reads between steps and changes nothing:
 - `wevents`: each human's war timer and warner, rebellion timer and realm cursor, raid and raid timer.
 - `wsprite <army>`: the call the army's sprite makes each frame it is drawn (`WPath.moving`), on this copy only. Rig copies don't draw the world map, so a UI call that writes world state shows only with this probe (PT3).
 
-World actions for several humans: `wpeace` makes the peace deal with the strongest NPC at war with this human, at the denari it asks. `wraiderpay` and `wallyhelp` answer this human's own raider. `wbesiegenear` skips settlements of other humans.
+World actions for several humans: `wpeace` makes the peace deal with the strongest NPC at war with this human, at the denari it asks. `wraiderpay` and `wallyhelp` answer this human's own raider. `wbesiegenear` skips settlements of other humans. `wsiege` notes each human capital's siege (its start, the days to the assault, Storm's refusal, and whether a goods deal could go) and this human's sally refusal; `sally` sallies this human out of its besieged capital, and `sallyother` does so as soon as a world prompt asking another human is open, such as the besieger's siege window (SOS-92).
 
 When the world section differs, the desync report lists the world at that step part by part, with every army and each human's timers, so two copies' reports can be compared line by line.
 

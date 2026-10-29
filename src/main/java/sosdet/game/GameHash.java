@@ -209,7 +209,7 @@ public final class GameHash implements StateSource {
         if (w != null) {
             w.eventHumans = GameEvents.keep(w.events);
         }
-        h = part(w, 7, GameTariffs.hash(GameDeals.hash(h))); // the tariffs with the deals: both are diplomacy between humans
+        h = part(w, 7, GameSieges.hash(GameTariffs.hash(GameDeals.hash(h)))); // the tariffs and sieges with the deals: between humans
         return part(w, 8, HashLog.mix(h, Double.doubleToLongBits(TIME.currentSecond())));
     }
 

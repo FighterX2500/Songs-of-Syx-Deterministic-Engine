@@ -461,6 +461,10 @@ public final class HumanDeals {
         if (why != null) {
             return why;
         }
+        why = blockadeRefusal(from, to, terms);
+        if (why != null) {
+            return why;
+        }
         why = sideRefusal(from, terms.fromCredits, terms.fromGoods());
         return why != null ? why : sideRefusal(to, terms.toCredits, terms.toGoods());
     }
@@ -521,6 +525,18 @@ public final class HumanDeals {
             n += chosen[reached.get(i).reg.index()] ? 1 : 0;
         }
         return n == regions.length ? null : "Each region must border " + receiver.name + "'s land, or another region given with it.";
+    }
+
+    /**
+     * Why goods in {@code terms} can't go between {@code from} and {@code to}: no goods reach a besieged capital or
+     * leave it (mod spec §9, SOS-92). Money still moves. Null when nothing stops them.
+     */
+    static String blockadeRefusal(Faction from, Faction to, Terms terms) {
+        if (terms.fromGoods().length == 0 && terms.toGoods().length == 0) {
+            return null;
+        }
+        Faction besieged = Hooks.humanBlockaded(from) ? from : Hooks.humanBlockaded(to) ? to : null;
+        return besieged == null ? null : besieged.name + "'s capital is besieged: no goods can reach it or leave it.";
     }
 
     /** Why {@code from} can't cancel every treaty with {@code to} at once; null when they can. */

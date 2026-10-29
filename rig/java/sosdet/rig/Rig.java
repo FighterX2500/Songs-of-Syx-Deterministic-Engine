@@ -454,6 +454,7 @@ public final class Rig implements SCRIPT {
                 if (inBattleAction != null) {
                     inBattle();
                 }
+                WorldActions.afterFrame();
                 if (city && !showMessages) {
                     // the city's messages (the invasion's, a noble's death...) would pause the game waiting for a human
                     VIEW.inters().messages.hide();
