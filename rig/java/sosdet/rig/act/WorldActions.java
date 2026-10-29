@@ -701,6 +701,19 @@ public final class WorldActions {
                 Rig.note("sallies out");
             });
             return true;
+        case "siegewait": { // siegewait <slot>: the siege of the human in <slot>'s capital began long enough ago that its
+            // wait has passed, at its step on every copy (test tooling, SOS-92 B)
+            int slot = Integer.parseInt(a[1]);
+            Rig.later(() -> {
+                sosdet.game.cmd.Sieges.waitPassedForTest(slot);
+                Rig.note("siege wait of slot " + slot + " passed");
+            });
+            return true;
+        }
+        case "wassault": // wassault: notes the assault running and the last one over (SOS-92 B)
+            Rig.later(() -> Rig.note("wassault step " + Engine.step() + ": now " + Engine.assault() + "; last "
+                    + Engine.lastAssault() + "; invading " + settlement.main.SETT.INVADOR().invading()));
+            return true;
         case "sallyother": // sallyother: this human sallies out once a world prompt asking another human is open (SOS-92)
             sallyAwaiting = true;
             return true;

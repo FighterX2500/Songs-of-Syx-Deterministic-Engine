@@ -37,3 +37,56 @@ Rig runs on Mogus-72 with three humans (`--humans 3 --make-humans 2,24`, copy 3 
 - **S92E** (24,000 steps, `--unanswered`, `sallyother`): the defender's first question ran out at step 10,765 and the besieger's siege window opened; the sally made during that window was taken, not refused, and asked the defender as soon as the window closed (step 13,166).
 
 Not covered by a run: the wait running out (Storm then stays refused until step B), and the mod's popup and Sally out button, which need a campaign with soldiers (the owner's playtest).
+
+## Step B: design (2026-10-30, decided as recommended while the owner was away)
+
+The mod plan says every PC loads the defender's city "with `loadView`'s path". The audit below settles how, and what is reused.
+
+### The vehicle: a view of the defender's city by every other PC, with the world held
+
+- **Not the field-battle path.** `battleIn` and `MapBattles.loadBattle` reload a battle through vanilla's battle state (`VIEW.b().state().reloadBattle`). An assault runs in the settlement, with no `BattleState`.
+- **The view path fits.** `GameView.saveForView` and `ViewCity.cityState` already carry an owner's whole city with the engine state a save leaves out. A viewer loads it, runs it in lockstep with the owner's PC, and hashes it (`viewHashes`). At the thaw, the viewer loads its own game back and puts the world it ran into it (`viewBackStart`, `viewBackWorld`, and SOS-97's `HeldTxn`).
+- **Engage at Storm's step S.** Every human except the defender gets a view of the defender's city, scheduled by the engine itself inside the step: not through the host's log, and with no Allow (the attacker and every other player watch the assault). The views freeze at the next report step, as any view does; the attackers' armies leave the world there.
+- **The world is held.** From the freeze until the assault ends, the world part doesn't run on any PC (new: `Session.assault`, checked where `stepPart` runs the world part). The defender's city runs on every PC. Every other city is frozen, as a viewer's is. This matches mod spec §4 ("the world pauses") without a battle-mode load.
+
+### The invasion
+
+- At the first step after every PC has loaded (the view's RUNNING on every viewer, as the host's log confirms), every PC starts the same invasion in the defender's city, in the city tail: `SETT.INVADOR().invade(spec, null)`.
+- The `InvasionSpec` is built from lockstep world data at S:
+  - the besieging armies' divisions (`WDIV.generate`, as `ResolverPlayer.invadeCapitol` does), with artillery and supplies;
+  - the world position, which sets the entry edge;
+  - `fi` = the attacker's faction index.
+- It is kept in the assault record, so a PC that loads late builds nothing itself.
+- The attacker's boosts come from its city report, as army 1's do in SOS-83 (`BValue`).
+- The state starts at BOMBARD (decision 2). Vanilla's `Prompt` (the WARNING phase's Attack first) is not sent.
+- **Audit of `Invasion.update` for lockstep:**
+  - The `RND` draws are on the city's stream, which a view seeds as the owner's.
+  - `TIME`, `STATS` and `SETT` are city state, the same on every PC.
+  - `VIEW.s().getWindow().centererTile.set` moves this PC's camera only (cosmetic); a patch skips it on PCs that don't command.
+  - `MessageText.send` goes through `Hooks.messageHere`.
+  - `FACTIONS.otherFactionSet` is game state, the same on every PC.
+  - The prisoners prompt (`VIEW.inters().yesNo`) must become a defender's command at a step (step C).
+  - `STANDINGS.emergency` is city state.
+  - The audit found no reads of per-PC state other than the camera.
+
+### Commanders
+
+- The commanders table (`Commanders`, `captureCommanders`) maps divisions to PCs, and the settlement has the same `GAME.ARMIES()`: army 0 is the city's, army 1 the invaders'.
+- The host sends the table as the invasion starts:
+  - army 0 to the defender's PC;
+  - army 1 to the attacker's PC;
+  - the rest to the host's AI.
+- Military orders go as the battle's already do.
+- City commands other than military orders, from any PC, are refused while the assault runs (with a reason).
+
+### The end
+
+- The assault ends when `Invador.invading()` turns false at a step (a win, a loss, or the 5-day retreat), the same on every PC. The record keeps the outcome: the enemy's and the city's losses, and who won.
+- Every view of it ends there (`View.GAME`) and thaws as views do. The world resumes from the freeze step.
+- The defender's PC keeps the city as it is: every PC ran the same city.
+- The outcome applies to the world at the thaw step: the survivors, the siege record and the defeat. That is step C.
+
+### Step B's tests
+
+- **Unit tests:** the assault record's save and load round trip; the refusals (a city command during the assault; Storm before the wait ends).
+- **Rig:** Mogus-72 with 2 humans, slot 1 besieging slot 0, Storm after the wait, using a rig shortcut that sets the siege's start back. Every copy's city stays identical (the view hash) to the assault's end.

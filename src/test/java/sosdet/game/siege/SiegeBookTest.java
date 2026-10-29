@@ -42,6 +42,18 @@ class SiegeBookTest {
     }
 
     @Test
+    void aBackdatedSiegeHasWaitedAndKeepsItsPopulation() {
+        SiegeBook b = new SiegeBook();
+        b.begin(3, 10_000, 3500);
+        b.backdate(3, (int) (4 * SEASON));
+        assertEquals(10_000 - 4 * SEASON, b.startSecond(3));
+        assertEquals(3500, b.population(3));
+        assertEquals(0, b.waitLeft(3, 10_000, SEASON));
+        b.backdate(4, (int) SEASON); // no siege there: nothing
+        assertFalse(b.besieged(4));
+    }
+
+    @Test
     void aSiegeThatEndsStartsOverNextTime() {
         SiegeBook b = new SiegeBook();
         b.begin(2, 100, 800);

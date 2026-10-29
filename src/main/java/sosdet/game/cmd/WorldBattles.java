@@ -105,6 +105,10 @@ public final class WorldBattles {
             return false; // a human's capital is stormed only after its wait, by the assault (SOS-92)
         }
         Hooks.worldPromptClose();
+        if (choice == AUTO && spec instanceof WBattleSiege && Sieges.humanCapital(((WBattleSiege) spec).besiged)) {
+            Sieges.storm(asked, (WBattleSiege) spec); // the assault, in lockstep on every PC (SOS-92 B)
+            return true;
+        }
         if (sallyAgainst >= 0 && choice == ENGAGE) {
             Hooks.ownCityEngage(asked, sallyAgainst, spec::engage); // built by the defender's PC; army 1 the besieger's
         } else if (choice == AUTO) {

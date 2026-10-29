@@ -1028,6 +1028,25 @@ public final class Engine {
         return Sieges.besiegedSince(slot);
     }
 
+    /** The assault on a human's capital running or waiting for its views to thaw, or null (SOS-92 step B). */
+    public static Assault assault() {
+        return required().assault;
+    }
+
+    /**
+     * Between steps: the next NPC invasion of a human's capital the world started, the same on every PC, as {step,
+     * human, invading faction's index or -1 for rebels and raiders}; null when there is none (SOS-92 step F). Each is
+     * handed out once.
+     */
+    public static long[] invasionNoticeTake() {
+        return required().invasionNotices.poll();
+    }
+
+    /** The last assault over, with its outcome, or null before the first (SOS-92 step B). */
+    public static Assault lastAssault() {
+        return required().lastAssault;
+    }
+
     /**
      * Between steps: the game days left before the capital of the human in {@code slot} may be assaulted, 0 once the
      * wait has passed, or -1 when it isn't besieged (mod spec §9, SOS-92).
