@@ -120,6 +120,19 @@ class ViewTest {
         assertThrows(IllegalArgumentException.class, () -> l.limits(0, 1, 1));
     }
 
+    @Test
+    void aWatchRunsBehindForAsLongAsItLikesUpToItsOneLimit() {
+        ViewLimit l = new ViewLimit();
+        l.battle(10_800);
+        l.start(0);
+        assertEquals(View.OPEN, l.update(600 * S, 10_800), "ten minutes behind, at the limit: a city's would have ended");
+        assertEquals(View.FELL_BEHIND, l.update(601 * S, 10_801));
+        l.battle(-1);
+        l.start(1000 * S);
+        assertEquals(View.OPEN, l.update(1000 * S, 601));
+        assertEquals(View.NOT_CAUGHT_UP, l.update(1061 * S, 601), "the next view is a city's again");
+    }
+
     // ------------------------------------------------------------ ends, the same on every PC
 
     /** The view of human 5's city by human 3, from step 10: every PC freezes human 3 at step 30. */
