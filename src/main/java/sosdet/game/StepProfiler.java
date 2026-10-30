@@ -1,6 +1,8 @@
 package sosdet.game;
 
+import java.util.Arrays;
 import java.util.IdentityHashMap;
+import java.util.Locale;
 
 import game.debug.Profiler;
 
@@ -9,12 +11,12 @@ import game.debug.Profiler;
  * the time each class takes. The step loop (patch 10) times every game part as one entry, and the parts that log their
  * own pieces (rooms, entities, terrain...) show them nested. Timing only: nothing here is read by the simulation.
  *
- * <p>No allocation once each class has its slot: fixed arrays, and slot numbers under 128 (Integer's cache). A class
- * started again inside itself counts once, from its outer start.
+ * <p>No allocation once each class has its slot: fixed arrays, and the slot numbers boxed once, when a class first
+ * shows. A class started again inside itself counts once, from its outer start.
  */
 public final class StepProfiler implements Profiler {
 
-    private static final int MAX = 128;
+    private static final int MAX = 512;
 
     private final IdentityHashMap<Class<?>, Integer> slots = new IdentityHashMap<>();
     private final Class<?>[] classes = new Class<?>[MAX];
@@ -73,16 +75,16 @@ public final class StepProfiler implements Profiler {
         StringBuilder b = new StringBuilder("step profile over ").append(steps).append(" steps: ");
         if (steps == 0)
             return b.append("none").toString();
-        b.append(String.format("%.3f", stepNanos / 1e6 / steps)).append(" ms a step");
+        b.append(String.format(Locale.ROOT, "%.3f", stepNanos / 1e6 / steps)).append(" ms a step");
         for (int i = 0; i < count; i++) {
-            if (total[i] == 0)
-                continue;
+            if (total[i] / 1e6 / steps < 0.0005)
+                continue; // under a microsecond a step: left out, so the line stays readable
             b.append(" | ");
             for (int d = 0; d < depth[i]; d++)
                 b.append('-');
-            b.append(name(classes[i])).append(' ').append(String.format("%.3f", total[i] / 1e6 / steps));
+            b.append(name(classes[i])).append(' ').append(String.format(Locale.ROOT, "%.3f", total[i] / 1e6 / steps));
         }
-        java.util.Arrays.fill(total, 0);
+        Arrays.fill(total, 0);
         steps = 0;
         stepNanos = 0;
         return b.toString();
