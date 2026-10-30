@@ -1,5 +1,6 @@
 package sosdet.game.cmd;
 
+import java.util.Arrays;
 import java.util.List;
 
 import game.faction.FACTIONS;
@@ -21,6 +22,7 @@ import sosdet.game.deal.DealBook.Outcome;
 import sosdet.game.deal.DealBook.Proposal;
 import sosdet.game.deal.DealBook.Terms;
 import sosdet.game.deal.TariffBook;
+import sosdet.game.siege.AssaultTerms;
 import snake2d.util.sets.LIST;
 import world.WORLD;
 import world.entity.caravan.Shipment;
@@ -362,6 +364,41 @@ public final class HumanDeals {
      */
     public static boolean tradePasses(Faction trader, Faction land) {
         return trader instanceof Player && land instanceof Player && trader != land && !DIP.WAR().is(trader, land);
+    }
+
+    /**
+     * In the world part, every PC: what the attacker took after reaching the human {@code defender}'s throne (SOS-92
+     * step D), as a deal the defender can't refuse. A sack moves {@code percent} of the defender's money and of each of
+     * its goods, read from its city's report, by a caravan to the attacker's capital, and ends the war; vassalage makes
+     * the defender the attacker's vassal with a tribute of {@code percent}. Returns the money taken.
+     */
+    static int assaultTerms(int defender, int attacker, int kind, int percent) {
+        Faction d = human(defender);
+        Faction a = human(attacker);
+        if (kind == AssaultTerms.VASSALAGE) {
+            execute(d, a, new Terms(DealBook.VASSAL, 0, 0, new int[0], new int[0], new int[0], new int[0], percent));
+            return 0;
+        }
+        int credits;
+        int[] goods;
+        int before = Hooks.currentHumanSwap(d);
+        try {
+            credits = AssaultTerms.share((int) d.credits().credits(), percent);
+            int[] all = new int[TR.ALL().size() * 2];
+            int n = 0;
+            for (int i = 0; i < TR.ALL().size(); i++) {
+                int amount = AssaultTerms.share(d.res().getAvailable(TR.ALL().get(i)), percent);
+                if (amount > 0) {
+                    all[n++] = i;
+                    all[n++] = amount;
+                }
+            }
+            goods = Arrays.copyOf(all, n);
+        } finally {
+            Hooks.currentHumanSwap(before);
+        }
+        execute(d, a, new Terms(DealBook.CANCEL_ALL, credits, 0, goods, new int[0]));
+        return credits;
     }
 
     private static void execute(Faction from, Faction to, Terms t) {

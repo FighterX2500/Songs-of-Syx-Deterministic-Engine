@@ -784,6 +784,9 @@ def main():
     ap.add_argument("--agreed-speed", type=float, default=0,
                     help="the speed every copy agrees on at the start, which sets the step length (1/60 s at 1x or"
                          " slower, 1/16 s above); default: copy 1's speed")
+    ap.add_argument("--answer-copies", default="1",
+                    help="--humans runs: the copies whose player answers its own world-battle prompts, e.g. 1,2 so a"
+                         " besieger on copy 2 storms (SOS-92); default: copy 1")
     ap.add_argument("--unanswered", action="store_true",
                     help="copy 1 leaves world-battle prompts unanswered, so their time runs out; reports each (SOS-45)")
     ap.add_argument("--engage", type=int, default=-1,
@@ -969,6 +972,9 @@ def main():
                  % args.copies)
         remove_copy, remove_at = int(k), int(at)
     engage_copies = {int(k) for k in args.engage_copy.split(",")}
+    answer_copies = {int(k) for k in args.answer_copies.split(",")}
+    if any(not 1 <= k <= args.copies for k in answer_copies) or answer_copies != {1} and not args.humans:
+        fail("--answer-copies is for --humans runs, copies from 1 to %d" % args.copies)
     if any(not 1 <= k <= args.copies for k in engage_copies) or engage_copies != {1} and not (args.humans and args.engage >= 0):
         fail("--engage-copy K[,K...] is for --engage --humans runs, K from 1 to %d" % args.copies)
     follower_saves = [s for s in args.follower_saves.split(",") if s]
@@ -1158,7 +1164,7 @@ def main():
                    "answerprompts")
             if args.in_battle:
                 c.send("inbattle " + args.in_battle, "inbattlearmed")
-        elif c.k == 1 and args.scenario == "city" and not args.play and not args.replay:
+        elif c.k in answer_copies and args.scenario == "city" and not args.play and not args.replay:
             if args.unanswered:  # nobody answers: each world-battle prompt's time runs out (SOS-45)
                 c.send("answerprompts wait", "answerprompts")
             else:

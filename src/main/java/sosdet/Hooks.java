@@ -305,6 +305,10 @@ public final class Hooks {
             s.part = StepParts.CITY;
             sosdet.game.GameProduction.refresh(); // the goods window's rates: the scan vanilla's UI drove (SOS-102)
         }
+        if (s.assault != null) {
+            s.part = StepParts.CITY; // the city tail: the assault's invasion starts or ends here (SOS-92 B)
+            s.assaultStep(step);
+        }
         if (s.hashes.due(step)) {
             // an own city's draws are its own: the world part's alone are counted (ADR 0005 §1); in a battle every PC
             // runs the same game, its draws counted from the battle's load (plan 0006)
@@ -345,7 +349,69 @@ public final class Hooks {
      */
     public static boolean worldHeld() {
         Session s = Engine.session();
-        return s != null && s.worldHeld;
+        return s != null && (s.worldHeld || s.assaultHolds(s.clock.step())); // an assault holds it too (SOS-92 B)
+    }
+
+    // ------------------------------------------------------------ the assault on a human's capital (SOS-92 step B)
+
+    /** {@code Invasion}'s ends ({@link #assaultOutcome}): the defender held, the invaders took the throne, they withdrew. */
+    public static final int ASSAULT_HELD = Assault.HELD;
+    public static final int ASSAULT_TAKEN = Assault.TAKEN;
+    public static final int ASSAULT_RETREAT = Assault.RETREAT;
+
+    /** True while the assault's invasion is being built: {@code Invasion} starts at the bombardment, with no warning. */
+    public static boolean assaultStarting() {
+        Session s = Engine.session();
+        return s != null && s.assaultStarting;
+    }
+
+    /** True while an assault's invasion runs in the defender's city, on every PC that runs it. */
+    public static boolean assaultRuns() {
+        Session s = Engine.session();
+        return s != null && s.assault != null && s.assault.started && s.assault.endStep < 0;
+    }
+
+    /** Why no assault can start now (a battle, an open view, another assault); null when one can. */
+    public static String assaultRefusal() {
+        Session s = Engine.session();
+        return s == null ? "No session." : s.assaultRefusal();
+    }
+
+    /** True while an assault on the capital of the human in {@code slot} runs or waits for its views. */
+    public static boolean assaultOf(int slot) {
+        Session s = Engine.session();
+        return s != null && s.assault != null && s.assault.defender == slot;
+    }
+
+    /** In the world part at Storm's step: the assault begins on every PC ({@link Session#assaultBegin}). */
+    public static void assaultBegin(int attacker, int defender, Object spec, int[] armies, int men) {
+        Session s = Engine.session();
+        s.assaultBegin(s.clock.step(), attacker, defender, spec, armies, men);
+    }
+
+    /** {@code ASSAULT_TERMS} in the world part: the attacker's choice after a taken throne (SOS-92 D). */
+    public static boolean assaultTerms(int attacker, int kind, int percent) {
+        Session s = Engine.session();
+        return s != null && s.assaultTerms(attacker, kind, percent);
+    }
+
+    /** The rig's {@code ASSAULT_END} in the world part: the running assault's invasion ends with {@code outcome}. */
+    public static boolean assaultForce(int outcome) {
+        Session s = Engine.session();
+        if (s == null || s.assault == null || !s.assault.started || s.assault.outcome >= 0 || outcome < Assault.HELD
+                || outcome > Assault.RETREAT) {
+            return false;
+        }
+        s.assault.forced = outcome;
+        return true;
+    }
+
+    /** {@code Invasion.update}, as the assault's invasion ends in the step: the same on every PC that runs the city. */
+    public static void assaultOutcome(int outcome) {
+        Session s = Engine.session();
+        if (s != null && s.assault != null && s.assault.started && s.assault.outcome < 0) {
+            s.assault.outcome = outcome;
+        }
     }
 
     /**
@@ -403,6 +469,8 @@ public final class Hooks {
             s.part = part;
             s.streams.reseed(s.worldSeed(step));
             s.streams.worldPart(true);
+            s.assaultResolve(step); // an assault whose views have all thawed: its outcome reaches the world (SOS-92 B)
+            s.assaultTermsDue(step); // a taken throne whose attacker didn't choose in time: the default terms (SOS-92 D)
             if (!battleRuns) {
                 s.dueWithoutReports();
                 s.retireDue(); // first: a removed human's report is read no more (SOS-66)
@@ -1243,6 +1311,9 @@ public final class Hooks {
         x.a = spec;
         Session s = Engine.session();
         s.reports(x.human).change(s.clock.step(), Field.INVASION_REF, 0, 1);
+        if (s.invasionNotices.size() < Session.NOTICES_MAX) { // every PC learns it at this step: the mod tells every player (SOS-92 F)
+            s.invasionNotices.add(new long[] {s.clock.step(), x.human, ((settlement.battle.invasion.InvasionSpec) spec).fi});
+        }
         return true;
     }
 

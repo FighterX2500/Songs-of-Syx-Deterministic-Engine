@@ -709,6 +709,48 @@ public final class WorldActions {
                 Rig.note("sallies out");
             });
             return true;
+        case "siegewait": { // siegewait <slot>: the siege of the human in <slot>'s capital began long enough ago that its
+            // wait has passed, at its step on every copy (test tooling, SOS-92 B)
+            int slot = Integer.parseInt(a[1]);
+            Rig.later(() -> {
+                sosdet.game.cmd.Sieges.waitPassedForTest(slot);
+                Rig.note("siege wait of slot " + slot + " passed");
+            });
+            return true;
+        }
+        case "wassault": // wassault: notes the assault running, the last one over and a throne awaiting terms (SOS-92 B, D)
+            Rig.later(() -> {
+                sosdet.Assault last = Engine.lastAssault();
+                Rig.note("wassault step " + Engine.step() + ": now " + Engine.assault() + "; last " + last + "; invading "
+                        + settlement.main.SETT.INVADOR().invading() + "; taken " + Engine.assaultTaken()
+                        + (last != null && last.termsKind() >= 0 ? "; terms " + sosdet.game.siege.AssaultTerms.name(last.termsKind())
+                                + " " + last.termsPercent() + "% credits " + last.termsCredits() : ""));
+            });
+            return true;
+        case "wassaultend": { // wassaultend <held|taken|retreat>: the running assault's invasion ends so, on every copy (test tooling, SOS-92 D)
+            int outcome = java.util.List.of("held", "taken", "retreat").indexOf(a[1]);
+            if (outcome < 0) {
+                throw new IllegalArgumentException("wassaultend held|taken|retreat, not " + a[1]);
+            }
+            Rig.later(() -> {
+                sosdet.game.cmd.Sieges.endForTest(outcome);
+                Rig.note("assault end asked: " + a[1]);
+            });
+            return true;
+        }
+        case "wterms": { // wterms <sack|vassalage> <percent>: this human, the attacker, chooses what to take (SOS-92 D)
+            int kind = a[1].equals("sack") ? sosdet.game.siege.AssaultTerms.SACK : sosdet.game.siege.AssaultTerms.VASSALAGE;
+            int percent = Integer.parseInt(a[2]);
+            Rig.later(() -> {
+                String why = sosdet.game.cmd.Sieges.termsRefusal(kind, percent);
+                if (why != null) {
+                    throw new IllegalStateException("terms refused: " + why);
+                }
+                sosdet.game.cmd.Sieges.terms(kind, percent);
+                Rig.note("terms chosen: " + a[1] + " " + percent + "%");
+            });
+            return true;
+        }
         case "sallyother": // sallyother: this human sallies out once a world prompt asking another human is open (SOS-92)
             sallyAwaiting = true;
             return true;

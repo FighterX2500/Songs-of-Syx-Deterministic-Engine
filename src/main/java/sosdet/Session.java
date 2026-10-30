@@ -12,6 +12,7 @@ import sosdet.game.StepParts;
 import sosdet.game.SpeedLine;
 import sosdet.game.cmd.BannerDraft;
 import sosdet.game.cmd.PlanStash;
+import sosdet.game.siege.AssaultTerms;
 import sosdet.hash.Desync;
 import sosdet.hash.HashLog;
 import sosdet.hash.StateSource;
@@ -468,6 +469,185 @@ final class Session {
             return;
         }
         views[viewer] = new View(viewer, pcOf(viewer), owner, ownerPc, nextReportStep(step));
+    }
+
+    // ------------------------------------------------------------ the assault on a human's capital (SOS-92 step B)
+
+    /** The assault on a human's capital, from Storm until the world took its outcome; null when none runs. */
+    Assault assault;
+    /** True while the assault's invasion is being built in the defender's city: it starts at the bombardment. */
+    boolean assaultStarting;
+    /** The last assault over, for the mod's notices and the rig; null before the first. */
+    Assault lastAssault;
+    /** The assault whose outcome the world just took, until the mod takes it (SOS-92 C). */
+    Assault assaultOutcome;
+    /** A taken throne whose attacker hasn't chosen what to take yet; saves wait for it (SOS-92 D). */
+    Assault taken;
+    /** The assault whose terms the world just applied, until the mod takes it (SOS-92 D). */
+    Assault assaultTermsOutcome;
+    /** NPC invasions of a human's capital, as the world part starts them: step, human, invading faction (-1: rebels). */
+    final java.util.ArrayDeque<long[]> invasionNotices = new java.util.ArrayDeque<>();
+    /** The notices kept for the mod at most; a mod that never takes them loses the oldest past this. */
+    static final int NOTICES_MAX = 64;
+
+    /** Why no assault can start now, the same on every PC; null when one can. */
+    String assaultRefusal() {
+        if (assault != null) {
+            return "An assault is running.";
+        }
+        if (taken != null) {
+            return "An attacker is choosing what to take from a throne.";
+        }
+        if (battle != null) {
+            return "A battle is running.";
+        }
+        for (View v : views) {
+            if (v != null && v.state != View.CANCELLED && v.state != View.ENDED) {
+                return "A city view is open: the assault starts once it is closed.";
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Every PC, in the world part at Storm's step: {@code attacker}'s armies assault {@code defender}'s capital. Every
+     * other human views the defender's city from the next report step, where the world holds; the invasion starts at
+     * the step after it ({@link #assaultStep}).
+     */
+    void assaultBegin(long step, int attacker, int defender, Object spec, int[] armies, int men) {
+        String why = assaultRefusal();
+        if (why != null) {
+            throw new IllegalStateException("SOSDET: an assault at step " + step + ": " + why);
+        }
+        long freeze = nextReportStep(step);
+        assault = new Assault(step, attacker, defender, freeze, spec, armies, men);
+        for (int h : humans()) {
+            if (h != defender && !retired(h)) {
+                views[h] = new View(h, pcOf(h), defender, pcOf(defender), freeze);
+            }
+        }
+    }
+
+    /**
+     * Every PC, in the city tail of each step: the assault's invasion starts in the defender's city the step after the
+     * freeze, on every PC that runs it; it ends as the invasion ends, and every view of it thaws at the next report
+     * step. A view that couldn't freeze calls the assault off.
+     */
+    void assaultStep(long step) {
+        Assault a = assault;
+        if (a == null || a.endStep >= 0 || step <= a.freeze) {
+            return;
+        }
+        if (!a.started) {
+            for (View v : views) {
+                if (assaultView(v, a) && v.state == View.CANCELLED) {
+                    assaultOver(step, "the view of human " + v.viewer + " couldn't start: " + v.reason);
+                    return;
+                }
+            }
+            if (cityHuman() == a.defender) {
+                assaultStarting = true;
+                try {
+                    a.invasionRef = sosdet.game.GameAssault.invade(a.spec);
+                } finally {
+                    assaultStarting = false;
+                }
+            }
+            a.started = true;
+            return;
+        }
+        if (a.forced >= 0 && a.outcome < 0) { // rig tests only: the invasion ends as the test asked
+            if (cityHuman() == a.defender) {
+                sosdet.game.GameAssault.endForTest(a.invasionRef);
+            }
+            a.outcome = a.forced;
+        }
+        if (a.outcome >= 0) {
+            assaultOver(step, null);
+        } else if (!sosdet.game.GameAssault.invading()) {
+            assaultOver(step, "the invasion stopped"); // the game dropped it: no room to fight in
+        }
+    }
+
+    private static boolean assaultView(View v, Assault a) {
+        return v != null && v.owner == a.defender && v.freeze == a.freeze;
+    }
+
+    private void assaultOver(long step, String cancelled) {
+        Assault a = assault;
+        a.cancelled = cancelled;
+        a.endStep = step;
+        for (View v : views) {
+            if (assaultView(v, a)) {
+                endView(v.viewer, step, View.GAME, "The assault is over.");
+            }
+        }
+    }
+
+    /**
+     * Every PC: true from the step after Storm until every view of the assault has thawed; the world stands still
+     * meanwhile (mod spec §4), so no siege window or battle opens before the views freeze.
+     */
+    boolean assaultHolds(long step) {
+        Assault a = assault;
+        if (a == null || step <= a.step) {
+            return false;
+        }
+        if (a.endStep < 0) {
+            return true;
+        }
+        for (View v : views) {
+            if (assaultView(v, a) && v.state != View.ENDED && v.state != View.CANCELLED) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Every PC, in the world part: once every view of an ended assault has thawed, the outcome reaches the world. */
+    void assaultResolve(long step) {
+        Assault a = assault;
+        if (a == null || a.endStep < 0 || assaultHolds(step)) {
+            return;
+        }
+        assault = null;
+        lastAssault = a;
+        if (a.cancelled == null) {
+            sosdet.game.GameAssault.resolve(a.defender, a.outcome, a.armies);
+            assaultOutcome = a;
+            if (a.outcome == Assault.TAKEN) {
+                a.termsDue = step + TERMS_WINDOWS * windowSteps(clock.agreedSpeed());
+                taken = a;
+            }
+        }
+    }
+
+    /** The attacker chooses what to take within two minutes of real time: 240 half-second windows (SOS-92 D). */
+    static final int TERMS_WINDOWS = 240;
+
+    /**
+     * Every PC, in the world part: the attacker's choice after a taken throne ({@code ASSAULT_TERMS}), or the default
+     * once it is due. Returns false when there is no such choice to make, or {@code attacker} isn't the one to make it.
+     */
+    boolean assaultTerms(int attacker, int kind, int percent) {
+        Assault a = taken;
+        if (a == null || a.attacker != attacker || AssaultTerms.refusal(kind, percent) != null) {
+            return false;
+        }
+        a.termsCredits = sosdet.game.cmd.Sieges.applyTerms(a.defender, a.attacker, kind, percent);
+        a.termsKind = kind;
+        a.termsPercent = percent;
+        taken = null;
+        assaultTermsOutcome = a;
+        return true;
+    }
+
+    /** Every PC, in the world part: the default terms once the attacker's choice is due. */
+    void assaultTermsDue(long step) {
+        Assault a = taken;
+        if (a != null && step >= a.termsDue) {
+            assaultTerms(a.attacker, AssaultTerms.DEFAULT_KIND, AssaultTerms.DEFAULT_PERCENT);
+        }
     }
 
     /**

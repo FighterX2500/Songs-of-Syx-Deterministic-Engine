@@ -56,6 +56,15 @@ public final class SiegeBook {
         }
     }
 
+    /** Test tooling (the rig): the siege of {@code slot}'s capital began {@code seconds} earlier; nothing when none runs. */
+    public void backdate(int slot, int seconds) {
+        check(slot);
+        Siege s = sieges.get(slot);
+        if (s != null) {
+            sieges.put(slot, new Siege(s.startSecond - seconds, s.population));
+        }
+    }
+
     /** The siege of {@code slot}'s capital ended: a later one waits from its own start. */
     public void end(int slot) {
         check(slot);

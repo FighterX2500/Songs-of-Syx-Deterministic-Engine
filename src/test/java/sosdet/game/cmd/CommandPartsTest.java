@@ -47,6 +47,19 @@ class CommandPartsTest {
     }
 
     /**
+     * SOS-92: the siege commands act on the world's siege book, so every PC applies them, in the world part; the S92J rig
+     * run desynced when the wait's test command applied on its sender's PC only.
+     */
+    @Test
+    void theSiegeCommandsAreWorldCommands() {
+        assertTrue(CommandParts.world(Sieges.SALLY));
+        assertTrue(CommandParts.everyPc(new CmdWriter(Sieges.WAIT_PASSED).i(0).bytes()));
+        assertTrue(CommandParts.everyPc(Sieges.ASSAULT_END));
+        assertTrue(CommandParts.everyPc(Sieges.ASSAULT_TERMS));
+        assertFalse(CommandParts.everyPc(StepPrompts.ANSWER));
+    }
+
+    /**
      * SOS-78: the player's faction name, ruler name and banner reach every PC, in the world part; the other names and
      * banners stay in the sender's city.
      */
