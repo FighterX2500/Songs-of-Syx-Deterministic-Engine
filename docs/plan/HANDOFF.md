@@ -1,4 +1,4 @@
-# Engine notes (updated 2026-10-25, after SOS-61)
+# Engine notes (updated 2026-10-30, after batch 1 of the playtest fixes)
 
 The project's handoff, for both repositories, is `C:\ClaudeFolder\SOS\docs\plan\HANDOFF.md`. Read that first. This file keeps the engine's own notes: its reading list, where it stands, how to work here and the owner's decisions about it.
 
@@ -11,12 +11,13 @@ The project's handoff, for both repositories, is `C:\ClaudeFolder\SOS\docs\plan\
 5. ADRs `docs/decisions/0002-player-commands.md` (accepted) and `docs/decisions/0003-room-planning.md` (accepted).
 6. ADR `docs/decisions/0004-several-humans.md` (accepted) and `docs/plan/0004-several-humans.md`: several humans on one world, its milestones, playtests and known gaps.
 7. `docs/plan/0005-add-human.md` (the world built around several humans at setup) and `docs/plan/0006-own-city-battles.md` (battles with own cities, its milestones).
+8. The plans of the mod's features, each recording the engine's half: `0007-remove-human.md` (SOS-66), `0008-siege-by-other-humans.md` (SOS-71), `0009-human-deals.md` (SOS-72), `0010-human-market.md` (SOS-77), `0011-regions-vassals.md` (SOS-73), `0012-war-between-humans.md` (SOS-74, SOS-83), `0013-city-viewing.md` (SOS-82) and `0014-sieges.md` (SOS-92).
 
 ## 2. Where things stand
 
 **Repositories:**
 - **Engine:** `C:\ClaudeFolder\SOSDET`, GitHub `FighterX2500/Songs-of-Syx-Deterministic-Engine` (public). The local folder and the launcher mod name are still SOSDET; `gh` needs `--repo FighterX2500/Songs-of-Syx-Deterministic-Engine`.
-- **Mod:** `C:\ClaudeFolder\SOS`, GitHub `FighterX2500/SOSGSGMP`. It plays over direct IP and Steam: setup (map, factions, locations), the game over the network, the desync window, battles over the network and a playtest log. Campaign saves and resume are in its PR #39 (open).
+- **Mod:** `C:\ClaudeFolder\SOS`, GitHub `FighterX2500/SOSGSGMP`. It plays over direct IP and Steam: setup (map, factions, locations), the game over the network, the desync window, battles over the network, a playtest log, campaign saves and resume, disconnects, diplomacy, trade and war between players, battles between players and city viewing. Its own handoff lists what is next.
 
 **Done and merged into engine main:**
 - SOS-32 M1 (orders and speed in the host's log) and M2a (city groundwork).
@@ -32,17 +33,28 @@ The project's handoff, for both repositories, is `C:\ClaudeFolder\SOS\docs\plan\
 - SOS-55 (PR #35): `addHuman`, built as `Engine.buildWorld`: the world built around several humans at setup (plan 0005).
 - SOS-56 (PR #36): `Engine.worldHash()` and `Engine.ownCityAt()`. The short suite was recorded again (commit 95288d8).
 - SOS-61 (PR #37): own-city battles, plan 0006 M1: the battle PC generates the battle and sends its battle save, and every PC loads it at the same step. Engage works in own-city mode.
+- SOS-64 (PR #38): a session load in a fresh process; the statics reset waits until a game exists.
+- SOS-69 (PR #40): a world resync with several humans keeps the difficulty's boosters. SOS-70 (PR #41): every PC holds before a battle's Engage, for the campaign save.
+- SOS-66 (PR #42, plan 0007) and SOS-65 (PR #43): a removed human's realm becomes free regions, its armies disband and its slot retires; `Engine.removeRefusal`.
+- SOS-71 (PR #44): a siege by another human arrives; not a bug (plan 0008).
+- SOS-72 (PR #45, plan 0009), SOS-73 (PR #51, plan 0011), SOS-77 (PR #50, plan 0010): deals between humans, regions, vassalage, trade at peace, and the market and tariffs between humans. SOS-76 (PR #47): cancelling every treaty at once.
+- SOS-74 and SOS-83 (PR #53, plan 0012): war between humans, and battles between two humans; the host stamps the commanders table from the sides, which is plan 0006 M2.
+- SOS-75 (PR #46), SOS-78 (PR #49), SOS-79 (PR #48), SOS-81 (PR #52): a capital needs land beyond its square, names and banners on every PC, no quick load in a session, the transfer record.
+- SOS-82 (PR #54, plan 0013): viewing another human's city.
+- SOS-87 to SOS-90 (PRs #55 to #59): the profile's banner, slider buttons, messages on their own player's PC, lockstep windows of half a second at every speed.
+- SOS-92 step A (PR #60, plan 0014): the siege of a human's capital, its wait and the sally. SOS-94 (PR #61): the governor tells a slow PC from a slow link (hash format 8).
+- Batch 1 of the 2026-10-29 playtest fixes (PR #62): SOS-97 (a view's held transactions), SOS-98 (the ruler name and the top bar's banner), SOS-99 (world news on every player), SOS-102 (Production Rate).
 
-**Open PR:** SOS-64 (PR #38): a session load in a fresh process; the statics reset waits until a game exists.
+**Open PRs:** #63, SOS-92 steps B and C in part (the assault on a human's capital); #64, SOS-102 (the unit tests run again).
 
 **Still open in the engine:**
-- Plan 0006 M2 (the commanders table) and M3 (resync in a battle).
-- SOS-32, the owner's 30-minute session: camera and clicks (render and UI state; the C1 split when the owner moved the camera is the biggest risk), own-city followers from older saves (Mogus-40 and Mogus-20) under the host's Mogus-72 world, and draw tracing on (mean step 3.9 to 6.5 ms). Read-only audits first, then a fix plan for the owner's approval, then the session.
+- Plan 0006 M3 (resync in a battle).
+- The rest of SOS-92 (sieges): the assault's end and outcomes, allied attackers.
+- SOS-32's leftover owner checks (the card is Done), from the owner's 30-minute session: camera and clicks (render and UI state; the C1 split when the owner moved the camera is the biggest risk), own-city followers from older saves (Mogus-40 and Mogus-20) under the host's Mogus-72 world, and draw tracing on (mean step 3.9 to 6.5 ms). Read-only audits first, then a fix plan for the owner's approval, then the session.
 - The V01B rig split at step 154,365.
 - The resync-with-open-prompt gap (plan 0002, stage D).
-- Room-planning milestone 3.
-- The speed cap at 5x and above (the lockstep cadence).
-- The full suite: check whether it was recorded again after SOS-46 moved the hash format to 7 (`python rig\suite.py --record`).
+- High speeds in a playtest: SOS-90 keeps the lockstep windows at half a second at every speed; whether 5x and above now reach their full rate is still to see.
+- The suite's recordings: every one in `rig\golden` is older than the AI log's format 8 (SOS-90) and the hash format 8 (SOS-94), so the suite says `RECORD` until it is recorded again (`python rig\suite.py --record`).
 
 ## 3. How to work here
 
@@ -75,6 +87,6 @@ The project's handoff, for both repositories, is `C:\ClaudeFolder\SOS\docs\plan\
 - **Refurnish:** the room keeps working until Build, and cancelling does nothing.
 - **Auto-compact:** set to 300k tokens in `~/.claude/settings.json`.
 - **No CI (owner, 2026-10-24):** a local check before merge instead; the scenario suite runs as one local command (SOS-31).
-- **Pacing (owner, 2026-10-24):** the slowest PC caps the pace; the lead is easy to change and belongs to the mod's speed voting later.
+- **Pacing (owner, 2026-10-24):** the slowest PC caps the pace; the lead is easy to change and belongs to the mod's speed voting later. The mod's lead is 1000 steps since SOS-86; the rig's `--pace-lead` still defaults to 60.
 - **Smoke tests:** test less; pace and catch-up checks are short smoke runs, not desync tests.
 - **Own-city battles (2026-10-25, plan 0006):** the asked human's PC generates the battle and ships it; every PC loads it at the same step.

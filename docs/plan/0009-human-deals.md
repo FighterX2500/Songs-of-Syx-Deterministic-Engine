@@ -1,6 +1,6 @@
 # Plan 0009: deals between humans (SOS-72, milestone 1)
 
-Card: [SOS-72](https://fighterx2500.atlassian.net/browse/SOS-72) · Date: 2026-10-26 · Status: approved (owner, 2026-10-26, as the mod's `docs/plan/diplomacy.md`), in progress · Mod spec 0.18 §6 Diplomacy, §7 Trade (direct contracts) · Builds on ADR 0002 (commands), ADR 0004 (several humans), ADR 0005 (city and world parts)
+Card: [SOS-72](https://fighterx2500.atlassian.net/browse/SOS-72) · Date: 2026-10-26 · Status: approved (owner, 2026-10-26, as the mod's `docs/plan/diplomacy.md`), merged (PR #45) · Mod spec 0.18 §6 Diplomacy, §7 Trade (direct contracts) · Builds on ADR 0002 (commands), ADR 0004 (several humans), ADR 0005 (city and world parts)
 
 Game paths are relative to `<game>/info/SongsOfSyx-sources/`.
 

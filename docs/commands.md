@@ -8,6 +8,8 @@ Status: **done** (hooked, with its command id), **to do**, or why it needs no co
 
 - Curfew (`Curfew.setForADay`): pilot, command 1000 `curfew`, patch 96. It's in the competitor's coverage document but not in its hook table.
 - Battle orders, battle settings, deployment, artillery and the agreed speed: SOS-32 (patches 90 and 95).
+- Deals between humans, from the mod's Diplomacy tab: 8100 propose, 8101 answer, 8102 cancel, 8103 tariff and 8104 war (`HumanDeals`; SOS-72 to SOS-74, SOS-77; plans 0009 to 0012). The mod calls them through `Engine.dealPropose`, `dealAnswer`, `dealCancel`, `setTariff` and `declareWar`; no game entry point is hooked.
+- A human's sally from its besieged capital: 7970 (`Sieges`; SOS-92, plan 0014), from the mod's siege popup and region row (`Engine.sallyOut`).
 
 ## Method hooks (the competitor's entry hooks)
 

@@ -14,6 +14,12 @@ Deterministic simulation engine for Songs of Syx V71 (build 71.44). The same sav
 - **World setup for several humans:** `Engine.buildWorld` builds a new world around every human's picked location; one PC builds it and every PC loads its save (SOS-55, [plan 0005](docs/plan/0005-add-human.md)).
 - **Desync hold:** at a desync every PC holds at the same step, and the host chooses a world resync or saving and leaving (SOS-53).
 - **Own-city battles:** with own cities, the battle PC generates a world battle and sends its battle save; every PC loads it at the same step and returns to its own city after it (SOS-61, [plan 0006](docs/plan/0006-own-city-battles.md) M1).
+- **Removing a human:** a human whose PC is gone is removed at the same step on every PC: its regions go free, its armies disband, and its slot retires (SOS-66, [plan 0007](docs/plan/0007-remove-human.md)).
+- **Between humans:** deals (treaties, money, goods, regions), vassalage with a tribute rate, trade at peace, the market with each human's tariffs, and war, all as commands applied at one step (SOS-72 to SOS-74, SOS-77; plans [0009](docs/plan/0009-human-deals.md) to [0012](docs/plan/0012-war-between-humans.md)).
+- **Battles between two humans:** both humans are asked, each commands their own army through the commanders table, and the battle runs on every PC (SOS-83, [plan 0012](docs/plan/0012-war-between-humans.md)).
+- **City viewing:** a PC runs another human's city in lockstep with its owner's, its own city frozen until the view ends (SOS-82, [plan 0013](docs/plan/0013-city-viewing.md)).
+- **Sieges of a human's capital:** the siege, its wait before an assault and the sally at any time (SOS-92 step A, [plan 0014](docs/plan/0014-sieges.md)); the assault itself is in progress.
+- **Pace at every speed:** the lockstep windows stay half a second of real time at every speed (SOS-90), and the governor tells a slow PC from a slow link (SOS-94).
 - **Scenario suite:** `python rig\suite.py` runs every rig scenario in one command, before each pull request (SOS-31, [rig/README.md](rig/README.md)).
 - **V0.1:** [docs/release/V0.1.md](docs/release/V0.1.md): what works, what is blocked, and how to start the owner's session. `gradlew.bat releaseZip` packs it into `build\release\SOSDET-0.1.0.zip`.
 

@@ -1,6 +1,6 @@
 # Plan 0003: area-room planning in lockstep (SOS-34, part 2)
 
-Status: in progress (2026-10-23). Design: [ADR 0003](../decisions/0003-room-planning.md). Branch: `SOS-34-room-planning` (local, not pushed).
+Status: done: milestones 1 and 2 merged with SOS-34, milestone 3 with SOS-36 (both cards Done). Design: [ADR 0003](../decisions/0003-room-planning.md).
 
 ## Done: milestone 1, new area rooms (merged into the branch; rig-tested 2026-10-23, run P34C)
 
