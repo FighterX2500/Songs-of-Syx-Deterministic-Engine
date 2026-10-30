@@ -276,18 +276,113 @@ final class Session {
     /** The armies of the world-battle prompt that just closed: a local battle's Engage keeps them waiting. */
     int[] closedPromptArmies = NO_ARMIES;
 
+    /** The local battle whose Engage runs now, inside its step: vanilla's Engage hands it its parts. */
+    LocalBattle engaging;
+    /** The battle PC between its result's step and the next: the world it ran, for its own city loaded back. */
+    private java.nio.file.Path localWorld;
+    private double[] localMoves;
+    /** The battle PC: its own city, as saved at the freeze, is loading back. */
+    boolean localBackLoading;
+
     /** Every PC, at the Engage step: the battle of {@code human} runs on its PC only, from the next report step. */
-    void localEngage(long step, int human, Runnable generate) {
-        locals[human] = new LocalBattle(step, human, pcOf(human), nextReportStep(step), closedPromptArmies,
-                human == localHuman ? generate : null);
+    LocalBattle localEngage(long step, int human) {
+        LocalBattle b = new LocalBattle(step, human, pcOf(human), nextReportStep(step), closedPromptArmies, null);
+        locals[human] = b;
         closedPromptArmies = NO_ARMIES;
+        return b;
     }
 
-    /** Every PC, at the start of each step: the local battles whose freeze step it is freeze their human. */
+    /**
+     * Every PC, at the start of each step: the local battles whose freeze step it is freeze their human, and those
+     * whose thaw step it is are over: the human's reports are read again.
+     */
     void localsAt(long step) {
-        for (LocalBattle b : locals) {
+        for (int slot = 0; slot < SLOTS; slot++) {
+            LocalBattle b = locals[slot];
             if (b != null && b.state == LocalBattle.ENGAGED && b.freeze == step) {
                 b.state = LocalBattle.RUNNING;
+            }
+            if (b != null && b.thaw == step) {
+                locals[slot] = null;
+                thawReports(slot, step);
+            }
+        }
+    }
+
+    /** Every PC, inside the step: the battle PC's result, once; false for a battle with no result due. */
+    boolean localResult(long step, int human, Object result) {
+        LocalBattle b = human >= 0 && human < SLOTS ? locals[human] : null;
+        if (b == null || b.state != LocalBattle.RUNNING || b.resultStep >= 0) {
+            return false; // a repeat, or a result for a battle not running: nothing changes
+        }
+        b.resultStep = step;
+        b.result = result;
+        b.thaw = nextReportStep(step + 1);
+        return true;
+    }
+
+    /**
+     * Between steps, after a local battle's result step: the battle PC saves the world it ran and loads its own city
+     * as saved at the freeze, then the world into it ({@link #localBackWorld}); every other PC reloads its own world at
+     * the same step, as for a view, so what a load resets is reset alike everywhere.
+     */
+    void localBacks() {
+        for (LocalBattle b : locals) {
+            if (b == null || b.back || b.resultStep < 0 || clock.step() != b.resultStep) {
+                continue;
+            }
+            b.back = true;
+            if (b.human != localHuman) {
+                reloadOwnWorld();
+                continue;
+            }
+            try {
+                localWorld = java.nio.file.Files.createTempFile("sosdet-localworld", ".save");
+            } catch (java.io.IOException e) {
+                throw new IllegalStateException("SOSDET: no file for the world a local battle leaves", e);
+            }
+            sosdet.game.GameWorldLoad.save(localWorld);
+            localMoves = sosdet.game.GameWorldLoad.unsaved();
+            localBackLoading = true;
+            sosdet.game.GameView.loadBeforeBattle();
+        }
+    }
+
+    /** The battle PC's own city is set again: the world it ran goes into it, then the transactions it missed. */
+    void localBackWorld() {
+        localBackLoading = false;
+        loadWorld(localWorld, localMoves);
+        localWorld = null;
+        localMoves = null;
+        part = StepParts.CITY;
+        for (int i = 0; i < heldTxns.size(); i++) {
+            Txn t = heldTxns.get(i).resolve(); // the loaded game's objects (SOS-97)
+            if (t != null) {
+                txnApplier().accept(t);
+            }
+        }
+        part = -1;
+        heldTxns.clear();
+    }
+
+    /** The world part of the step after a local battle's result: every PC runs vanilla's after-battle alike. */
+    void localAfter(long step) {
+        for (LocalBattle b : locals) {
+            if (b == null || b.resultStep < 0 || step != b.resultStep + 1 || b.after == null) {
+                continue;
+            }
+            java.util.function.Consumer<Object> after = b.after;
+            b.after = null;
+            b.armies = NO_ARMIES; // the armies move again once the result applies
+            long worldDraws = streams.worldDraws();
+            streams.reseed(battleSeed(step));
+            currentHuman = b.human; // as the human whose battle it was, whose result prompt opens
+            try {
+                after.accept(b.result);
+            } finally {
+                currentHuman = 0;
+                streams.reseed(worldSeed(step));
+                streams.worldDraws(worldDraws);
             }
         }
     }
@@ -295,7 +390,7 @@ final class Session {
     /** This PC's running local battle: the battle map is the game this PC runs. Null otherwise. */
     LocalBattle localHere() {
         LocalBattle b = locals[localHuman];
-        return b != null && b.state == LocalBattle.RUNNING ? b : null;
+        return b != null && b.state == LocalBattle.RUNNING && !b.back ? b : null; // back: its own city again
     }
 
     /** The step the human in {@code slot} froze at: its view's, or its local battle's. */
@@ -333,6 +428,21 @@ final class Session {
         View v = views[slot];
         LocalBattle b = locals[slot];
         return v != null && v.frozen() || b != null && b.frozen(); // a local battle's human too (SOS-93)
+    }
+
+    /** Saves this PC's own world and loads it back, as another PC loads at the same step (a view, a local battle). */
+    private void reloadOwnWorld() {
+        long started = System.nanoTime();
+        java.nio.file.Path file;
+        try {
+            file = java.nio.file.Files.createTempFile("sosdet-viewreload", ".save");
+        } catch (java.io.IOException e) {
+            throw new IllegalStateException("SOSDET: no file for this PC's world reload", e);
+        }
+        double[] unsaved = sosdet.game.GameWorldLoad.unsaved();
+        sosdet.game.GameWorldLoad.save(file);
+        loadWorld(file, unsaved);
+        lastViewLoadMs = (System.nanoTime() - started) / 1e6;
     }
 
     /** This PC's view as the viewer, running: the owner's city is the one this PC runs. Null otherwise. */
@@ -443,17 +553,7 @@ final class Session {
                 continue;
             }
             v.reloaded = at;
-            long started = System.nanoTime();
-            java.nio.file.Path file;
-            try {
-                file = java.nio.file.Files.createTempFile("sosdet-viewreload", ".save");
-            } catch (java.io.IOException e) {
-                throw new IllegalStateException("SOSDET: no file for this PC's world reload", e);
-            }
-            double[] unsaved = sosdet.game.GameWorldLoad.unsaved();
-            sosdet.game.GameWorldLoad.save(file);
-            loadWorld(file, unsaved);
-            lastViewLoadMs = (System.nanoTime() - started) / 1e6;
+            reloadOwnWorld();
         }
     }
 
@@ -823,11 +923,16 @@ final class Session {
         v.state = View.ENDED;
         viewHashes[v.viewer] = null;
         pacer.away(v.viewerPc, false);
-        if (v.viewer != localHuman) {
+        thawReports(v.viewer, step);
+    }
+
+    /** Every PC but the human's own, at its thaw step (a view, a local battle): the human's reports are read again. */
+    private void thawReports(int human, long step) {
+        if (human != localHuman) {
             // the world reads the frozen report through the step before the thaw report applies (ADR 0005 §4)
-            receivedTakenAt[v.viewer] = Math.max(receivedTakenAt[v.viewer], step - Reports.EVERY);
+            receivedTakenAt[human] = Math.max(receivedTakenAt[human], step - Reports.EVERY);
             // the thaw report applies at the least delay after it, or later (SOS-90)
-            receivedNextAt[v.viewer] = Math.max(receivedNextAt[v.viewer], step + Reports.DELAY);
+            receivedNextAt[human] = Math.max(receivedNextAt[human], step + Reports.DELAY);
         }
     }
 
@@ -877,7 +982,7 @@ final class Session {
 
     /** Before step {@code step}: true while this PC, the viewer or the owner of a view, holds at its freeze step. */
     boolean viewHolds(long step) {
-        if (viewLoading) {
+        if (viewLoading || localBackLoading) {
             return true; // a view load runs: the owner's, the viewer's or another PC's own
         }
         for (View v : views) {
@@ -1192,8 +1297,8 @@ final class Session {
             viewLoaded();
             return;
         }
-        if (viewBackLoading) {
-            ownCityBack();
+        if (viewBackLoading || localBackLoading) {
+            ownCityBack(); // a local battle's PC too: its city as at the freeze (SOS-93)
             return;
         }
         playerUpdateAcc = 0;

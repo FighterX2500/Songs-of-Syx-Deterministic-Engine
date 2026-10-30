@@ -6,7 +6,10 @@ import java.nio.file.Path;
 import java.util.List;
 
 import game.battle.state.BattleState;
+import game.battle.state.BattleStateResult;
 import init.paths.PATHS;
+import settlement.stats.Induvidual;
+import settlement.stats.STATS;
 import snake2d.util.color.COLOR;
 import sosdet.Engine;
 import sosdet.Hooks;
@@ -28,6 +31,8 @@ public final class MapBattles {
     static final int RETREAT = 7961;
     static final int CONCLUDE = 7962;
     static final int RESTART = 7963;
+    /** A local battle's result, from its PC to every PC (SOS-93). */
+    static final int LOCAL_RESULT = 7964;
 
     /** The save the battle's generation writes ({@code BattleState.setGenerate}). */
     private static final String BATTLE_SAVE = "__battle";
@@ -75,9 +80,77 @@ public final class MapBattles {
                 Hooks.battleLeaving(); // the steps hold until the load, which goes on at this step
                 b.reloadBattle();
                 return true;
-            }));
+            }),
+            new Command(LOCAL_RESULT, "battleLocalResult", MapBattles::applyLocalResult));
 
     private MapBattles() {
+    }
+
+    /**
+     * A local battle's result as a command (SOS-93): the result, the losses, each enemy division's survivors, each of
+     * the player's divisions' survivors as a count with their mean combat experience (owner, 2026-10-30: vanilla's
+     * {@code resolve(int, double)}), and the captives by race. Read on the battle PC from vanilla's result.
+     */
+    public static byte[] localResultCommand(int human, Object result) {
+        BattleStateResult r = (BattleStateResult) result;
+        CmdWriter w = new CmdWriter(LOCAL_RESULT).i(human).i(r.result.ordinal()).i(r.playerLosses).i(r.enemyLosses);
+        w.i(r.enemySurvivors.length);
+        for (int v : r.enemySurvivors) {
+            w.i(v);
+        }
+        w.i(r.playerSurvivors.length);
+        for (Induvidual[] survivors : r.playerSurvivors) {
+            if (survivors == null) {
+                w.i(-1).d(0);
+                continue;
+            }
+            double experience = 0;
+            int known = 0;
+            for (Induvidual i : survivors) {
+                if (i != null) {
+                    experience += STATS.BATTLE().COMBAT_EXPERIENCE.indu().getD(i);
+                    known++;
+                }
+            }
+            w.i(survivors.length).d(known == 0 ? 0 : experience / known); // vanilla counts by the array's length
+        }
+        w.i(r.enemyCaptured.length);
+        for (int v : r.enemyCaptured) {
+            w.i(v);
+        }
+        return w.bytes();
+    }
+
+    /**
+     * Every PC: the result's arrays, for patch 99's {@code BattleStateResult.sosdetOf}: result ordinal, player and
+     * enemy losses, enemy survivors, player survivor counts (-1: no division), their experience, captives.
+     */
+    private static boolean applyLocalResult(sosdet.ai.CmdReader r) {
+        int human = r.i();
+        Object[] result = new Object[7];
+        result[0] = r.i();
+        result[1] = r.i();
+        result[2] = r.i();
+        int[] enemy = new int[r.i()];
+        for (int i = 0; i < enemy.length; i++) {
+            enemy[i] = r.i();
+        }
+        result[3] = enemy;
+        int divisions = r.i();
+        int[] survivors = new int[divisions];
+        double[] experience = new double[divisions];
+        for (int i = 0; i < divisions; i++) {
+            survivors[i] = r.i();
+            experience[i] = r.d();
+        }
+        result[4] = survivors;
+        result[5] = experience;
+        int[] captured = new int[r.i()];
+        for (int i = 0; i < captured.length; i++) {
+            captured[i] = r.i();
+        }
+        result[6] = captured;
+        return Hooks.localResult(human, result);
     }
 
     /** Every PC, at a step's start: the deployment of a battle between two humans ran out of time, so it starts (SOS-83). */
@@ -187,8 +260,8 @@ public final class MapBattles {
      * gave it gets a notice (SOS-41).
      */
     public static boolean worldCommandSkipped(int pc) {
-        if (!VIEW.b().isActive()) {
-            return false;
+        if (!VIEW.b().isActive() || Hooks.localBattleHere()) {
+            return false; // a local battle's PC runs the world on: every human's world commands apply there too (SOS-93)
         }
         if (Hooks.localPc(pc)) {
             VIEW.inters().fullScreen.activate(WORLD_COMMAND_NOTICE, COLOR.WHITE100, null);

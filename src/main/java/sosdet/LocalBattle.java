@@ -21,9 +21,21 @@ public final class LocalBattle {
     /** The step every PC freezes the human at, and the battle PC generates the battle at: the next report step. */
     public final long freeze;
     /** The battle's armies, which wait in place until the battle's result applies. */
-    final int[] armies;
+    int[] armies;
     /** The battle PC: vanilla's Engage, run at {@link #freeze}; null once run. */
     Runnable generate;
+    /** Every PC: vanilla's after-battle, kept at Engage with the two sides it copied; it takes the result's arrays. */
+    java.util.function.Consumer<Object> after;
+    /** The battle PC: the battle's result went out as a command. */
+    boolean resultSent;
+    /** The step the result command applied at, the same on every PC; -1 until then. */
+    long resultStep = -1;
+    /** The result, decoded from the command: the arrays vanilla's after-battle takes. */
+    Object result;
+    /** Between {@link #resultStep} and the next step: every PC loaded its world (the battle PC its city too). */
+    boolean back;
+    /** The step the human thaws at: the first report step after the result applies; -1 until then. */
+    long thaw = -1;
     volatile int state = ENGAGED;
 
     LocalBattle(long engage, int human, int pc, long freeze, int[] armies, Runnable generate) {

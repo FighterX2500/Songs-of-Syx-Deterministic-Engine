@@ -225,6 +225,7 @@ public final class Hooks {
         }
         s.viewBackStart(); // a viewer before its thaw step loads its own city back (SOS-82)
         s.viewWorldReloads(); // every other PC reloads its world where the owner and the viewer load
+        s.localBacks(); // after a local battle's result: its PC loads its city back, every other PC its world (SOS-93)
         boolean battleAwaited = s.battle != null && s.battle.awaiting; // the battle PC's battle isn't loaded yet
         boolean waits = !s.ai().mayRun(s.clock.step() + 1) || !s.worldMayRun(s.clock.step() + 1);
         if (waits) {
@@ -389,6 +390,7 @@ public final class Hooks {
         }
         Runnable generate = b.generate;
         b.generate = null;
+        s.ownCityState = ViewCity.cityState(s); // put back with the city at the battle's end, as after a view
         long worldDraws = s.streams.worldDraws();
         s.streams.reseed(s.battleSeed(step));
         try {
@@ -397,6 +399,54 @@ public final class Hooks {
             s.streams.reseed(s.worldSeed(step));
             s.streams.worldDraws(worldDraws);
         }
+    }
+
+    /**
+     * Patch 15, vanilla's Engage (ResolverPlayer.Manual), in a local battle's Engage on every PC: keeps its after-battle,
+     * which takes the result's arrays. True when it is a local battle: vanilla's own generation doesn't run now.
+     */
+    public static boolean localEngaged(java.util.function.Consumer<Object> after) {
+        Session s = Engine.session();
+        if (s == null || s.engaging == null) {
+            return false;
+        }
+        s.engaging.after = after;
+        return true;
+    }
+
+    /** Patch 15, in a local battle's Engage: true on the battle PC, which generates the battle at the freeze step. */
+    public static boolean localBattleMine() {
+        Session s = Engine.session();
+        return s != null && s.engaging != null && s.engaging.human == s.localHuman;
+    }
+
+    /** Patch 15, on the battle PC: the generation, run at the freeze step ({@link #localGenerate}). */
+    public static void localGenerateLater(Runnable generate) {
+        Engine.session().engaging.generate = generate;
+    }
+
+    /**
+     * Patch 99, the battle's exit on a local battle's PC (Retreat, or Close on the victory or defeat panel): its result
+     * goes to every PC as a command, applied at the step the host stamps; nothing loads now. True when it is a local
+     * battle; false for vanilla's exit.
+     */
+    public static boolean localExit(Object result) {
+        Session s = Engine.session();
+        LocalBattle b = s == null ? null : s.localHere();
+        if (b == null) {
+            return false;
+        }
+        if (!b.resultSent) {
+            b.resultSent = true;
+            orderCapture(sosdet.ai.AiEntry.COMMAND, -1, sosdet.game.cmd.MapBattles.localResultCommand(b.human, result));
+        }
+        return true;
+    }
+
+    /** The result command, inside the step on every PC: the battle's result, applied once (SOS-93). */
+    public static boolean localResult(int human, Object result) {
+        Session s = Engine.session();
+        return s != null && s.localResult(s.clock.step(), human, result);
     }
 
     private static boolean contains(int[] values, int value) {
@@ -536,6 +586,7 @@ public final class Hooks {
             s.streams.reseed(s.worldSeed(step));
             s.streams.worldPart(true);
             localGenerate(s, step); // a local battle's PC generates its battle at the freeze step (SOS-93)
+            s.localAfter(step); // the step after a local battle's result: vanilla's after-battle on every PC
             s.assaultResolve(step); // an assault whose views have all thawed: its outcome reaches the world (SOS-92 B)
             s.assaultTermsDue(step); // a taken throne whose attacker didn't choose in time: the default terms (SOS-92 D)
             if (!battleRuns) {
@@ -1817,6 +1868,9 @@ public final class Hooks {
             if (s.viewBackLoading) {
                 s.viewBackWorld(); // the viewer's own city is back: the world it ran goes into it (SOS-82)
             }
+            if (s.localBackLoading) {
+                s.localBackWorld(); // a local battle's PC: its city is back, the world it ran goes in (SOS-93)
+            }
             if (s.plans().inGame()) {
                 // a map battle's end or a resync: the session goes on at this step, with no "click to continue" (SOS-41)
                 VIEW.inters().load.deactivate();
@@ -2259,7 +2313,19 @@ public final class Hooks {
         Session s = Engine.session();
         long step = s.clock.step();
         if (s.localBattles && other < 0) {
-            s.localEngage(step, human, engage); // against NPCs: on the human's PC only, the world running on (SOS-93)
+            // against NPCs: on the human's PC only, the world running on (SOS-93). Every PC runs vanilla's Engage, which
+            // keeps the two sides for the result; the battle PC's generation waits for the freeze step
+            LocalBattle b = s.localEngage(step, human);
+            long worldDraws = s.streams.worldDraws();
+            s.engaging = b;
+            s.streams.reseed(s.battleSeed(step));
+            try {
+                engage.run();
+            } finally {
+                s.engaging = null;
+                s.streams.reseed(s.afterEngageSeed(step));
+                s.streams.worldDraws(worldDraws);
+            }
             return;
         }
         OwnBattle b = new OwnBattle(step, human, s.pcOf(human), other, s.streams.worldDraws());

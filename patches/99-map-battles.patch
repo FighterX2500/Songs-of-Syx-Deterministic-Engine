@@ -1,6 +1,6 @@
 diff -ru -U2 a/game/battle/state/BattleState.java b/game/battle/state/BattleState.java
 --- a/game/battle/state/BattleState.java	2026-01-31 08:38:56.000000000 +0500
-+++ b/game/battle/state/BattleState.java	2026-10-28 03:13:52.477400700 +0500
++++ b/game/battle/state/BattleState.java	2026-10-30 15:32:13.695190300 +0500
 @@ -94,7 +94,8 @@
  	
  	private void view() {
@@ -73,11 +73,13 @@ diff -ru -U2 a/game/battle/state/BattleState.java b/game/battle/state/BattleStat
  //			if (timer >= 10) {
 diff -ru -U2 a/game/battle/state/BattleStateExiter.java b/game/battle/state/BattleStateExiter.java
 --- a/game/battle/state/BattleStateExiter.java	2025-08-29 11:08:26.000000000 +0500
-+++ b/game/battle/state/BattleStateExiter.java	2026-10-28 03:13:52.473380500 +0500
-@@ -10,12 +10,13 @@
++++ b/game/battle/state/BattleStateExiter.java	2026-10-30 15:32:13.698147700 +0500
+@@ -10,12 +10,15 @@
  	
  	public void exit(BATTLE_RESULT res, int plosses, int elosses) {
  		final BattleStateResult r = new BattleStateResult(res, elosses, plosses);
++		if (sosdet.Hooks.localExit(r)) // SOSDET: a local battle's result goes to every PC as a command; nothing loads now (SOS-93)
++			return;
 +		sosdet.Hooks.battleLeaving(); // SOSDET: the steps hold until the load, which goes on at this step (SOS-32)
  		new GameLoader(PATHS.local().save().get("__beforeBattle")){
  			
@@ -91,8 +93,42 @@ diff -ru -U2 a/game/battle/state/BattleStateExiter.java b/game/battle/state/Batt
  			
 diff -ru -U2 a/game/battle/state/BattleStateResult.java b/game/battle/state/BattleStateResult.java
 --- a/game/battle/state/BattleStateResult.java	2026-06-17 10:48:06.000000000 +0500
-+++ b/game/battle/state/BattleStateResult.java	2026-10-28 03:13:52.474378400 +0500
-@@ -49,6 +49,19 @@
++++ b/game/battle/state/BattleStateResult.java	2026-10-30 15:32:13.699174100 +0500
+@@ -24,6 +24,33 @@
+ 	public final BATTLE_RESULT result;
+ 	public final int playerLosses;
+ 	public final int enemyLosses;
++	/** SOSDET: a local battle's result (SOS-93): each player division's survivors' mean experience; null otherwise. */
++	public double[] sosdetExperience;
++	
++	private BattleStateResult(BATTLE_RESULT result, int playerLosses, int enemyLosses, boolean sosdet) {
++		this.result = result;
++		this.playerLosses = playerLosses;
++		this.enemyLosses = enemyLosses;
++	}
++	
++	/**
++	 * SOSDET: a local battle's result, as every PC builds it from the battle PC's command (SOS-93): result ordinal,
++	 * player and enemy losses, enemy survivors, player survivor counts (-1: no division), their experience, captives.
++	 * The player's survivors are counts only: an array of that length, applied with resolve(int, double).
++	 */
++	public static BattleStateResult sosdetOf(Object[] d) {
++		BattleStateResult r = new BattleStateResult(BATTLE_RESULT.values()[(Integer) d[0]], (Integer) d[1], (Integer) d[2], true);
++		int[] enemy = (int[]) d[3];
++		System.arraycopy(enemy, 0, r.enemySurvivors, 0, Math.min(enemy.length, r.enemySurvivors.length));
++		int[] survivors = (int[]) d[4];
++		for (int i = 0; i < survivors.length && i < r.playerSurvivors.length; i++)
++			if (survivors[i] >= 0)
++				r.playerSurvivors[i] = new Induvidual[survivors[i]];
++		r.sosdetExperience = (double[]) d[5];
++		int[] captured = (int[]) d[6];
++		System.arraycopy(captured, 0, r.enemyCaptured, 0, Math.min(captured.length, r.enemyCaptured.length));
++		return r;
++	}
+ 	
+ 	BattleStateResult(BATTLE_RESULT result, int enemydead, int playerdead){
+ 		this.result = result;
+@@ -49,6 +76,19 @@
  				playerSurvivors[d.indexArmy()] = new Induvidual[STATS.BATTLE().DIV.stat().div().get(d)];
  			}
  		}
@@ -112,7 +148,7 @@ diff -ru -U2 a/game/battle/state/BattleStateResult.java b/game/battle/state/Batt
  		
  		
  		
-@@ -65,7 +78,12 @@
+@@ -65,7 +105,12 @@
  					
  					if (d.index() >= Config.battle().DIVISIONS_PER_ARMY) {
  						
@@ -128,7 +164,7 @@ diff -ru -U2 a/game/battle/state/BattleStateResult.java b/game/battle/state/Batt
  							enemySurvivors[d.indexArmy()] ++;
 diff -ru -U2 a/view/battle/IDeploy.java b/view/battle/IDeploy.java
 --- a/view/battle/IDeploy.java	2025-09-12 16:12:40.000000000 +0500
-+++ b/view/battle/IDeploy.java	2026-10-28 03:13:52.474378400 +0500
++++ b/view/battle/IDeploy.java	2026-10-30 15:32:13.696182600 +0500
 @@ -17,7 +17,8 @@
  	private final GButt.ButtPanel butt = new GButt.ButtPanel(Dic.¤¤Start) {
  		@Override

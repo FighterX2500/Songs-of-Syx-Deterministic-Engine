@@ -46,6 +46,13 @@ class CommandPartsTest {
         assertFalse(CommandParts.everyPc(1000));
     }
 
+    @Test
+    void aLocalBattlesResultIsAppliedByEveryPcAndTheBattlesOwnOrdersAreNot() {
+        assertTrue(CommandParts.world(MapBattles.LOCAL_RESULT));
+        assertTrue(CommandParts.everyPc(new CmdWriter(MapBattles.LOCAL_RESULT).i(0).bytes()));
+        assertFalse(CommandParts.everyPc(MapBattles.RESTART));
+    }
+
     /**
      * SOS-92: the siege commands act on the world's siege book, so every PC applies them, in the world part; the S92J rig
      * run desynced when the wait's test command applied on its sender's PC only.

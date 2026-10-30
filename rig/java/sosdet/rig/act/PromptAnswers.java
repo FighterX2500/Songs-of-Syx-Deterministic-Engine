@@ -111,11 +111,11 @@ public final class PromptAnswers {
         }
         if (open instanceof WBattleResult) {
             if (((WBattleResult) open).result != BATTLE_RESULT.VICTORY) {
-                WorldBattles.accept(null, null, 0); // as the Accept button after a defeat
-                return "defeat accept";
+                boolean sent = WorldBattles.accept(null, null, 0); // as the Accept button after a defeat
+                return sent ? "defeat accept" : "defeat accept not captured";
             }
-            WorldBattles.accept(new int[RACES.all().size()], new int[RESOURCES.ALL().size()], 0);
-            return "victory accept";
+            boolean sent = WorldBattles.accept(new int[RACES.all().size()], new int[RESOURCES.ALL().size()], 0);
+            return sent ? "victory accept" : "victory accept not captured";
         }
         if (open instanceof WBattleSiege.Result) {
             WorldBattles.siegeResult(WorldBattles.OCCUPY, 0, 0, new int[RACES.all().size()], new int[TR.ALL().size()], 0);
