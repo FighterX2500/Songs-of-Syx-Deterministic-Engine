@@ -366,6 +366,12 @@ public final class Hooks {
         return s != null && part == StepParts.WORLD_PART && s.localHere() != null;
     }
 
+    /** Patch 10, in the step's city part: on a local battle's PC the world's clock runs every step (SOS-93, O3). */
+    public static boolean localClock(GameResource r, int part) {
+        Session s = Engine.session();
+        return s != null && part == StepParts.CITY && s.localHere() != null && StepParts.worldClock(r);
+    }
+
     /** True on a local battle's PC while it runs (SOS-93): the battle's Start keeps the world's tick count. */
     public static boolean localBattleHere() {
         Session s = Engine.session();

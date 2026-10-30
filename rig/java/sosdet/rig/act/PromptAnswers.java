@@ -216,7 +216,9 @@ public final class PromptAnswers {
                 return null;
             }
             startAsked = true;
-            MapBattles.deploy();
+            if (!MapBattles.deploy()) {
+                battle.deploy(); // a local battle: its PC's own, no command (SOS-93)
+            }
             return "battle start";
         }
         if (battleFrom < 0) {
@@ -227,7 +229,12 @@ public final class PromptAnswers {
         }
         if (Hooks.battleConcludeOpen() && !closeAsked) {
             closeAsked = true;
-            MapBattles.conclude();
+            if (!MapBattles.conclude()) {
+                Runnable close = Hooks.battleConcludeTake(); // a local battle: its PC's own, no command (SOS-93)
+                if (close != null) {
+                    close.run();
+                }
+            }
             return "battle close";
         }
         if (restartAfter > 0 && !restartAsked && !closeAsked && Engine.step() - battleFrom >= restartAfter) {
@@ -237,7 +244,9 @@ public final class PromptAnswers {
         }
         if (retreatAfter > 0 && !retreatAsked && !closeAsked && Engine.step() - battleFrom >= retreatAfter) {
             retreatAsked = true;
-            MapBattles.retreat();
+            if (!MapBattles.retreat()) {
+                battle.liveRetreat(); // a local battle: its PC's own, no command (SOS-93)
+            }
             return "battle retreat";
         }
         return null;

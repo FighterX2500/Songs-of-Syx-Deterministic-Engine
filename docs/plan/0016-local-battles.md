@@ -73,4 +73,17 @@ Every other PC runs its own city and the world as usual.
 
 ## Results
 
-(Filled in as the steps run.)
+### Step A (2026-10-30)
+
+Rig, Mogus-72 with 2 humans, two copies at 5×: `SOSDET_LOCAL_BATTLES=1 rig.py city --humans 2 --copies 2 --speeds 5,5 --engage 1500 --cmds "wbesiegenear 0 stronger"`.
+
+| Run | What happened |
+|---|---|
+| L93A | Engage at 11,852, Start at 11,910. World desync at 11,940: the calendar only. `TIME` is a battle resource that updates in the city part, and it stood still on the battle PC while the battle deployed (O3). |
+| L93B | With the world's clock (`TIME`, `INTER`, `TEMP_EVENTS`) run every step on the battle PC: identical to step 15,000. But the battle never left deployment: the rig's Start went through the command log, which a local battle no longer uses. |
+| L93C | With the rig's Start, Retreat and Close done locally: the battle fought from 11,910 to the retreat at 13,410, **no desync on either copy**. The retreat then crashed the battle PC: vanilla's exit loads the whole game saved at the freeze, which drops the session's city reports (step C). |
+
+Found:
+- **Generating takes 12.7 s in one step** on the battle PC (Mogus-72). The other PC waits, and the agreed speed falls to 1×. Step B should generate between steps, as a view's load does.
+- **The battle's commands** (Start, Retreat, Close) are captured only for battles every PC runs. A local battle applies them on its own PC, outside the step. Watching (SOS-109) will need them in a local queue, at a step.
+

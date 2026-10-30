@@ -1,6 +1,6 @@
 diff -ru -U2 a/game/GAME.java b/game/GAME.java
 --- a/game/GAME.java	2026-06-17 19:41:18.000000000 +0500
-+++ b/game/GAME.java	2026-10-30 15:05:20.232624800 +0500
++++ b/game/GAME.java	2026-10-30 15:13:23.597818000 +0500
 @@ -255,7 +255,9 @@
  		double speed = SPEED.update(slowDown);
  		
@@ -49,13 +49,13 @@ diff -ru -U2 a/game/GAME.java b/game/GAME.java
 +					for (int part = 0; part < 2; part++) {
 +						sosdet.Hooks.stepPart(part); // SOSDET: the city part, then the world part on a stream of its own (ADR 0005)
 +						for (GameResource s : GameResource.all) {
-+							if (sosdet.Hooks.afterTickIn(s, part) && ((s.isBattle && !deploying)|| ((!battleView || sosdet.Hooks.localWorldPart(part)) && !sosdet.Hooks.worldHeld()))) // SOSDET: a local battle's PC runs the world part too (SOS-93)
++							if (sosdet.Hooks.afterTickIn(s, part) && ((s.isBattle && !deploying)|| ((!battleView || sosdet.Hooks.localWorldPart(part)) && !sosdet.Hooks.worldHeld()) || sosdet.Hooks.localClock(s, part))) // SOSDET: a local battle's PC runs the world part too (SOS-93)
 +								s.afterTick(); // SOSDET: once per step, not per rendered frame: it does simulation work (B7)
 +						}
 +						Object sp = sosdet.Hooks.stepProfiler(); // SOSDET: the engine's step profile when on (SOS-106)
 +						Profiler prof = sp != null ? (Profiler) sp : game.profiler;
 +						for (GameResource s : GameResource.all) {
-+							if (sosdet.Hooks.updatesIn(s, part) && ((s.isBattle && !deploying)|| ((!battleView || sosdet.Hooks.localWorldPart(part)) && !sosdet.Hooks.worldHeld()))) {
++							if (sosdet.Hooks.updatesIn(s, part) && ((s.isBattle && !deploying)|| ((!battleView || sosdet.Hooks.localWorldPart(part)) && !sosdet.Hooks.worldHeld()) || sosdet.Hooks.localClock(s, part))) {
 +								prof.logStart(s);
 +								s.update(max, prof);
 +								prof.logEnd(s);
@@ -136,7 +136,7 @@ diff -ru -U2 a/game/GAME.java b/game/GAME.java
  			}
 diff -ru -U2 a/view/battle/BattleView.java b/view/battle/BattleView.java
 --- a/view/battle/BattleView.java	2025-11-19 14:24:46.000000000 +0500
-+++ b/view/battle/BattleView.java	2026-10-30 15:05:20.229127100 +0500
++++ b/view/battle/BattleView.java	2026-10-30 15:13:23.593795000 +0500
 @@ -109,7 +109,7 @@
  	@Override
  	protected boolean update(float ds, boolean should){

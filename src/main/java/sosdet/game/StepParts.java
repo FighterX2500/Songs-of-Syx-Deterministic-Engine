@@ -1,10 +1,13 @@
 package sosdet.game;
 
 import game.GAME.GameResource;
+import game.boosting.tmp.TmpBoosting;
 import game.events.EVENTS;
 import game.faction.FACTIONS;
 import game.faction.player.Player;
 import game.raiding.RAIDING;
+import game.time.Intervals;
+import game.time.TIME;
 import world.WORLD;
 
 /**
@@ -39,6 +42,14 @@ public final class StepParts {
     public static boolean afterTickIn(GameResource r, int part) {
         boolean world = world(r) || r instanceof EVENTS || r instanceof FACTIONS;
         return (part == WORLD_PART) == world;
+    }
+
+    /**
+     * True for the world's clock among the city part's resources: the calendar, its intervals and the temporary boosts
+     * (world sections). A local battle's PC runs them once a step whatever its battle does (SOS-93, O3).
+     */
+    public static boolean worldClock(GameResource r) {
+        return r instanceof TIME || r instanceof Intervals || r instanceof TmpBoosting;
     }
 
     private static boolean world(GameResource r) {
