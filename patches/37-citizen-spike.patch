@@ -1,0 +1,29 @@
+diff -ru -U2 a/settlement/entity/ENTETIES.java b/settlement/entity/ENTETIES.java
+--- a/settlement/entity/ENTETIES.java	2026-06-17 18:21:56.000000000 +0500
++++ b/settlement/entity/ENTETIES.java	2026-10-30 13:54:12.273048100 +0500
+@@ -357,7 +357,9 @@
+ 			ENTITY e = ents[i];
+ 			if (e == null)
+ 				continue;
++			sosdet.Hooks.citizenPart(0, true); // SOSDET spike (SOS-108): time this part of a citizen's update
+ 			e.update(ds);
++			sosdet.Hooks.citizenPart(0, false);
+ 			if (e.handlerId == -1) {
+ 				continue;
+ 			}
+diff -ru -U2 a/snake2d/PathUtilOnline.java b/snake2d/PathUtilOnline.java
+--- a/snake2d/PathUtilOnline.java	2026-06-17 17:00:12.000000000 +0500
++++ b/snake2d/PathUtilOnline.java	2026-10-30 13:54:12.274045500 +0500
+@@ -81,10 +81,12 @@
+ 		 */
+ 		public void init(Object user){
+ 			lock(user);
++			sosdet.Hooks.citizenPart(6, true); // SOSDET spike (SOS-108): a search inside a citizen's update
+ 			tree.clear();
+ 		}
+ 		
+ 		public void done() {
++			sosdet.Hooks.citizenPart(6, false);
+ 			unlock();
+ 		}
+ 		

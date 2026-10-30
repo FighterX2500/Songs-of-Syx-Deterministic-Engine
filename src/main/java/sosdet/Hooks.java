@@ -355,6 +355,14 @@ public final class Hooks {
         return s == null ? null : s.profiler;
     }
 
+    /** SOS-108 spike: one part of a citizen's update starts or ends; timed while the step profile is on, on the simulation thread only. */
+    public static void citizenPart(int part, boolean start) {
+        Session s = Engine.session();
+        if (s == null || s.profiler == null || !s.streams.isSimulationThread())
+            return;
+        s.profiler.citizenPart(part, start);
+    }
+
     public static boolean worldHeld() {
         Session s = Engine.session();
         return s != null && s.worldHeld;

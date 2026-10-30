@@ -24,6 +24,8 @@ public final class StepProfiler implements Profiler {
     private final int[] open = new int[MAX];
     private final long[] started = new long[MAX];
     private final long[] total = new long[MAX];
+    private final long[] calls = new long[MAX];
+    private boolean inCitizen;
     private int count;
     private int level;
     private long steps;
@@ -46,6 +48,7 @@ public final class StepProfiler implements Profiler {
         int i = slot(cl);
         if (i < 0 || open[i]++ > 0)
             return;
+        calls[i]++;
         started[i] = System.nanoTime();
         level++;
     }
@@ -62,6 +65,28 @@ public final class StepProfiler implements Profiler {
     @Override
     public void log() {
         // the engine reports it: see report()
+    }
+
+    // SOS-108 spike: the parts of a citizen's update, keyed like the game's parts
+    private static final class Citizen {}
+    private static final class Move {}
+    private static final class StateTick {}
+    private static final class Collide {}
+    private static final class Plan {}
+    private static final class Person {}
+    private static final class Search {}
+    private static final Class<?>[] PARTS = {Citizen.class, Move.class, StateTick.class, Collide.class, Plan.class, Person.class, Search.class};
+
+    /** SOS-108 spike: part 0 is a whole entity update; 6, a search, counts only inside one. */
+    public void citizenPart(int part, boolean start) {
+        if (part == 0)
+            inCitizen = start;
+        else if (part == 6 && !inCitizen)
+            return;
+        if (start)
+            logStart(PARTS[part]);
+        else
+            logEnd(PARTS[part]);
     }
 
     /** One step ended, having taken {@code nanos} in all. */
@@ -83,8 +108,11 @@ public final class StepProfiler implements Profiler {
             for (int d = 0; d < depth[i]; d++)
                 b.append('-');
             b.append(name(classes[i])).append(' ').append(String.format(Locale.ROOT, "%.3f", total[i] / 1e6 / steps));
+            if (calls[i] != steps)
+                b.append(String.format(Locale.ROOT, " (%.1f a step)", (double) calls[i] / steps));
         }
         Arrays.fill(total, 0);
+        Arrays.fill(calls, 0);
         steps = 0;
         stepNanos = 0;
         return b.toString();
