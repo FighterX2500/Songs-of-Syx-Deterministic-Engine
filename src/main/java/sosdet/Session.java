@@ -152,6 +152,8 @@ final class Session {
     long frameStepNanos;
     long pathJobs;
     long pathNanos;
+    /** The step profile, while a rig run asks for it (SOS-106); null otherwise. Timing only. */
+    sosdet.game.StepProfiler profiler;
     /** Runs the path jobs a step queued, at its end (SOS-37). */
     final PathWorkers paths = new PathWorkers();
     /** The game's queue of path jobs, set by the first job a step queues; null when none is waiting. */

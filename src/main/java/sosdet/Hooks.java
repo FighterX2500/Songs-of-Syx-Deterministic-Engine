@@ -333,6 +333,8 @@ public final class Hooks {
         s.viewsEnd(step); // a thaw due next step is put off while a battle runs or a world prompt is open (SOS-82)
         long stepNanos = System.nanoTime() - s.stepStartNanos;
         s.times.record(stepNanos);
+        if (s.profiler != null)
+            s.profiler.stepDone(stepNanos);
         s.frameStepNanos += stepNanos; // this PC's capacity (SOS-94): timing only, never fed to the simulation
         s.stepStartNanos = 0;
         s.part = -1;
@@ -343,6 +345,16 @@ public final class Hooks {
      * True when the world map must not update in the city view: a session holding the world still. An open world-battle
      * prompt no longer holds it (spec §4, SOS-45): only the battle's armies wait ({@link #armyHeld}).
      */
+    /**
+     * Patch 10, in the step: the engine's step profile while one is on (SOS-106), for each game part's update; null
+     * otherwise, and the part gets vanilla's own. An Object, so that loading Hooks never needs the game's Profiler type
+     * (the unit tests run without the game).
+     */
+    public static Object stepProfiler() {
+        Session s = Engine.session();
+        return s == null ? null : s.profiler;
+    }
+
     public static boolean worldHeld() {
         Session s = Engine.session();
         return s != null && s.worldHeld;

@@ -1413,6 +1413,18 @@ public final class Engine {
      * How long the last frame's game update took, in nanoseconds (-1 before the first frame of the session; without a
      * session, vanilla's last frame). The current frame's update is still running when the caller asks.
      */
+    /** Turns the step profile on or off (SOS-106): the time each game part takes in the step. Timing only. */
+    public static void profileSteps(boolean on) {
+        Session s = required();
+        s.profiler = on ? (s.profiler != null ? s.profiler : new sosdet.game.StepProfiler()) : null;
+    }
+
+    /** The step profile since the last call, as one line; "off" when no profile is on. */
+    public static String stepProfile() {
+        Session s = required();
+        return s.profiler == null ? "step profile off" : s.profiler.report();
+    }
+
     public static long lastFrameUpdateNanos() {
         Session s = session;
         return s == null ? vanillaFrameUpdateNanos : s.lastFrameUpdateNanos;

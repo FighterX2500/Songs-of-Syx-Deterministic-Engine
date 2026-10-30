@@ -112,6 +112,8 @@ Probes for a player. Each notes what it reads between steps and changes nothing:
 
 World actions for several humans: `wpeace` makes the peace deal with the strongest NPC at war with this human, at the denari it asks. `wraiderpay` and `wallyhelp` answer this human's own raider. `wbesiegenear` skips settlements of other humans. `wsiege` notes each human capital's siege (its start, the days to the assault, Storm's refusal, and whether a goods deal could go) and this human's sally refusal; `sally` sallies this human out of its besieged capital, and `sallyother` does so as soon as a world prompt asking another human is open, such as the besieger's siege window (SOS-92).
 
+`wprofile` turns the step profile on, and each later call notes each game part's mean milliseconds a step since the call before, nested as the game logs them (SOS-106).
+
 `wprod` notes, for up to 8 goods, this human's net production rate and how many workplaces count in it, as the goods window reads them (SOS-102). `wtrade` notes each human's capital, regions, stance with every other human and the factions its traders reach, with the distance (SOS-101).
 
 Profile actions (SOS-98): `rulertype <name>` and `factiontype <name>` type the name into the profile window's own input as a player does (click, delete key by key, type, click away), so its hooks run as for a player; `identity` notes every human's faction name and ruler name as this PC has them.
