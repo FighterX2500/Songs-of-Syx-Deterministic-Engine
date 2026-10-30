@@ -169,6 +169,42 @@ class LocalBattleTest {
     }
 
     @Test
+    void theBattlePcKeepsItsMessagesForTheLoadBack() {
+        Session s = session(3);
+        s.localEngage(1234, 3);
+        Runnable back = () -> { };
+        Hooks.localMessage(back);
+        assertTrue(s.localMessages.isEmpty(), "its city runs on: no load loses it");
+        s.localsAt(1260);
+        Hooks.localMessage(back);
+        assertEquals(List.of(back), s.localMessages);
+    }
+
+    @Test
+    void anotherPcKeepsNoMessagesOfTheBattle() {
+        Session s = session(0);
+        s.localEngage(1234, 3);
+        s.localsAt(1260);
+        Hooks.localMessage(() -> { });
+        assertTrue(s.localMessages.isEmpty(), "this PC loads no city back");
+    }
+
+    @Test
+    void aHumanRemovedInItsBattleEndsTheBattle() {
+        Session s = session(0);
+        s.remover = slot -> { };
+        s.localEngage(1234, 3);
+        s.localsAt(1260);
+        s.localCap(5);
+        s.removeDue[3] = true;
+        s.retireDue();
+        assertNull(Engine.localBattle(3));
+        assertFalse(Engine.localBattleRunning(), "campaign saves go on");
+        assertFalse(s.frozen(3));
+        assertEquals(5, s.localCap(5), "the world's speed comes back");
+    }
+
+    @Test
     void theHostsFramesHoldTheCapWhileAPeerFights() {
         Session s = session(0);
         s.clock.agreedSpeed(5);

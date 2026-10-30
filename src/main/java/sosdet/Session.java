@@ -302,6 +302,10 @@ final class Session {
     private double[] localMoves;
     /** The battle PC: its own city, as saved at the freeze, is loading back. */
     boolean localBackLoading;
+    /** The battle PC: what puts back each message to its player since the freeze, which the load back would lose. */
+    final java.util.ArrayList<Runnable> localMessages = new java.util.ArrayList<>();
+    /** The battle PC: how many of them the last load back put in the list; for the rig. */
+    int localMessagesBack;
 
     /** Every PC, at the Engage step: the battle of {@code human} runs on its PC only, from the next report step. */
     LocalBattle localEngage(long step, int human) {
@@ -495,6 +499,11 @@ final class Session {
         }
         part = -1;
         heldTxns.clear();
+        localMessagesBack = localMessages.size();
+        for (int i = 0; i < localMessages.size(); i++) {
+            localMessages.get(i).run();
+        }
+        localMessages.clear();
     }
 
     /**
@@ -1285,6 +1294,7 @@ final class Session {
             removeDue[slot] = false;
             removing[slot] = false;
             reports(slot).clear();
+            locals[slot] = null; // its battle ends with it: no result will come, and its armies and the speed go free
         }
     }
 

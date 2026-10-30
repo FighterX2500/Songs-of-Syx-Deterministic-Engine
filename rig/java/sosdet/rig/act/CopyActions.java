@@ -3,6 +3,9 @@ package sosdet.rig.act;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 
+import game.GAME;
+import settlement.entity.ENTITY;
+import settlement.entity.humanoid.Humanoid;
 import settlement.main.SETT;
 import settlement.room.main.Room;
 import settlement.room.main.RoomInstance;
@@ -12,6 +15,7 @@ import snake2d.util.datatypes.COORDINATE;
 import snake2d.util.datatypes.Coo;
 import snake2d.util.datatypes.RECTANGLE;
 import snake2d.util.datatypes.Rec;
+import sosdet.Hooks;
 import sosdet.rig.Rig;
 import view.main.VIEW;
 import view.sett.ui.room.copy.UICopier;
@@ -32,6 +36,15 @@ public final class CopyActions {
     /** Queues the action named by {@code a[0]} to run outside the step; false if this area has no such action. */
     public static boolean run(String[] a) {
         switch (a[0]) {
+        case "wipeenemy": // wipeenemy <human slot>: on that human's PC every enemy soldier dies, so its local battle is won (SOS-93)
+            if (Hooks.localHuman() == Integer.parseInt(a[1])) {
+                for (ENTITY e : SETT.ENTITIES().getAllEnts()) {
+                    if (e instanceof Humanoid && ((Humanoid) e).indu().army() == GAME.ARMIES().enemy()) {
+                        e.helloMyNameIsInigoMontoyaYouKilledMyFatherPrepareToDie();
+                    }
+                }
+            }
+            return true;
         case "copyroom": // copyroom <key prefix> [n] [rot]: the room copier on the n-th area room, placed at the first
             // free spot (6100)
             String ckey = a[1];

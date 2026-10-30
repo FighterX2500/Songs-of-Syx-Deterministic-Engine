@@ -785,6 +785,18 @@ public final class Hooks {
         return s == null || s.loading || s.humanNow() == s.localHuman;
     }
 
+    /**
+     * Patch 16, a message sent to this PC's player: in its local battle no popup opens, as vanilla's battle view shows
+     * none, but the load back would lose the message: {@code back} puts it in the list of the game loaded back, with no
+     * popup (spec section 8).
+     */
+    public static void localMessage(Runnable back) {
+        Session s = Engine.session();
+        if (s != null && s.localHere() != null) {
+            s.localMessages.add(back);
+        }
+    }
+
     /** {@link #newsHumans}: no human to set, the site sends as it is. */
     private static final int[] NEWS_AS_IT_IS = {-1};
 

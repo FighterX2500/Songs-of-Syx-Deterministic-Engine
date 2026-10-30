@@ -375,6 +375,11 @@ public final class Engine {
         return required().locals[slot];
     }
 
+    /** How many messages the last local battle's load back kept on this PC; for the rig. */
+    public static int localMessagesBack() {
+        return required().localMessagesBack;
+    }
+
     /** True from a local battle's Engage until its human has thawed: campaign saves wait (spec §8). */
     public static boolean localBattleRunning() {
         for (LocalBattle b : required().locals) {

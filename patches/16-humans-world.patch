@@ -1,6 +1,6 @@
 diff -ru -U2 a/game/events/faction/EventFactionCollapse.java b/game/events/faction/EventFactionCollapse.java
 --- a/game/events/faction/EventFactionCollapse.java	2025-09-22 07:59:34.000000000 +0500
-+++ b/game/events/faction/EventFactionCollapse.java	2026-10-30 02:50:37.702736700 +0500
++++ b/game/events/faction/EventFactionCollapse.java	2026-10-30 20:47:39.135604700 +0500
 @@ -27,7 +27,7 @@
  
  public class EventFactionCollapse extends EventResource{
@@ -27,7 +27,7 @@ diff -ru -U2 a/game/events/faction/EventFactionCollapse.java b/game/events/facti
  				if (reg.faction() != f)
 diff -ru -U2 a/game/events/faction/EventFactionExpand.java b/game/events/faction/EventFactionExpand.java
 --- a/game/events/faction/EventFactionExpand.java	2026-01-12 09:17:34.000000000 +0500
-+++ b/game/events/faction/EventFactionExpand.java	2026-10-30 02:50:37.641233200 +0500
++++ b/game/events/faction/EventFactionExpand.java	2026-10-30 20:47:39.135604700 +0500
 @@ -23,7 +23,7 @@
  
  public class EventFactionExpand extends EventResource{
@@ -61,7 +61,7 @@ diff -ru -U2 a/game/events/faction/EventFactionExpand.java b/game/events/faction
  			v /= d.distance;
 diff -ru -U2 a/game/events/faction/player/EventDiplomacy.java b/game/events/faction/player/EventDiplomacy.java
 --- a/game/events/faction/player/EventDiplomacy.java	2026-06-25 10:49:14.000000000 +0500
-+++ b/game/events/faction/player/EventDiplomacy.java	2026-10-30 02:50:37.642721800 +0500
++++ b/game/events/faction/player/EventDiplomacy.java	2026-10-30 20:47:39.136601900 +0500
 @@ -28,11 +28,20 @@
  	private final Stance stance = new Stance();
  
@@ -196,7 +196,7 @@ diff -ru -U2 a/game/events/faction/player/EventDiplomacy.java b/game/events/fact
  	static class EData implements SAVABLE{
 diff -ru -U2 a/game/events/world/EventWorldRebellion.java b/game/events/world/EventWorldRebellion.java
 --- a/game/events/world/EventWorldRebellion.java	2025-12-18 13:27:26.000000000 +0500
-+++ b/game/events/world/EventWorldRebellion.java	2026-10-30 02:50:37.643713200 +0500
++++ b/game/events/world/EventWorldRebellion.java	2026-10-30 20:47:39.136601900 +0500
 @@ -41,9 +41,15 @@
  	private static CharSequence ¤¤RebellionArmy = "¤In fact they hate you so much that they have raised an army against you. You better deal with this problem before it spreads.";
  	
@@ -339,7 +339,7 @@ diff -ru -U2 a/game/events/world/EventWorldRebellion.java b/game/events/world/Ev
  	}
 diff -ru -U2 a/game/faction/diplomacy/Listener.java b/game/faction/diplomacy/Listener.java
 --- a/game/faction/diplomacy/Listener.java	2025-11-20 16:37:40.000000000 +0500
-+++ b/game/faction/diplomacy/Listener.java	2026-10-30 02:50:37.645697100 +0500
++++ b/game/faction/diplomacy/Listener.java	2026-10-30 20:47:39.136601900 +0500
 @@ -31,8 +31,12 @@
  			Str.TMP.insert(0, faction.name);
  			Str.TMP.insert(1, other.name);
@@ -357,7 +357,7 @@ diff -ru -U2 a/game/faction/diplomacy/Listener.java b/game/faction/diplomacy/Lis
  			Str.TMP.clear().add(¤¤trade);
 diff -ru -U2 a/game/faction/npc/FactionNPC.java b/game/faction/npc/FactionNPC.java
 --- a/game/faction/npc/FactionNPC.java	2026-06-01 14:10:18.000000000 +0500
-+++ b/game/faction/npc/FactionNPC.java	2026-10-30 02:50:37.646690800 +0500
++++ b/game/faction/npc/FactionNPC.java	2026-10-30 20:47:39.137604100 +0500
 @@ -170,7 +170,7 @@
  				s.clear();
  		}
@@ -369,7 +369,7 @@ diff -ru -U2 a/game/faction/npc/FactionNPC.java b/game/faction/npc/FactionNPC.ja
  	}
 diff -ru -U2 a/game/faction/royalty/Royalty.java b/game/faction/royalty/Royalty.java
 --- a/game/faction/royalty/Royalty.java	2026-03-26 10:56:52.000000000 +0500
-+++ b/game/faction/royalty/Royalty.java	2026-10-30 02:50:37.648178900 +0500
++++ b/game/faction/royalty/Royalty.java	2026-10-30 20:47:39.137604100 +0500
 @@ -28,6 +28,22 @@
  	public short eventMark;
  	
@@ -419,7 +419,7 @@ diff -ru -U2 a/game/faction/royalty/Royalty.java b/game/faction/royalty/Royalty.
  }
 diff -ru -U2 a/game/raiding/RAIDING.java b/game/raiding/RAIDING.java
 --- a/game/raiding/RAIDING.java	2026-05-28 12:01:02.000000000 +0500
-+++ b/game/raiding/RAIDING.java	2026-10-30 02:50:37.651154600 +0500
++++ b/game/raiding/RAIDING.java	2026-10-30 20:47:39.137604100 +0500
 @@ -32,13 +32,28 @@
  	public final int AMOUNT = 100;
  	
@@ -561,7 +561,7 @@ diff -ru -U2 a/game/raiding/RAIDING.java b/game/raiding/RAIDING.java
  	
 diff -ru -U2 a/game/raiding/RaidingCurrent.java b/game/raiding/RaidingCurrent.java
 --- a/game/raiding/RaidingCurrent.java	2026-06-24 16:32:06.000000000 +0500
-+++ b/game/raiding/RaidingCurrent.java	2026-10-30 02:50:37.652642800 +0500
++++ b/game/raiding/RaidingCurrent.java	2026-10-30 20:47:39.137604100 +0500
 @@ -76,7 +76,10 @@
  
  	}
@@ -689,7 +689,7 @@ diff -ru -U2 a/game/raiding/RaidingCurrent.java b/game/raiding/RaidingCurrent.ja
  				}else {
 diff -ru -U2 a/game/raiding/Updater.java b/game/raiding/Updater.java
 --- a/game/raiding/Updater.java	2025-09-22 07:59:34.000000000 +0500
-+++ b/game/raiding/Updater.java	2026-10-30 02:50:37.656114200 +0500
++++ b/game/raiding/Updater.java	2026-10-30 20:47:39.138597000 +0500
 @@ -10,8 +10,9 @@
  
  class Updater extends IUpdater{
@@ -769,7 +769,7 @@ diff -ru -U2 a/game/raiding/Updater.java b/game/raiding/Updater.java
  	
 diff -ru -U2 a/game/raiding/UpdaterRegions.java b/game/raiding/UpdaterRegions.java
 --- a/game/raiding/UpdaterRegions.java	2026-06-11 09:04:28.000000000 +0500
-+++ b/game/raiding/UpdaterRegions.java	2026-10-30 02:50:37.657601500 +0500
++++ b/game/raiding/UpdaterRegions.java	2026-10-30 20:47:39.138597000 +0500
 @@ -56,8 +56,8 @@
  			
  			@Override
@@ -816,19 +816,48 @@ diff -ru -U2 a/game/raiding/UpdaterRegions.java b/game/raiding/UpdaterRegions.ja
  		
 diff -ru -U2 a/view/ui/message/Message.java b/view/ui/message/Message.java
 --- a/view/ui/message/Message.java	2026-06-22 10:59:28.000000000 +0500
-+++ b/view/ui/message/Message.java	2026-10-30 02:50:37.659090400 +0500
-@@ -62,6 +62,8 @@
++++ b/view/ui/message/Message.java	2026-10-30 20:47:39.145133400 +0500
+@@ -62,10 +62,18 @@
  	}
  	
  	public boolean send() {
 +		if (!sosdet.Hooks.messageHere()) // SOSDET: another PC's player's message, from the world part or a viewed city (SOS-89)
 +			return false;
  		currentSecond = TIME.currentSecond();
++		sosdet.Hooks.localMessage(this::sosdetBack); // SOSDET: its load back would lose a message of a local battle (SOS-93)
  		return VIEW.messages().add(this);
  	}
+ 	
++	private void sosdetBack() { // SOSDET: into the list of the game loaded back (SOS-93)
++		section = null;
++		VIEW.messages().sosdetBack(this);
++	}
++	
+ 	protected final String title() {
+ 		return title;
+ 	}
+diff -ru -U2 a/view/ui/message/Messages.java b/view/ui/message/Messages.java
+--- a/view/ui/message/Messages.java	2026-04-06 08:55:32.000000000 +0500
++++ b/view/ui/message/Messages.java	2026-10-30 20:47:39.139594100 +0500
+@@ -184,6 +184,15 @@
+ 		return true;
+ 	}
+ 	
++	void sosdetBack(Message m) { // SOSDET: in the list, with no popup (SOS-93)
++		if (!all.hasRoom()) {
++			remove(0);
++		}
++		all.add(m);
++		if (!m.isRead)
++			unread ++;
++	}
++	
+ 	private void remove(int index) {
+ 		
+ 		if (index < 0 || index >= all.size())
 diff -ru -U2 a/view/ui/raider/Current.java b/view/ui/raider/Current.java
 --- a/view/ui/raider/Current.java	2025-11-18 07:32:38.000000000 +0500
-+++ b/view/ui/raider/Current.java	2026-10-30 02:50:37.661569700 +0500
++++ b/view/ui/raider/Current.java	2026-10-30 20:47:39.139594100 +0500
 @@ -69,7 +69,7 @@
  			public void update(GText text) {
  				text.setMaxWidth(700);
@@ -840,7 +869,7 @@ diff -ru -U2 a/view/ui/raider/Current.java b/view/ui/raider/Current.java
  					Str.TMP.clear();
 diff -ru -U2 a/view/ui/raider/Info.java b/view/ui/raider/Info.java
 --- a/view/ui/raider/Info.java	2026-01-31 09:04:10.000000000 +0500
-+++ b/view/ui/raider/Info.java	2026-10-30 02:50:37.663057200 +0500
++++ b/view/ui/raider/Info.java	2026-10-30 20:47:39.140644800 +0500
 @@ -52,7 +52,7 @@
  			
  			@Override
@@ -894,7 +923,7 @@ diff -ru -U2 a/view/ui/raider/Info.java b/view/ui/raider/Info.java
  			@Override
 diff -ru -U2 a/view/ui/raider/List.java b/view/ui/raider/List.java
 --- a/view/ui/raider/List.java	2025-09-12 16:09:02.000000000 +0500
-+++ b/view/ui/raider/List.java	2026-10-30 02:50:37.664545600 +0500
++++ b/view/ui/raider/List.java	2026-10-30 20:47:39.140644800 +0500
 @@ -136,7 +136,7 @@
  			COLOR c = COLOR.WHITE100;
  			Str.TMP.clear();
@@ -906,7 +935,7 @@ diff -ru -U2 a/view/ui/raider/List.java b/view/ui/raider/List.java
  			}else if (rr.defeated) {
 diff -ru -U2 a/view/world/ui/army/Hoverer.java b/view/world/ui/army/Hoverer.java
 --- a/view/world/ui/army/Hoverer.java	2025-10-21 12:33:42.000000000 +0500
-+++ b/view/world/ui/army/Hoverer.java	2026-10-30 02:50:37.666034200 +0500
++++ b/view/world/ui/army/Hoverer.java	2026-10-30 20:47:39.140644800 +0500
 @@ -41,8 +41,8 @@
  					text.add(a.get().faction().name);
  				}else {
@@ -931,7 +960,7 @@ diff -ru -U2 a/view/world/ui/army/Hoverer.java b/view/world/ui/army/Hoverer.java
  				}
 diff -ru -U2 a/view/world/ui/region/ListPlayer.java b/view/world/ui/region/ListPlayer.java
 --- a/view/world/ui/region/ListPlayer.java	2026-06-16 11:04:52.000000000 +0500
-+++ b/view/world/ui/region/ListPlayer.java	2026-10-30 02:50:37.670002600 +0500
++++ b/view/world/ui/region/ListPlayer.java	2026-10-30 20:47:39.141604000 +0500
 @@ -136,7 +136,7 @@
  					
  					@Override
@@ -943,7 +972,7 @@ diff -ru -U2 a/view/world/ui/region/ListPlayer.java b/view/world/ui/region/ListP
  					@Override
 diff -ru -U2 a/world/army/ai/Chiller.java b/world/army/ai/Chiller.java
 --- a/world/army/ai/Chiller.java	2024-12-26 16:43:54.000000000 +0500
-+++ b/world/army/ai/Chiller.java	2026-10-30 02:50:37.670993300 +0500
++++ b/world/army/ai/Chiller.java	2026-10-30 20:47:39.141604000 +0500
 @@ -1,6 +1,5 @@
  package world.army.ai;
  
@@ -969,7 +998,7 @@ diff -ru -U2 a/world/army/ai/Chiller.java b/world/army/ai/Chiller.java
  				RegDist d = l.rnd();
 diff -ru -U2 a/world/overlay/OverlayRegAbs.java b/world/overlay/OverlayRegAbs.java
 --- a/world/overlay/OverlayRegAbs.java	2026-06-10 09:44:08.000000000 +0500
-+++ b/world/overlay/OverlayRegAbs.java	2026-10-30 02:50:37.671985800 +0500
++++ b/world/overlay/OverlayRegAbs.java	2026-10-30 20:47:39.141604000 +0500
 @@ -54,7 +54,7 @@
  		COLOR.WHITE2WHITE.bind();
  		
@@ -981,7 +1010,7 @@ diff -ru -U2 a/world/overlay/OverlayRegAbs.java b/world/overlay/OverlayRegAbs.ja
  			
 diff -ru -U2 a/world/overlay/WorldOverlays.java b/world/overlay/WorldOverlays.java
 --- a/world/overlay/WorldOverlays.java	2026-06-10 10:26:48.000000000 +0500
-+++ b/world/overlay/WorldOverlays.java	2026-10-30 02:50:37.673969000 +0500
++++ b/world/overlay/WorldOverlays.java	2026-10-30 20:47:39.142601300 +0500
 @@ -51,7 +51,7 @@
  		
  		@Override
@@ -1002,7 +1031,7 @@ diff -ru -U2 a/world/overlay/WorldOverlays.java b/world/overlay/WorldOverlays.ja
  				
 diff -ru -U2 a/world/region/RDOwner.java b/world/region/RDOwner.java
 --- a/world/region/RDOwner.java	2026-03-24 16:15:46.000000000 +0500
-+++ b/world/region/RDOwner.java	2026-10-30 02:50:37.679921000 +0500
++++ b/world/region/RDOwner.java	2026-10-30 20:47:39.142601300 +0500
 @@ -24,15 +24,17 @@
  		D.ts(RDOwner.class);
  	}

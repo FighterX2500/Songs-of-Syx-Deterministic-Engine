@@ -144,6 +144,26 @@ Fixed:
 - **The polls:** `PRegAttack` checked only the region's owner, an NPC here, not the attacking human. It now checks both. The pending orders at the top of `PRegAttack` and `PSiege` wait too.
 - **The return:** it waits until no prompt or question is open, as a view's thaw does, and the after-battle runs once the PCs are back. A battle PC can stay on the battle map a little longer for it, up to another human's prompt time.
 
-Measured, not explained: in L93AM the host was held 12.0 s in all, 7.88 s at the longest, against 1.0 s in L93AH. Nothing here shows which wait that is; a peer's load back is the first thing to check.
+### The remaining cases (2026-10-30)
 
-Still not shown by a run: a victory, the other human's world order during a battle, two battles at once, a human removed mid-battle, a prompt open at the result (unit test only), and any of this on two real PCs.
+| Run | What happened |
+|---|---|
+| L93AN | No local battles: a city view (steps 300 to 700), then a battle every PC runs, to 12,600: identical. The stricter hash raises no false alarm on whole-game loads. |
+| L93AP | The peer fights on to the end and loses, returning at 21,471: identical to 23,500. The garrison attack happens only when the garrison is the stronger side, so this line can't give a victory. |
+| L93AQ | The rig's `wipeenemy` gives the host a victory, accepted at 18,304; the peer is removed mid-battle: identical to 21,000. It also showed a bug: with no speed entry after the retirement, the removed human's battle record stayed open, which would hold the world at 1× for good. |
+| L93AR | Two battles at once, the peer's from 18,420 and the host's from 18,720; the host's victory and return at 19,363 with the peer still fighting; the peer removed: **identical to 21,200**. The speed came back to 5× 31 steps after the retirement. |
+
+Fixed:
+- **Removal:** retiring a human ends its local battle.
+- **The one world question:** a human's army that reaches the region it was sent to besiege stands there until the battle is over.
+- **Notifications:** vanilla's battle view shows no popups, but the battle PC's load back restores the message list from before the battle. Messages from the battle are now kept and put back with no popup.
+
+The other human's world commands reach the battle PC: in L93AR the host's Engage (18,704) and its victory accept (19,395) applied on the peer's PC during the peer's battle, and the world hashes stayed equal. These were those two commands, not an army's move order. The rig's own `wraid` and `warmyname` fired during the host's battle, so they prove nothing here.
+
+Measured, not explained: the longest time the host was held was 7.88 s in L93AM, 8.53 s in L93AP and 6.08 s in L93AR, against 0.46 s in L93AQ and 1.0 s in L93AH. L93AM and L93AP had a peer's return; L93AR had none, but had two battles at once. Nothing here shows which waits these are.
+
+Known limits:
+- A world question has no time limit, unlike a prompt's 30 seconds, and a battle's return waits for it, so a player who ignores one delays another player's return. A view's thaw waits the same way.
+- The host generating its own battle holds the others about 12.7 s.
+
+Still not shown by a run: a victory on a peer, a prompt or world question held and then asked after a battle, a message kept through a return (every run had 0), and any of this on two real PCs.
