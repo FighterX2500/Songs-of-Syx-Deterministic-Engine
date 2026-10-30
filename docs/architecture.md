@@ -31,7 +31,7 @@ A short map for an AI agent (or a person) about to change SOSDET. Read it first,
    - The host's AI general keeps its own thread, but writes only to the log (patch `90`).
 5. **`Hooks.stepEnd`:** every 30 steps the state hash ([`GameHash`](../src/main/java/sosdet/game/GameHash.java), [`HashLog`](../src/main/java/sosdet/hash/HashLog.java)). It has seven sections: clock, soldiers, divisions, projectiles, entities, world and report (the city report the world part reads, ADR 0005). Rooms, stock and stats are not hashed, so a split there shows up in the entities a few steps later.
    - The clock section also holds the human slots and each PC's human, when there are several humans in own-city mode (SOS-46), and marks each retired human (SOS-66).
-   - The world section holds the armies, every world entity, region owners, each faction's credits, overlord and stance with every other faction (not only wars), every NPC king's opinion of each human after slot 0, the raiders, each human's war and rebellion timers and current raider, and the calendar. Hash format 7 (SOS-46). When it differs, the desync report lists it part by part.
+   - The world section holds the armies, every world entity, region owners, each faction's credits, overlord and stance with every other faction (not only wars), every NPC king's opinion of each human after slot 0, the raiders, each human's war and rebellion timers and current raider, and the calendar. Hash format 8 (SOS-46 made it 7; SOS-94 added each PC's capacity to every record). When it differs, the desync report lists it part by part.
 6. **Between steps** come the UI and rendering. They draw from the cosmetic stream and must never write simulation state (patches `65`, `67`, `98`).
 
 ## Player input: commands
@@ -59,7 +59,9 @@ A player's action never changes state on the PC where it was clicked. It becomes
 | 7900s | `WorldBattles` | world-battle prompt decisions |
 | 7950, 7951 | `StepPrompts` | yes/no questions the step asks: 7950 a city's, 7951 a world one, answered by the human asked (SOS-46) |
 | 7960s | `MapBattles` | a battle fought on the battle map: Start, Retreat, the victory or defeat panel's Close, Restart (SOS-41). A world command whose step falls in the battle is skipped, with a notice to its PC: the battle's end loads the game saved before it, which would undo it |
+| 7970s | `Sieges` | a human's sally from its besieged capital, 7970 (SOS-92) |
 | 8000s | `Diplomacy` | deals, emissaries, an overlord's tribute (8005) |
+| 8100s | `HumanDeals` | deals between humans: propose 8100, answer 8101, cancel 8102, tariff 8103, war 8104 (SOS-72 to SOS-74, SOS-77) |
 | 9000s | `Events` | event choices, raiders |
 
 [docs/commands.md](commands.md) lists every player entry point in the game and its status.

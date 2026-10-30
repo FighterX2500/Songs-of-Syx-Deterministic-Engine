@@ -14,7 +14,7 @@ Every PC that starts from the same save and seed (a battle, a city or the campai
 
 - **Game build:** Songs of Syx V71, build 71.44, pinned (mod spec §3). Later game versions are out of scope.
 - **v1:** field battles, as decided in the mod's [ADR 0003](https://github.com/FighterX2500/SOSGSGMP/blob/main/docs/decisions/0003-battle-lockstep.md), including the AI general on the host.
-- **City (owner, 2026-10-23; plan 0002):** the whole city simulation runs in lockstep, including players' city commands (SOS-34). Lockstep for siege assaults still waits on the mod's decision SOS-17.
+- **City (owner, 2026-10-23; plan 0002):** the whole city simulation runs in lockstep, including players' city commands (SOS-34). Siege assaults run in lockstep too: the mod's decision SOS-17 settled it ([ADR 0006](https://github.com/FighterX2500/SOSGSGMP/blob/main/docs/decisions/0006-lockstep-city-viewing-and-assaults.md), 2026-10-24).
 - **World map (owner, 2026-10-23; plan 0002):** the world simulation runs in lockstep on every PC, and the host's save recovers a PC that splits. Everything the world reads from a city, and every change the world makes to a city, crosses as a stamped input applied at the same world step on every PC (plan 0002, stage E).
 - **Several human factions (owner, 2026-10-25; [ADR 0004](decisions/0004-several-humans.md), plan 0004, SOS-46):** up to 16 humans share one world, each a `Player` in its own slot, the same on every PC. The world part treats every human as vanilla's single player, one at a time as the step's current human, and reads each human's values from that human's city reports; NPC relations, event timers and raids are kept per human. Each PC runs only its own human's city. A PC's local human never enters the step. An old single-player save loads as one human in slot 0. Replaces "one player faction" (owner, 2026-10-23).
 - **Not in the engine:** networking, the lobby and every other multiplayer feature. The engine runs and is tested with no network.
@@ -35,6 +35,11 @@ Every PC that starts from the same save and seed (a battle, a city or the campai
 - Resync the world with several humans (SOS-52): the world resync carries every human's ledger and loads every human's world sections (city divisions, relations, events), each PC keeping its own city. Every PC also resets every world army's movement remainder, which vanilla doesn't save, so a resync repairs a difference there too.
 - Build a new world around the players at setup (SOS-55): on the confirmed terrain, `Engine.buildWorld` gives each human a capital at its picked location, in slots 0 to N-1 with the lobby's race, name and banner, then NPC countries and routes as vanilla makes them, with vanilla's small NPC states around every human. `Engine.locationProblem` tells every PC's location picker why a location can't be picked (the terrain, or closer than 6 tiles to another human's). One PC builds the world and every PC loads its save (owner, 2026-10-25).
 - Remove a human whose PC is gone (SOS-66, [plan 0007](plan/0007-remove-human.md); mod spec §11): the host's `Engine.removeHuman(slot)` logs a removal that applies at the same step on every PC. A battle that human is in ends with no result, every army of it is disbanded and every region it held is freed, as vanilla destroys a faction. It stays in its slot, retired (`Engine.retired`), so every other human keeps its place, and nothing runs for it again. Until that step no PC waits for its reports past the last one the host has. `Engine.removeHumanAtStart(slot)` does the same for a resume without that player. The host's own human (slot 0) is never removed.
+- Hold every PC before a battle's Engage (`Engine.battleHold`, `battleGo`), so the mod can save the campaign before the battle (SOS-70; mod spec §11).
+- Deals between humans (SOS-72 to SOS-74, SOS-77): propose, answer and cancel a deal, set a tariff and declare war (`Engine.dealPropose`, `dealAnswer`, `dealCancel`, `setTariff`, `declareWar`), each with a refusal check the mod's window shows first; every one is a command applied at one step on every PC.
+- View another human's city (SOS-82, mod spec §10): the host's `Engine.viewBegin(viewer, owner)` and `viewEnd`; the owner's city goes out through `viewOut` and comes in through `viewIn`, and view hashes compare the two (`viewHashOut`, `viewHashIn`).
+- Sieges of a human's capital (SOS-92 step A, mod spec §9): when the siege began, the days to the assault (`Engine.besiegedSince`, `assaultInDays`) and the defender's sally (`Engine.sallyOut`, `sallyRefusal`).
+- Read every human's money and goods transfers between steps, the same on every PC (`Engine.transfers`; SOS-81, the mod's playtest log).
 - Switch a PC from peer to host mid-battle: after a host change, the new host starts its own general (ADR 0003).
 - With several humans (SOS-46): say which human slot is this PC's (`Engine.localHuman`) and which is each PC's (`Engine.pcHuman`), so each PC's commands act for its own human and its city's reports feed that human. `Engine.asHuman` reads the game as another human between steps only (for the rig's probes). Making a human is still setup through the adapter (`GameHumans.add`, the rig's `makehuman`); the `addHuman` call of [ADR 0004](decisions/0004-several-humans.md) is built as `Engine.buildWorld` (SOS-55, above).
 - Every data format crossing the API (orders, AI log entries, engine save data) carries a format version.
@@ -54,7 +59,7 @@ On the reference PC (Intel Core i5-11600K, 16 GB RAM; mod spec §13) unless a li
 | Determinism, world | Several game copies running the world and a city stay identical for 30 minutes with the AI host (plan 0002, stage D) |
 | Desync report | Every desync can produce a report: the step, which part of the state differs, recent orders, commands and AI log |
 | Resync | Saving and loading at a step leaves room for the mod to recover within 10 s (mod spec §13). Met with several humans since SOS-52: the world resync carries every human's sections. A report miss still throws with several humans |
-| AI log delay | Entries are applied 30 steps (0.5 s) after the host's general writes them, inside the 1 s order latency (mod spec §13) |
+| AI log delay | Entries are applied 30 steps (0.5 s) after the host's general writes them, inside the 1 s order latency (mod spec §13). At higher speeds the delay is half a second of real time, up to 400 steps (SOS-90) |
 
 ## 5. Verification
 
@@ -62,5 +67,5 @@ On the reference PC (Intel Core i5-11600K, 16 GB RAM; mod spec §13) unless a li
 
 ## 6. Open questions
 
-- [x] **City assault as a target.** Settled 2026-10-23: the whole city runs in lockstep (plan 0002), so the Mogus-72 city, invasion included, is a determinism and timing target now. Lockstep for siege assaults between players still waits on SOS-17.
+- [x] **City assault as a target.** Settled 2026-10-23: the whole city runs in lockstep (plan 0002), so the Mogus-72 city, invasion included, is a determinism and timing target now. Lockstep for siege assaults between players was settled by SOS-17: lockstep (mod ADR 0006).
 - [x] **Test saves.** Settled in SOS-31: the suite's saves stay in each PC's own saves folder, a field recording's battle save too; the recordings name each save's checksum ([rig/README.md](../rig/README.md)).

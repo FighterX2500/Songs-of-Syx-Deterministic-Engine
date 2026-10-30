@@ -1,6 +1,6 @@
 # Plan 0007: a removed human's realm becomes free regions (SOS-66)
 
-Card: [SOS-66](https://fighterx2500.atlassian.net/browse/SOS-66) · Date: 2026-10-26 · Status: approved (owner, 2026-10-26), built, smokes passed · Mod spec 0.17 §11 (Removing a player, Disconnects); the mod's SOS-65 calls it · Builds on [ADR 0004](../decisions/0004-several-humans.md), [plan 0004](0004-several-humans.md), [plan 0006](0006-own-city-battles.md)
+Card: [SOS-66](https://fighterx2500.atlassian.net/browse/SOS-66) · Date: 2026-10-26 · Status: approved (owner, 2026-10-26), merged (PR #42; `Engine.removeRefusal` in PR #43) · Mod spec 0.17 §11 (Removing a player, Disconnects); the mod's SOS-65 calls it · Builds on [ADR 0004](../decisions/0004-several-humans.md), [plan 0004](0004-several-humans.md), [plan 0006](0006-own-city-battles.md)
 
 Game paths are relative to `<game>/info/SongsOfSyx-sources/`. Nothing here has been run yet.
 
