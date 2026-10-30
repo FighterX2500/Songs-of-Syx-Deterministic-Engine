@@ -45,6 +45,9 @@ public final class PromptAnswers {
     private boolean retreatAsked;
     private boolean closeAsked;
     private boolean restartAsked;
+    private boolean paused;
+    private boolean resumed;
+    private double speedBefore;
 
     public PromptAnswers(boolean engage, long retreatAfter, long restartAfter, boolean waitOut) {
         this.engage = engage;
@@ -201,6 +204,28 @@ public final class PromptAnswers {
         return null;
     }
 
+    /** SOSDET_LOCAL_PAUSE=from,to: the fighting human pauses its battle these steps after Start (SOS-93). */
+    private String pause() {
+        String env = System.getenv("SOSDET_LOCAL_PAUSE");
+        if (env == null || resumed) {
+            return null;
+        }
+        String[] at = env.split(",");
+        long since = Engine.step() - battleFrom;
+        if (!paused && since >= Long.parseLong(at[0])) {
+            paused = true;
+            speedBefore = game.GAME.SPEED.speedTarget();
+            game.GAME.SPEED.speedSet(0);
+            return "battle pause, men " + game.GAME.ARMIES().player().men() + "/" + game.GAME.ARMIES().enemy().men();
+        }
+        if (paused && since >= Long.parseLong(at[1])) {
+            resumed = true;
+            game.GAME.SPEED.speedSet(speedBefore);
+            return "battle resume, men " + game.GAME.ARMIES().player().men() + "/" + game.GAME.ARMIES().enemy().men();
+        }
+        return null;
+    }
+
     /** On the battle map: Start, then Retreat after the set steps, and Close once the battle is won or lost. */
     private String battle(BattleState battle) {
         sosdet.OwnBattle own = Engine.battle();
@@ -241,6 +266,10 @@ public final class PromptAnswers {
             }
             return "battle close";
         }
+        String pause = pause();
+        if (pause != null) {
+            return pause;
+        }
         if (restartAfter > 0 && !restartAsked && !closeAsked && Engine.step() - battleFrom >= restartAfter) {
             restartAsked = true;
             battle.reloadBattle(); // as the battle panel's restart, once confirmed: the hook makes it a command
@@ -251,7 +280,7 @@ public final class PromptAnswers {
             if (!MapBattles.retreat()) {
                 battle.liveRetreat(); // a local battle: its PC's own, no command (SOS-93)
             }
-            return "battle retreat";
+            return "battle retreat, extra rounds " + Engine.localRoundsRun();
         }
         return null;
     }

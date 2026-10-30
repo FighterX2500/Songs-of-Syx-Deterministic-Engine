@@ -26,6 +26,8 @@ public final class LocalBattle {
     Runnable generate;
     /** Every PC: vanilla's after-battle, kept at Engage with the two sides it copied; it takes the result's arrays. */
     java.util.function.Consumer<Object> after;
+    /** The host: the pace waits for no battle PC from the freeze until it has caught up after generating. */
+    boolean away;
     /** The battle PC: the battle's result went out as a command. */
     boolean resultSent;
     /** The step the result command applied at, the same on every PC; -1 until then. */

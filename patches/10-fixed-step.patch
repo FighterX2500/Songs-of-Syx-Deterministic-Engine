@@ -1,8 +1,12 @@
 diff -ru -U2 a/game/GAME.java b/game/GAME.java
 --- a/game/GAME.java	2026-06-17 19:41:18.000000000 +0500
-+++ b/game/GAME.java	2026-10-30 16:35:57.813899800 +0500
-@@ -255,7 +255,9 @@
- 		double speed = SPEED.update(slowDown);
++++ b/game/GAME.java	2026-10-30 16:49:54.409520700 +0500
+@@ -252,10 +252,12 @@
+ 		
+ 		float max = (float) (1.0/16);
+ 		
+-		double speed = SPEED.update(slowDown);
++		double speed = sosdet.Hooks.frameSpeed(SPEED.update(slowDown)); // SOSDET: a local battle's speed and pause are the battle's own, not the world's (SOS-93)
  		
  		
 -		if (speed == 0) {
@@ -140,7 +144,7 @@ diff -ru -U2 a/game/GAME.java b/game/GAME.java
  			}
 diff -ru -U2 a/view/battle/BattleView.java b/view/battle/BattleView.java
 --- a/view/battle/BattleView.java	2025-11-19 14:24:46.000000000 +0500
-+++ b/view/battle/BattleView.java	2026-10-30 16:35:57.810907900 +0500
++++ b/view/battle/BattleView.java	2026-10-30 16:49:54.406524400 +0500
 @@ -109,7 +109,7 @@
  	@Override
  	protected boolean update(float ds, boolean should){

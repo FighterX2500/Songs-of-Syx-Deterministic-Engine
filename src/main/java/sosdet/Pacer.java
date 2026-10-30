@@ -51,6 +51,8 @@ final class Pacer {
     static final double HELD_CALM = 0.05;
     /** The reason {@link #slowPc} gives for a speed the link lowered, not a PC. */
     static final int LINK = -2;
+    /** The reason logged with the speed for a local battle's 1× (SOS-93): no PC is slow. */
+    static final int LOCAL_BATTLE = -3;
     /** The host's own PC number: its own capacity counts with its peers'. */
     static final int HOST_PC = 0;
     /** A capacity leaves this many frames a second for drawing (SOS-94). */
@@ -142,6 +144,11 @@ final class Pacer {
     void away(int pc, boolean on) {
         away[pc] = on;
         cap = StepClock.NO_LIMIT;
+    }
+
+    /** The last step {@code pc}'s hashes have reached, or -1 before the first. */
+    long reachedBy(int pc) {
+        return reached.applyAsLong(pc);
     }
 
     void govern(boolean on) {

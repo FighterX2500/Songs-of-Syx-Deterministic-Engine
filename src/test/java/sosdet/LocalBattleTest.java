@@ -158,6 +158,26 @@ class LocalBattleTest {
     }
 
     @Test
+    void theBattlePcsFramesKeepTheWorldsPaceWhateverTheBattlesSpeed() {
+        Session s = session(3);
+        s.clock.agreedSpeed(1);
+        s.localEngage(1234, 3);
+        assertEquals(5, Hooks.frameSpeed(5), "before the freeze its city runs on");
+        s.localsAt(1260);
+        assertEquals(1, Hooks.frameSpeed(5), "the battle at speed 5");
+        assertEquals(1, Hooks.frameSpeed(0), "the battle paused");
+    }
+
+    @Test
+    void anotherPcsFramesKeepTheirOwnSpeed() {
+        Session s = session(0);
+        s.clock.agreedSpeed(1);
+        s.localEngage(1234, 3);
+        s.localsAt(1260);
+        assertEquals(5, Hooks.frameSpeed(5));
+    }
+
+    @Test
     void aSlowBattlePcLowersItsRoundsNotTheWorld() {
         assertEquals(4, Session.roundsFor(5, 5, 60, 60), "can't hold the rate");
         assertEquals(1, Session.roundsFor(1, 5, 30, 60), "one round is the least");
@@ -166,6 +186,54 @@ class LocalBattleTest {
         assertEquals(2, Session.roundsFor(2, 5, 120, 60), "three rounds wouldn't fit");
         assertEquals(3, Session.roundsFor(3, 3, 900, 60), "no more than the human's speed");
         assertEquals(3, Session.roundsFor(3, 5, -1, 60), "nothing measured yet");
+    }
+
+    @Test
+    void aHumansPromptsWaitUntilItsBattlesResultHasBeenAsked() {
+        Session s = session(0);
+        assertFalse(s.localBusy(3), "no battle");
+        LocalBattle b = s.localEngage(1234, 3);
+        s.engaging = b;
+        Hooks.localEngaged(r -> { });
+        s.engaging = null;
+        assertTrue(s.localBusy(3));
+        assertFalse(s.localBusy(0), "the other human is asked as usual");
+        assertFalse(s.localBusy(60), "an NPC has no prompts");
+        s.localsAt(1260);
+        s.localResult(1400, 3, new Object[0]);
+        assertTrue(s.localBusy(3), "its own result comes first");
+        s.localAfter(1401);
+        assertFalse(s.localBusy(3));
+    }
+
+    @Test
+    void theResultWaitsForAnotherHumansOpenPrompt() {
+        Session s = session(0);
+        LocalBattle b = s.localEngage(1234, 3);
+        List<Object> seen = new ArrayList<>();
+        s.engaging = b;
+        Hooks.localEngaged(seen::add);
+        s.engaging = null;
+        s.localsAt(1260);
+        s.localResult(1400, 3, new Object[0]);
+        s.worldPrompt = new Object();
+        s.localAfter(1401);
+        assertTrue(seen.isEmpty(), "vanilla's panel holds one prompt");
+        long thaw = b.thaw;
+        s.localsAt(thaw);
+        assertSame(b, Engine.localBattle(3), "the after-battle is still to run");
+        assertTrue(b.thaw > thaw);
+        s.worldPrompt = null;
+        s.localAfter(1405);
+        assertEquals(1, seen.size());
+    }
+
+    @Test
+    void aHumanInALocalBattleIsNotViewedAndViewsNobody() {
+        Session s = session(0);
+        s.localEngage(1234, 3);
+        assertEquals("A battle is running.", s.viewRefusal(0, 3, null));
+        assertEquals("A battle is running.", s.viewRefusal(3, 0, null));
     }
 
     @Test

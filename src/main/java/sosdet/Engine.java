@@ -375,6 +375,16 @@ public final class Engine {
         return required().locals[slot];
     }
 
+    /** True from a local battle's Engage until its human has thawed: campaign saves wait (spec §8). */
+    public static boolean localBattleRunning() {
+        for (LocalBattle b : required().locals) {
+            if (b != null) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public static byte[] battleOut() {
         Session s = required();
         OwnBattle b = s.battle;
@@ -613,6 +623,11 @@ public final class Engine {
      * How long this PC's last view load took, in ms, its own save included for a PC outside the view: the pause a
      * view's opening or closing costs it (playtest log).
      */
+    /** Debugging: the local battle's extra rounds this PC has run; the rig shows them to prove the battle's speed. */
+    public static long localRoundsRun() {
+        return required().localRoundsRun;
+    }
+
     public static double lastViewLoadMs() {
         return required().lastViewLoadMs;
     }

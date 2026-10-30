@@ -282,6 +282,8 @@ final class Session {
     private static final double LOCAL_MARGIN = 1.1;
     private static final double LOCAL_RAISE_MARGIN = 1.5;
     private static final long LOCAL_CHECK_NANOS = 5_000_000_000L;
+    /** Steps behind the host at which a battle PC has caught up: the catch-up's own limit and one hash interval and more. */
+    private static final int LOCAL_CAUGHT_UP_STEPS = Hooks.VIEW_CATCH_UP_LAG + 60;
     /** The host: the local battles hold the world at 1× (spec §4). */
     private boolean localCapped;
     private double localCapFrom;
@@ -290,6 +292,8 @@ final class Session {
     private int localRounds = 1;
     private boolean localPaused;
     private long localCheckedAt;
+    /** The battle PC: the extra rounds run so far, for the rig. */
+    long localRoundsRun;
 
     /** The local battle whose Engage runs now, inside its step: vanilla's Engage hands it its parts. */
     LocalBattle engaging;
@@ -304,6 +308,11 @@ final class Session {
         LocalBattle b = new LocalBattle(step, human, pcOf(human), nextReportStep(step), closedPromptArmies, null);
         locals[human] = b;
         closedPromptArmies = NO_ARMIES;
+        for (View v : views) {
+            if (v != null && (v.viewer == human || v.owner == human)) {
+                endView(v.viewer, step, View.GAME, "A battle started."); // the city goes under the battle map
+            }
+        }
         return b;
     }
 
@@ -316,10 +325,32 @@ final class Session {
             LocalBattle b = locals[slot];
             if (b != null && b.state == LocalBattle.ENGAGED && b.freeze == step) {
                 b.state = LocalBattle.RUNNING;
+                if (ai().mode() == AiMode.HOST && b.pc != ai().localPc()) {
+                    b.away = true; // it generates the battle, seconds in one step: the others don't wait
+                    pacer.away(b.pc, true);
+                }
             }
-            if (b != null && b.thaw == step) {
+            if (b != null && b.thaw == step && b.after != null) {
+                b.thaw = nextReportStep(step + 1); // its after-battle waits for another human's prompt: it comes first
+            } else if (b != null && b.thaw == step) {
                 locals[slot] = null;
                 thawReports(slot, step);
+                if (b.away) {
+                    pacer.away(b.pc, false);
+                }
+            }
+        }
+    }
+
+    /** The host: a battle PC that generated its battle and has caught up is waited for again. */
+    private void localCaughtUp() {
+        for (LocalBattle b : locals) {
+            if (b != null && b.away) {
+                long reached = pacer.reachedBy(b.pc);
+                if (reached > b.freeze && clock.step() - reached <= LOCAL_CAUGHT_UP_STEPS) {
+                    b.away = false;
+                    pacer.away(b.pc, false);
+                }
             }
         }
     }
@@ -392,7 +423,11 @@ final class Session {
 
     /** The battle PC: the battle's rounds beyond the one every step runs. */
     int localExtraRounds() {
-        return localHere() == null ? 0 : localRounds - 1;
+        if (localHere() == null) {
+            return 0;
+        }
+        localRoundsRun += localRounds - 1;
+        return localRounds - 1;
     }
 
     /** Every PC, inside the step: the battle PC's result, once; false for a battle with no result due. */
@@ -451,10 +486,21 @@ final class Session {
         heldTxns.clear();
     }
 
-    /** The world part of the step after a local battle's result: every PC runs vanilla's after-battle alike. */
+    /**
+     * True while the prompts that need this faction wait for its human's local battle, and until that battle's own
+     * result has been asked (spec §8). A prompt that would ask it stays in the game's queue; it opens after that.
+     */
+    boolean localBusy(int faction) {
+        return faction >= 0 && faction < SLOTS && locals[faction] != null && locals[faction].after != null;
+    }
+
+    /**
+     * The world part, from the step after a local battle's result: every PC runs vanilla's after-battle alike, as soon
+     * as no other prompt is open, as vanilla's panel is one and every PC's copy of it the same.
+     */
     void localAfter(long step) {
         for (LocalBattle b : locals) {
-            if (b == null || b.resultStep < 0 || step != b.resultStep + 1 || b.after == null) {
+            if (b == null || b.resultStep < 0 || step <= b.resultStep || b.after == null || worldPrompt != null) {
                 continue;
             }
             java.util.function.Consumer<Object> after = b.after;
@@ -1035,6 +1081,9 @@ final class Session {
         if (viewer == owner || !isHuman(viewer) || !isHuman(owner) || retired(viewer) || retired(owner)
                 || removing[viewer] || removing[owner]) {
             return "That city can't be viewed.";
+        }
+        if (locals[viewer] != null || locals[owner] != null) {
+            return "A battle is running.";
         }
         if (frozen(owner)) {
             return "Its player is viewing another city.";
@@ -1746,6 +1795,7 @@ final class Session {
             return;
         }
         holdForDesync();
+        localCaughtUp();
         ai().delay(windowSteps(clock.agreedSpeed())); // orders stay in flight the same real time at every speed
         clock.paceCap(pacer.frame(now, clock.step(), clock.lastStep(), w, stepNanos));
         hashes.ownCapacity(pacer.capacity());
@@ -1755,7 +1805,7 @@ final class Session {
             if (!localCapped) {
                 pacer.wanted(cap, now); // the governor starts again from the host's speed
             }
-            logSpeed(cap, cap, -1);
+            logSpeed(cap, localCapped && wanted > 0 ? wanted : cap, localCapped ? Pacer.LOCAL_BATTLE : -1);
         }
         if (localCapped) {
             return;
@@ -1811,6 +1861,9 @@ final class Session {
             speedNoticeUntil = 0;
             speedNotice = "SOSDET: speed " + speedText(speed) + ", the connection between the PCs can't keep up (host set "
                     + speedText(wanted) + ")";
+        } else if (slowPc == Pacer.LOCAL_BATTLE) {
+            speedNoticeUntil = 0;
+            speedNotice = "SOSDET: speed " + speedText(speed) + " while a player fights a battle against NPCs";
         } else if (speedNotice != null && speedNoticeUntil == 0) {
             speedNoticeUntil = now + 5 * Pacer.SECOND;
             speedNotice = "SOSDET: every PC keeps up again, speed " + speedText(speed);

@@ -140,10 +140,10 @@ public final class Hooks {
         Session s = Engine.session();
         s.speedSeen(setSpeed);
         s.pace(now);
-        double speed = setSpeed;
-        if (s.viewing() != null && s.ai().mode() == sosdet.ai.AiMode.PEER
+        double speed = frameSpeed(setSpeed); // a local battle's PC keeps the world's pace, whatever the battle's own speed
+        if ((s.viewing() != null || s.localHere() != null) && s.ai().mode() == sosdet.ai.AiMode.PEER
                 && s.ai().confirmed() - s.clock.step() > VIEW_CATCH_UP_LAG) {
-            speed *= VIEW_CATCH_UP; // a viewer behind the host runs faster until it has caught up (SOS-82)
+            speed *= VIEW_CATCH_UP; // a viewer behind the host runs faster until it has caught up (SOS-82), a battle PC too
         }
         if (s.viewing() != null && s.ai().mode() == sosdet.ai.AiMode.PEER) {
             // the viewer's limits, on this PC's clock: they only decide whether it asks the host to end the view
@@ -277,6 +277,9 @@ public final class Hooks {
         }
         if (s.worldPromptOther >= 0) { // between two humans one Fight doesn't engage: only pvpEngageAt does
             return false;
+        }
+        if (s.localBattles && s.worldPromptSally < 0) {
+            return false; // a battle against NPCs saves nothing first: the world runs on (spec §11)
         }
         if (!s.ai().commandDue(step, sosdet.game.cmd.WorldBattles::isEngage)) {
             return false;
@@ -448,6 +451,42 @@ public final class Hooks {
     public static boolean localResult(int human, Object result) {
         Session s = Engine.session();
         return s != null && s.localResult(s.clock.step(), human, result);
+    }
+
+    /**
+     * Patch 10: the frame's speed: the game's, but on a local battle's PC the game's speed is the battle's own, so the
+     * frame takes the world's: a paused battle's world runs on, and a fast one's stays at the agreed speed (SOS-93).
+     */
+    public static double frameSpeed(double speed) {
+        Session s = Engine.session();
+        return s == null || s.localHere() == null ? speed : s.clock.agreedSpeed();
+    }
+
+    /**
+     * Patch 15, the world battles' polls: true when a battle between these armies waits for a local battle: a human of
+     * theirs is fighting one, or one of them stands in one (spec §8). {@code b} may be null.
+     */
+    public static boolean localWaits(WArmy a, WArmy b) {
+        Session s = Engine.session();
+        return s != null && (localWaits(s, a) || b != null && localWaits(s, b));
+    }
+
+    private static boolean localWaits(Session s, WArmy a) {
+        if (a.faction() != null && s.localBusy(a.faction().index())) {
+            return true;
+        }
+        for (LocalBattle b : s.locals) {
+            if (b != null && contains(b.armies, a.armyIndex())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Patch 15, the polls of regions: true while a prompt about this faction's region waits for its local battle. */
+    public static boolean localWaits(game.faction.Faction f) {
+        Session s = Engine.session();
+        return s != null && f != null && s.localBusy(f.index());
     }
 
     /** Patch 10: the battle's own pause on its PC: its resources stand still, as in deployment; the world runs on. */
