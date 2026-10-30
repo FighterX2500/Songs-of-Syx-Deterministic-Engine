@@ -1118,24 +1118,30 @@ public final class Engine {
         return Sieges.assaultInDays(slot);
     }
 
-    /** Between steps: why this PC's player can't take {@code kind} at {@code percent} now, or null (SOS-92 D). */
-    public static String assaultTermsRefusal(int kind, int percent) {
+    /** Between steps: why this PC's player can't take these terms now, or null (SOS-92 D). */
+    public static String assaultTermsRefusal(int kind, int percent, int[] people) {
         required();
-        return Sieges.termsRefusal(kind, percent);
+        return Sieges.termsRefusal(kind, percent, people);
+    }
+
+    /** Between steps: the people a sack could remove from the city of the human in {@code slot}, by race (SOS-92). */
+    public static int[] assaultPeopleInCity(int slot) {
+        required();
+        return Sieges.peopleInCity(slot);
     }
 
     /**
      * Between steps: this PC's player, whose army took another human's throne, takes {@code kind}
-     * ({@code AssaultTerms}) at {@code percent}, applied at its step on every PC (SOS-92 D). Check
-     * {@link #assaultTermsRefusal} first.
+     * ({@code AssaultTerms}) at {@code percent} and removes {@code people}, applied at its step on every PC (SOS-92 D).
+     * Check {@link #assaultTermsRefusal} first.
      */
-    public static void assaultTerms(int kind, int percent) {
+    public static void assaultTerms(int kind, int percent, int[] people) {
         required();
-        String why = Sieges.termsRefusal(kind, percent);
+        String why = Sieges.termsRefusal(kind, percent, people);
         if (why != null) {
             throw new IllegalStateException("SOSDET: assault terms refused: " + why);
         }
-        Sieges.terms(kind, percent);
+        Sieges.terms(kind, percent, people);
     }
 
     /** Between steps: why this PC's player can't sally out of their besieged capital now, or null (SOS-92). */

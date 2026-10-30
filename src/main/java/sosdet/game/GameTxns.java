@@ -20,8 +20,12 @@ import init.resources.ResSupply;
 import init.trade.TRADE_TYPE;
 import init.type.CAUSE_ARRIVES;
 import init.type.CAUSE_LEAVE;
+import init.type.CAUSE_LEAVES;
+import init.type.HCLASS;
+import init.type.HCLASSES;
 import init.type.HTYPES;
 import settlement.battle.invasion.InvasionSpec;
+import settlement.entity.EntityIterator;
 import settlement.entity.humanoid.Humanoid;
 import settlement.main.SETT;
 import settlement.stats.Induvidual;
@@ -32,8 +36,10 @@ import settlement.trade.PSeller;
 import snake2d.util.datatypes.COORDINATE;
 import snake2d.util.datatypes.Coo;
 import snake2d.util.misc.CLAMP;
+import sosdet.game.siege.AssaultTerms;
 import sosdet.report.Input;
 import sosdet.txn.Txn;
+import sosdet.txn.TxnKind;
 import world.army.AD;
 import world.army.WDIV;
 import world.entity.army.WArmy;
@@ -121,9 +127,42 @@ public final class GameTxns implements Consumer<Txn> {
         case IMMIGRANTS_HIGHER:
             SETT.ENTRY().immi().setHigher((Race) t.a, t.i); // the city tail is the city part: the hook lets it through
             break;
+        case REMOVE_PEOPLE:
+            removePeople((int[]) t.a);
+            break;
         default:
             throw new IllegalStateException("SOSDET: no applier for transaction kind " + t.kind);
         }
+    }
+
+    /**
+     * {@link TxnKind#REMOVE_PEOPLE}: the first citizens and slaves of each race, in entity order, so that every PC
+     * running this city removes the same people. Nobles stay. Who was moved travels as a count in the world part.
+     */
+    private static void removePeople(int[] people) {
+        int[] left = people.clone();
+        new EntityIterator.Humans() {
+            @Override
+            protected boolean processAndShouldBreakH(Humanoid h, int ie) {
+                HCLASS c = h.indu().clas();
+                if (c == HCLASSES.CITIZEN() || c == HCLASSES.SLAVE()) {
+                    int race = h.race().index * AssaultTerms.FATES;
+                    for (int f = 0; f < AssaultTerms.FATES; f++) {
+                        if (left[race + f] > 0) {
+                            left[race + f]--;
+                            h.kill(false, leaveCause(f));
+                            break;
+                        }
+                    }
+                }
+                return false;
+            }
+        }.iterate();
+    }
+
+    private static CAUSE_LEAVE leaveCause(int fate) {
+        return fate == AssaultTerms.MOVED ? CAUSE_LEAVES.SOLD()
+                : fate == AssaultTerms.KILLED ? CAUSE_LEAVES.SLAYED() : CAUSE_LEAVES.EMMIGRATED();
     }
 
     /** {@link sosdet.Hooks#entryLater}. */

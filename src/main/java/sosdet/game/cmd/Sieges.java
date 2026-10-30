@@ -8,9 +8,12 @@ import game.faction.FACTIONS;
 import game.faction.Faction;
 import game.faction.player.Player;
 import game.time.TIME;
+import init.race.RACES;
+import init.type.HCLASSES;
 import sosdet.Engine;
 import sosdet.Hooks;
 import sosdet.Notice;
+import sosdet.ai.CmdReader;
 import sosdet.ai.CmdWriter;
 import sosdet.game.GameHumans;
 import sosdet.game.siege.AssaultTerms;
@@ -39,7 +42,7 @@ public final class Sieges {
     static final List<Command> ALL = List.of(new Command(SALLY, "siegeSally", r -> applySally()),
             new Command(WAIT_PASSED, "siegeWaitPassed", r -> applyWaitPassed(r.i())),
             new Command(ASSAULT_END, "assaultEndForTest", r -> Hooks.assaultForce(r.i())),
-            new Command(ASSAULT_TERMS, "assaultTerms", r -> Hooks.assaultTerms(r.i(), r.i(), r.i())));
+            new Command(ASSAULT_TERMS, "assaultTerms", Sieges::applyTermsCommand));
 
     /** Patch 15's {@code WBattles.sosdetSally}: the engine compiles against the shipped game, without it. */
     private static final Method SALLY_OUT = sallyOutMethod();
@@ -111,26 +114,57 @@ public final class Sieges {
 
     // ---------------------------------------------------------------- after a taken throne (SOS-92 step D)
 
-    /** Why this PC's player can't choose {@code kind} at {@code percent} now, as a sentence; null when they can. */
-    public static String termsRefusal(int kind, int percent) {
+    /** Why this PC's player can't choose these terms now, as a sentence; null when they can. */
+    public static String termsRefusal(int kind, int percent, int[] people) {
         sosdet.Assault a = Engine.assaultTaken();
         if (a == null || a.attacker != FACTIONS.player().index()) {
             return "There is no throne of yours to decide on.";
         }
-        return AssaultTerms.refusal(kind, percent);
+        return AssaultTerms.refusal(kind, percent, people);
     }
 
     /** This PC's player, the attacker, chooses what to take: captured, applied at its step on every PC. */
-    public static void terms(int kind, int percent) {
+    public static void terms(int kind, int percent, int[] people) {
         if (!Commands.capturing()) {
             throw new IllegalStateException("SOSDET: assault terms outside a session's play");
         }
-        Commands.capture(new CmdWriter(ASSAULT_TERMS).i(FACTIONS.player().index()).i(kind).i(percent));
+        CmdWriter w = new CmdWriter(ASSAULT_TERMS).i(FACTIONS.player().index()).i(kind).i(percent).i(people.length);
+        for (int n : people) {
+            w.i(n);
+        }
+        Commands.capture(w);
+    }
+
+    private static boolean applyTermsCommand(CmdReader r) {
+        int attacker = r.i();
+        int kind = r.i();
+        int percent = r.i();
+        int[] people = new int[r.i()];
+        for (int i = 0; i < people.length; i++) {
+            people[i] = r.i();
+        }
+        return Hooks.assaultTerms(attacker, kind, percent, people);
+    }
+
+    /** The citizens and slaves in the city of the human in {@code slot}, by race, from its report: who can be removed. */
+    public static int[] peopleInCity(int slot) {
+        int[] n = new int[RACES.all().size()];
+        int citizens = HCLASSES.CITIZEN().index() + 1;
+        int slaves = HCLASSES.SLAVE().index() + 1;
+        for (int r = 0; r < n.length; r++) {
+            n[r] = Hooks.reportI(slot, Field.PHYSICAL, citizens, r + 1) + Hooks.reportI(slot, Field.PHYSICAL, slaves, r + 1);
+        }
+        return n;
+    }
+
+    /** In the world part, every PC: {@code people} as far as the city of the human in {@code slot} allows. */
+    public static int[] peopleLimited(int slot, int[] people) {
+        return AssaultTerms.limited(people, peopleInCity(slot));
     }
 
     /** In the world part, every PC: the terms reach both players' cities and the world. Returns the money taken. */
-    public static int applyTerms(int defender, int attacker, int kind, int percent) {
-        return HumanDeals.assaultTerms(defender, attacker, kind, percent);
+    public static int applyTerms(int defender, int attacker, int kind, int percent, int[] people) {
+        return HumanDeals.assaultTerms(defender, attacker, kind, percent, people);
     }
 
     /**

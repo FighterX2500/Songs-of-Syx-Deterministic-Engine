@@ -95,6 +95,7 @@ The mod plan says every PC loads the defender's city "with `loadView`'s path". T
 
 ### Step B's results (2026-10-30)
 
+- **With local battles (SOS-93, owner 2026-10-30):** Storm is refused while any player is in a local battle, from its Engage until its human has thawed. Every other player must view the assault, and a player in a local battle can't, so the view would fail and call the assault off. Unit test only: no rig run has had a Storm and a local battle together.
 - Rig S92M and S92N (Mogus-72, slot 2 storms slot 0, 2 copies, 5x): Storm at about step 16,600, the view of slot 0 by slot 2 loaded in 7.5 s, the invasion ran on both copies, the defender held at 28,882 and 32,884, the view ended "The assault is over.", and afterwards the attacker's army was gone and the siege record cleared on both copies. No desync.
 - S92J found a step A bug: `CommandParts.world` stopped at 7949, so the sally (7970) applied on its sender's PC only in own-city mode. The siege commands are world commands now.
 - Not built from the list above: the save round trip (saves are refused during an assault instead, so the assault is never saved), and the refusal of the defender's city commands during the assault (they apply on every PC that runs the city, as in any view, so they don't desync).
@@ -111,7 +112,7 @@ After a taken throne the world keeps the assault as `Session.taken` until the at
 
 Not built: Eliminate and the people's fates (Moved, Killed, Freed, mercy), which need a `REMOVE_PEOPLE` transaction and spec §11's elimination.
 
-Rig: `wassaultend held|taken|retreat` ends the running invasion at the next city tail on every copy (test tooling, `ASSAULT_END` 7972); `wterms sack|vassalage <percent>` chooses.
+Rig: `wassaultend held|taken|retreat` ends the running invasion at the next city tail on every copy (test tooling, `ASSAULT_END` 7972); `wterms sack|vassalage <percent> [moved:killed:freed]` chooses.
 
 ### Step D's results (2026-10-30)
 
@@ -124,3 +125,23 @@ Rig: `wassaultend held|taken|retreat` ends the running invasion at the next city
 - **S92R** (one assault, a forced taken, sack 60%): exactly 60% left the defender (DIPLOMACY out 1,354,957).
 - **S92P** (a forced taken, `wterms vassalage 25`): slot 0 became "vassal of 2 at 25%" (VASSAL and OVERLORD), the war ended, the siege cleared and the army went to Fortifying. No desync.
 - **Not run:** the 2-minute default (Sack 50%) when the attacker doesn't choose.
+
+## The removed people (SOS-92 step D, part 1, 2026-10-30)
+
+A sack now also removes people. Eliminate is still to come; the spectator it needs is SOS-111.
+
+- **The choice:** `ASSAULT_TERMS` carries a count per race and fate (`AssaultTerms`' flat array). Refusals check only its shape: the population moves between the choice and its step, so `AssaultTerms.limited` caps it at the step, from the defender's report, the same on every PC.
+- **The limit:** 80% of everyone who can be removed, in all and not per race, so one race can go whole. Who can be removed: the citizens and slaves physically in the city (`Field.PHYSICAL`). Nobles stay, and people away in armies aren't counted.
+- **The default:** no one is removed. A timed-out attacker gets half the money and goods, and no one's fate or the attacker's mercy is decided for them.
+- **`REMOVE_PEOPLE`** (a new `TxnKind`): the world part queues the counts for the defender's city, whose tail removes the first citizens and slaves of each race in entity order, so that a PC viewing the city removes the same people. Its transaction ID makes it apply once; a repeated command finds no taken throne and changes nothing. A frozen city holds it for its thaw (`HeldTxn`).
+- **Causes:** moved `SOLD`, killed `SLAYED` (with corpses, capped by the game), freed `EMMIGRATED`.
+- **Moved:** they travel in a spoils caravan as the race's `TR.SLAVES` tradable and arrive through `PBuyerSlave` as prisoners; the attacker's prison law then decides. Where no caravan can go they arrive directly, like goods.
+- **Mercy:** freed +n, moved -n/2, killed -n, over 1 + the attacker's population from its report, on `AD.stats().mercy()`.
+- **A fix to Sack:** it walked `TR.ALL`, which holds a slave tradable per race, so a sack silently took that share of the defender's slaves as goods, with no mercy cost. It walks `TR.RES` now: slaves are people, and go only by the attacker's choice.
+- **The mod:** `MpAssaultTerms` has a row per race with a slider per fate, and the notices and the playtest log give the counts.
+
+Proof:
+
+- **Rig S92T** (Mogus-72, slot 2 storms slot 0, 2 copies, 5x, a forced taken, `wterms sack 60 300:200:100`): the defender's city went from 4,126 people to 3,526, exactly the 600 chosen, and the terms note gave 300 moved, 200 killed, 100 freed and 1,354,884 credits. The 300 prisoners were delivered at step 28,214 (`DELIVERED 47 300`, a slave tradable), 3 steps after the sack's goods reached the city. No desync through step 34,201, no crash file.
+- **Prisoners and mercy:** 6 prisoners were left in the attacker's city at step 34,201: its prison law had processed the rest. Each one's punishment writes the attacker's mercy in its own city (`StatPunishment.report`), so its PC reached 1.0 while the host's copy stayed at -0.079. That isn't a desync: the world reads a human's mercy from that human's report (`Field.MERCY`), and the copies on other PCs aren't read or hashed. The rig didn't note the attacker's mercy before those punishments, so the fates' own change was seen only on the host's copy.
+- **The window:** a two-game GUI preview on one PC (`twopc --here --gui-preview`, TERMS3, PASS, 0 hashes differ) showed the terms window with a real city's limit, and the notice with the counts. Moving the sliders by hand isn't tested.

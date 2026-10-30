@@ -1,5 +1,7 @@
 package sosdet;
 
+import sosdet.game.siege.AssaultTerms;
+
 /**
  * The assault on a human's capital (mod spec §9, SOS-92 step B): from the besieger's Storm until the world takes its
  * outcome. Every other human views the defender's city ({@link View}), so every PC runs that city, and the world is held
@@ -45,6 +47,8 @@ public final class Assault {
     volatile int termsKind = -1;
     volatile int termsPercent = -1;
     volatile int termsCredits;
+    /** The people the attacker removed ({@code AssaultTerms}'s flat counts). */
+    volatile int[] termsPeople = AssaultTerms.NO_PEOPLE;
 
     Assault(long step, int attacker, int defender, long freeze, Object spec, int[] armies, int men) {
         this.step = step;
@@ -82,6 +86,11 @@ public final class Assault {
 
     public int termsCredits() {
         return termsCredits;
+    }
+
+    /** How many people the attacker removed with {@code fate} ({@code AssaultTerms}). */
+    public int termsPeople(int fate) {
+        return AssaultTerms.removed(termsPeople, fate);
     }
 
     /** {@link #HELD}, {@link #TAKEN} or {@link #RETREAT} as a word, for logs. */

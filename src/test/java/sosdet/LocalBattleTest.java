@@ -190,6 +190,28 @@ class LocalBattleTest {
     }
 
     @Test
+    void stormWaitsUntilTheLastLocalBattleHasEnded() {
+        Session s = session(0);
+        assertNull(s.assaultRefusal());
+        LocalBattle b = s.localEngage(1234, 3);
+        String why = "A player is fighting a battle: the assault starts once it ends.";
+        assertEquals(why, s.assaultRefusal(), "from the Engage: that human can't view the assault");
+        s.localsAt(1260);
+        assertEquals(why, s.assaultRefusal());
+        s.localResult(1400, 3, "r");
+        assertEquals(why, s.assaultRefusal(), "until its human has thawed");
+        s.localsAt(b.thaw);
+        assertNull(s.assaultRefusal());
+    }
+
+    @Test
+    void termsWithoutATakenThroneChangeNothing() {
+        Session s = session(0);
+        assertFalse(s.assaultTerms(0, sosdet.game.siege.AssaultTerms.SACK, 50, new int[] {1, 0, 0}), "a repeat finds no throne");
+        assertNull(s.assaultTermsOutcome);
+    }
+
+    @Test
     void aHumanRemovedInItsBattleEndsTheBattle() {
         Session s = session(0);
         s.remover = slot -> { };

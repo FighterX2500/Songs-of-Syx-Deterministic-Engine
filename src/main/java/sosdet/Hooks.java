@@ -573,9 +573,19 @@ public final class Hooks {
     }
 
     /** {@code ASSAULT_TERMS} in the world part: the attacker's choice after a taken throne (SOS-92 D). */
-    public static boolean assaultTerms(int attacker, int kind, int percent) {
+    public static boolean assaultTerms(int attacker, int kind, int percent, int[] people) {
         Session s = Engine.session();
-        return s != null && s.assaultTerms(attacker, kind, percent);
+        return s != null && s.assaultTerms(attacker, kind, percent, people);
+    }
+
+    /** In the world part: {@code people} ({@code AssaultTerms}'s flat counts) leave the city of the human in {@code human}. */
+    public static void removePeople(int human, int[] people) {
+        Txn x = toCity(TxnKind.REMOVE_PEOPLE);
+        if (x == null) {
+            throw new IllegalStateException("SOSDET: people removed from the city of human " + human + " outside the world part");
+        }
+        x.human = human;
+        x.a = people;
     }
 
     /** The rig's {@code ASSAULT_END} in the world part: the running assault's invasion ends with {@code outcome}. */
