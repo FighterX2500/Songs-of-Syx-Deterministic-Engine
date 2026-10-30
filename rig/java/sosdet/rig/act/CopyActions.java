@@ -45,6 +45,15 @@ public final class CopyActions {
                 }
             }
             return true;
+        case "divorders": // divorders <human slot>: on that human's PC every division gets a player's orders (SOS-109)
+            if (Hooks.localHuman() == Integer.parseInt(a[1])) {
+                for (game.battle.div.Div d : game.GAME.ARMIES().player().divisions()) {
+                    sosdet.game.AiHooks.running(d, true);
+                    sosdet.game.AiHooks.guard(d, true);
+                    sosdet.game.AiHooks.mopUp(d, true);
+                }
+            }
+            return true;
         case "copyroom": // copyroom <key prefix> [n] [rot]: the room copier on the n-th area room, placed at the first
             // free spot (6100)
             String ckey = a[1];

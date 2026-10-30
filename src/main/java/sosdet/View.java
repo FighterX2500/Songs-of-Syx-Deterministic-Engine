@@ -41,6 +41,8 @@ public final class View {
     public final int ownerPc;
     /** The step every PC freezes the viewer at: the first multiple of the report interval after the entry's step. */
     public final long freeze;
+    /** The owner runs a local battle at the freeze step: the view is a watch of that battle (plan 0017, SOS-109). */
+    boolean battle;
     /** The owner's PC has handed out its save ({@link Engine#viewOut}). */
     boolean sent;
     /** The step every PC thaws the viewer at, the same on every PC; -1 until the view's end is in the log. */
@@ -100,6 +102,24 @@ public final class View {
         default:
             return null;
         }
+    }
+
+    /** {@link #sentence} for a watch of a local battle. */
+    static String battleSentence(int why) {
+        switch (why) {
+        case NOT_CAUGHT_UP:
+        case FELL_BEHIND:
+            return "Your PC fell too far behind the battle.";
+        case DESYNC:
+            return "The view lost step with the battle.";
+        default:
+            return null;
+        }
+    }
+
+    /** True for a view of a running local battle (SOS-109). */
+    public boolean battle() {
+        return battle;
     }
 
     /** The step the viewer thaws at, the same on every PC; -1 while no end is in the log. */

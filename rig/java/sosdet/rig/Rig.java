@@ -298,6 +298,10 @@ public final class Rig implements SCRIPT {
         private String[] dumpRestore = new String[0];
         private java.util.Map<String, Object> dumpSnapshot;
         private long viewEndStep = -1;
+        /** A watch of a local battle (SOS-109): its start and end, in steps after the owner's battle froze; -1: none. */
+        private long viewBattleAfter = -1;
+        private long viewBattleEnd = -1;
+        private long viewTapeOffset;
         private int viewViewer = -1;
         private int viewOwner = -1;
         private Path viewDir;
@@ -615,6 +619,12 @@ public final class Rig implements SCRIPT {
                 return;
             }
             try {
+                sosdet.LocalBattle fight = viewBattleAfter >= 0 ? Engine.localBattle(viewOwner) : null;
+                if (fight != null && fight.state() == sosdet.LocalBattle.RUNNING) {
+                    viewStep = fight.freeze + viewBattleAfter;
+                    viewEndStep = viewBattleEnd < 0 ? -1 : fight.freeze + viewBattleEnd;
+                    viewBattleAfter = -1;
+                }
                 if (viewStep >= 0 && aiHost && Engine.step() >= viewStep) {
                     Engine.viewBegin(viewViewer, viewOwner);
                     event("viewbegin", String.format(Locale.ROOT, "\"step\":%d,\"viewer\":%d,\"owner\":%d",
@@ -668,8 +678,14 @@ public final class Rig implements SCRIPT {
                         Files.write(viewDir.resolve("view.save"), out);
                         Files.write(viewDir.resolve("view.done"), Long.toString(v.freeze).getBytes(StandardCharsets.UTF_8));
                         Files.deleteIfExists(viewDir.resolve("view.hash"));
+                        Files.deleteIfExists(viewDir.resolve("view.tape"));
                         event("viewout", String.format(Locale.ROOT, "\"step\":%d,\"bytes\":%d,\"ms\":%.1f",
                                 Engine.step(), out.length, (System.nanoTime() - t0) / 1e6));
+                    }
+                    byte[] tape = Engine.viewTapeOut(viewViewer);
+                    if (tape.length > 0) { // each piece with its length: the watcher takes whole pieces
+                        Files.write(viewDir.resolve("view.tape"), java.nio.ByteBuffer.allocate(4 + tape.length)
+                                .putInt(tape.length).put(tape).array(), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
                     }
                     byte[] hashes = Engine.viewHashOut(viewViewer);
                     if (hashes.length > 0) {
@@ -686,6 +702,7 @@ public final class Rig implements SCRIPT {
                             .equals(Long.toString(v.freeze))) {
                         byte[] city = Files.readAllBytes(viewDir.resolve("view.save"));
                         Engine.viewIn(city);
+                        viewTapeOffset = 0;
                         viewHashOffset = 0; // the owner starts a new view.hash for each view (SOS-92: two views in one run)
                         viewCloseSent = false;
                         viewDesyncReported = false;
@@ -722,6 +739,16 @@ public final class Rig implements SCRIPT {
                     viewCaughtUpSeen = Engine.viewCaughtUpSeconds();
                     event("viewcaughtup", String.format(Locale.ROOT, "\"step\":%d,\"s\":%.1f", Engine.step(),
                             viewCaughtUpSeen));
+                }
+                byte[] tape = readNew(viewDir.resolve("view.tape"), viewTapeOffset);
+                for (int at = 0; at + 4 <= tape.length; ) {
+                    int length = java.nio.ByteBuffer.wrap(tape, at, 4).getInt();
+                    if (at + 4 + length > tape.length) {
+                        break; // the rest of this piece isn't written yet
+                    }
+                    Engine.viewTapeIn(Arrays.copyOfRange(tape, at + 4, at + 4 + length));
+                    at += 4 + length;
+                    viewTapeOffset += 4 + length;
                 }
                 byte[] in = readNew(viewDir.resolve("view.hash"), viewHashOffset);
                 viewHashOffset += in.length;
@@ -1438,6 +1465,11 @@ public final class Rig implements SCRIPT {
                 viewEndStep = Long.parseLong(c[4]);
                 viewDir = Paths.get(rest(Arrays.copyOfRange(c, 4, c.length)));
                 event("viewat", "\"step\":" + viewStep);
+                return;
+            case "viewbattle": // viewbattle <steps> <end steps or -1>: after the owner's battle froze, a watch (SOS-109)
+                viewBattleAfter = Long.parseLong(c[1]);
+                viewBattleEnd = Long.parseLong(c[2]);
+                event("viewbattle", "\"after\":" + viewBattleAfter + ",\"end\":" + viewBattleEnd);
                 return;
             case "viewlimits": // viewlimits <catch-up s> <keep-up s> <steps>: shorter view limits (SOS-82, M2)
                 Engine.viewLimits(Double.parseDouble(c[1]), Double.parseDouble(c[2]), Integer.parseInt(c[3]));

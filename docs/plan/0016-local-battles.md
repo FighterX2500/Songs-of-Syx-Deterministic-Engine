@@ -19,7 +19,7 @@ Each step on the battle PC runs:
 
 Every other PC runs its own city and the world as usual.
 
-**The life of a local battle.** `LocalBattle` is a record per human, world state: the same on every PC, saved with the world and hashed.
+**The life of a local battle.** `LocalBattle` is a record per human, the same on every PC. It's in no save and no hash: campaign saves wait until the last local battle has ended.
 1. **Engage at step N**, in the world part on every PC: every PC records the battle (the human, its PC, the armies, the freeze step F, the next multiple of 30 after N). The armies wait in place from N.
 2. **At F's world part**, on the battle PC only: it generates the battle, on a battle seed, with the world stream's draws put back. Every PC freezes the human from F: no reports are taken or read, and transactions are held.
 3. **From F+1**, the battle PC runs battle ticks in the city part.
@@ -85,7 +85,7 @@ Rig, Mogus-72 with 2 humans, two copies at 5×: `SOSDET_LOCAL_BATTLES=1 rig.py c
 
 Found:
 - **Generating takes 12.7 s in one step** on the battle PC (Mogus-72). The other PC waits, and the agreed speed falls to 1×. Step B should generate between steps, as a view's load does.
-- **The battle's commands** (Start, Retreat, Close) are captured only for battles every PC runs. A local battle applies them on its own PC, outside the step. Watching (SOS-109) will need them in a local queue, at a step.
+- **The battle's commands** (Start, Retreat, Close) are captured only for battles every PC runs. A local battle applies them on its own PC, outside the step. Watching (SOS-109, plan 0017) put them in a local queue, at a step.
 
 
 ### Step C (2026-10-30)

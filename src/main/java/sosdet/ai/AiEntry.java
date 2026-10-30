@@ -66,6 +66,11 @@ public final class AiEntry {
     public final int pc;
     private final byte[] payload;
 
+    /** An order outside the log, for a local battle's tape (SOS-109). */
+    public static AiEntry order(int kind, int div, int pc, byte[] payload) {
+        return new AiEntry(-1, -1, kind, div, pc, payload.clone());
+    }
+
     AiEntry(long step, int seq, int kind, int div, int pc, byte[] payload) {
         if (kind < 0 || kind >= KINDS) {
             throw new IllegalArgumentException("SOSDET: AI log entry kind " + kind);

@@ -554,12 +554,18 @@ public final class Engine {
             byte[] save = sosdet.game.GameView.saveForView();
             byte[] state = ViewCity.cityState(s);
             double[] moves = GameWorldLoad.unsaved();
+            byte[] battle = v.battle ? sosdet.game.GameResync.captureLocal() : new byte[0];
             v.sent = true;
             // the owner loads its save too: two PCs that load one save run its city alike, a loaded and an unloaded
             // game don't (plan 0013, rig run V82D)
             s.viewLoadStart(state, moves, v.viewer);
-            sosdet.game.GameView.loadSaved();
-            return ViewCity.toBytes(v.freeze, state, moves, save);
+            if (v.battle) {
+                s.tape.watch(v.viewer);
+                sosdet.game.GameView.loadSavedBattle(sosdet.game.GameResync.exiter(), battle);
+            } else {
+                sosdet.game.GameView.loadSaved();
+            }
+            return ViewCity.toBytes(v.freeze, state, moves, battle, save);
         }
         return null;
     }
@@ -590,7 +596,13 @@ public final class Engine {
         s.ownCityState = ViewCity.cityState(s);
         s.ai().watchOnly(true);
         s.viewLoadStart(c.state, c.moves, s.localHuman);
-        sosdet.game.GameView.loadView(c.save);
+        if (v.battle) {
+            s.tape.clear();
+            s.viewLimit.battle(s.watchBehindSteps());
+            sosdet.game.GameView.loadViewBattle(c.save, c.battle);
+        } else {
+            sosdet.game.GameView.loadView(c.save);
+        }
     }
 
     /**
@@ -659,6 +671,21 @@ public final class Engine {
         }
     }
 
+    /** The battle's PC: its tape for the watcher in {@code viewer} since the last call, for that watcher; may be empty. */
+    public static byte[] viewTapeOut(int viewer) {
+        return required().tape.out(viewer);
+    }
+
+    /** The watcher's PC: more of the battle's tape, in order; each step runs when this PC reaches it (SOS-109). */
+    public static void viewTapeIn(byte[] bytes) {
+        Session s = required();
+        View v = s.views[s.localHuman];
+        if (v == null) {
+            throw new IllegalStateException("SOSDET: a battle's tape with no view of this PC's human");
+        }
+        s.tape.in(bytes, v.ownerPc);
+    }
+
     /** The viewer's PC: the first difference between its copy of the viewed city and the owner's city, or null. */
     public static Desync viewDesync() {
         Session s = required();
@@ -673,10 +700,10 @@ public final class Engine {
         return h == null ? 0 : h.compared();
     }
 
-    /** How many steps this PC is behind the host's last confirmed step (0 on the host): a viewer's catching up. */
+    /** How many steps this PC is behind the host's last confirmed step, or the host behind the world it leads as a watcher. */
     public static long behindHost() {
         Session s = required();
-        return s.ai().mode() == AiMode.PEER ? Math.max(0, s.ai().confirmed() - s.clock.step()) : 0;
+        return s.ai().mode() == AiMode.PEER ? Math.max(0, s.ai().confirmed() - s.clock.step()) : s.watchBehind();
     }
 
     /**

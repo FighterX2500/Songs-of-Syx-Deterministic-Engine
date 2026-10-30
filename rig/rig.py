@@ -48,7 +48,7 @@ REMOTE_WINDOW = (1600, 900)  # a watched remote copy's window (the laptop: 1920x
 RELAY, RELAY_SRC, RELAY_PORT = BUILD / "rig" / "relay", ROOT / "rig" / "relay" / "Relay.java", 47710
 # what a remote copy reads from the copies on this PC; everything else stays here
 SHARED = ("hashes.bin,ai-host.log,reports.bin,resync.save,resync.state,wresync.save,wresync.state,wresync.state.done,"
-          "battle.save,battle.done,view.save,view.done,view.hash,view.close")
+          "battle.save,battle.done,view.save,view.done,view.hash,view.close,view.tape")
 
 
 def log(msg):
@@ -476,8 +476,9 @@ def compare(copies, run_dir, tag, ref, steps, ends, after=1, resync_step=0):
             continue
         hashes, _ = logs[k]
         # a copy that loaded a resync from behind its step has no lines for the steps it jumped
+        # a copy that ran several steps in one frame has one line for them (a watcher catching up, SOS-109)
         first = next((s for s in range(after, last + 1) if s in ref_hashes and hashes.get(s) != ref_hashes[s]
-                      and not (s not in hashes and s <= resync_step)), None)
+                      and not (s not in hashes and (s <= resync_step or ends[k] >= steps))), None)
         at_end = hashes.get(steps + 1)
         if first is None and (ref_end is None or at_end == ref_end) and ends[ref] == steps:  # no end line: closed by hand
             lines.append("copy %d: identical to copy %d at every step %sto %d"
@@ -837,6 +838,10 @@ def main():
                     help="with --humans: 'STEP:V:O[:END]': copy 1 starts a city view at STEP, copy V's human viewing"
                          " copy O's city, and ends it at END; the owner's copy sends its city through its rig folder"
                          " and the viewer's copy compares its copy of that city with the owner's view hashes (SOS-82)")
+    ap.add_argument("--view-battle", default="",
+                    help="with --view (STEP unused, give 999999999): 'AFTER:END': the view is a watch of the owner's local"
+                         " battle, starting AFTER steps after it froze and ending END steps after (-1: with the"
+                         " battle) (SOS-109)")
     ap.add_argument("--view-limits", default="",
                     help="with --view: 'CATCHUP:KEEPUP:STEPS': the viewer's limits in seconds and steps instead of the"
                          " spec's 60:60:60, so a short run hits one; the viewer's copy asks copy 1 to end the view"
@@ -1115,6 +1120,8 @@ def main():
                 owner = copies[view[2] - 1]
                 c.send("viewat %d %d %d %d %s" % (view[0], human_slots[view[1] - 1], human_slots[view[2] - 1], view[3],
                                                   owner.rig), "viewat")
+                if args.view_battle:
+                    c.send("viewbattle %s" % " ".join(args.view_battle.split(":")), "viewbattle")
                 if c.k == view[1] and args.view_limits:
                     c.send("viewlimits %s" % " ".join(args.view_limits.split(":")), "viewlimits")
                 if c.k == view[1] and args.view_stall:

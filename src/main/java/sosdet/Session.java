@@ -257,7 +257,7 @@ final class Session {
     final java.util.function.Consumer<Txn> ownTxns = t -> {
         if (t.human == localHuman && frozen(localHuman)) { // first: a local battle's PC runs no other city (SOS-112)
             this.heldTxns.add(sosdet.game.HeldTxn.of(t)); // the queue clears and reuses t after the step (SOS-97)
-        } else if (t.human == cityHuman()) {
+        } else if (t.human == cityHuman() && !frozen(t.human)) { // a fighter's waits on its own PC, a watcher's game too
             txnApplier().accept(t);
         }
     };
@@ -276,6 +276,8 @@ final class Session {
     /** The armies of the world-battle prompt that just closed: a local battle's Engage keeps them waiting. */
     int[] closedPromptArmies = NO_ARMIES;
 
+    /** How far a watcher may run behind a local battle, in seconds of the world at 1× (SOS-109). */
+    private static final double WATCH_BEHIND_SECONDS = 180;
     /** The most rounds of a local battle in one world step: vanilla's fastest speed. */
     private static final int LOCAL_ROUNDS_MAX = 25;
     /** The share of its capacity a local battle's PC keeps free, and how often its rounds are looked at. */
@@ -294,6 +296,13 @@ final class Session {
     private long localCheckedAt;
     /** The battle PC: the extra rounds run so far, for the rig. */
     long localRoundsRun;
+    /** The orders and rounds of a local battle: the fighter's, or the one this PC watches (plan 0017, SOS-109). */
+    final LocalTape tape = new LocalTape(SLOTS);
+    /** The watcher: the rounds of the step that runs now, from the tape; 0 paused, or past the battle's result. */
+    private int watchRounds;
+    /** The host as a watcher: the step the world has reached for the other PCs, and when; -1 while it doesn't watch. */
+    private double watchLead = -1;
+    private long watchLeadAt;
 
     /** The local battle whose Engage runs now, inside its step: vanilla's Engage hands it its parts. */
     LocalBattle engaging;
@@ -425,15 +434,20 @@ final class Session {
         return rounds;
     }
 
+    /** The steps behind the host at which a watch ends; a slower PC watches on, behind. */
+    long watchBehindSteps() {
+        return (long) (WATCH_BEHIND_SECONDS / StepClock.STEP_SECONDS);
+    }
+
     /** The battle PC: the human paused its battle. */
     boolean localPaused() {
-        return localHere() != null && localPaused;
+        return localHere() != null ? localPaused : watchingBattle() != null && watchRounds == 0;
     }
 
     /** The battle PC: the battle's rounds beyond the one every step runs. */
     int localExtraRounds() {
         if (localHere() == null) {
-            return 0;
+            return watchingBattle() != null ? Math.max(0, watchRounds - 1) : 0;
         }
         localRoundsRun += localRounds - 1;
         return localRounds - 1;
@@ -448,6 +462,12 @@ final class Session {
         b.resultStep = step;
         b.result = result;
         b.thaw = nextReportStep(step + 1);
+        for (View v : views) {
+            if (v != null && v.battle && v.owner == human) {
+                endView(v.viewer, step, View.GAME, "The battle is over.");
+                viewHashes[v.viewer] = null; // its PC loads its own city now: the battles no longer run alike
+            }
+        }
         return true;
     }
 
@@ -464,7 +484,9 @@ final class Session {
             }
             b.back = true;
             if (b.human != localHuman) {
-                reloadOwnWorld();
+                if (!viewBackLoading) { // a watcher's load back resets the same
+                    reloadOwnWorld();
+                }
                 continue;
             }
             try {
@@ -520,8 +542,8 @@ final class Session {
      */
     void localAfter(long step) {
         for (LocalBattle b : locals) {
-            if (b == null || !b.back || b.after == null || worldPrompt != null) {
-                continue;
+            if (b == null || !b.back || b.after == null || worldPrompt != null || watched(b.human)) {
+                continue; // a watcher's game is still the battle's: it takes the result in its own city, as every PC
             }
             java.util.function.Consumer<Object> after = b.after;
             b.after = null;
@@ -543,6 +565,98 @@ final class Session {
     LocalBattle localHere() {
         LocalBattle b = locals[localHuman];
         return b != null && b.state == LocalBattle.RUNNING && !b.back ? b : null; // back: its own city again
+    }
+
+    /** This PC's view as a watcher of a local battle, until its own city is back; null otherwise (SOS-109). */
+    View watchingBattle() {
+        View v = viewing();
+        return v != null && v.battle ? v : null;
+    }
+
+    /** True while this PC's game is a local battle: its own, or the one it watches. */
+    boolean localRuns() {
+        return localHere() != null || watchingBattle() != null;
+    }
+
+    /** True while a watcher of the battle of the human in {@code owner} hasn't thawed, the same on every PC. */
+    private boolean watched(int owner) {
+        for (View v : views) {
+            if (v != null && v.battle && v.owner == owner && v.frozen()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Every PC running a local battle, at the start of a step, right after the log: the fighter's orders since the last
+     * step apply and go on the tape with this step's rounds; a watcher applies the same from the tape. The step's
+     * rounds are decided here, so both run the same battle, whenever each reaches this step.
+     */
+    void localOrders(long step) {
+        LocalBattle b = localHere();
+        if (b != null) {
+            tape.record(step, localPaused ? 0 : localRounds);
+            java.util.ArrayList<sosdet.ai.AiEntry> orders = tape.queued();
+            for (int i = 0; i < orders.size(); i++) {
+                ai().applier().apply(orders.get(i));
+            }
+            tape.clearQueued();
+            return;
+        }
+        View v = watchingBattle();
+        if (v == null) {
+            return;
+        }
+        if (!watchNeedsTape(v, step)) {
+            watchRounds = 0;
+            return;
+        }
+        LocalTape.Step t = tape.take(step);
+        watchRounds = t.rounds;
+        for (sosdet.ai.AiEntry e : t.orders) {
+            ai().applier().apply(e);
+        }
+    }
+
+    /**
+     * The host as a watcher, every frame, between steps: the world goes on for the other PCs at the agreed speed however
+     * slowly this PC runs the battle, so a slow host doesn't hold the fighter or anyone else. {@code speed} is this PC's
+     * game speed: a shared pause stops it.
+     */
+    void watchLead(long now, double speed) {
+        if (ai().mode() != AiMode.HOST || watchingBattle() == null) {
+            watchLead = -1;
+            return;
+        }
+        if (watchLead < 0) {
+            watchLead = clock.step();
+        } else if (speed > 0) {
+            double steps = (now - watchLeadAt) / 1e9 * clock.agreedSpeed() / clock.stepSeconds();
+            watchLead = Math.max(clock.step(), watchLead + steps);
+        }
+        watchLeadAt = now;
+        ai().leadTo((long) watchLead);
+    }
+
+    /** The steps this PC, the host, is behind the world while it watches; 0 otherwise. */
+    long watchBehind() {
+        return watchLead < 0 ? 0 : Math.max(0, (long) watchLead - clock.step());
+    }
+
+    /** The watcher: step {@code step} runs from the tape, until the battle's result has applied. */
+    private boolean watchNeedsTape(View v, long step) {
+        LocalBattle b = locals[v.owner];
+        if (removing[v.owner] || retired(v.owner)) {
+            return false; // its PC has gone: no more tape comes, and the removal ends the watch
+        }
+        return step > v.freeze && b != null && (b.resultStep < 0 || b.resultStep >= step);
+    }
+
+    /** Before step {@code step}: false while a watcher waits for that step of the battle's tape (SOS-109). */
+    boolean watchMayRun(long step) {
+        View v = watchingBattle();
+        return v == null || !watchNeedsTape(v, step) || tape.has(step);
     }
 
     /** The step the human in {@code slot} froze at: its view's, or its local battle's. */
@@ -684,6 +798,7 @@ final class Session {
         heldTxns.clear();
         ai().watchOnly(false);
         viewLimit.stop();
+        viewLimit.battle(-1);
     }
 
     /**
@@ -757,7 +872,8 @@ final class Session {
     void viewEntry(long step, int viewer, int owner, int ownerPc) {
         if (owner < 0) {
             int why = ownerPc < 0 || ownerPc > View.LAST_ASKED ? View.CLOSED : ownerPc;
-            endView(viewer, step, why, View.sentence(why));
+            View v = views[viewer];
+            endView(viewer, step, why, v != null && v.battle ? View.battleSentence(why) : View.sentence(why));
             return;
         }
         views[viewer] = new View(viewer, pcOf(viewer), owner, ownerPc, nextReportStep(step));
@@ -1075,6 +1191,7 @@ final class Session {
                 continue;
             }
             v.state = v.viewer == localHuman ? View.LOADING : View.RUNNING;
+            v.battle = locals[v.owner] != null;
             pacer.away(v.viewerPc, true); // the host's pace waits for no viewer
         }
     }
@@ -1089,6 +1206,9 @@ final class Session {
         }
         v.state = View.ENDED;
         viewHashes[v.viewer] = null;
+        if (v.battle && v.owner == localHuman) {
+            tape.unwatch(v.viewer);
+        }
         pacer.away(v.viewerPc, false);
         thawReports(v.viewer, step);
     }
@@ -1117,11 +1237,20 @@ final class Session {
                 || removing[viewer] || removing[owner]) {
             return "That city can't be viewed.";
         }
-        if (locals[viewer] != null || locals[owner] != null) {
+        if (locals[viewer] != null) {
             return "A battle is running.";
         }
-        if (frozen(owner)) {
+        LocalBattle fight = locals[owner];
+        if (fight != null && (fight.state != LocalBattle.RUNNING || fight.resultStep >= 0)) {
+            return "That battle is starting or ending.";
+        }
+        if (fight == null && frozen(owner)) {
             return "Its player is viewing another city.";
+        }
+        for (View o : views) {
+            if (fight != null && o != null && o != self && o.owner == owner && o.frozen()) {
+                return "Another player is watching that battle."; // one load of a battle per watcher: plan 0017
+            }
         }
         for (View o : views) {
             if (o != null && o != self && o.frozen() && o.owner == viewer) {
@@ -1676,9 +1805,8 @@ final class Session {
         if (r.takenAt <= receivedTakenAt[r.faction]) {
             return; // a repeat changes nothing
         }
-        if (frozen(r.faction) && r.takenAt >= freezeStep(r.faction)) {
-            return; // a viewer sends none from its freeze step; every PC reads its last one before (SOS-82)
-        }
+        // a human takes no report while frozen, so one from past its freeze is its thaw report, from a PC ahead of this
+        // one: it applies after this PC's own thaw (SOS-109, SOS-95)
         if (retired(r.faction) || removing[r.faction] && r.takenAt > removeCutoff[r.faction]) {
             return; // past its human's last report every PC reads (SOS-66)
         }

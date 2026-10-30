@@ -286,6 +286,14 @@ public final class AiLog {
         delay = steps;
     }
 
+    /**
+     * Host, between steps: the world is at {@code step} for the other PCs though this one is behind it, watching a local
+     * battle: they may run on, and whatever this PC logs is stamped past the horizon as ever (SOS-109).
+     */
+    public void leadTo(long step) {
+        horizon = Math.max(horizon, step + delay);
+    }
+
     /** The host's horizon as this PC knows it: the last step every entry is in for (SOS-90). */
     public long horizon() {
         return horizon;

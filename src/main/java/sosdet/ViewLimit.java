@@ -19,6 +19,8 @@ final class ViewLimit {
     private long catchUpNanos = seconds(DEFAULT_SECONDS);
     private long behindNanos = seconds(DEFAULT_SECONDS);
     private long steps = DEFAULT_STEPS;
+    /** A watch of a local battle ends only this many steps behind (SOS-109); below 0 for a city's limits. */
+    private long battleSteps = -1;
     /** When catching up started (the view load set, the clock's nanoseconds); -1 while no view is measured. */
     private long started = -1;
     private long caughtUpAt = -1;
@@ -35,6 +37,14 @@ final class ViewLimit {
         catchUpNanos = seconds(catchUpSeconds);
         behindNanos = seconds(behindSeconds);
         steps = behindSteps;
+    }
+
+    /**
+     * The view is a watch of a local battle (SOS-109): it may run behind as long as it likes, up to {@code steps}, and
+     * catches up when the battle lets it; {@code steps} below 0 for a city's limits.
+     */
+    void battle(long steps) {
+        battleSteps = steps;
     }
 
     /** The viewer's view load is set at {@code now}: catching up starts. */
@@ -56,6 +66,10 @@ final class ViewLimit {
      */
     int update(long now, long behind) {
         if (started < 0 || hit != View.OPEN) {
+            return hit;
+        }
+        if (battleSteps >= 0) {
+            hit = behind > battleSteps ? View.FELL_BEHIND : View.OPEN;
             return hit;
         }
         boolean caughtUp = behind <= steps;
