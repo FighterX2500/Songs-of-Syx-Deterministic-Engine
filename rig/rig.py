@@ -252,8 +252,10 @@ class RemoteCopy(Copy):
                          " -like '%s\*' -and $_.CommandLine -notlike '*Relay*' }).Count" % self.root).strip() not in ("", "0")
 
     def start(self, autoload):
-        script = ("@echo off\r\nset APPDATA=%s\r\nset SOSDET_RIG_AUTOLOAD=%s\r\ncd /d %s\\game\r\n"
-                  "jre\\bin\\java.exe -cp SongsOfSyx.jar init.Main\r\n" % (self.remote_appdata, autoload, self.root))
+        switches = "".join("set %s=%s\r\n" % (k, v) for k, v in sorted(os.environ.items())
+                           if k.startswith("SOSDET_LOCAL_"))  # the local battles' test switches, as a copy here has them
+        script = ("@echo off\r\nset APPDATA=%s\r\nset SOSDET_RIG_AUTOLOAD=%s\r\n%scd /d %s\\game\r\n"
+                  "jre\\bin\\java.exe -cp SongsOfSyx.jar init.Main\r\n" % (self.remote_appdata, autoload, switches, self.root))
         path = self.remote_appdata + "\\start.cmd"
         remote_ps("[IO.File]::WriteAllText('%s', '%s')" % (path, script.replace("'", "''")))
         remote_task("SOSDET-copy-%d" % self.k, path)

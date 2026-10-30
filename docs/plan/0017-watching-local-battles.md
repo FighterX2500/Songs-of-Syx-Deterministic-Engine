@@ -54,6 +54,23 @@ Known cost: a host far behind that leaves a watch thaws only when it reaches T, 
 - **Unit:** `LocalTapeTest`; `LocalBattleTest` (who can watch, the tape's rounds, the result ending a watch, the after-battle waiting, a watcher leaving the fighter's transactions alone, orders on the tape). SOSGSGMP: `ProtocolTest`, `ViewRequestsTest`.
 - **Rig:** `--view 999999999:V:O --view-battle AFTER:END`, `SOSDET_LOCAL_START=N` keeps a battle in deployment, `--in-battle "N divorders H"` gives a human's divisions orders.
 
+## Results
+
+All on Mogus-72, two humans, world speed 5×, the battle at 1×. A retreat ends each battle.
+
+| Run | PCs | Fighter, watcher | What it covered | Result |
+|---|---|---|---|---|
+| W1 | one | host, peer | Joined a running battle, left it after 1,200 steps; the fighter fought on | 35 battle hashes equal; identical to step 17,000 |
+| W3 | one | peer, host | Joined in deployment, Start, division orders, pause, Close | 65 battle hashes equal; **world desync at 20,730, reports only** |
+| W5 | one | peer, host | W3's line with the fix | 40 battle hashes equal; 716 world hashes equal |
+| W7 | two (laptop fights) | peer, host | W5 with a 6 s stall on the watcher | 50 battle hashes equal, 638 steps behind at worst, caught up; identical to step 21,500 |
+
+- **The join:** the fighter's save is 2.0 to 3.0 MB and takes 0.8 to 1.0 s; the watcher's load takes 5.9 to 7.0 s. The fighter's world reload on leaving takes about 230 ms.
+- **W3's desync:** `Session.reportReceived` dropped any report taken past a frozen human's freeze step, on the idea that a frozen human sends none. That's true of the sender, but a PC ahead of the thaw step has thawed and sends one, and a PC still before the thaw dropped it. Only that PC missed the report, so the report section differed. A frozen human takes no report, so the guard is gone. This was found by reading the code, not seen in a trace: the proof is W3's line going clean twice (W5, W7), and `aThawReportFromAPcAheadIsKeptWhileThisPcStillSeesItsHumanFrozen`. SOS-95 has the same symptom after a host's view and may be the same cause; its run hasn't been repeated.
+- **The rig:** a copy that ran several steps in one frame has no lines for them, which printed "copies differ" for W4 and W5 with every shared step equal. It now counts those as missing, not different. `--remote` now passes `SOSDET_LOCAL_*` to the laptop's copy: W6 ran without them and desynced at 18,630, before its watch, which says nothing about watching.
+
+Not tested: a watcher that reaches the 3-minute limit, a host far behind when it leaves, and a late-game battle's join.
+
 ## Gaps
 
 - **One watcher per battle.** A second watcher would reload the fighter's game while the first doesn't, and a loaded and a reloaded game don't run alike. The mod spec says any other player can join; the second one is refused with a reason for now.
