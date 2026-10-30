@@ -162,6 +162,8 @@ The other human's world commands reach the battle PC: in L93AR the host's Engage
 
 Measured, not explained: the longest time the host was held was 7.88 s in L93AM, 8.53 s in L93AP and 6.08 s in L93AR, against 0.46 s in L93AQ and 1.0 s in L93AH. L93AM and L93AP had a peer's return; L93AR had none, but had two battles at once. Nothing here shows which waits these are.
 
+The short suite before the pull request: `ownworld-short` passed. `field-short` and `assault-short` stopped at "record again": their recordings are in the AI log's format 6 and the engine's is 8, an older gap (SOS-107), so they weren't replayed against expected hashes. Their rig lines, run as copy comparisons instead, were identical to 3,000 and 6,000 (L93AS, L93AT).
+
 Known limits:
 - A world question has no time limit, unlike a prompt's 30 seconds, and a battle's return waits for it, so a player who ignores one delays another player's return. A view's thaw waits the same way.
 - The host generating its own battle holds the others about 12.7 s.
