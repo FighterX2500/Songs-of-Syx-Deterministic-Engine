@@ -37,7 +37,7 @@ public final class MapBattles {
     /** The save the battle's generation writes ({@code BattleState.setGenerate}). */
     private static final String BATTLE_SAVE = "__battle";
 
-    static final String RESTART_NOTICE = "SOSDET: restarting a battle doesn't work with own cities.";
+    static final String RESTART_NOTICE = "SOSDET: a battle can't be restarted in a multiplayer game.";
 
     static final String WORLD_COMMAND_NOTICE = "SOSDET: a world map action came in during the battle and was not done."
             + " Do it again after the battle.";
@@ -215,9 +215,14 @@ public final class MapBattles {
 
     /**
      * Hook in {@code BattleState.reloadBattle} (the battle panel's restart, once confirmed, and the result panel's): in
-     * a session (true) a command. Applied inside the step, it runs the reload.
+     * a session (true) a command. Applied inside the step, it runs the reload. A local battle has none: vanilla's
+     * reload is a whole game's, so it would rewind the world on this PC alone (SOS-93).
      */
     public static boolean restart() {
+        if (Hooks.localBattleHere()) {
+            VIEW.inters().fullScreen.activate(RESTART_NOTICE, COLOR.WHITE100, null);
+            return true;
+        }
         if (Hooks.battleLoadingNow() || !Commands.capturing()) {
             return false; // the engine's own load of the battle PC's battle runs as vanilla's restart (plan 0006)
         }

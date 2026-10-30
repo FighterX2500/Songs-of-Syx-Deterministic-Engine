@@ -169,6 +169,23 @@ class LocalBattleTest {
     }
 
     @Test
+    void theHostsFramesHoldTheCapWhileAPeerFights() {
+        Session s = session(0);
+        s.clock.agreedSpeed(5);
+        LocalBattle b = s.localEngage(1234, 3);
+        s.localCap(5);
+        assertEquals(5, Hooks.frameSpeed(5), "the 1x isn't agreed yet");
+        s.clock.agreedSpeed(1);
+        s.localsAt(b.freeze);
+        assertEquals(1, Hooks.frameSpeed(5), "no PC's pace holds the host while the peer generates");
+        assertEquals(0, Hooks.frameSpeed(0), "the host's pause stays");
+        s.localResult(1400, 3, "r");
+        s.localsAt(b.thaw);
+        s.localCap(5);
+        assertEquals(5, Hooks.frameSpeed(5), "the cap is off");
+    }
+
+    @Test
     void anotherPcsFramesKeepTheirOwnSpeed() {
         Session s = session(0);
         s.clock.agreedSpeed(1);
@@ -202,6 +219,7 @@ class LocalBattleTest {
         s.localsAt(1260);
         s.localResult(1400, 3, new Object[0]);
         assertTrue(s.localBusy(3), "its own result comes first");
+        b.back = true;
         s.localAfter(1401);
         assertFalse(s.localBusy(3));
     }
@@ -216,7 +234,9 @@ class LocalBattleTest {
         s.engaging = null;
         s.localsAt(1260);
         s.localResult(1400, 3, new Object[0]);
+        assertTrue(s.localBackDue(b));
         s.worldPrompt = new Object();
+        assertFalse(s.localBackDue(b), "the battle PC's load would drop the prompt, every other PC keep it");
         s.localAfter(1401);
         assertTrue(seen.isEmpty(), "vanilla's panel holds one prompt");
         long thaw = b.thaw;
@@ -224,7 +244,12 @@ class LocalBattleTest {
         assertSame(b, Engine.localBattle(3), "the after-battle is still to run");
         assertTrue(b.thaw > thaw);
         s.worldPrompt = null;
+        assertTrue(s.localBackDue(b));
         s.localAfter(1405);
+        assertTrue(seen.isEmpty(), "only once the PCs are back");
+        b.back = true;
+        assertFalse(s.localBackDue(b), "once");
+        s.localAfter(1406);
         assertEquals(1, seen.size());
     }
 
@@ -258,6 +283,7 @@ class LocalBattleTest {
         s.localResult(1400, 3, result);
         s.localAfter(1400);
         assertTrue(seen.isEmpty(), "not in the result's own step");
+        b.back = true;
         s.localAfter(1401);
         assertEquals(List.of(result), seen);
         assertEquals(0, b.armies.length, "the armies move again");

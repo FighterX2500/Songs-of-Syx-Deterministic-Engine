@@ -120,3 +120,30 @@ Not shown by a run yet:
 - that the battle ran two rounds a step: nothing measures the rounds;
 - the pause;
 - k going down on a slow PC (unit test only).
+
+### The long run (2026-10-30)
+
+The earlier results stopped too soon. L93J's and L93M's battles ended before the first human trade after them, so they could not show what follows; "identical to 16,000" was true but proved less than it seemed. L93L ran before the fix to the battle PC's frame speed, so it says nothing about the 1× cap on that PC's pace.
+
+| Run | What happened |
+|---|---|
+| L93AC | Unfixed, with the boosts and NPC stocks added to the world hash: battle started at 11,940, first difference at 11,941, and "NPC production boosts" the first part to differ. Vanilla's generation clears the city, which re-rolls every `FBoost.mul` on the battle PC only. These are world state kept in a city class, and no world load or resync carries them. |
+| L93AD | With `localGenerate` keeping them: identical at every step to 18,000. |
+| L93AE | Restart unguarded (`--restart 300`): the battle PC went back to step 0 and the session froze. Vanilla's restart is a whole game's load. |
+| L93AF | Restart refused with the notice, same line to 14,000: identical. The notice doesn't block, and the battle ran on to its defeat. |
+| L93AG | The line that kept desyncing, two battles, to 21,000: identical. The peer's battle started at 19,620, but hadn't ended. |
+| L93AH | The same to 23,500: identical, and still no result. The host ran on at 5× through the peer's generation, 3,700 steps ahead, because no pace waits for a PC away. |
+| L93AI | The host now holds the agreed speed while a peer fights, and the peer's battle reached its end for the first time: desync at 21,360, in the report only. The peer thawed at 21,330; the host never did. |
+| L93AK, L93AL | With a temporary log: `PRegAttack`'s poll asked the fighting human again in the Engage step, so that prompt stood open through the whole battle on every PC. At the result the peer's full load dropped it and the host's world reload kept it, so only the peer ran the after-battle. |
+| L93AM | Both fixed, same line to 22,500: **all copies identical, engine hashes agree**, 750 hashes compared on each copy. The peer's result applied at 21,360, its reports came back at 21,390, 5× at 21,421, and its defeat was accepted at 21,450. |
+
+Fixed:
+- **The boosts:** `localGenerate` saves `mul` before generating and puts it back; the world hash now holds them and every NPC's goods and rates.
+- **Restart:** off in local battles, so off in every battle (spec section 8, owner 2026-10-30).
+- **The host's pace:** while a local battle runs, its frames keep the agreed speed.
+- **The polls:** `PRegAttack` checked only the region's owner, an NPC here, not the attacking human. It now checks both. The pending orders at the top of `PRegAttack` and `PSiege` wait too.
+- **The return:** it waits until no prompt or question is open, as a view's thaw does, and the after-battle runs once the PCs are back. A battle PC can stay on the battle map a little longer for it, up to another human's prompt time.
+
+Measured, not explained: in L93AM the host was held 12.0 s in all, 7.88 s at the longest, against 1.0 s in L93AH. Nothing here shows which wait that is; a peer's load back is the first thing to check.
+
+Still not shown by a run: a victory, the other human's world order during a battle, two battles at once, a human removed mid-battle, a prompt open at the result (unit test only), and any of this on two real PCs.

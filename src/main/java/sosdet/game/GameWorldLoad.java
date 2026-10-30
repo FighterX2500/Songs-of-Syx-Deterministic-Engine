@@ -40,6 +40,7 @@ import snake2d.util.file.SAVABLE;
 import snake2d.util.misc.ACTION;
 import snake2d.util.sets.KeyMap;
 import snake2d.util.sets.LIST;
+import sosdet.hash.HashLog;
 import snake2d.util.sets.Stack;
 import util.data.DataO;
 import util.keymap.RMAPS;
@@ -446,6 +447,47 @@ public final class GameWorldLoad {
             }
         }
         return all;
+    }
+
+    /** Every recipe's NPC production boost, in {@link #fboosts()} order. */
+    public static double[] fboostMuls() {
+        List<Object> fboosts = fboosts();
+        double[] m = new double[fboosts.size()];
+        for (int i = 0; i < m.length; i++) {
+            m[i] = fboostMul(fboosts.get(i));
+        }
+        return m;
+    }
+
+    /** Puts back what {@link #fboostMuls()} took, in the same game. */
+    public static void fboostMuls(double[] m) {
+        List<Object> fboosts = fboosts();
+        if (m.length != fboosts.size()) {
+            throw new IllegalStateException("SOSDET: " + m.length + " production boosts for " + fboosts.size() + " in this game");
+        }
+        for (int i = 0; i < m.length; i++) {
+            fboostMul(fboosts.get(i), m[i]);
+        }
+    }
+
+    /**
+     * {@code h} with every recipe's NPC production boost mixed in, in recipe order: world state kept in a city
+     * resource, so a map generated on one PC re-rolls it there (SOS-93). For the state hash, so no allocation: a boost
+     * two recipes share is mixed twice.
+     */
+    static long hashFboosts(long h) {
+        Class<?> c = FBOOST_MUL.getDeclaringClass();
+        LIST<Recipe> recipes = SETT.RECIPES().all();
+        for (int i = 0; i < recipes.size(); i++) {
+            Recipe r = recipes.get(i);
+            for (int k = 0; k < r.bo.all().size(); k++) {
+                Object b = r.bo.all().get(k);
+                if (b.getClass() == c) {
+                    h = HashLog.mix(h, Double.doubleToLongBits(fboostMul(b)));
+                }
+            }
+        }
+        return h;
     }
 
     private static double fboostMul(Object b) {

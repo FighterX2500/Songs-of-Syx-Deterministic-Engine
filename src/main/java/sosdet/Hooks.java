@@ -384,7 +384,8 @@ public final class Hooks {
 
     /**
      * The freeze step's world part, on a local battle's PC: vanilla's Engage generates the battle, on a stream of its
-     * own; the world stream goes on as on every other PC, reseeded, its draw count put back (SOS-93).
+     * own; the world stream goes on as on every other PC, reseeded, its draw count put back (SOS-93). The world's NPC
+     * production boosts, which vanilla's generation re-rolls as it clears the city, stay as every other PC has them.
      */
     private static void localGenerate(Session s, long step) {
         LocalBattle b = s.localHere();
@@ -396,10 +397,12 @@ public final class Hooks {
         GAME.SPEED.speedSet(1); // as vanilla's battle opens; the world's speed goes on in the log
         s.ownCityState = ViewCity.cityState(s); // put back with the city at the battle's end, as after a view
         long worldDraws = s.streams.worldDraws();
+        double[] boosts = sosdet.game.GameWorldLoad.fboostMuls();
         s.streams.reseed(s.battleSeed(step));
         try {
             generate.run();
         } finally {
+            sosdet.game.GameWorldLoad.fboostMuls(boosts);
             s.streams.reseed(s.worldSeed(step));
             s.streams.worldDraws(worldDraws);
         }
@@ -456,10 +459,17 @@ public final class Hooks {
     /**
      * Patch 10: the frame's speed: the game's, but on a local battle's PC the game's speed is the battle's own, so the
      * frame takes the world's: a paused battle's world runs on, and a fast one's stays at the agreed speed (SOS-93).
+     * The host holds that speed too while a peer fights: the peer generating its battle is waited for by no pace.
      */
     public static double frameSpeed(double speed) {
         Session s = Engine.session();
-        return s == null || s.localHere() == null ? speed : s.clock.agreedSpeed();
+        if (s == null) {
+            return speed;
+        }
+        if (s.localHere() != null) {
+            return s.clock.agreedSpeed();
+        }
+        return s.localCapped() ? Math.min(speed, s.clock.agreedSpeed()) : speed;
     }
 
     /**

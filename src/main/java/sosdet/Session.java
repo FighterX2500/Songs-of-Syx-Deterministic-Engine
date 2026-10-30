@@ -364,6 +364,11 @@ final class Session {
         return false;
     }
 
+    /** The host: true from the first local battle's Engage until the last one's human has thawed. */
+    boolean localCapped() {
+        return localCapped;
+    }
+
     /**
      * The host: the speed to log now for the local battles' cap, or 0: 1× from the first Engage, and {@code wanted} (the
      * speed from before the cap if the host chose none) once the last battle's human has thawed.
@@ -445,11 +450,12 @@ final class Session {
     /**
      * Between steps, after a local battle's result step: the battle PC saves the world it ran and loads its own city
      * as saved at the freeze, then the world into it ({@link #localBackWorld}); every other PC reloads its own world at
-     * the same step, as for a view, so what a load resets is reset alike everywhere.
+     * the same step, as for a view, so what a load resets is reset alike everywhere. It waits while a prompt or question
+     * is open, as a view's thaw does: the battle PC's load would drop it there and every other PC keep it.
      */
     void localBacks() {
         for (LocalBattle b : locals) {
-            if (b == null || b.back || b.resultStep < 0 || clock.step() != b.resultStep) {
+            if (!localBackDue(b)) {
                 continue;
             }
             b.back = true;
@@ -467,6 +473,11 @@ final class Session {
             localBackLoading = true;
             sosdet.game.GameView.loadBeforeBattle();
         }
+    }
+
+    /** Between steps, the same on every PC: this battle's result has applied, it hasn't gone back, and no prompt is open. */
+    boolean localBackDue(LocalBattle b) {
+        return b != null && !b.back && b.resultStep >= 0 && worldPromptOrQuestion() == null;
     }
 
     /** The battle PC's own city is set again: the world it ran goes into it, then the transactions it missed. */
@@ -495,12 +506,12 @@ final class Session {
     }
 
     /**
-     * The world part, from the step after a local battle's result: every PC runs vanilla's after-battle alike, as soon
-     * as no other prompt is open, as vanilla's panel is one and every PC's copy of it the same.
+     * The world part, from the step after a local battle's load back: every PC runs vanilla's after-battle alike, as
+     * soon as no other prompt is open, as vanilla's panel is one and every PC's copy of it the same.
      */
     void localAfter(long step) {
         for (LocalBattle b : locals) {
-            if (b == null || b.resultStep < 0 || step <= b.resultStep || b.after == null || worldPrompt != null) {
+            if (b == null || !b.back || b.after == null || worldPrompt != null) {
                 continue;
             }
             java.util.function.Consumer<Object> after = b.after;
