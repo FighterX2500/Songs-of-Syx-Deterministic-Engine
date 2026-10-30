@@ -35,6 +35,16 @@ public final class Assault {
     volatile long endStep = -1;
     /** Why it ended without an outcome (a view that couldn't start); null otherwise. */
     volatile String cancelled;
+    /** The invasion's reference in the defender's city, once it runs there. */
+    volatile int invasionRef = -1;
+    /** Rig tests only: the outcome the invasion ends with at the next city tail; -1 when none. */
+    volatile int forced = -1;
+    /** After {@link #TAKEN}: the step the attacker's choice is due by; then the default applies (SOS-92 D). */
+    volatile long termsDue = -1;
+    /** What the attacker took ({@code AssaultTerms} kind and percent, and the money); -1 until then. */
+    volatile int termsKind = -1;
+    volatile int termsPercent = -1;
+    volatile int termsCredits;
 
     Assault(long step, int attacker, int defender, long freeze, Object spec, int[] armies, int men) {
         this.step = step;
@@ -60,6 +70,18 @@ public final class Assault {
 
     public String cancelled() {
         return cancelled;
+    }
+
+    public int termsKind() {
+        return termsKind;
+    }
+
+    public int termsPercent() {
+        return termsPercent;
+    }
+
+    public int termsCredits() {
+        return termsCredits;
     }
 
     /** {@link #HELD}, {@link #TAKEN} or {@link #RETREAT} as a word, for logs. */

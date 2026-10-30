@@ -385,6 +385,23 @@ public final class Hooks {
         s.assaultBegin(s.clock.step(), attacker, defender, spec, armies, men);
     }
 
+    /** {@code ASSAULT_TERMS} in the world part: the attacker's choice after a taken throne (SOS-92 D). */
+    public static boolean assaultTerms(int attacker, int kind, int percent) {
+        Session s = Engine.session();
+        return s != null && s.assaultTerms(attacker, kind, percent);
+    }
+
+    /** The rig's {@code ASSAULT_END} in the world part: the running assault's invasion ends with {@code outcome}. */
+    public static boolean assaultForce(int outcome) {
+        Session s = Engine.session();
+        if (s == null || s.assault == null || !s.assault.started || s.assault.outcome >= 0 || outcome < Assault.HELD
+                || outcome > Assault.RETREAT) {
+            return false;
+        }
+        s.assault.forced = outcome;
+        return true;
+    }
+
     /** {@code Invasion.update}, as the assault's invasion ends in the step: the same on every PC that runs the city. */
     public static void assaultOutcome(int outcome) {
         Session s = Engine.session();
@@ -449,6 +466,7 @@ public final class Hooks {
             s.streams.reseed(s.worldSeed(step));
             s.streams.worldPart(true);
             s.assaultResolve(step); // an assault whose views have all thawed: its outcome reaches the world (SOS-92 B)
+            s.assaultTermsDue(step); // a taken throne whose attacker didn't choose in time: the default terms (SOS-92 D)
             if (!battleRuns) {
                 s.dueWithoutReports();
                 s.retireDue(); // first: a removed human's report is read no more (SOS-66)

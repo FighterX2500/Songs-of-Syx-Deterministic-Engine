@@ -3,9 +3,15 @@ package sosdet.game;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 
+import game.GAME;
 import game.time.TIME;
+import init.type.HTYPES;
 import settlement.battle.invasion.InvasionSpec;
+import settlement.entity.ENTITY;
+import settlement.entity.humanoid.Humanoid;
 import settlement.main.SETT;
+import settlement.room.military.artillery.ArtilleryInstance;
+import settlement.room.military.artillery.ROOM_ARTILLERY;
 import sosdet.Assault;
 import sosdet.Hooks;
 import sosdet.report.Field;
@@ -53,9 +59,31 @@ public final class GameAssault {
         return men;
     }
 
-    /** In the city tail of the defender's city, on every PC that runs it: the invasion starts. */
-    public static void invade(Object spec) {
-        SETT.INVADOR().invade((InvasionSpec) spec, null);
+    /** In the city tail of the defender's city, on every PC that runs it: the invasion starts. Returns its reference. */
+    public static int invade(Object spec) {
+        return SETT.INVADOR().invade((InvasionSpec) spec, null);
+    }
+
+    /**
+     * Rig tests only, in the city tail of the defender's city on every PC that runs it: the assault's invasion stops
+     * now, and its invaders and their artillery leave the city, as {@code Invador.update} clears them after an invasion.
+     */
+    public static void endForTest(int ref) {
+        SETT.INVADOR().cancel(ref);
+        for (ENTITY e : SETT.ENTITIES().getAllEnts()) {
+            if (e instanceof Humanoid && ((Humanoid) e).indu().hType() == HTYPES.ENEMY()) {
+                ((Humanoid) e).helloMyNameIsInigoMontoyaYouKilledMyFatherPrepareToDie();
+            }
+        }
+        for (ROOM_ARTILLERY b : SETT.ROOMS().ARTILLERY) {
+            for (int i = 0; i < b.instancesSize(); i++) {
+                ArtilleryInstance ins = b.getInstance(i);
+                if (ins.army() == GAME.ARMIES().enemy()) {
+                    ins.destroyTile(ins.mX(), ins.mY());
+                    i--;
+                }
+            }
+        }
     }
 
     /** True while an invasion runs in this PC's city. */

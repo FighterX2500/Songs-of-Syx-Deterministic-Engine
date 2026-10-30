@@ -90,3 +90,35 @@ The mod plan says every PC loads the defender's city "with `loadView`'s path". T
 
 - **Unit tests:** the assault record's save and load round trip; the refusals (a city command during the assault; Storm before the wait ends).
 - **Rig:** Mogus-72 with 2 humans, slot 1 besieging slot 0, Storm after the wait, using a rig shortcut that sets the siege's start back. Every copy's city stays identical (the view hash) to the assault's end.
+
+### Step B's results (2026-10-30)
+
+- Rig S92M and S92N (Mogus-72, slot 2 storms slot 0, 2 copies, 5x): Storm at about step 16,600, the view of slot 0 by slot 2 loaded in 7.5 s, the invasion ran on both copies, the defender held at 28,882 and 32,884, the view ended "The assault is over.", and afterwards the attacker's army was gone and the siege record cleared on both copies. No desync.
+- S92J found a step A bug: `CommandParts.world` stopped at 7949, so the sally (7970) applied on its sender's PC only in own-city mode. The siege commands are world commands now.
+- Not built from the list above: the save round trip (saves are refused during an assault instead, so the assault is never saved), and the refusal of the defender's city commands during the assault (they apply on every PC that runs the city, as in any view, so they don't desync).
+
+## Step D: the attacker's terms (2026-10-30, decided as recommended while the owner was away)
+
+After a taken throne the world keeps the assault as `Session.taken` until the attacker chooses, in the world part, by `ASSAULT_TERMS` (7973):
+
+- **Sack** (`AssaultTerms.SACK`, 0% to 80%): that share of the defender's money and of each good, read from its city's report, goes to the attacker through `HumanDeals.execute` (the money at once, the goods by caravan from the defender's capital), and the war ends (`CANCEL_ALL`, neutral).
+- **Vassalage** (0% to 100%): the defender becomes the attacker's vassal with that tribute (SOS-73's terms), which also ends the war.
+- **No choice in two minutes of real time** (240 half-second windows at the agreed speed): Sack at 50%.
+- The siege ends as the war does: `PSiege` drops a besieger that is no longer an enemy, which clears the siege record.
+- No saves while a choice is open (mod).
+
+Not built: Eliminate and the people's fates (Moved, Killed, Freed, mercy), which need a `REMOVE_PEOPLE` transaction and spec §11's elimination.
+
+Rig: `wassaultend held|taken|retreat` ends the running invasion at the next city tail on every copy (test tooling, `ASSAULT_END` 7972); `wterms sack|vassalage <percent>` chooses.
+
+### Step D's results (2026-10-30)
+
+- **S92Q and S92S** (a forced retreat, then a second Storm, a forced taken, and `wterms sack 60`):
+  - the retreat started a new 16-day wait, and the army stayed besieging;
+  - the second view ran (it found a rig bug: the viewer kept the first view's hash offset, now reset at each view);
+  - the sack moved 1,350,756 (60%) from slot 0 to slot 2, set the two neutral, and cleared the siege;
+  - no desync.
+  - The defender's treasury then fell near zero: its import orders bought back the goods the sack took (962,228 of TRADE out the same day). That is the game's trade, not the sack.
+- **S92R** (one assault, a forced taken, sack 60%): exactly 60% left the defender (DIPLOMACY out 1,354,957).
+- **S92P** (a forced taken, `wterms vassalage 25`): slot 0 became "vassal of 2 at 25%" (VASSAL and OVERLORD), the war ended, the siege cleared and the army went to Fortifying. No desync.
+- **Not run:** the 2-minute default (Sack 50%) when the attacker doesn't choose.

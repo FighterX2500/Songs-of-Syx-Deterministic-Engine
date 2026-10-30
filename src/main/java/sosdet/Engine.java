@@ -1059,12 +1059,48 @@ public final class Engine {
     }
 
     /**
+     * A taken throne whose attacker hasn't chosen what to take yet, or null (SOS-92 D): the attacker's PC shows the
+     * choice, and no PC saves meanwhile.
+     */
+    public static Assault assaultTaken() {
+        return required().taken;
+    }
+
+    /** Once, as the world applies an attacker's terms: that assault, with what was taken; else null (SOS-92 D). */
+    public static Assault assaultTermsTake() {
+        Session s = required();
+        Assault a = s.assaultTermsOutcome;
+        s.assaultTermsOutcome = null;
+        return a;
+    }
+
+    /**
      * Between steps: the game days left before the capital of the human in {@code slot} may be assaulted, 0 once the
      * wait has passed, or -1 when it isn't besieged (mod spec §9, SOS-92).
      */
     public static int assaultInDays(int slot) {
         required();
         return Sieges.assaultInDays(slot);
+    }
+
+    /** Between steps: why this PC's player can't take {@code kind} at {@code percent} now, or null (SOS-92 D). */
+    public static String assaultTermsRefusal(int kind, int percent) {
+        required();
+        return Sieges.termsRefusal(kind, percent);
+    }
+
+    /**
+     * Between steps: this PC's player, whose army took another human's throne, takes {@code kind}
+     * ({@code AssaultTerms}) at {@code percent}, applied at its step on every PC (SOS-92 D). Check
+     * {@link #assaultTermsRefusal} first.
+     */
+    public static void assaultTerms(int kind, int percent) {
+        required();
+        String why = Sieges.termsRefusal(kind, percent);
+        if (why != null) {
+            throw new IllegalStateException("SOSDET: assault terms refused: " + why);
+        }
+        Sieges.terms(kind, percent);
     }
 
     /** Between steps: why this PC's player can't sally out of their besieged capital now, or null (SOS-92). */

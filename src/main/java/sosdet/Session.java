@@ -12,6 +12,7 @@ import sosdet.game.StepParts;
 import sosdet.game.SpeedLine;
 import sosdet.game.cmd.BannerDraft;
 import sosdet.game.cmd.PlanStash;
+import sosdet.game.siege.AssaultTerms;
 import sosdet.hash.Desync;
 import sosdet.hash.HashLog;
 import sosdet.hash.StateSource;
@@ -477,6 +478,10 @@ final class Session {
     Assault lastAssault;
     /** The assault whose outcome the world just took, until the mod takes it (SOS-92 C). */
     Assault assaultOutcome;
+    /** A taken throne whose attacker hasn't chosen what to take yet; saves wait for it (SOS-92 D). */
+    Assault taken;
+    /** The assault whose terms the world just applied, until the mod takes it (SOS-92 D). */
+    Assault assaultTermsOutcome;
     /** NPC invasions of a human's capital, as the world part starts them: step, human, invading faction (-1: rebels). */
     final java.util.ArrayDeque<long[]> invasionNotices = new java.util.ArrayDeque<>();
     /** The notices kept for the mod at most; a mod that never takes them loses the oldest past this. */
@@ -486,6 +491,9 @@ final class Session {
     String assaultRefusal() {
         if (assault != null) {
             return "An assault is running.";
+        }
+        if (taken != null) {
+            return "An attacker is choosing what to take from a throne.";
         }
         if (battle != null) {
             return "A battle is running.";
@@ -537,13 +545,19 @@ final class Session {
             if (cityHuman() == a.defender) {
                 assaultStarting = true;
                 try {
-                    sosdet.game.GameAssault.invade(a.spec);
+                    a.invasionRef = sosdet.game.GameAssault.invade(a.spec);
                 } finally {
                     assaultStarting = false;
                 }
             }
             a.started = true;
             return;
+        }
+        if (a.forced >= 0 && a.outcome < 0) { // rig tests only: the invasion ends as the test asked
+            if (cityHuman() == a.defender) {
+                sosdet.game.GameAssault.endForTest(a.invasionRef);
+            }
+            a.outcome = a.forced;
         }
         if (a.outcome >= 0) {
             assaultOver(step, null);
@@ -598,6 +612,38 @@ final class Session {
         if (a.cancelled == null) {
             sosdet.game.GameAssault.resolve(a.defender, a.outcome, a.armies);
             assaultOutcome = a;
+            if (a.outcome == Assault.TAKEN) {
+                a.termsDue = step + TERMS_WINDOWS * windowSteps(clock.agreedSpeed());
+                taken = a;
+            }
+        }
+    }
+
+    /** The attacker chooses what to take within two minutes of real time: 240 half-second windows (SOS-92 D). */
+    static final int TERMS_WINDOWS = 240;
+
+    /**
+     * Every PC, in the world part: the attacker's choice after a taken throne ({@code ASSAULT_TERMS}), or the default
+     * once it is due. Returns false when there is no such choice to make, or {@code attacker} isn't the one to make it.
+     */
+    boolean assaultTerms(int attacker, int kind, int percent) {
+        Assault a = taken;
+        if (a == null || a.attacker != attacker || AssaultTerms.refusal(kind, percent) != null) {
+            return false;
+        }
+        a.termsCredits = sosdet.game.cmd.Sieges.applyTerms(a.defender, a.attacker, kind, percent);
+        a.termsKind = kind;
+        a.termsPercent = percent;
+        taken = null;
+        assaultTermsOutcome = a;
+        return true;
+    }
+
+    /** Every PC, in the world part: the default terms once the attacker's choice is due. */
+    void assaultTermsDue(long step) {
+        Assault a = taken;
+        if (a != null && step >= a.termsDue) {
+            assaultTerms(a.attacker, AssaultTerms.DEFAULT_KIND, AssaultTerms.DEFAULT_PERCENT);
         }
     }
 

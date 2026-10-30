@@ -12,6 +12,7 @@ import sosdet.Engine;
 import sosdet.Hooks;
 import sosdet.ai.CmdWriter;
 import sosdet.game.GameHumans;
+import sosdet.game.siege.AssaultTerms;
 import sosdet.game.siege.SiegeBook;
 import sosdet.report.Field;
 import world.WORLD;
@@ -31,9 +32,13 @@ public final class Sieges {
 
     static final int SALLY = 7970;
     static final int WAIT_PASSED = 7971;
+    static final int ASSAULT_END = 7972;
+    static final int ASSAULT_TERMS = 7973;
 
     static final List<Command> ALL = List.of(new Command(SALLY, "siegeSally", r -> applySally()),
-            new Command(WAIT_PASSED, "siegeWaitPassed", r -> applyWaitPassed(r.i())));
+            new Command(WAIT_PASSED, "siegeWaitPassed", r -> applyWaitPassed(r.i())),
+            new Command(ASSAULT_END, "assaultEndForTest", r -> Hooks.assaultForce(r.i())),
+            new Command(ASSAULT_TERMS, "assaultTerms", r -> Hooks.assaultTerms(r.i(), r.i(), r.i())));
 
     /** Patch 15's {@code WBattles.sosdetSally}: the engine compiles against the shipped game, without it. */
     private static final Method SALLY_OUT = sallyOutMethod();
@@ -98,6 +103,41 @@ public final class Sieges {
         int[] armies = (int[]) built[1];
         Hooks.assaultBegin(attacker, siege.besiged.faction().index(), built[0], armies,
                 sosdet.game.GameAssault.men(armies));
+    }
+
+    // ---------------------------------------------------------------- after a taken throne (SOS-92 step D)
+
+    /** Why this PC's player can't choose {@code kind} at {@code percent} now, as a sentence; null when they can. */
+    public static String termsRefusal(int kind, int percent) {
+        sosdet.Assault a = Engine.assaultTaken();
+        if (a == null || a.attacker != FACTIONS.player().index()) {
+            return "There is no throne of yours to decide on.";
+        }
+        return AssaultTerms.refusal(kind, percent);
+    }
+
+    /** This PC's player, the attacker, chooses what to take: captured, applied at its step on every PC. */
+    public static void terms(int kind, int percent) {
+        if (!Commands.capturing()) {
+            throw new IllegalStateException("SOSDET: assault terms outside a session's play");
+        }
+        Commands.capture(new CmdWriter(ASSAULT_TERMS).i(FACTIONS.player().index()).i(kind).i(percent));
+    }
+
+    /** In the world part, every PC: the terms reach both players' cities and the world. Returns the money taken. */
+    public static int applyTerms(int defender, int attacker, int kind, int percent) {
+        return HumanDeals.assaultTerms(defender, attacker, kind, percent);
+    }
+
+    /**
+     * Test tooling, for the rig only (never the mod): the running assault's invasion ends with {@code outcome} at the
+     * next city tail, on every PC alike.
+     */
+    public static void endForTest(int outcome) {
+        if (!Commands.capturing()) {
+            throw new IllegalStateException("SOSDET: an assault's end outside a session's play");
+        }
+        Commands.capture(new CmdWriter(ASSAULT_END).i(outcome));
     }
 
     // ---------------------------------------------------------------- the defender's sally

@@ -686,6 +686,10 @@ public final class Rig implements SCRIPT {
                             .equals(Long.toString(v.freeze))) {
                         byte[] city = Files.readAllBytes(viewDir.resolve("view.save"));
                         Engine.viewIn(city);
+                        viewHashOffset = 0; // the owner starts a new view.hash for each view (SOS-92: two views in one run)
+                        viewCloseSent = false;
+                        viewDesyncReported = false;
+                        viewCaughtUpSeen = -1;
                         event("viewin", String.format(Locale.ROOT, "\"step\":%d,\"bytes\":%d", Engine.step(), city.length));
                     }
                     return;

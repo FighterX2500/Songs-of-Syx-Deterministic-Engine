@@ -54,6 +54,8 @@ class CommandPartsTest {
     void theSiegeCommandsAreWorldCommands() {
         assertTrue(CommandParts.world(Sieges.SALLY));
         assertTrue(CommandParts.everyPc(new CmdWriter(Sieges.WAIT_PASSED).i(0).bytes()));
+        assertTrue(CommandParts.everyPc(Sieges.ASSAULT_END));
+        assertTrue(CommandParts.everyPc(Sieges.ASSAULT_TERMS));
         assertFalse(CommandParts.everyPc(StepPrompts.ANSWER));
     }
 
