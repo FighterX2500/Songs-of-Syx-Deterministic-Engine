@@ -14,6 +14,7 @@ import init.trade.TR;
 import init.trade.TRADABLE;
 import init.trade.TRADE_TYPE;
 import sosdet.Hooks;
+import sosdet.Notice;
 import sosdet.ai.CmdReader;
 import sosdet.ai.CmdWriter;
 import sosdet.game.GameHumans;
@@ -245,7 +246,15 @@ public final class HumanDeals {
             return true;
         }
         book().close(id, Outcome.ACCEPTED);
+        boolean war = DIP.WAR().is(from, me);
         execute(from, me, p.terms());
+        if (war && !DIP.WAR().is(from, me)) {
+            Hooks.notice(Notice.PEACE, from.index(), me.index(), 0);
+        }
+        if (p.terms().vassalage()) {
+            boolean proposerRules = p.terms().treaty == DealBook.PROTECTOR;
+            Hooks.notice(Notice.VASSAL, (proposerRules ? me : from).index(), (proposerRules ? from : me).index(), 0);
+        }
         return true;
     }
 
@@ -271,6 +280,7 @@ public final class HumanDeals {
             return false; // it changed since this PC's UI checked it
         }
         declareWar(from, to);
+        Hooks.notice(Notice.WAR, from.index(), to.index(), 0);
         return true;
     }
 
@@ -298,6 +308,7 @@ public final class HumanDeals {
             return false; // it changed since this PC's UI checked it, such as the trade stance ended
         }
         tariffs().set(from.index(), to.index(), percent);
+        Hooks.notice(Notice.TARIFF, from.index(), to.index(), percent);
         return true;
     }
 

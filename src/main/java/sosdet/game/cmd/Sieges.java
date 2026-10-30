@@ -10,6 +10,7 @@ import game.faction.player.Player;
 import game.time.TIME;
 import sosdet.Engine;
 import sosdet.Hooks;
+import sosdet.Notice;
 import sosdet.ai.CmdWriter;
 import sosdet.game.GameHumans;
 import sosdet.game.siege.AssaultTerms;
@@ -54,6 +55,9 @@ public final class Sieges {
             return;
         }
         int slot = reg.faction().index();
+        if (!book().besieged(slot)) {
+            Hooks.notice(Notice.SIEGE, slot, -1, 0);
+        }
         book().begin(slot, (int) TIME.currentSecond(), Math.max(0, Hooks.reportI(slot, Field.POP_TOTAL, 0)));
     }
 
