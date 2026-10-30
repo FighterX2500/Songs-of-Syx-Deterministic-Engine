@@ -87,3 +87,20 @@ Found:
 - **Generating takes 12.7 s in one step** on the battle PC (Mogus-72). The other PC waits, and the agreed speed falls to 1×. Step B should generate between steps, as a view's load does.
 - **The battle's commands** (Start, Retreat, Close) are captured only for battles every PC runs. A local battle applies them on its own PC, outside the step. Watching (SOS-109) will need them in a local queue, at a step.
 
+
+### Step C (2026-10-30)
+
+The same rig line, with the battle's exit sending the result. The rig retreats 1,500 steps after Start.
+
+| Run | What happened |
+|---|---|
+| L93D | The return works: no crash, identical through the result. World desync 34 steps later, at the thaw report: the thaw didn't set the other PC's report schedule as a view's does. |
+| L93E | The first difference moved to the step after the accept: human 0's army was gone on the battle PC only. |
+| L93F, L93G | With a temporary log: the other PC never ran the result, as command 7964 was its sender's PC's only. It is now a world command. |
+| L93H, L93I | Identical for 180 steps more, then a draw trace found `EventFactionPeace.up` drawing on the battle PC only: its `secondWhenWarEnds` is in no save, so a full load zeroes it and a world load keeps it. It now goes through `GameWorldLoad.unsaved()`. |
+| L93J | **All copies identical to step 16,000**, through the fight (1,500 steps), the result, the return, the thaw and 2,500 steps after it. |
+
+Found:
+- **The peace timers were a bug for views too:** a viewer's full load zeroed them while the other PCs kept theirs. `unsaved()` fixes both.
+- **World commands on the battle PC:** `worldCommandSkipped` dropped every world command while the battle view was open. A local battle's PC now applies them, as the world runs on. No rig run has exercised this yet: it needs the other human giving a world order during the battle.
+- **Every survivor count was 0 in these runs, and that is vanilla's rule:** a retreat loses 0.4 men per enemy soldier, and 4,000 enemies wipe out 498 men.
