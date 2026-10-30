@@ -301,7 +301,7 @@ public final class Hooks {
             s.part = StepParts.CITY; // the city tail: the world part's changes to the city apply (ADR 0005 §3)
             s.txns.apply(s.ownTxns); // this PC's human's only (ADR 0004)
         }
-        if ((step & 1) == 0 && (s.battle == null || s.battle.awaiting)) {
+        if ((step & 1) == 0 && (s.battle == null || s.battle.awaiting) && s.plans().inGame()) { // unit tests have no game
             s.part = StepParts.CITY;
             sosdet.game.GameProduction.refresh(); // the goods window's rates: the scan vanilla's UI drove (SOS-102)
         }
