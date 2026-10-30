@@ -924,12 +924,14 @@ final class Session {
      * Every PC, in the world part: the attacker's choice after a taken throne ({@code ASSAULT_TERMS}), or the default
      * once it is due. Returns false when there is no such choice to make, or {@code attacker} isn't the one to make it.
      */
-    boolean assaultTerms(int attacker, int kind, int percent) {
+    boolean assaultTerms(int attacker, int kind, int percent, int[] people) {
         Assault a = taken;
-        if (a == null || a.attacker != attacker || AssaultTerms.refusal(kind, percent) != null) {
+        if (a == null || a.attacker != attacker || AssaultTerms.refusal(kind, percent, people) != null) {
             return false;
         }
-        a.termsCredits = sosdet.game.cmd.Sieges.applyTerms(a.defender, a.attacker, kind, percent);
+        int[] removed = sosdet.game.cmd.Sieges.peopleLimited(a.defender, people);
+        a.termsCredits = sosdet.game.cmd.Sieges.applyTerms(a.defender, a.attacker, kind, percent, removed);
+        a.termsPeople = removed;
         a.termsKind = kind;
         a.termsPercent = percent;
         taken = null;
@@ -941,7 +943,7 @@ final class Session {
     void assaultTermsDue(long step) {
         Assault a = taken;
         if (a != null && step >= a.termsDue) {
-            assaultTerms(a.attacker, AssaultTerms.DEFAULT_KIND, AssaultTerms.DEFAULT_PERCENT);
+            assaultTerms(a.attacker, AssaultTerms.DEFAULT_KIND, AssaultTerms.DEFAULT_PERCENT, AssaultTerms.NO_PEOPLE);
         }
     }
 

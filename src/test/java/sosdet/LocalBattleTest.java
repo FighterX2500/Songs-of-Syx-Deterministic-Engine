@@ -205,6 +205,13 @@ class LocalBattleTest {
     }
 
     @Test
+    void termsWithoutATakenThroneChangeNothing() {
+        Session s = session(0);
+        assertFalse(s.assaultTerms(0, sosdet.game.siege.AssaultTerms.SACK, 50, new int[] {1, 0, 0}), "a repeat finds no throne");
+        assertNull(s.assaultTermsOutcome);
+    }
+
+    @Test
     void aHumanRemovedInItsBattleEndsTheBattle() {
         Session s = session(0);
         s.remover = slot -> { };

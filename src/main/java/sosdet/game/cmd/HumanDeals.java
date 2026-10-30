@@ -23,8 +23,10 @@ import sosdet.game.deal.DealBook.Proposal;
 import sosdet.game.deal.DealBook.Terms;
 import sosdet.game.deal.TariffBook;
 import sosdet.game.siege.AssaultTerms;
+import sosdet.report.Field;
 import snake2d.util.sets.LIST;
 import world.WORLD;
+import world.army.AD;
 import world.entity.caravan.Shipment;
 import world.map.pathing.WRegFinder.RegDist;
 import world.map.pathing.WRegFinder.Treaty;
@@ -369,10 +371,11 @@ public final class HumanDeals {
     /**
      * In the world part, every PC: what the attacker took after reaching the human {@code defender}'s throne (SOS-92
      * step D), as a deal the defender can't refuse. A sack moves {@code percent} of the defender's money and of each of
-     * its goods, read from its city's report, by a caravan to the attacker's capital, and ends the war; vassalage makes
-     * the defender the attacker's vassal with a tribute of {@code percent}. Returns the money taken.
+     * its goods, read from its city's report, by a caravan to the attacker's capital, removes {@code people}, and ends
+     * the war; vassalage makes the defender the attacker's vassal with a tribute of {@code percent}. Returns the money
+     * taken.
      */
-    static int assaultTerms(int defender, int attacker, int kind, int percent) {
+    static int assaultTerms(int defender, int attacker, int kind, int percent, int[] people) {
         Faction d = human(defender);
         Faction a = human(attacker);
         if (kind == AssaultTerms.VASSALAGE) {
@@ -384,12 +387,12 @@ public final class HumanDeals {
         int before = Hooks.currentHumanSwap(d);
         try {
             credits = AssaultTerms.share((int) d.credits().credits(), percent);
-            int[] all = new int[TR.ALL().size() * 2];
+            int[] all = new int[TR.RES().size() * 2];
             int n = 0;
-            for (int i = 0; i < TR.ALL().size(); i++) {
-                int amount = AssaultTerms.share(d.res().getAvailable(TR.ALL().get(i)), percent);
+            for (TRADABLE t : TR.RES()) { // not TR.ALL: slaves are people, the attacker's choice of them is separate
+                int amount = AssaultTerms.share(d.res().getAvailable(t), percent);
                 if (amount > 0) {
-                    all[n++] = i;
+                    all[n++] = t.index();
                     all[n++] = amount;
                 }
             }
@@ -398,7 +401,36 @@ public final class HumanDeals {
             Hooks.currentHumanSwap(before);
         }
         execute(d, a, new Terms(DealBook.CANCEL_ALL, credits, 0, goods, new int[0]));
+        takePeople(d, a, people);
         return credits;
+    }
+
+    /**
+     * The people the attacker {@code to} removes from {@code from}'s city: the city loses them at the tail of this
+     * step, the moved ones arrive as prisoners by a caravan, as vanilla's spoils do, and the fates change the attacker's
+     * mercy.
+     */
+    private static void takePeople(Faction from, Faction to, int[] people) {
+        if (Arrays.stream(people).sum() == 0) {
+            return;
+        }
+        Hooks.removePeople(from.index(), people);
+        if (AssaultTerms.removed(people, AssaultTerms.MOVED) > 0) {
+            int before = Hooks.currentHumanSwap(from);
+            try {
+                Shipment s = WORLD.ENTITIES().caravans.create(from.capitolRegion().cx(), from.capitolRegion().cy(),
+                        to.capitolRegion(), TRADE_TYPE.spoils);
+                for (int r = 0; r < TR.SLAVES().size(); r++) {
+                    int n = people[r * AssaultTerms.FATES + AssaultTerms.MOVED];
+                    if (n > 0) {
+                        carry(s, to, TR.SLAVES().get(r), n, TRADE_TYPE.spoils);
+                    }
+                }
+            } finally {
+                Hooks.currentHumanSwap(before);
+            }
+        }
+        AD.stats().mercy().incD(to, AssaultTerms.mercy(people, Hooks.reportI(to.index(), Field.POP_TOTAL, 0)));
     }
 
     private static void execute(Faction from, Faction to, Terms t) {
@@ -454,15 +486,20 @@ public final class HumanDeals {
             for (int i = 0; i < goods.length; i += 2) {
                 TRADABLE res = TR.ALL().get(goods[i]);
                 int a = goods[i + 1];
-                if (s != null) {
-                    s.loadAndReserve(res, a);
-                } else {
-                    other.buyer(res).addReserveAndDeliver(a, TRADE_TYPE.diplomacy);
-                }
+                carry(s, other, res, a, TRADE_TYPE.diplomacy);
                 f.seller(res).remove(a, TRADE_TYPE.diplomacy, 0, other);
             }
         } finally {
             Hooks.currentHumanSwap(before);
+        }
+    }
+
+    /** {@code a} of {@code res} on its way to {@code other}: on the caravan, or at once where no caravan can go. */
+    private static void carry(Shipment s, Faction other, TRADABLE res, int a, TRADE_TYPE type) {
+        if (s != null) {
+            s.loadAndReserve(res, a);
+        } else {
+            other.buyer(res).addReserveAndDeliver(a, type);
         }
     }
 

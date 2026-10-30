@@ -38,7 +38,9 @@ public enum TxnKind {
     /** C6: a war with the player ended; the city calls off that faction's invasions ({@code Invador}'s listener). */
     WAR_ENDED,
     /** A2 (SOS-46): a haven's race wants more immigrants in the city ({@code Immigration.setHigher}, from the world's havens). */
-    IMMIGRANTS_HIGHER;
+    IMMIGRANTS_HIGHER,
+    /** After a taken throne (SOS-92): people leave the city, moved, killed or freed; the city picks which of them. */
+    REMOVE_PEOPLE;
 
     /**
      * Whether a follower's city applies it (SOS-38: its world reads another PC's city). Not the ones that carry the
@@ -57,6 +59,7 @@ public enum TxnKind {
         case ARMY_SUPPLY_RECRUIT:
         case GARRISON_RESOLVE:
         case GARRISON_RESOLVE_PEOPLE:
+        case REMOVE_PEOPLE:
             return false;
         default:
             return true;

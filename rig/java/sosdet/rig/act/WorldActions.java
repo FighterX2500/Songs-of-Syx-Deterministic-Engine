@@ -728,7 +728,13 @@ public final class WorldActions {
                 Rig.note("wassault step " + Engine.step() + ": now " + Engine.assault() + "; last " + last + "; invading "
                         + settlement.main.SETT.INVADOR().invading() + "; taken " + Engine.assaultTaken()
                         + (last != null && last.termsKind() >= 0 ? "; terms " + sosdet.game.siege.AssaultTerms.name(last.termsKind())
-                                + " " + last.termsPercent() + "% credits " + last.termsCredits() : ""));
+                                + " " + last.termsPercent() + "% credits " + last.termsCredits() + " people "
+                                + last.termsPeople(sosdet.game.siege.AssaultTerms.MOVED) + " moved "
+                                + last.termsPeople(sosdet.game.siege.AssaultTerms.KILLED) + " killed "
+                                + last.termsPeople(sosdet.game.siege.AssaultTerms.FREED) + " freed; in the city "
+                                + java.util.Arrays.stream(sosdet.game.cmd.Sieges.peopleInCity(last.defender)).sum()
+                                + "; attacker's mercy " + world.army.AD.stats().mercy().getD(FACTIONS.getByIndex(last.attacker))
+                                + "; prisoners here " + prisonersHere() : ""));
             });
             return true;
         case "wassaultend": { // wassaultend <held|taken|retreat>: the running assault's invasion ends so, on every copy (test tooling, SOS-92 D)
@@ -742,16 +748,20 @@ public final class WorldActions {
             });
             return true;
         }
-        case "wterms": { // wterms <sack|vassalage> <percent>: this human, the attacker, chooses what to take (SOS-92 D)
+        case "wterms": { // wterms <sack|vassalage> <percent> [moved:killed:freed]: this human, the attacker, chooses what to
+                         // take (SOS-92 D); the people are of the defender's largest race
             int kind = a[1].equals("sack") ? sosdet.game.siege.AssaultTerms.SACK : sosdet.game.siege.AssaultTerms.VASSALAGE;
             int percent = Integer.parseInt(a[2]);
             Rig.later(() -> {
-                String why = sosdet.game.cmd.Sieges.termsRefusal(kind, percent);
+                int[] people = a.length > 3 ? termsPeople(a[3]) : sosdet.game.siege.AssaultTerms.NO_PEOPLE;
+                String why = sosdet.game.cmd.Sieges.termsRefusal(kind, percent, people);
                 if (why != null) {
                     throw new IllegalStateException("terms refused: " + why);
                 }
-                sosdet.game.cmd.Sieges.terms(kind, percent);
-                Rig.note("terms chosen: " + a[1] + " " + percent + "%");
+                sosdet.game.cmd.Sieges.terms(kind, percent, people);
+                Rig.note("terms chosen: " + a[1] + " " + percent + "% people " + (a.length > 3 ? a[3] : "none")
+                        + "; in the city " + java.util.Arrays.stream(sosdet.game.cmd.Sieges.peopleInCity(Engine.assaultTaken().defender)).sum()
+                        + "; prisoners here " + prisonersHere());
             });
             return true;
         }
@@ -1141,6 +1151,31 @@ public final class WorldActions {
         } catch (ReflectiveOperationException e) {
             throw new IllegalStateException("SOSDET rig: no " + target.getClass().getSimpleName() + "." + name + " in this build", e);
         }
+    }
+
+    /** {@code moved:killed:freed} of the largest race in the city of the throne this human took, as terms' flat counts. */
+    private static int[] termsPeople(String split) {
+        int[] in = sosdet.game.cmd.Sieges.peopleInCity(Engine.assaultTaken().defender);
+        int largest = 0;
+        for (int r = 0; r < in.length; r++) {
+            if (in[r] > in[largest]) {
+                largest = r;
+            }
+        }
+        int[] people = new int[in.length * sosdet.game.siege.AssaultTerms.FATES];
+        String[] counts = split.split(":");
+        for (int f = 0; f < counts.length; f++) {
+            people[largest * sosdet.game.siege.AssaultTerms.FATES + f] = Integer.parseInt(counts[f]);
+        }
+        return people;
+    }
+
+    private static int prisonersHere() {
+        int n = 0;
+        for (int r = 0; r < RACES.all().size(); r++) {
+            n += STATS.POP().pop(RACES.all().get(r), init.type.HTYPES.PRISONER());
+        }
+        return n;
     }
 
     private static FactionNPC npcAt(int slot) {
