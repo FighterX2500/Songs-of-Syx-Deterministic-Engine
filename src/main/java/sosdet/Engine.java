@@ -365,6 +365,16 @@ public final class Engine {
      * Between steps, on the battle PC (its human's): the battle it generated at Engage, as save bytes for every PC's
      * {@link #battleIn}, once; null on every other PC, before Engage, and after the first call.
      */
+    /** Own-city mode: battles against NPC armies run on their human's PC only, the world running on (SOS-93). */
+    public static void localBattles(boolean on) {
+        required().localBattles = on;
+    }
+
+    /** The local battle of the human in {@code slot}, or null (SOS-93). */
+    public static LocalBattle localBattle(int slot) {
+        return required().locals[slot];
+    }
+
     public static byte[] battleOut() {
         Session s = required();
         OwnBattle b = s.battle;

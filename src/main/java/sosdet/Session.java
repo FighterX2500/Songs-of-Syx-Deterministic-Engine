@@ -266,6 +266,43 @@ final class Session {
 
     /** The city views in the log, by the viewer's slot: the same on every PC; null where there is none. */
     final View[] views = new View[SLOTS];
+
+    // ------------------------------------------------------------ local battles (plan 0016, SOS-93)
+
+    /** Battles against NPC armies run on their human's PC only (SOS-93); off, every PC runs them (plan 0006). */
+    boolean localBattles = "1".equals(System.getenv("SOSDET_LOCAL_BATTLES")); // spike: the rig's switch
+    /** The local battles in the world, by human slot: the same on every PC; null where there is none. */
+    final LocalBattle[] locals = new LocalBattle[SLOTS];
+    /** The armies of the world-battle prompt that just closed: a local battle's Engage keeps them waiting. */
+    int[] closedPromptArmies = NO_ARMIES;
+
+    /** Every PC, at the Engage step: the battle of {@code human} runs on its PC only, from the next report step. */
+    void localEngage(long step, int human, Runnable generate) {
+        locals[human] = new LocalBattle(step, human, pcOf(human), nextReportStep(step), closedPromptArmies,
+                human == localHuman ? generate : null);
+        closedPromptArmies = NO_ARMIES;
+    }
+
+    /** Every PC, at the start of each step: the local battles whose freeze step it is freeze their human. */
+    void localsAt(long step) {
+        for (LocalBattle b : locals) {
+            if (b != null && b.state == LocalBattle.ENGAGED && b.freeze == step) {
+                b.state = LocalBattle.RUNNING;
+            }
+        }
+    }
+
+    /** This PC's running local battle: the battle map is the game this PC runs. Null otherwise. */
+    LocalBattle localHere() {
+        LocalBattle b = locals[localHuman];
+        return b != null && b.state == LocalBattle.RUNNING ? b : null;
+    }
+
+    /** The step the human in {@code slot} froze at: its view's, or its local battle's. */
+    long freezeStep(int slot) {
+        View v = views[slot];
+        return v != null && v.frozen() ? v.freeze : locals[slot].freeze;
+    }
     /** This PC as a viewer: the transactions for its own city since the freeze, applied when the city is back. */
     final java.util.ArrayList<sosdet.game.HeldTxn> heldTxns = new java.util.ArrayList<>();
     /** This PC as a viewer: its own city's engine state at the freeze ({@link ViewCity#cityState}), or null. */
@@ -294,7 +331,8 @@ final class Session {
     /** True from a view's freeze step: the human in {@code slot} views another city, and every world reads it frozen. */
     boolean frozen(int slot) {
         View v = views[slot];
-        return v != null && v.frozen();
+        LocalBattle b = locals[slot];
+        return v != null && v.frozen() || b != null && b.frozen(); // a local battle's human too (SOS-93)
     }
 
     /** This PC's view as the viewer, running: the owner's city is the one this PC runs. Null otherwise. */
@@ -1362,7 +1400,7 @@ final class Session {
         if (r.takenAt <= receivedTakenAt[r.faction]) {
             return; // a repeat changes nothing
         }
-        if (frozen(r.faction) && r.takenAt >= views[r.faction].freeze) {
+        if (frozen(r.faction) && r.takenAt >= freezeStep(r.faction)) {
             return; // a viewer sends none from its freeze step; every PC reads its last one before (SOS-82)
         }
         if (retired(r.faction) || removing[r.faction] && r.takenAt > removeCutoff[r.faction]) {
