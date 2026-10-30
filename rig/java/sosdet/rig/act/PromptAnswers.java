@@ -45,6 +45,9 @@ public final class PromptAnswers {
     private boolean retreatAsked;
     private boolean closeAsked;
     private boolean restartAsked;
+    private boolean paused;
+    private boolean resumed;
+    private double speedBefore;
 
     public PromptAnswers(boolean engage, long retreatAfter, long restartAfter, boolean waitOut) {
         this.engage = engage;
@@ -111,11 +114,11 @@ public final class PromptAnswers {
         }
         if (open instanceof WBattleResult) {
             if (((WBattleResult) open).result != BATTLE_RESULT.VICTORY) {
-                WorldBattles.accept(null, null, 0); // as the Accept button after a defeat
-                return "defeat accept";
+                boolean sent = WorldBattles.accept(null, null, 0); // as the Accept button after a defeat
+                return sent ? "defeat accept" : "defeat accept not captured";
             }
-            WorldBattles.accept(new int[RACES.all().size()], new int[RESOURCES.ALL().size()], 0);
-            return "victory accept";
+            boolean sent = WorldBattles.accept(new int[RACES.all().size()], new int[RESOURCES.ALL().size()], 0);
+            return sent ? "victory accept" : "victory accept not captured";
         }
         if (open instanceof WBattleSiege.Result) {
             WorldBattles.siegeResult(WorldBattles.OCCUPY, 0, 0, new int[RACES.all().size()], new int[TR.ALL().size()], 0);
@@ -201,6 +204,28 @@ public final class PromptAnswers {
         return null;
     }
 
+    /** SOSDET_LOCAL_PAUSE=from,to: the fighting human pauses its battle these steps after Start (SOS-93). */
+    private String pause() {
+        String env = System.getenv("SOSDET_LOCAL_PAUSE");
+        if (env == null || resumed) {
+            return null;
+        }
+        String[] at = env.split(",");
+        long since = Engine.step() - battleFrom;
+        if (!paused && since >= Long.parseLong(at[0])) {
+            paused = true;
+            speedBefore = game.GAME.SPEED.speedTarget();
+            game.GAME.SPEED.speedSet(0);
+            return "battle pause, men " + game.GAME.ARMIES().player().men() + "/" + game.GAME.ARMIES().enemy().men();
+        }
+        if (paused && since >= Long.parseLong(at[1])) {
+            resumed = true;
+            game.GAME.SPEED.speedSet(speedBefore);
+            return "battle resume, men " + game.GAME.ARMIES().player().men() + "/" + game.GAME.ARMIES().enemy().men();
+        }
+        return null;
+    }
+
     /** On the battle map: Start, then Retreat after the set steps, and Close once the battle is won or lost. */
     private String battle(BattleState battle) {
         sosdet.OwnBattle own = Engine.battle();
@@ -216,7 +241,13 @@ public final class PromptAnswers {
                 return null;
             }
             startAsked = true;
-            MapBattles.deploy();
+            if (!MapBattles.deploy()) {
+                battle.deploy(); // a local battle: its PC's own, no command (SOS-93)
+                String speed = System.getenv("SOSDET_LOCAL_SPEED"); // the fighting human's own speed
+                if (speed != null) {
+                    game.GAME.SPEED.speedSet(Double.parseDouble(speed));
+                }
+            }
             return "battle start";
         }
         if (battleFrom < 0) {
@@ -227,8 +258,17 @@ public final class PromptAnswers {
         }
         if (Hooks.battleConcludeOpen() && !closeAsked) {
             closeAsked = true;
-            MapBattles.conclude();
+            if (!MapBattles.conclude()) {
+                Runnable close = Hooks.battleConcludeTake(); // a local battle: its PC's own, no command (SOS-93)
+                if (close != null) {
+                    close.run();
+                }
+            }
             return "battle close";
+        }
+        String pause = pause();
+        if (pause != null) {
+            return pause;
         }
         if (restartAfter > 0 && !restartAsked && !closeAsked && Engine.step() - battleFrom >= restartAfter) {
             restartAsked = true;
@@ -237,8 +277,10 @@ public final class PromptAnswers {
         }
         if (retreatAfter > 0 && !retreatAsked && !closeAsked && Engine.step() - battleFrom >= retreatAfter) {
             retreatAsked = true;
-            MapBattles.retreat();
-            return "battle retreat";
+            if (!MapBattles.retreat()) {
+                battle.liveRetreat(); // a local battle: its PC's own, no command (SOS-93)
+            }
+            return "battle retreat, extra rounds " + Engine.localRoundsRun();
         }
         return null;
     }

@@ -9,9 +9,13 @@ import game.battle.setting.DivSettings;
 import game.faction.FACTIONS;
 import game.faction.Faction;
 import game.faction.diplomacy.DIP;
+import game.faction.npc.FactionNPC;
+import game.faction.npc.stockpile.NPCRes;
 import game.faction.player.Player;
 import game.raiding.Raider;
 import game.time.TIME;
+import init.trade.TR;
+import init.trade.TRADABLE;
 import settlement.entity.ENTITY;
 import settlement.entity.humanoid.Humanoid;
 import settlement.main.SETT;
@@ -123,7 +127,7 @@ public final class GameHash implements StateSource {
      * faction's credits, overlord and stance with every other (war, peace, pact, ...), and each human's name, ruler name
      * and banner (SOS-78); every NPC king's opinion of
      * every human but slot 0's (SOS-46 M3); every raider's power, defeat and
-     * raids, and the raider now raiding (and each other human's, with its war and rebellion timers: SOS-46 M4); the calendar. In own-city mode the humans' credits are their cities' and are
+     * raids, and the raider now raiding (and each other human's, with its war and rebellion timers: SOS-46 M4); the recipes' NPC production boosts and every NPC's goods and production rates (SOS-93); the calendar. In own-city mode the humans' credits are their cities' and are
      * left out (ADR 0005, ADR 0004).
      * Public for the rig's per-step log of a follower run.
      */
@@ -210,7 +214,26 @@ public final class GameHash implements StateSource {
             w.eventHumans = GameEvents.keep(w.events);
         }
         h = part(w, 7, GameSieges.hash(GameTariffs.hash(GameDeals.hash(h)))); // the tariffs and sieges with the deals: between humans
-        return part(w, 8, HashLog.mix(h, Double.doubleToLongBits(TIME.currentSecond())));
+        h = part(w, 8, Engine.active() ? GameWorldLoad.hashFboosts(h) : h); // a world before its session: a load's draws, each copy's
+        h = part(w, 9, npcStocks(h));
+        return part(w, 10, HashLog.mix(h, Double.doubleToLongBits(TIME.currentSecond())));
+    }
+
+    /** Every active NPC's goods and production rates, which otherwise show only when a trade spends them (SOS-93). */
+    private static long npcStocks(long h) {
+        LIST<FactionNPC> npcs = FACTIONS.NPCs();
+        LIST<TRADABLE> goods = TR.ALL();
+        for (int i = 0; i < npcs.size(); i++) {
+            FactionNPC f = npcs.get(i);
+            h = HashLog.mix(h, f.index());
+            for (int k = 0; k < goods.size(); k++) {
+                NPCRes r = f.res(goods.get(k));
+                h = HashLog.mix(h, Double.doubleToLongBits(r.amount()));
+                h = HashLog.mix(h, Double.doubleToLongBits(r.rate()));
+                h = HashLog.mix(h, Double.doubleToLongBits(r.rateTot()));
+            }
+        }
+        return h;
     }
 
     /**
@@ -245,7 +268,8 @@ public final class GameHash implements StateSource {
     private static final class WorldKept {
         static final int ARMY_FIELDS = 6;
         static final String[] PARTS = {"armies", "entities", "region owners", "factions and stances",
-            "NPC relations per human", "raiders", "events per human", "deals and tariffs between humans", "calendar"};
+            "NPC relations per human", "raiders", "events per human", "deals and tariffs between humans",
+            "NPC production boosts", "NPC stocks", "calendar"};
         final long[] parts = new long[PARTS.length];
         final int[] army;
         final long[] armyHash;

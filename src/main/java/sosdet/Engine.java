@@ -365,6 +365,31 @@ public final class Engine {
      * Between steps, on the battle PC (its human's): the battle it generated at Engage, as save bytes for every PC's
      * {@link #battleIn}, once; null on every other PC, before Engage, and after the first call.
      */
+    /** Own-city mode: battles against NPC armies run on their human's PC only, the world running on (SOS-93). */
+    public static void localBattles(boolean on) {
+        required().localBattles = on;
+    }
+
+    /** The local battle of the human in {@code slot}, or null (SOS-93). */
+    public static LocalBattle localBattle(int slot) {
+        return required().locals[slot];
+    }
+
+    /** How many messages the last local battle's load back kept on this PC; for the rig. */
+    public static int localMessagesBack() {
+        return required().localMessagesBack;
+    }
+
+    /** True from a local battle's Engage until its human has thawed: campaign saves wait (spec §8). */
+    public static boolean localBattleRunning() {
+        for (LocalBattle b : required().locals) {
+            if (b != null) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public static byte[] battleOut() {
         Session s = required();
         OwnBattle b = s.battle;
@@ -603,6 +628,11 @@ public final class Engine {
      * How long this PC's last view load took, in ms, its own save included for a PC outside the view: the pause a
      * view's opening or closing costs it (playtest log).
      */
+    /** Debugging: the local battle's extra rounds this PC has run; the rig shows them to prove the battle's speed. */
+    public static long localRoundsRun() {
+        return required().localRoundsRun;
+    }
+
     public static double lastViewLoadMs() {
         return required().lastViewLoadMs;
     }

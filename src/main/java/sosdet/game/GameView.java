@@ -67,6 +67,11 @@ public final class GameView {
         load(file(OWN_SAVE));
     }
 
+    /** A local battle's PC at its end: its own game as the battle's generation saved it at the freeze (SOS-93). */
+    public static void loadBeforeBattle() {
+        load(file("__beforeBattle"));
+    }
+
     /** A file in the saves folder; the game's own lookup wants it to exist already. */
     private static Path file(String name) {
         return PATHS.local().save().get().resolve(name + ".save");

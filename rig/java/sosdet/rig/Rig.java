@@ -1008,7 +1008,7 @@ public final class Rig implements SCRIPT {
         /** The first frame of the game loaded at a map battle's end (SOS-32): the run goes on at the same step. */
         private void battleReturned() {
             GAME.SPEED.speedSet(speed);
-            event("battlereturned", "\"step\":" + Engine.step());
+            event("battlereturned", "\"step\":" + Engine.step() + ",\"messages\":" + Engine.localMessagesBack());
         }
 
         /** Peer: the first frame of the game loaded for a resync. */

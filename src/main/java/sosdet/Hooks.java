@@ -140,10 +140,10 @@ public final class Hooks {
         Session s = Engine.session();
         s.speedSeen(setSpeed);
         s.pace(now);
-        double speed = setSpeed;
-        if (s.viewing() != null && s.ai().mode() == sosdet.ai.AiMode.PEER
+        double speed = frameSpeed(setSpeed); // a local battle's PC keeps the world's pace, whatever the battle's own speed
+        if ((s.viewing() != null || s.localHere() != null) && s.ai().mode() == sosdet.ai.AiMode.PEER
                 && s.ai().confirmed() - s.clock.step() > VIEW_CATCH_UP_LAG) {
-            speed *= VIEW_CATCH_UP; // a viewer behind the host runs faster until it has caught up (SOS-82)
+            speed *= VIEW_CATCH_UP; // a viewer behind the host runs faster until it has caught up (SOS-82), a battle PC too
         }
         if (s.viewing() != null && s.ai().mode() == sosdet.ai.AiMode.PEER) {
             // the viewer's limits, on this PC's clock: they only decide whether it asks the host to end the view
@@ -225,6 +225,7 @@ public final class Hooks {
         }
         s.viewBackStart(); // a viewer before its thaw step loads its own city back (SOS-82)
         s.viewWorldReloads(); // every other PC reloads its world where the owner and the viewer load
+        s.localBacks(); // after a local battle's result: its PC loads its city back, every other PC its world (SOS-93)
         boolean battleAwaited = s.battle != null && s.battle.awaiting; // the battle PC's battle isn't loaded yet
         boolean waits = !s.ai().mayRun(s.clock.step() + 1) || !s.worldMayRun(s.clock.step() + 1);
         if (waits) {
@@ -239,6 +240,7 @@ public final class Hooks {
             return false;
         }
         s.viewsAt(s.clock.step()); // before anything of the step: a view freezes its viewer from here (SOS-82)
+        s.localsAt(s.clock.step()); // and a local battle its human (SOS-93)
         s.plans().lift();
         s.streams.enter();
         // Reseeded every step: the stream depends only on the seed and the step, so a resync needs no random state
@@ -275,6 +277,9 @@ public final class Hooks {
         }
         if (s.worldPromptOther >= 0) { // between two humans one Fight doesn't engage: only pvpEngageAt does
             return false;
+        }
+        if (s.localBattles && s.worldPromptSally < 0) {
+            return false; // a battle against NPCs saves nothing first: the world runs on (spec §11)
         }
         if (!s.ai().commandDue(step, sosdet.game.cmd.WorldBattles::isEngage)) {
             return false;
@@ -359,6 +364,167 @@ public final class Hooks {
         return s == null ? null : s.profiler;
     }
 
+    /** Patch 10, in the step: the world part runs on a local battle's PC whatever its battle view (SOS-93). */
+    public static boolean localWorldPart(int part) {
+        Session s = Engine.session();
+        return s != null && part == StepParts.WORLD_PART && s.localHere() != null;
+    }
+
+    /** Patch 10, in the step's city part: on a local battle's PC the world's clock runs every step (SOS-93, O3). */
+    public static boolean localClock(GameResource r, int part) {
+        Session s = Engine.session();
+        return s != null && part == StepParts.CITY && s.localHere() != null && StepParts.worldClock(r);
+    }
+
+    /** True on a local battle's PC while it runs (SOS-93): the battle's Start keeps the world's tick count. */
+    public static boolean localBattleHere() {
+        Session s = Engine.session();
+        return s != null && s.localHere() != null;
+    }
+
+    /**
+     * The freeze step's world part, on a local battle's PC: vanilla's Engage generates the battle, on a stream of its
+     * own; the world stream goes on as on every other PC, reseeded, its draw count put back (SOS-93). The world's NPC
+     * production boosts, which vanilla's generation re-rolls as it clears the city, stay as every other PC has them.
+     */
+    private static void localGenerate(Session s, long step) {
+        LocalBattle b = s.localHere();
+        if (b == null || b.freeze != step || b.generate == null) {
+            return;
+        }
+        Runnable generate = b.generate;
+        b.generate = null;
+        GAME.SPEED.speedSet(1); // as vanilla's battle opens; the world's speed goes on in the log
+        s.ownCityState = ViewCity.cityState(s); // put back with the city at the battle's end, as after a view
+        long worldDraws = s.streams.worldDraws();
+        double[] boosts = sosdet.game.GameWorldLoad.fboostMuls();
+        s.streams.reseed(s.battleSeed(step));
+        try {
+            generate.run();
+        } finally {
+            sosdet.game.GameWorldLoad.fboostMuls(boosts);
+            s.streams.reseed(s.worldSeed(step));
+            s.streams.worldDraws(worldDraws);
+        }
+    }
+
+    /**
+     * Patch 15, vanilla's Engage (ResolverPlayer.Manual), in a local battle's Engage on every PC: keeps its after-battle,
+     * which takes the result's arrays. True when it is a local battle: vanilla's own generation doesn't run now.
+     */
+    public static boolean localEngaged(java.util.function.Consumer<Object> after) {
+        Session s = Engine.session();
+        if (s == null || s.engaging == null) {
+            return false;
+        }
+        s.engaging.after = after;
+        return true;
+    }
+
+    /** Patch 15, in a local battle's Engage: true on the battle PC, which generates the battle at the freeze step. */
+    public static boolean localBattleMine() {
+        Session s = Engine.session();
+        return s != null && s.engaging != null && s.engaging.human == s.localHuman;
+    }
+
+    /** Patch 15, on the battle PC: the generation, run at the freeze step ({@link #localGenerate}). */
+    public static void localGenerateLater(Runnable generate) {
+        Engine.session().engaging.generate = generate;
+    }
+
+    /**
+     * Patch 99, the battle's exit on a local battle's PC (Retreat, or Close on the victory or defeat panel): its result
+     * goes to every PC as a command, applied at the step the host stamps; nothing loads now. True when it is a local
+     * battle; false for vanilla's exit.
+     */
+    public static boolean localExit(Object result) {
+        Session s = Engine.session();
+        LocalBattle b = s == null ? null : s.localHere();
+        if (b == null) {
+            return false;
+        }
+        if (!b.resultSent) {
+            b.resultSent = true;
+            orderCapture(sosdet.ai.AiEntry.COMMAND, -1, sosdet.game.cmd.MapBattles.localResultCommand(b.human, result));
+        }
+        return true;
+    }
+
+    /** The result command, inside the step on every PC: the battle's result, applied once (SOS-93). */
+    public static boolean localResult(int human, Object result) {
+        Session s = Engine.session();
+        return s != null && s.localResult(s.clock.step(), human, result);
+    }
+
+    /**
+     * Patch 10: the frame's speed: the game's, but on a local battle's PC the game's speed is the battle's own, so the
+     * frame takes the world's: a paused battle's world runs on, and a fast one's stays at the agreed speed (SOS-93).
+     * The host holds that speed too while a peer fights: the peer generating its battle is waited for by no pace.
+     */
+    public static double frameSpeed(double speed) {
+        Session s = Engine.session();
+        if (s == null) {
+            return speed;
+        }
+        if (s.localHere() != null) {
+            return s.clock.agreedSpeed();
+        }
+        return s.localCapped() ? Math.min(speed, s.clock.agreedSpeed()) : speed;
+    }
+
+    /**
+     * Patch 15, the world battles' polls: true when a battle between these armies waits for a local battle: a human of
+     * theirs is fighting one, or one of them stands in one (spec §8). {@code b} may be null.
+     */
+    public static boolean localWaits(WArmy a, WArmy b) {
+        Session s = Engine.session();
+        return s != null && (localWaits(s, a) || b != null && localWaits(s, b));
+    }
+
+    private static boolean localWaits(Session s, WArmy a) {
+        if (a.faction() != null && s.localBusy(a.faction().index())) {
+            return true;
+        }
+        for (LocalBattle b : s.locals) {
+            if (b != null && contains(b.armies, a.armyIndex())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Patch 15, the polls of regions: true while a prompt about this faction's region waits for its local battle. */
+    public static boolean localWaits(game.faction.Faction f) {
+        Session s = Engine.session();
+        return s != null && f != null && s.localBusy(f.index());
+    }
+
+    /** Patch 10: the battle's own pause on its PC: its resources stand still, as in deployment; the world runs on. */
+    public static boolean localPaused() {
+        Session s = Engine.session();
+        return s != null && s.localPaused();
+    }
+
+    /** Patch 10: true for a resource of the battle itself, which runs again in a local battle's extra rounds. */
+    public static boolean localRound(GameResource r) {
+        return StepParts.battleRound(r);
+    }
+
+    /** Patch 10: how many more times the battle's resources run in this part of this step. */
+    public static int localExtraRounds(int part, boolean deploying) {
+        Session s = Engine.session();
+        return s == null || deploying || part != StepParts.CITY ? 0 : s.localExtraRounds();
+    }
+
+    private static boolean contains(int[] values, int value) {
+        for (int v : values) {
+            if (v == value) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public static boolean worldHeld() {
         Session s = Engine.session();
         return s != null && (s.worldHeld || s.assaultHolds(s.clock.step())); // an assault holds it too (SOS-92 B)
@@ -436,11 +602,16 @@ public final class Hooks {
         if (s == null) {
             return false;
         }
+        int index = a.armyIndex();
+        for (LocalBattle b : s.locals) {
+            if (b != null && contains(b.armies, index)) {
+                return true; // a local battle's armies wait until its result applies (SOS-93)
+            }
+        }
         int[] held = s.worldPromptArmies;
         if (held.length == 0) {
             return false;
         }
-        int index = a.armyIndex();
         for (int h : held) {
             if (h == index) {
                 return true;
@@ -481,6 +652,8 @@ public final class Hooks {
             s.part = part;
             s.streams.reseed(s.worldSeed(step));
             s.streams.worldPart(true);
+            localGenerate(s, step); // a local battle's PC generates its battle at the freeze step (SOS-93)
+            s.localAfter(step); // the step after a local battle's result: vanilla's after-battle on every PC
             s.assaultResolve(step); // an assault whose views have all thawed: its outcome reaches the world (SOS-92 B)
             s.assaultTermsDue(step); // a taken throne whose attacker didn't choose in time: the default terms (SOS-92 D)
             if (!battleRuns) {
@@ -610,6 +783,18 @@ public final class Hooks {
     public static boolean messageHere() {
         Session s = Engine.session();
         return s == null || s.loading || s.humanNow() == s.localHuman;
+    }
+
+    /**
+     * Patch 16, a message sent to this PC's player: in its local battle no popup opens, as vanilla's battle view shows
+     * none, but the load back would lose the message: {@code back} puts it in the list of the game loaded back, with no
+     * popup (spec section 8).
+     */
+    public static void localMessage(Runnable back) {
+        Session s = Engine.session();
+        if (s != null && s.localHere() != null) {
+            s.localMessages.add(back);
+        }
     }
 
     /** {@link #newsHumans}: no human to set, the site sends as it is. */
@@ -1599,7 +1784,9 @@ public final class Hooks {
     public static void runBattleJobs(Runnable orders, Runnable centres, Runnable trajectories, Runnable general,
             Runnable status) {
         Session s = Engine.session();
-        s.jobs.run(s.clock.step(), orders, centres, trajectories, general, status, s.ai().mode() == AiMode.IN_STEP);
+        // a local battle's general runs in the step on its own PC: only that PC runs the battle (SOS-93)
+        s.jobs.run(s.clock.step(), orders, centres, trajectories, general, status,
+                s.ai().mode() == AiMode.IN_STEP || s.localHere() != null);
     }
 
     /**
@@ -1608,7 +1795,7 @@ public final class Hooks {
      */
     public static boolean threadRunsInStep(boolean general) {
         Session s = Engine.session();
-        return s != null && !(general && s.ai().mode() == AiMode.HOST);
+        return s != null && !(general && s.ai().mode() == AiMode.HOST && s.localHere() == null);
     }
 
     /** What a battle thread's {@code working()} answers; {@code vanilla} is its own answer. */
@@ -1625,7 +1812,7 @@ public final class Hooks {
     /** The general's job starts; on the host this is its own thread, whose changes are captured from now on. */
     public static void aiGeneralJob() {
         Session s = Engine.session();
-        if (s != null) {
+        if (s != null && s.localHere() == null) { // a local battle's general captures nothing (SOS-93)
             s.ai().generalThreadIs(Thread.currentThread());
         }
     }
@@ -1647,7 +1834,8 @@ public final class Hooks {
      */
     public static boolean ordersCapturing() {
         Session s = Engine.session();
-        return s != null && !s.streams.inStep() && !s.loading && s.ai().capturingOrders();
+        // a local battle's orders apply on its own PC, the only one running it (SOS-93)
+        return s != null && !s.streams.inStep() && !s.loading && s.ai().capturingOrders() && s.localHere() == null;
     }
 
     /** A player's order on this PC: into the host's log, through it on a peer. */
@@ -1759,6 +1947,10 @@ public final class Hooks {
             if (s.viewBackLoading) {
                 s.viewBackWorld(); // the viewer's own city is back: the world it ran goes into it (SOS-82)
             }
+            if (s.localBackLoading) {
+                s.localBackWorld(); // a local battle's PC: its city is back, the world it ran goes in (SOS-93)
+                GAME.SPEED.speedSet(s.seenSpeed); // the save's speed isn't the player's: no change to send
+            }
             if (s.plans().inGame()) {
                 // a map battle's end or a resync: the session goes on at this step, with no "click to continue" (SOS-41)
                 VIEW.inters().load.deactivate();
@@ -1834,7 +2026,11 @@ public final class Hooks {
      */
     public static boolean battleView(boolean localViewOpen, boolean battleRunning) {
         Session s = Engine.session();
-        return s != null && s.streams.isSimulationThread() ? battleRunning : localViewOpen;
+        if (s != null && s.streams.isSimulationThread()) {
+            // a local battle's world part runs as on every other PC, where no battle runs (SOS-93)
+            return battleRunning && !(s.part == StepParts.WORLD_PART && s.localHere() != null);
+        }
+        return localViewOpen;
     }
 
     /**
@@ -2196,6 +2392,22 @@ public final class Hooks {
     public static void ownCityEngage(int human, int other, Runnable engage) {
         Session s = Engine.session();
         long step = s.clock.step();
+        if (s.localBattles && other < 0) {
+            // against NPCs: on the human's PC only, the world running on (SOS-93). Every PC runs vanilla's Engage, which
+            // keeps the two sides for the result; the battle PC's generation waits for the freeze step
+            LocalBattle b = s.localEngage(step, human);
+            long worldDraws = s.streams.worldDraws();
+            s.engaging = b;
+            s.streams.reseed(s.battleSeed(step));
+            try {
+                engage.run();
+            } finally {
+                s.engaging = null;
+                s.streams.reseed(s.afterEngageSeed(step));
+                s.streams.worldDraws(worldDraws);
+            }
+            return;
+        }
         OwnBattle b = new OwnBattle(step, human, s.pcOf(human), other, s.streams.worldDraws());
         b.otherReport = other >= 0 ? s.reports(other).current() : null; // a battle load clears the reports (SOS-83)
         s.battle = b;
@@ -2273,6 +2485,7 @@ public final class Hooks {
         s.worldPrompt = null;
         s.worldPromptClose = null;
         s.worldPromptTimeout = null;
+        s.closedPromptArmies = s.worldPromptArmies; // a local battle's Engage keeps them waiting (SOS-93)
         s.worldPromptArmies = Session.NO_ARMIES;
         s.worldPromptOther = -1;
         s.worldPromptOtherNext = -1;

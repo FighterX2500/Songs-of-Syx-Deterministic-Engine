@@ -16,6 +16,7 @@ import game.GAME;
 import game.boosting.tmp.TmpBoostable;
 import game.boosting.tmp.TmpBoosting;
 import game.events.EVENTS;
+import game.events.faction.EventFactionPeace;
 import game.events.faction.EventFactionWar;
 import game.faction.FACTIONS;
 import game.faction.FactionResource;
@@ -39,6 +40,7 @@ import snake2d.util.file.SAVABLE;
 import snake2d.util.misc.ACTION;
 import snake2d.util.sets.KeyMap;
 import snake2d.util.sets.LIST;
+import sosdet.hash.HashLog;
 import snake2d.util.sets.Stack;
 import util.data.DataO;
 import util.keymap.RMAPS;
@@ -107,6 +109,7 @@ public final class GameWorldLoad {
     private static final Field STACK_ITEMS = field(Stack.class, "ints");
     /** The faction war event's timer, which its load sets to 16 seconds. */
     private static final Field WAR_TIMER = field(EventFactionWar.class, "timer");
+    private static final Field PEACE_TIMES = field(EventFactionPeace.class, "secondWhenWarEnds");
     /** An NPC court's day counter: a day ages its royals and may draw a successor (V82X). */
     private static final Field COURT_DAY = field(NPCCourt.class, "addT");
     /** Every human's raid map ({@code RAIDING}, patch 16), whose army power and regions are kept between updates. */
@@ -279,7 +282,8 @@ public final class GameWorldLoad {
      * where one reuses a pooled caravan, the other makes a new one, whose path draws its direction (rig run V82E), and a
      * reused one keeps the move remainder of its last trip (V82F). The war event's load sets its timer to 16 seconds,
      * whatever was saved (V82I). Then each NPC court's day counter (V82X) and each recipe's NPC production boost
-     * ({@link #FBOOST_MUL}), which no save holds either.
+     * ({@link #FBOOST_MUL}), which no save holds either; then each faction's second its wars end, which a full load
+     * resets and a world load keeps (SOS-93, rig run L93H).
      */
     public static double[] unsaved() {
         LIST<WEntity> fast = WORLD.ENTITIES().allFast();
@@ -287,7 +291,8 @@ public final class GameWorldLoad {
         LIST<FactionNPC> npcs = FACTIONS.NPCs();
         List<Object> fboosts = fboosts();
         int n = fast.size() + slow.size();
-        int size = n + 1 + npcs.size() + fboosts.size();
+        double[] peace = peaceTimes();
+        int size = n + 1 + npcs.size() + fboosts.size() + peace.length;
         for (int k = 0; k < POOLS.length; k++) {
             size += 1 + pool(k).size();
         }
@@ -311,6 +316,7 @@ public final class GameWorldLoad {
         for (Object b : fboosts) {
             m[at++] = fboostMul(b);
         }
+        System.arraycopy(peace, 0, m, at, peace.length);
         return m;
     }
 
@@ -355,6 +361,9 @@ public final class GameWorldLoad {
         for (Object b : fboosts()) {
             fboostMul(b, m[at++]);
         }
+        double[] peace = peaceTimes();
+        System.arraycopy(m, at, peace, 0, peace.length);
+        at += peace.length;
         resetRaidMaps();
         if (at != m.length) {
             throw new IllegalStateException("SOSDET: " + m.length + " unsaved values, " + at + " for this world");
@@ -376,6 +385,20 @@ public final class GameWorldLoad {
         } catch (IllegalAccessException ex) {
             throw new IllegalStateException("SOSDET: cannot write WPath.movement" + VERSION, ex);
         }
+    }
+
+    /** The peace event's own array: it has no field in {@code EVENTS}, only its place in the events' list. */
+    private static double[] peaceTimes() {
+        for (EVENTS.EventResource e : GAME.events().all()) {
+            if (e instanceof EventFactionPeace) {
+                try {
+                    return (double[]) PEACE_TIMES.get(e);
+                } catch (IllegalAccessException ex) {
+                    throw new IllegalStateException("SOSDET: cannot read EventFactionPeace.secondWhenWarEnds" + VERSION, ex);
+                }
+            }
+        }
+        throw new IllegalStateException("SOSDET: no EventFactionPeace among the game's events" + VERSION);
     }
 
     private static double warTimer() {
@@ -424,6 +447,47 @@ public final class GameWorldLoad {
             }
         }
         return all;
+    }
+
+    /** Every recipe's NPC production boost, in {@link #fboosts()} order. */
+    public static double[] fboostMuls() {
+        List<Object> fboosts = fboosts();
+        double[] m = new double[fboosts.size()];
+        for (int i = 0; i < m.length; i++) {
+            m[i] = fboostMul(fboosts.get(i));
+        }
+        return m;
+    }
+
+    /** Puts back what {@link #fboostMuls()} took, in the same game. */
+    public static void fboostMuls(double[] m) {
+        List<Object> fboosts = fboosts();
+        if (m.length != fboosts.size()) {
+            throw new IllegalStateException("SOSDET: " + m.length + " production boosts for " + fboosts.size() + " in this game");
+        }
+        for (int i = 0; i < m.length; i++) {
+            fboostMul(fboosts.get(i), m[i]);
+        }
+    }
+
+    /**
+     * {@code h} with every recipe's NPC production boost mixed in, in recipe order: world state kept in a city
+     * resource, so a map generated on one PC re-rolls it there (SOS-93). For the state hash, so no allocation: a boost
+     * two recipes share is mixed twice.
+     */
+    static long hashFboosts(long h) {
+        Class<?> c = FBOOST_MUL.getDeclaringClass();
+        LIST<Recipe> recipes = SETT.RECIPES().all();
+        for (int i = 0; i < recipes.size(); i++) {
+            Recipe r = recipes.get(i);
+            for (int k = 0; k < r.bo.all().size(); k++) {
+                Object b = r.bo.all().get(k);
+                if (b.getClass() == c) {
+                    h = HashLog.mix(h, Double.doubleToLongBits(fboostMul(b)));
+                }
+            }
+        }
+        return h;
     }
 
     private static double fboostMul(Object b) {

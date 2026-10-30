@@ -1,10 +1,16 @@
 package sosdet.game;
 
 import game.GAME.GameResource;
+import game.battle.Armies;
+import game.battle.thread.BattleThreads;
+import game.boosting.tmp.TmpBoosting;
 import game.events.EVENTS;
 import game.faction.FACTIONS;
 import game.faction.player.Player;
 import game.raiding.RAIDING;
+import game.time.Intervals;
+import game.time.TIME;
+import settlement.main.SETT;
 import world.WORLD;
 
 /**
@@ -39,6 +45,23 @@ public final class StepParts {
     public static boolean afterTickIn(GameResource r, int part) {
         boolean world = world(r) || r instanceof EVENTS || r instanceof FACTIONS;
         return (part == WORLD_PART) == world;
+    }
+
+    /**
+     * True for the battle's own simulation: all that a local battle's own speed runs again in a step (SOS-93). Nearly
+     * every game resource counts as a battle's in vanilla, the clock, the events, the factions and the scripts too, and
+     * each of those runs once a step, or a mod's script would run at the battle's speed.
+     */
+    public static boolean battleRound(GameResource r) {
+        return r instanceof SETT || r instanceof Armies || r instanceof BattleThreads;
+    }
+
+    /**
+     * True for the world's clock among the city part's resources: the calendar, its intervals and the temporary boosts
+     * (world sections). A local battle's PC runs them once a step whatever its battle does (SOS-93, O3).
+     */
+    public static boolean worldClock(GameResource r) {
+        return r instanceof TIME || r instanceof Intervals || r instanceof TmpBoosting;
     }
 
     private static boolean world(GameResource r) {
