@@ -301,6 +301,10 @@ public final class Hooks {
             s.part = StepParts.CITY; // the city tail: the world part's changes to the city apply (ADR 0005 §3)
             s.txns.apply(s.ownTxns); // this PC's human's only (ADR 0004)
         }
+        if ((step & 1) == 0 && (s.battle == null || s.battle.awaiting)) {
+            s.part = StepParts.CITY;
+            sosdet.game.GameProduction.refresh(); // the goods window's rates: the scan vanilla's UI drove (SOS-102)
+        }
         if (s.assault != null) {
             s.part = StepParts.CITY; // the city tail: the assault's invasion starts or ends here (SOS-92 B)
             s.assaultStep(step);
@@ -594,6 +598,47 @@ public final class Hooks {
     public static boolean messageHere() {
         Session s = Engine.session();
         return s == null || s.loading || s.humanNow() == s.localHuman;
+    }
+
+    /** {@link #newsHumans}: no human to set, the site sends as it is. */
+    private static final int[] NEWS_AS_IT_IS = {-1};
+
+    /**
+     * World news (SOS-99): a message vanilla sends its player about the world, whoever caused it: an NPC's capital moved
+     * after a conquest, a realm that collapsed near the player, a war between neighbours. Every PC runs the world part,
+     * and a message shows only on the PC whose human is current at the send ({@link #messageHere}, SOS-89), so such news
+     * reached one player only. In the world part the site now sends once for each human, that human current
+     * ({@link #newsAs}), so its own conditions (a neighbour of that human's) decide; each PC shows its own human's.
+     * Elsewhere, and without a session, the site sends once, as it is. Rare events: the list is made per call.
+     */
+    public static int[] newsHumans() {
+        Session s = Engine.session();
+        if (s == null || s.part != StepParts.WORLD_PART) {
+            return NEWS_AS_IT_IS;
+        }
+        int[] all = s.humans();
+        int n = 0;
+        for (int h : all) {
+            if (!retired(h)) {
+                n++;
+            }
+        }
+        int[] out = new int[n];
+        n = 0;
+        for (int h : all) {
+            if (!retired(h)) {
+                out[n++] = h;
+            }
+        }
+        return out;
+    }
+
+    /** {@link #newsHumans}: makes {@code slot} the current human and returns the one before; -1 changes nothing. */
+    public static int newsAs(int slot) {
+        if (slot < 0) {
+            return -1;
+        }
+        return currentHumanSwap(slot);
     }
 
     /** True when the world part runs every human's world half: in a session; without one only slot 0's, as in vanilla. */

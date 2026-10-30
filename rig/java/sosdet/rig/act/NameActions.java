@@ -71,6 +71,22 @@ public final class NameActions {
                 }
             });
             return true;
+        case "rulertype": // rulertype <name>: the player types the ruler name into the profile's input, key by key (SOS-98)
+        case "factiontype": // factiontype <name>: the same for the faction name input
+            boolean ruler = a[0].equals("rulertype");
+            String typed = a[1];
+            Rig.later(() -> type(ruler, typed));
+            return true;
+        case "identity": // identity: notes every human's faction name and ruler name as this PC has them (SOS-98)
+            Rig.later(() -> {
+                StringBuilder s = new StringBuilder("identity:");
+                for (int h : sosdet.Hooks.humanSlots()) {
+                    game.faction.player.Player p = (game.faction.player.Player) FACTIONS.getByIndex(h);
+                    s.append(" slot ").append(h).append(' ').append(p.name).append('|').append(p.rulerName).append(';');
+                }
+                Rig.note(s.toString());
+            });
+            return true;
         case "markadd": // markadd <tx> <ty>: the map marks' placer
             int addX = Integer.parseInt(a[1]);
             int addY = Integer.parseInt(a[2]);
@@ -284,6 +300,68 @@ public final class NameActions {
             return mark(Integer.parseInt(owner[1]), Integer.parseInt(owner[2])).color;
         default:
             throw new IllegalArgumentException("SOSDET rig: no colour owner " + owner[0]);
+        }
+    }
+    /**
+     * As a player does in the profile window (SOS-98): clicks the input, deletes its text key by key, types the name, then
+     * clicks away. The input is found in the window the game built, so its hooks run as they do for a player.
+     */
+    private static void type(boolean ruler, String name) {
+        snake2d.util.sprite.text.StringInputSprite in = profileInputs().get(ruler ? 1 : 0);
+        in.listen();
+        while (in.text().length() > 0) {
+            call(in, "backspace", null);
+        }
+        for (char c : name.toCharArray()) {
+            call(in, "acceptChar", c);
+        }
+        snake2d.CORE.getInput().clearAllInput(); // the click away
+        Rig.note((ruler ? "rulertype " : "factiontype ") + name + ": the input shows " + in.text());
+    }
+
+    /** The profile window's text inputs in their order: the faction name, then the ruler name. */
+    private static java.util.List<snake2d.util.sprite.text.StringInputSprite> profileInputs() {
+        java.util.List<snake2d.util.sprite.text.StringInputSprite> found = new java.util.ArrayList<>();
+        inputs(field(view.ui.manage.IFullView.class, "section", view.main.VIEW.UI().profile), found);
+        if (found.size() < 2) {
+            throw new IllegalStateException("SOSDET rig: the profile has " + found.size() + " text inputs, not 2");
+        }
+        return found;
+    }
+
+    private static void inputs(Object o, java.util.List<snake2d.util.sprite.text.StringInputSprite> found) {
+        if (o instanceof util.gui.misc.GInput) {
+            found.add((snake2d.util.sprite.text.StringInputSprite) field(util.gui.misc.GInput.class, "input", o));
+        } else if (o instanceof snake2d.util.gui.GuiSection) {
+            Object list = field(snake2d.util.gui.GuiSection.class, "renderables", o);
+            for (Object r : (snake2d.util.sets.LIST<?>) list) {
+                inputs(r, found);
+            }
+        }
+    }
+    /** A protected or private member of the game's UI, as a player's input reaches it. */
+    private static Object field(Class<?> owner, String name, Object o) {
+        try {
+            java.lang.reflect.Field f = owner.getDeclaredField(name);
+            f.setAccessible(true);
+            return f.get(o);
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException("SOSDET rig: no field " + owner.getName() + "." + name, e);
+        }
+    }
+
+    private static void call(snake2d.util.sprite.text.StringInputSprite in, String name, Character c) {
+        try {
+            java.lang.reflect.Method m = c == null ? snake2d.util.sprite.text.StringInputSprite.class.getDeclaredMethod(name)
+                    : snake2d.util.sprite.text.StringInputSprite.class.getDeclaredMethod(name, char.class);
+            m.setAccessible(true);
+            if (c == null) {
+                m.invoke(in);
+            } else {
+                m.invoke(in, c.charValue());
+            }
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException("SOSDET rig: no method StringInputSprite." + name, e);
         }
     }
 }

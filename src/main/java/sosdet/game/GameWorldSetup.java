@@ -180,6 +180,9 @@ public final class GameWorldSetup {
     private static void set(Player p, HumanStart h, Race race) {
         p.setRace(race);
         p.name.clear().add(h.name);
+        if (h.ruler != null) {
+            p.rulerName.clear().add(h.ruler); // SOS-98: a joining player's ruler name, typed in its own setup
+        }
         byte[] banner = h.banner();
         if (banner != null) {
             GameCodec codec = new GameCodec();

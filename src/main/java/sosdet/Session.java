@@ -256,7 +256,7 @@ final class Session {
         if (t.human == cityHuman()) {
             txnApplier().accept(t);
         } else if (t.human == localHuman && frozen(localHuman)) {
-            this.heldTxns.add(t);
+            this.heldTxns.add(sosdet.game.HeldTxn.of(t)); // the queue clears and reuses t after the step (SOS-97)
         }
     };
 
@@ -265,7 +265,7 @@ final class Session {
     /** The city views in the log, by the viewer's slot: the same on every PC; null where there is none. */
     final View[] views = new View[SLOTS];
     /** This PC as a viewer: the transactions for its own city since the freeze, applied when the city is back. */
-    final java.util.ArrayList<Txn> heldTxns = new java.util.ArrayList<>();
+    final java.util.ArrayList<sosdet.game.HeldTxn> heldTxns = new java.util.ArrayList<>();
     /** This PC as a viewer: its own city's engine state at the freeze ({@link ViewCity#cityState}), or null. */
     byte[] ownCityState;
     /** The owner's city's engine state, put in by the view load on the owner's and the viewer's PC, then cleared. */
@@ -373,7 +373,10 @@ final class Session {
         viewMoves = null;
         part = StepParts.CITY; // the city tail's work, before the thaw step's report is taken
         for (int i = 0; i < heldTxns.size(); i++) {
-            txnApplier().accept(heldTxns.get(i));
+            Txn t = heldTxns.get(i).resolve(); // the loaded game's objects (SOS-97)
+            if (t != null) {
+                txnApplier().accept(t);
+            }
         }
         part = -1;
         heldTxns.clear();
