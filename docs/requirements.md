@@ -1,6 +1,6 @@
 # SOSDET requirements
 
-Version 0.2 · 2026-10-23
+Version 0.3 · 2026-10-30
 
 What the deterministic engine must do. It does not say how; that belongs in `docs/decisions/` and the cards. Changes to a rule here need the owner's approval, and the change goes in the same PR.
 
