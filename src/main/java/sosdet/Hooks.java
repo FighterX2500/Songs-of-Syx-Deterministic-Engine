@@ -567,6 +567,11 @@ public final class Hooks {
         s.assaultBegin(s.clock.step(), attacker, defender, spec, armies, men);
     }
 
+    /** In the step, every PC: tells the mod of an event ({@link Notice}). */
+    public static void notice(int kind, int first, int second, int value) {
+        Engine.session().notice(kind, first, second, value);
+    }
+
     /** {@code ASSAULT_TERMS} in the world part: the attacker's choice after a taken throne (SOS-92 D). */
     public static boolean assaultTerms(int attacker, int kind, int percent, int[] people) {
         Session s = Engine.session();
@@ -2417,6 +2422,9 @@ public final class Hooks {
                 s.streams.worldDraws(worldDraws);
             }
             return;
+        }
+        if (other >= 0) {
+            s.notice(Notice.BATTLE, human, other, 0);
         }
         OwnBattle b = new OwnBattle(step, human, s.pcOf(human), other, s.streams.worldDraws());
         b.otherReport = other >= 0 ? s.reports(other).current() : null; // a battle load clears the reports (SOS-83)

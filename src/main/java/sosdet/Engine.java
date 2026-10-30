@@ -1072,6 +1072,11 @@ public final class Engine {
         return required().invasionNotices.poll();
     }
 
+    /** Between steps: the next event the step told, the same on every PC in the same order; null when there is none. */
+    public static Notice noticeTake() {
+        return required().notices.poll();
+    }
+
     /** The last assault over, with its outcome, or null before the first (SOS-92 step B). */
     public static Assault lastAssault() {
         return required().lastAssault;
