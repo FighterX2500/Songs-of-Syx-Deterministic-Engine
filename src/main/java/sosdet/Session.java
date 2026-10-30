@@ -781,6 +781,15 @@ final class Session {
     final java.util.ArrayDeque<long[]> invasionNotices = new java.util.ArrayDeque<>();
     /** The notices kept for the mod at most; a mod that never takes them loses the oldest past this. */
     static final int NOTICES_MAX = 64;
+    /** Events every PC learns at the same step, in the same order, for the mod's chat (SOS-110). */
+    final java.util.ArrayDeque<Notice> notices = new java.util.ArrayDeque<>();
+
+    /** In the step: tells the mod of an event. Neither the save nor the hash knows these. */
+    void notice(int kind, int first, int second, int value) {
+        if (notices.size() < NOTICES_MAX) {
+            notices.add(new Notice(clock.step(), kind, first, second, value));
+        }
+    }
 
     /** Why no assault can start now, the same on every PC; null when one can. */
     String assaultRefusal() {
@@ -818,6 +827,7 @@ final class Session {
                 views[h] = new View(h, pcOf(h), defender, pcOf(defender), freeze);
             }
         }
+        notice(Notice.ASSAULT, attacker, defender, 0);
     }
 
     /**
