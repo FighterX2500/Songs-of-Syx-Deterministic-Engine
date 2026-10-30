@@ -104,3 +104,19 @@ Found:
 - **The peace timers were a bug for views too:** a viewer's full load zeroed them while the other PCs kept theirs. `unsaved()` fixes both.
 - **World commands on the battle PC:** `worldCommandSkipped` dropped every world command while the battle view was open. A local battle's PC now applies them, as the world runs on. No rig run has exercised this yet: it needs the other human giving a world order during the battle.
 - **Every survivor count was 0 in these runs, and that is vanilla's rule:** a retreat loses 0.4 men per enemy soldier, and 4,000 enemies wipe out 498 men.
+
+### Step B (2026-10-30)
+
+- **The cap:** the host logs 1× from the first Engage and the speed it wants once the last human has thawed. A speed the host sets meanwhile waits for that.
+- **The battle's speed:** on the battle PC the game's speed is the battle's own. `SETT`, `Armies` and `BattleThreads` run k rounds in a world step; a pause holds them as deployment does, and the world's clock runs on.
+- **A slow PC lowers k:** every 5 seconds k goes down while the PC can't hold the world's rate, and back up once one more round fits.
+
+| Run | What happened |
+|---|---|
+| L93K | Speed 2. The rig's per-step line differed from Start on, with the engine's hashes agreeing: nearly every resource counts as a battle's in vanilla, so the extra round ran the scripts, events and factions too. Now only the three above run again. |
+| L93L | Speed 2. **All copies identical to step 15,000.** Game seconds per step: 0.0625 before, 0.0167 in the battle, 0.0625 after. |
+
+Not shown by a run yet:
+- that the battle ran two rounds a step: nothing measures the rounds;
+- the pause;
+- k going down on a slow PC (unit test only).

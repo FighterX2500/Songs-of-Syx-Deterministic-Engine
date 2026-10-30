@@ -140,6 +140,35 @@ class LocalBattleTest {
     }
 
     @Test
+    void theWorldIsHeldAt1xFromTheFirstEngageUntilTheLastBattleThaws() {
+        Session s = session(0);
+        s.clock.agreedSpeed(25);
+        assertEquals(0, s.localCap(25), "no battle: no cap");
+        LocalBattle one = s.localEngage(1234, 3);
+        assertEquals(1, s.localCap(25));
+        assertEquals(0, s.localCap(25), "once");
+        LocalBattle two = s.localEngage(1235, 0);
+        s.localsAt(1260);
+        s.localResult(1300, 3, "r");
+        s.localsAt(one.thaw);
+        assertEquals(0, s.localCap(25), "the other battle still runs");
+        s.localResult(1400, 0, "r");
+        s.localsAt(two.thaw);
+        assertEquals(5, s.localCap(5), "the speed the host set meanwhile");
+    }
+
+    @Test
+    void aSlowBattlePcLowersItsRoundsNotTheWorld() {
+        assertEquals(4, Session.roundsFor(5, 5, 60, 60), "can't hold the rate");
+        assertEquals(1, Session.roundsFor(1, 5, 30, 60), "one round is the least");
+        assertEquals(5, Session.roundsFor(5, 5, 300, 60), "holds it");
+        assertEquals(3, Session.roundsFor(2, 5, 300, 60), "room for one more");
+        assertEquals(2, Session.roundsFor(2, 5, 120, 60), "three rounds wouldn't fit");
+        assertEquals(3, Session.roundsFor(3, 3, 900, 60), "no more than the human's speed");
+        assertEquals(3, Session.roundsFor(3, 5, -1, 60), "nothing measured yet");
+    }
+
+    @Test
     void aResultAtAReportStepThawsAtTheNextOne() {
         Session s = session(0);
         LocalBattle b = s.localEngage(1234, 3);

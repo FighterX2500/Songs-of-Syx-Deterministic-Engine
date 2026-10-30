@@ -390,6 +390,7 @@ public final class Hooks {
         }
         Runnable generate = b.generate;
         b.generate = null;
+        GAME.SPEED.speedSet(1); // as vanilla's battle opens; the world's speed goes on in the log
         s.ownCityState = ViewCity.cityState(s); // put back with the city at the battle's end, as after a view
         long worldDraws = s.streams.worldDraws();
         s.streams.reseed(s.battleSeed(step));
@@ -447,6 +448,23 @@ public final class Hooks {
     public static boolean localResult(int human, Object result) {
         Session s = Engine.session();
         return s != null && s.localResult(s.clock.step(), human, result);
+    }
+
+    /** Patch 10: the battle's own pause on its PC: its resources stand still, as in deployment; the world runs on. */
+    public static boolean localPaused() {
+        Session s = Engine.session();
+        return s != null && s.localPaused();
+    }
+
+    /** Patch 10: true for a resource of the battle itself, which runs again in a local battle's extra rounds. */
+    public static boolean localRound(GameResource r) {
+        return StepParts.battleRound(r);
+    }
+
+    /** Patch 10: how many more times the battle's resources run in this part of this step. */
+    public static int localExtraRounds(int part, boolean deploying) {
+        Session s = Engine.session();
+        return s == null || deploying || part != StepParts.CITY ? 0 : s.localExtraRounds();
     }
 
     private static boolean contains(int[] values, int value) {
@@ -1870,6 +1888,7 @@ public final class Hooks {
             }
             if (s.localBackLoading) {
                 s.localBackWorld(); // a local battle's PC: its city is back, the world it ran goes in (SOS-93)
+                GAME.SPEED.speedSet(s.seenSpeed); // the save's speed isn't the player's: no change to send
             }
             if (s.plans().inGame()) {
                 // a map battle's end or a resync: the session goes on at this step, with no "click to continue" (SOS-41)

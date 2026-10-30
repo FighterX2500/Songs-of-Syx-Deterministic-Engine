@@ -276,6 +276,21 @@ final class Session {
     /** The armies of the world-battle prompt that just closed: a local battle's Engage keeps them waiting. */
     int[] closedPromptArmies = NO_ARMIES;
 
+    /** The most rounds of a local battle in one world step: vanilla's fastest speed. */
+    private static final int LOCAL_ROUNDS_MAX = 25;
+    /** The share of its capacity a local battle's PC keeps free, and how often its rounds are looked at. */
+    private static final double LOCAL_MARGIN = 1.1;
+    private static final double LOCAL_RAISE_MARGIN = 1.5;
+    private static final long LOCAL_CHECK_NANOS = 5_000_000_000L;
+    /** The host: the local battles hold the world at 1× (spec §4). */
+    private boolean localCapped;
+    private double localCapFrom;
+    /** The battle PC: the fighting human's speed and pause, and the rounds it can run per world step. */
+    private int localWanted = 1;
+    private int localRounds = 1;
+    private boolean localPaused;
+    private long localCheckedAt;
+
     /** The local battle whose Engage runs now, inside its step: vanilla's Engage hands it its parts. */
     LocalBattle engaging;
     /** The battle PC between its result's step and the next: the world it ran, for its own city loaded back. */
@@ -307,6 +322,77 @@ final class Session {
                 thawReports(slot, step);
             }
         }
+    }
+
+    private boolean anyLocal() {
+        for (LocalBattle b : locals) {
+            if (b != null) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * The host: the speed to log now for the local battles' cap, or 0: 1× from the first Engage, and {@code wanted} (the
+     * speed from before the cap if the host chose none) once the last battle's human has thawed.
+     */
+    double localCap(double wanted) {
+        boolean on = anyLocal();
+        if (on == localCapped) {
+            return 0;
+        }
+        localCapped = on;
+        if (on) {
+            localCapFrom = clock.agreedSpeed();
+            return 1;
+        }
+        return wanted > 0 ? wanted : localCapFrom;
+    }
+
+    /** The battle PC, every frame: the game's speed is its battle's own; a slow PC lowers the rounds, not the world. */
+    private void localSpeed(double speed, long now) {
+        localPaused = speed <= 0;
+        if (speed <= 0) {
+            return;
+        }
+        int wanted = Math.max(1, Math.min(LOCAL_ROUNDS_MAX, (int) Math.round(speed)));
+        if (wanted != localWanted) {
+            localWanted = wanted;
+            localRounds = wanted;
+            localCheckedAt = now;
+        }
+        if (now - localCheckedAt >= LOCAL_CHECK_NANOS) {
+            localCheckedAt = now;
+            localRounds = roundsFor(localRounds, localWanted, pacer.capacity(), clock.agreedSpeed() / clock.stepSeconds());
+        }
+    }
+
+    /**
+     * A local battle's rounds per world step on a PC of this capacity (steps a second, with the rounds it ran; below 0
+     * unknown) at this world rate: one fewer while it can't hold the rate, one more once one more would fit.
+     */
+    static int roundsFor(int rounds, int wanted, double capacity, double rate) {
+        if (capacity < 0) {
+            return rounds;
+        }
+        if (rounds > 1 && capacity < LOCAL_MARGIN * rate) {
+            return rounds - 1;
+        }
+        if (rounds < wanted && capacity * rounds / (rounds + 1) > LOCAL_RAISE_MARGIN * rate) {
+            return rounds + 1;
+        }
+        return rounds;
+    }
+
+    /** The battle PC: the human paused its battle. */
+    boolean localPaused() {
+        return localHere() != null && localPaused;
+    }
+
+    /** The battle PC: the battle's rounds beyond the one every step runs. */
+    int localExtraRounds() {
+        return localHere() == null ? 0 : localRounds - 1;
     }
 
     /** Every PC, inside the step: the battle PC's result, once; false for a battle with no result due. */
@@ -1629,6 +1715,10 @@ final class Session {
      * every PC switches at the stamped step. A peer's own speed only sets its pace.
      */
     void speedSeen(double speed) {
+        if (localHere() != null) {
+            localSpeed(speed, System.nanoTime()); // the fighting human's alone (spec §8)
+            return;
+        }
         if (speed <= 0 || speed == seenSpeed) {
             return; // paused, or no change
         }
@@ -1638,7 +1728,9 @@ final class Session {
             clock.agreedSpeed(speed);
         } else if (log.mode() == AiMode.HOST) {
             pacer.wanted(speed, System.nanoTime());
-            logSpeed(speed, speed, -1);
+            if (!localCapped) {
+                logSpeed(speed, speed, -1); // under the cap it waits for the last battle's end (spec §4)
+            }
         }
     }
 
@@ -1657,6 +1749,17 @@ final class Session {
         ai().delay(windowSteps(clock.agreedSpeed())); // orders stay in flight the same real time at every speed
         clock.paceCap(pacer.frame(now, clock.step(), clock.lastStep(), w, stepNanos));
         hashes.ownCapacity(pacer.capacity());
+        double wanted = pacer.wantedSpeed();
+        double cap = localCap(wanted);
+        if (cap > 0) {
+            if (!localCapped) {
+                pacer.wanted(cap, now); // the governor starts again from the host's speed
+            }
+            logSpeed(cap, cap, -1);
+        }
+        if (localCapped) {
+            return;
+        }
         double speed = pacer.speed(now);
         if (speed > 0) {
             logSpeed(speed, pacer.wantedSpeed(), pacer.slowPc());

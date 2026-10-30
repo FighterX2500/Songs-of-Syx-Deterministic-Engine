@@ -218,6 +218,10 @@ public final class PromptAnswers {
             startAsked = true;
             if (!MapBattles.deploy()) {
                 battle.deploy(); // a local battle: its PC's own, no command (SOS-93)
+                String speed = System.getenv("SOSDET_LOCAL_SPEED"); // the fighting human's own speed
+                if (speed != null) {
+                    game.GAME.SPEED.speedSet(Double.parseDouble(speed));
+                }
             }
             return "battle start";
         }
