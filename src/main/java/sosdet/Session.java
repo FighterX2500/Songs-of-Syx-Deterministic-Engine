@@ -793,6 +793,9 @@ final class Session {
         if (battle != null) {
             return "A battle is running.";
         }
+        if (anyLocal()) {
+            return "A player is fighting a battle: the assault starts once it ends."; // that human can't view it
+        }
         for (View v : views) {
             if (v != null && v.state != View.CANCELLED && v.state != View.ENDED) {
                 return "A city view is open: the assault starts once it is closed.";

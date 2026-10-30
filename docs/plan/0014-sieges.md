@@ -95,6 +95,7 @@ The mod plan says every PC loads the defender's city "with `loadView`'s path". T
 
 ### Step B's results (2026-10-30)
 
+- **With local battles (SOS-93, owner 2026-10-30):** Storm is refused while any player is in a local battle, from its Engage until its human has thawed. Every other player must view the assault, and a player in a local battle can't, so the view would fail and call the assault off. Unit test only: no rig run has had a Storm and a local battle together.
 - Rig S92M and S92N (Mogus-72, slot 2 storms slot 0, 2 copies, 5x): Storm at about step 16,600, the view of slot 0 by slot 2 loaded in 7.5 s, the invasion ran on both copies, the defender held at 28,882 and 32,884, the view ended "The assault is over.", and afterwards the attacker's army was gone and the siege record cleared on both copies. No desync.
 - S92J found a step A bug: `CommandParts.world` stopped at 7949, so the sally (7970) applied on its sender's PC only in own-city mode. The siege commands are world commands now.
 - Not built from the list above: the save round trip (saves are refused during an assault instead, so the assault is never saved), and the refusal of the defender's city commands during the assault (they apply on every PC that runs the city, as in any view, so they don't desync).
