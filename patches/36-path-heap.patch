@@ -1,0 +1,575 @@
+diff -ru -U2 a/snake2d/PathTile.java b/snake2d/PathTile.java
+--- a/snake2d/PathTile.java	2024-10-19 15:00:58.000000000 +0500
++++ b/snake2d/PathTile.java	2026-10-30 07:19:05.030877200 +0500
+@@ -16,6 +16,8 @@
+ 	PathTile right; // 4
+ 	PathTile parent; // 4
+ 	boolean color; // 1
++	int heapI = -1; // SOSDET (SOS-106): this tile's place in RBTileTree's heap
++	long heapSeq; // SOSDET (SOS-106): when it was put, the tree's order among equal values
+ 					// 34 + 12 = 46 = 64
+ 	// possible: // 2+2+4+4+1+4+4+4+4 = 29
+ 
+diff -ru -U2 a/snake2d/RBTileTree.java b/snake2d/RBTileTree.java
+--- a/snake2d/RBTileTree.java	2024-10-19 15:00:16.000000000 +0500
++++ b/snake2d/RBTileTree.java	2026-10-30 07:19:05.030877200 +0500
+@@ -13,8 +13,17 @@
+  */
+ class RBTileTree{
+ 
+-    private PathTile root = null;
++    // SOSDET (SOS-106): a 4-ary heap on an array in place of the red-black tree, the speed-up SyxSpeed measured for the
++    // path search. It pops tiles in exactly the tree's order: by value, and among equal values in the order they were
++    // put (the tree puts an equal key after the others), so every search finds the same path as vanilla. Tiles go in
++    // unordered until the first poll after clear(); that poll's direction (smallest or greatest) orders the heap, as a
++    // search only ever polls one way. A poll the other way after that finds its tile by a scan.
++
++    private PathTile[] heap = new PathTile[1024];
+     private int size = 0;
++    private long seq = 0;
++    /** 0: unordered, 1: smallest first, -1: greatest first. */
++    private int mode = 0;
+ 
+     public RBTileTree() {
+ 
+@@ -23,445 +32,124 @@
+     public int size() {
+         return size;
+     }
+-    
+-    public void put(PathTile key) {
+-        PathTile t = root;
+-        if (t == null) {
+-            initTile(key, null);
+-        	root = key;
+-            size = 1;
+-            return;
+-        }
+-        int cmp;
+-        PathTile parent;
+-        
+-        do {
+-            parent = t;
+-            cmp = key.compareTo(t);
+-            if (cmp < 0)
+-                t = t.left;
+-            else if (cmp > 0)
+-                t = t.right;
+-            else{
+-            	throw new RuntimeException("shitstorm");
+-            }
+-            
+-        } while (t != null);
+ 
+-        initTile(key, parent);
+-        if (cmp < 0)
+-            parent.left = key;
+-        else
+-            parent.right = key;
+-        fixAfterInsertion(key);
+-        size++;
+-        return;
+-    }
+-
+-    private void initTile(PathTile t, PathTile parent){
+-    	t.left = null;
+-    	t.right = null;
+-        t.parent = parent;
+-        t.color = RBTileTree.BLACK;
++    public void put(PathTile key) {
++        if (size == heap.length)
++            heap = java.util.Arrays.copyOf(heap, size * 2);
++        key.heapSeq = seq++;
++        key.heapI = size;
++        heap[size++] = key;
++        if (mode != 0)
++            up(size - 1);
+     }
+-    
++
+     public PathTile pollSmallest(){
+-    	PathTile t = getFirstEntry();
+-    	deleteEntry(t);
+-    	return t;
++        order(1);
++        return removeAt(mode == 1 ? 0 : scan(1));
+     }
+-    
++
+     public PathTile pollGreatest(){
+-    	PathTile t = getLastEntry();
+-    	deleteEntry(t);
+-    	return t;
++        order(-1);
++        return removeAt(mode == -1 ? 0 : scan(-1));
+     }
+-    
++
+     public PathTile smallest() {
+-        return getFirstEntry();
++        if (size == 0)
++            return null;
++        order(1);
++        return heap[mode == 1 ? 0 : scan(1)];
+     }
+ 
+     public PathTile greatest() {
+-        return getLastEntry();
++        if (size == 0)
++            return null;
++        order(-1);
++        return heap[mode == -1 ? 0 : scan(-1)];
+     }
+-    
++
+     public void remove(PathTile p) {
+         if (p == null)
+             return;
+-        deleteEntry(p);
++        removeAt(p.heapI);
+     }
+ 
+     public void clear() {
+         size = 0;
+-        root = null;
+-    }
+-
+-    // Red-black mechanics
+-
+-    private static final boolean RED   = false;
+-    private static final boolean BLACK = true;
+-    
+-    /**
+-     * Returns the first Entry in the TreeMap (according to the TreeMap's
+-     * key-sort function).  Returns null if the TreeMap is empty.
+-     */
+-    private final PathTile getFirstEntry() {
+-        PathTile p = root;
+-        if (p != null)
+-            while (p.left != null)
+-                p = p.left;
+-        return p;
+-    }
+-
+-    /**
+-     * Returns the last Entry in the TreeMap (according to the TreeMap's
+-     * key-sort function).  Returns null if the TreeMap is empty.
+-     */
+-
+-    private  final PathTile getLastEntry() {
+-    	PathTile p = root;
+-    	if (p != null)
+-    		while (p.right != null)
+-    			p = p.right;
+-    	return p;
+-    }
+-
+-    /**
+-     * Returns the successor of the specified Entry, or null if no such.
+-     */
+-    private PathTile successor(PathTile t) {
+-        if (t == null)
+-            return null;
+-        else if (t.right != null) {
+-            PathTile p = t.right;
+-            while (p.left != null)
+-                p = p.left;
+-            return p;
+-        } else {
+-            PathTile p = t.parent;
+-            PathTile ch = t;
+-            while (p != null && ch == p.right) {
+-                ch = p;
+-                p = p.parent;
+-            }
+-            return p;
+-        }
+-    }
+-
+-    /**
+-     * Balancing operations.
+-     *
+-     * Implementations of rebalancings during insertion and deletion are
+-     * slightly different than the CLR version.  Rather than using dummy
+-     * nilnodes, we use a set of accessors that deal properly with null.  They
+-     * are used to avoid messiness surrounding nullness checks in the main
+-     * algorithms.
+-     */
+-
+-    private static boolean colorOf(PathTile p) {
+-        return (p == null ? BLACK : p.color);
+-    }
+-
+-    private static PathTile parentOf(PathTile p) {
+-        return (p == null ? null: p.parent);
+-    }
+-
+-    private static void setColor(PathTile p, boolean c) {
+-        if (p != null)
+-            p.color = c;
+-    }
+-
+-    private static  PathTile leftOf(PathTile p) {
+-        return (p == null) ? null: p.left;
+-    }
+-
+-    private static PathTile rightOf(PathTile p) {
+-        return (p == null) ? null: p.right;
+-    }
+-
+-    /** From CLR */
+-    private void rotateLeft(PathTile p) {
+-        if (p != null) {
+-        	PathTile r = p.right;
+-            p.right = r.left;
+-            if (r.left != null)
+-                r.left.parent = p;
+-            r.parent = p.parent;
+-            if (p.parent == null)
+-                root = r;
+-            else if (p.parent.left == p)
+-                p.parent.left = r;
+-            else
+-                p.parent.right = r;
+-            r.left = p;
+-            p.parent = r;
+-        }
+-    }
+-
+-    /** From CLR */
+-    private void rotateRight(PathTile p) {
+-        if (p != null) {
+-        	PathTile l = p.left;
+-            p.left = l.right;
+-            if (l.right != null) l.right.parent = p;
+-            l.parent = p.parent;
+-            if (p.parent == null)
+-                root = l;
+-            else if (p.parent.right == p)
+-                p.parent.right = l;
+-            else p.parent.left = l;
+-            l.right = p;
+-            p.parent = l;
+-        }
++        mode = 0;
+     }
+ 
+-    /** From CLR */
+-    private void fixAfterInsertion(PathTile x) {
+-        x.color = RED;
+-
+-        while (x != null && x != root && x.parent.color == RED) {
+-            if (parentOf(x) == leftOf(parentOf(parentOf(x)))) {
+-            	PathTile y = rightOf(parentOf(parentOf(x)));
+-                if (colorOf(y) == RED) {
+-                    setColor(parentOf(x), BLACK);
+-                    setColor(y, BLACK);
+-                    setColor(parentOf(parentOf(x)), RED);
+-                    x = parentOf(parentOf(x));
+-                } else {
+-                    if (x == rightOf(parentOf(x))) {
+-                        x = parentOf(x);
+-                        rotateLeft(x);
+-                    }
+-                    setColor(parentOf(x), BLACK);
+-                    setColor(parentOf(parentOf(x)), RED);
+-                    rotateRight(parentOf(parentOf(x)));
+-                }
+-            } else {
+-            	PathTile y = leftOf(parentOf(parentOf(x)));
+-                if (colorOf(y) == RED) {
+-                    setColor(parentOf(x), BLACK);
+-                    setColor(y, BLACK);
+-                    setColor(parentOf(parentOf(x)), RED);
+-                    x = parentOf(parentOf(x));
+-                } else {
+-                    if (x == leftOf(parentOf(x))) {
+-                        x = parentOf(x);
+-                        rotateRight(x);
+-                    }
+-                    setColor(parentOf(x), BLACK);
+-                    setColor(parentOf(parentOf(x)), RED);
+-                    rotateLeft(parentOf(parentOf(x)));
+-                }
+-            }
+-        }
+-        root.color = BLACK;
+-    }
+-
+-    /**
+-     * Delete node p, and then rebalance the tree.
+-     */
+-    private void deleteEntry(PathTile p) {
+-        
+-        size--;
+-
+-        if (size == 0){
+-        	root = null;
+-        	return;
+-        }
+-        	
+-        
+-        // If strictly internal, copy successor's element to p and then make p
+-        // point to successor.
+-        if (p.left != null && p.right != null) {
+-        	
+-        	PathTile s = successor (p);
+-        	switchLoc(s, p);
+-        } // p has 2 children
+-
+-        // Start fixup at replacement node, if it exists.
+-        PathTile replacement = (p.left != null ? p.left : p.right);
+-
+-        if (replacement != null) {
+-            // Link replacement to parent
+-            replacement.parent = p.parent;
+-            if (p.parent == null)
+-                root = replacement;
+-            else if (p == p.parent.left)
+-                p.parent.left  = replacement;
+-            else
+-                p.parent.right = replacement;
+-
+-            // Null out links so they are OK to use by fixAfterDeletion.
+-            p.left = p.right = p.parent = null;
+-
+-            // Fix replacement
+-            if (p.color == BLACK)
+-                fixAfterDeletion(replacement);
+-        } else if (p.parent == null) { // return if we are the only node.
+-            root = null;
+-        } else { //  No children. Use self as phantom replacement and unlink.
+-        	if (p.color == BLACK)
+-                fixAfterDeletion(p);
+-
+-            if (p.parent != null) {
+-                if (p == p.parent.left)
+-                    p.parent.left = null;
+-                else if (p == p.parent.right)
+-                    p.parent.right = null;
+-                p.parent = null;
++    private void order(int dir) {
++        if (mode != 0)
++            return;
++        mode = dir;
++        for (int i = (size - 2) >> 2; i >= 0; i--)
++            down(i);
++    }
++
++    /** True when a comes out before b in the given direction: the tree's order, ties by when they were put. */
++    private static boolean before(PathTile a, PathTile b, int dir) {
++        if (dir > 0)
++            return a.value < b.value || (a.value == b.value && a.heapSeq < b.heapSeq);
++        return a.value > b.value || (a.value == b.value && a.heapSeq > b.heapSeq);
++    }
++
++    private int scan(int dir) {
++        int best = 0;
++        for (int i = 1; i < size; i++)
++            if (before(heap[i], heap[best], dir))
++                best = i;
++        return best;
++    }
++
++    private PathTile removeAt(int i) {
++        PathTile t = heap[i];
++        PathTile last = heap[--size];
++        heap[size] = null;
++        if (i < size) {
++            heap[i] = last;
++            last.heapI = i;
++            if (mode != 0) {
++                up(i);
++                down(last.heapI);
+             }
+         }
++        t.heapI = -1;
++        return t;
+     }
+ 
+-    private void switchLoc(PathTile a, PathTile b){
+-    	
+-    	//color
+-    	boolean ac = a.color;
+-    	a.color = b.color;
+-    	b.color = ac;
+-    	
+-    	if (a.parent == b && b != null){
+-    		PathTile lc = a.left;
+-    		PathTile rc = a.right;
+-    		
+-    		if (b.left == a){
+-    			a.left = b;
+-    			a.right = b.right;
+-    			a.right.parent = a;
+-    		}else{
+-    			a.right = b;
+-    			a.left = b.left;
+-    			a.left.parent = a;
+-    		}
+-    		
+-    		a.parent = b.parent;
+-    		
+-    		if (a.parent != null){
+-	    		if (a.parent.left == b)
+-	    			a.parent.left = a;
+-	    		else
+-	    			a.parent.right = a;
+-    		}
+-    		
+-    		b.parent = a;
+-    		
+-    		b.left = lc;
+-    		if (lc != null)
+-    			lc.parent = b;
+-    		b.right = rc;
+-    		if (rc != null)
+-    			rc.parent = b;
+-    	}else if(b.parent == a && b != null){
+-    		throw new RuntimeException("should not happen!");
+-    	}else{
+-        	//parent
+-        	if (b.parent != null){
+-        		if (b.parent.left == b){
+-        			b.parent.left = a;
+-        		}else{
+-        			b.parent.right = a;
+-        		}
+-        	}
+-        	if (a.parent != null){
+-        		if (a.parent.left == a){
+-        			a.parent.left = b;
+-        		}else{
+-        			a.parent.right = b;
+-        		}
+-        		
+-        	}
+-        	PathTile ap = a.parent;
+-        	a.parent = b.parent;
+-        	b.parent = ap;
+-        	
+-        	//childrens parents
+-        	if (a.left != null)
+-        		a.left.parent = b;
+-        	if (a.right != null)
+-        		a.right.parent = b;
+-        	if (b.left != null)
+-        		b.left.parent = a;
+-        	if (b.right != null)
+-        		b.right.parent = a;
+-        	
+-        	//children
+-        	PathTile al = a.left;
+-        	PathTile ar = a.right;
+-        	a.left = b.left;
+-        	a.right = b.right;
+-        	b.left = al;
+-        	b.right = ar;
+-    	}
+-    	
+-    	if (a == root){
+-    		root = b;
+-    	}else if (b == root){
+-    		root= a;
+-    	}
+-
+-    }
+-    
+-    /** From CLR */
+-    private void fixAfterDeletion(PathTile x) {
+-        while (x != root && colorOf(x) == BLACK) {
+-            if (x == leftOf(parentOf(x))) {
+-            	PathTile sib = rightOf(parentOf(x));
+-
+-                if (colorOf(sib) == RED) {
+-                    setColor(sib, BLACK);
+-                    setColor(parentOf(x), RED);
+-                    rotateLeft(parentOf(x));
+-                    sib = rightOf(parentOf(x));
+-                }
+-
+-                if (colorOf(leftOf(sib))  == BLACK &&
+-                    colorOf(rightOf(sib)) == BLACK) {
+-                    setColor(sib, RED);
+-                    x = parentOf(x);
+-                } else {
+-                    if (colorOf(rightOf(sib)) == BLACK) {
+-                        setColor(leftOf(sib), BLACK);
+-                        setColor(sib, RED);
+-                        rotateRight(sib);
+-                        sib = rightOf(parentOf(x));
+-                    }
+-                    setColor(sib, colorOf(parentOf(x)));
+-                    setColor(parentOf(x), BLACK);
+-                    setColor(rightOf(sib), BLACK);
+-                    rotateLeft(parentOf(x));
+-                    x = root;
+-                }
+-            } else { // symmetric
+-            	PathTile sib = leftOf(parentOf(x));
+-
+-                if (colorOf(sib) == RED) {
+-                    setColor(sib, BLACK);
+-                    setColor(parentOf(x), RED);
+-                    rotateRight(parentOf(x));
+-                    sib = leftOf(parentOf(x));
+-                }
+-
+-                if (colorOf(rightOf(sib)) == BLACK &&
+-                    colorOf(leftOf(sib)) == BLACK) {
+-                    setColor(sib, RED);
+-                    x = parentOf(x);
+-                } else {
+-                    if (colorOf(leftOf(sib)) == BLACK) {
+-                        setColor(rightOf(sib), BLACK);
+-                        setColor(sib, RED);
+-                        rotateLeft(sib);
+-                        sib = leftOf(parentOf(x));
+-                    }
+-                    setColor(sib, colorOf(parentOf(x)));
+-                    setColor(parentOf(x), BLACK);
+-                    setColor(leftOf(sib), BLACK);
+-                    rotateRight(parentOf(x));
+-                    x = root;
+-                }
+-            }
++    private void up(int i) {
++        PathTile t = heap[i];
++        while (i > 0) {
++            int p = (i - 1) >> 2;
++            if (!before(t, heap[p], mode))
++                break;
++            heap[i] = heap[p];
++            heap[i].heapI = i;
++            i = p;
++        }
++        heap[i] = t;
++        t.heapI = i;
++    }
++
++    private void down(int i) {
++        PathTile t = heap[i];
++        while (true) {
++            int c = (i << 2) + 1;
++            if (c >= size)
++                break;
++            int best = c;
++            int end = Math.min(c + 4, size);
++            for (int k = c + 1; k < end; k++)
++                if (before(heap[k], heap[best], mode))
++                    best = k;
++            if (!before(heap[best], t, mode))
++                break;
++            heap[i] = heap[best];
++            heap[i].heapI = i;
++            i = best;
+         }
+-
+-        setColor(x, BLACK);
++        heap[i] = t;
++        t.heapI = i;
+     }
+ 
+-}
+\ No newline at end of file
++}

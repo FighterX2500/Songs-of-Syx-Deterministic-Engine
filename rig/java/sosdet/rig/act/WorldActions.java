@@ -150,6 +150,10 @@ public final class WorldActions {
             // every other human, read as that human between steps (SOS-101)
             Rig.later(() -> Rig.note(tradeRoutes()));
             return true;
+        case "wprofile": // wprofile: turns the step profile on (SOS-106), then each call notes each game part's mean ms a step since the last
+            Rig.later(() -> Rig.note(Engine.stepProfile()));
+            Engine.profileSteps(true);
+            return true;
         case "wprod": // wprod: notes the goods window's production and consumption totals of the first goods, and how many
             // workplaces count in them (SOS-102), as that window reads them between steps
             Rig.later(() -> Rig.note(production()));
