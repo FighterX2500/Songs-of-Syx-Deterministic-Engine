@@ -380,9 +380,9 @@ public final class Hooks {
     }
 
     /** In the world part at Storm's step: the assault begins on every PC ({@link Session#assaultBegin}). */
-    public static void assaultBegin(int attacker, int defender, Object spec, int[] armies) {
+    public static void assaultBegin(int attacker, int defender, Object spec, int[] armies, int men) {
         Session s = Engine.session();
-        s.assaultBegin(s.clock.step(), attacker, defender, spec, armies);
+        s.assaultBegin(s.clock.step(), attacker, defender, spec, armies, men);
     }
 
     /** {@code Invasion.update}, as the assault's invasion ends in the step: the same on every PC that runs the city. */

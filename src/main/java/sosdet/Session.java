@@ -475,6 +475,8 @@ final class Session {
     boolean assaultStarting;
     /** The last assault over, for the mod's notices and the rig; null before the first. */
     Assault lastAssault;
+    /** The assault whose outcome the world just took, until the mod takes it (SOS-92 C). */
+    Assault assaultOutcome;
     /** NPC invasions of a human's capital, as the world part starts them: step, human, invading faction (-1: rebels). */
     final java.util.ArrayDeque<long[]> invasionNotices = new java.util.ArrayDeque<>();
     /** The notices kept for the mod at most; a mod that never takes them loses the oldest past this. */
@@ -501,13 +503,13 @@ final class Session {
      * other human views the defender's city from the next report step, where the world holds; the invasion starts at
      * the step after it ({@link #assaultStep}).
      */
-    void assaultBegin(long step, int attacker, int defender, Object spec, int[] armies) {
+    void assaultBegin(long step, int attacker, int defender, Object spec, int[] armies, int men) {
         String why = assaultRefusal();
         if (why != null) {
             throw new IllegalStateException("SOSDET: an assault at step " + step + ": " + why);
         }
         long freeze = nextReportStep(step);
-        assault = new Assault(step, attacker, defender, freeze, spec, armies);
+        assault = new Assault(step, attacker, defender, freeze, spec, armies, men);
         for (int h : humans()) {
             if (h != defender && !retired(h)) {
                 views[h] = new View(h, pcOf(h), defender, pcOf(defender), freeze);
@@ -595,6 +597,7 @@ final class Session {
         lastAssault = a;
         if (a.cancelled == null) {
             sosdet.game.GameAssault.resolve(a.defender, a.outcome, a.armies);
+            assaultOutcome = a;
         }
     }
 

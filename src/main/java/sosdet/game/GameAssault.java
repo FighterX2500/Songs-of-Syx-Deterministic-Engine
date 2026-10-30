@@ -10,6 +10,7 @@ import sosdet.Assault;
 import sosdet.Hooks;
 import sosdet.report.Field;
 import world.WORLD;
+import world.army.AD;
 import world.battle.spec.WBattleSiege;
 import world.entity.army.WArmy;
 
@@ -38,6 +39,18 @@ public final class GameAssault {
         } catch (InvocationTargetException e) {
             throw new IllegalStateException("SOSDET: building the assault failed", e.getCause());
         }
+    }
+
+    /** The men in the world's armies at {@code armies}. */
+    public static int men(int[] armies) {
+        int men = 0;
+        for (int i : armies) {
+            WArmy a = WORLD.ENTITIES().armies.get(i);
+            if (a != null && a.added()) {
+                men += AD.men(null).get(a);
+            }
+        }
+        return men;
     }
 
     /** In the city tail of the defender's city, on every PC that runs it: the invasion starts. */

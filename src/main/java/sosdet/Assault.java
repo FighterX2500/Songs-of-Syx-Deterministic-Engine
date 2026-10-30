@@ -25,6 +25,8 @@ public final class Assault {
     final Object spec;
     /** The besieging armies' indices: the world's armies the invasion came from. */
     final int[] armies;
+    /** The men in those armies at Storm's step. */
+    public final int men;
     /** The invasion is running in the defender's city. */
     volatile boolean started;
     /** {@link #HELD}, {@link #TAKEN} or {@link #RETREAT}; -1 while it runs. */
@@ -34,13 +36,14 @@ public final class Assault {
     /** Why it ended without an outcome (a view that couldn't start); null otherwise. */
     volatile String cancelled;
 
-    Assault(long step, int attacker, int defender, long freeze, Object spec, int[] armies) {
+    Assault(long step, int attacker, int defender, long freeze, Object spec, int[] armies, int men) {
         this.step = step;
         this.attacker = attacker;
         this.defender = defender;
         this.freeze = freeze;
         this.spec = spec;
         this.armies = armies.clone();
+        this.men = men;
     }
 
     public boolean started() {

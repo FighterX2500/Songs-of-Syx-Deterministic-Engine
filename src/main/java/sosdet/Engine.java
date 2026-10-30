@@ -1048,6 +1048,17 @@ public final class Engine {
     }
 
     /**
+     * Once, as the world takes an assault's outcome: that assault, for the mod to tell each side and to log; else null
+     * (SOS-92 C). The same step on every PC.
+     */
+    public static Assault assaultOutcomeTake() {
+        Session s = required();
+        Assault a = s.assaultOutcome;
+        s.assaultOutcome = null;
+        return a;
+    }
+
+    /**
      * Between steps: the game days left before the capital of the human in {@code slot} may be assaulted, 0 once the
      * wait has passed, or -1 when it isn't besieged (mod spec §9, SOS-92).
      */

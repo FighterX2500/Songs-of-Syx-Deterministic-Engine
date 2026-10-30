@@ -95,7 +95,9 @@ public final class Sieges {
      */
     public static void storm(int attacker, WBattleSiege siege) {
         Object[] built = sosdet.game.GameAssault.build(siege);
-        Hooks.assaultBegin(attacker, siege.besiged.faction().index(), built[0], (int[]) built[1]);
+        int[] armies = (int[]) built[1];
+        Hooks.assaultBegin(attacker, siege.besiged.faction().index(), built[0], armies,
+                sosdet.game.GameAssault.men(armies));
     }
 
     // ---------------------------------------------------------------- the defender's sally
