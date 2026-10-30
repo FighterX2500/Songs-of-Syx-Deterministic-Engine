@@ -1,6 +1,7 @@
 package sosdet;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -45,5 +46,13 @@ class HumanStartTest {
         HumanStart s = new HumanStart("HUMAN", "A", banner, 1, 1);
         banner[0] = 9;
         assertArrayEquals(new byte[] {1, 2, 3}, s.banner());
+    }
+
+    /** SOS-98: a joining player's ruler name goes with its start; none or an empty one keeps the game's. */
+    @Test
+    void theRulerNameGoesWithTheStart() {
+        assertEquals("Grak", new HumanStart("HUMAN", "A", "Grak", null, 1, 1).ruler);
+        assertNull(new HumanStart("HUMAN", "A", "", null, 1, 1).ruler);
+        assertNull(new HumanStart("HUMAN", "A", null, 1, 1).ruler);
     }
 }

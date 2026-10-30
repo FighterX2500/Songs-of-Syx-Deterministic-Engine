@@ -16,18 +16,29 @@ public final class HumanStart {
     /** The race's key, as {@code Race.key}. */
     public final String race;
     public final String name;
+    /** The ruler's name (SOS-98), or null to keep the game's. */
+    public final String ruler;
     public final int tx;
     public final int ty;
     private final byte[] banner;
 
-    /** {@code banner}: the banner in the game's own save layout ({@link Engine#bannerBytes}), or null to keep it. */
+    /** As {@link #HumanStart(String, String, String, byte[], int, int)}, keeping the game's ruler name. */
     public HumanStart(String race, String name, byte[] banner, int tx, int ty) {
+        this(race, name, null, banner, tx, ty);
+    }
+
+    /**
+     * {@code ruler}: the ruler's name the player typed in the setup (SOS-98), or null or empty to keep the game's.
+     * {@code banner}: the banner in the game's own save layout ({@link Engine#bannerBytes}), or null to keep it.
+     */
+    public HumanStart(String race, String name, String ruler, byte[] banner, int tx, int ty) {
         if (race == null || race.isEmpty() || name == null || name.isEmpty()) {
             throw new IllegalArgumentException("SOSDET: a human start needs a race and a name (race " + race + ", name "
                     + name + ")");
         }
         this.race = race;
         this.name = name;
+        this.ruler = ruler == null || ruler.isEmpty() ? null : ruler;
         this.banner = banner == null ? null : banner.clone();
         this.tx = tx;
         this.ty = ty;

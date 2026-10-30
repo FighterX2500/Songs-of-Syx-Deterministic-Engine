@@ -146,6 +146,14 @@ public final class WorldActions {
         case "wstatus": // wstatus: notes the player's slot, treasury, capital, regions, armies and wars (a probe for an agent player)
             Rig.later(() -> Rig.note(status()));
             return true;
+        case "wtrade": // wtrade: notes each human's trade partners (the capitals its traders reach, SOS-77) and its stance with
+            // every other human, read as that human between steps (SOS-101)
+            Rig.later(() -> Rig.note(tradeRoutes()));
+            return true;
+        case "wprod": // wprod: notes the goods window's production and consumption totals of the first goods, and how many
+            // workplaces count in them (SOS-102), as that window reads them between steps
+            Rig.later(() -> Rig.note(production()));
+            return true;
         case "wcredits": // wcredits: notes the player's credits in and out by kind, today and yesterday (a treasury drop's cause)
             Rig.later(() -> Rig.note(credits()));
             return true;
@@ -1103,5 +1111,68 @@ public final class WorldActions {
             }
         }
         throw new IllegalStateException("no active NPC faction");
+    }
+
+    /** {@code wprod} (SOS-102): per goods with any producer, its net rate and the sources counted, read-only. */
+    private static String production() {
+        StringBuilder s = new StringBuilder("wprod step ").append(Engine.step()).append(':');
+        int shown = 0;
+        for (init.resources.RESOURCE res : init.resources.RESOURCES.ALL()) {
+            double net = 0;
+            int counted = 0;
+            for (settlement.room.industry.module.RoomProduction.Source src : settlement.main.SETT.ROOMS().PROD.producers(res)) {
+                double am = src.am();
+                if (am != 0) {
+                    counted++;
+                    net += am;
+                }
+            }
+            for (settlement.room.industry.module.RoomProduction.Source src : settlement.main.SETT.ROOMS().PROD.consumers(res)) {
+                double am = src.am();
+                if (am != 0) {
+                    counted++;
+                    net -= am;
+                }
+            }
+            if (counted == 0) {
+                continue;
+            }
+            s.append(' ').append(res.key).append(String.format(java.util.Locale.ROOT, " %.1f (%d)", net, counted));
+            if (++shown == 8) {
+                break;
+            }
+        }
+        return s.toString();
+    }
+
+    /** {@code wtrade} (SOS-101): per human, its stance with each other human and the factions its traders reach. */
+    private static String tradeRoutes() {
+        StringBuilder s = new StringBuilder("wtrade step ").append(Engine.step()).append(':');
+        for (int h : Hooks.humanSlots()) {
+            int before = Engine.asHuman(h);
+            try {
+                game.faction.Faction me = FACTIONS.getByIndex(h);
+                s.append(" | slot ").append(h).append(' ').append(me.name).append(" capital ")
+                        .append(me.capitolRegion() == null ? "none" : me.capitolRegion().info.name()).append(" regions ")
+                        .append(me.realm().regions());
+                for (int o : Hooks.humanSlots()) {
+                    if (o != h) {
+                        game.faction.diplomacy.DipStance st = game.faction.diplomacy.DIP.get(me, FACTIONS.getByIndex(o));
+                        s.append("; with slot ").append(o).append(' ').append(st.key()).append(st.trades ? " (trades)" : "");
+                    }
+                }
+                s.append("; reaches");
+                if (me.capitolRegion() != null) {
+                    for (world.map.pathing.WRegFinder.RegDist d : RD.DIST().tradePartners(me)) {
+                        if (d.reg.faction() != null && d.reg.faction() != me) {
+                            s.append(' ').append(d.reg.faction().name).append("@" + d.distance);
+                        }
+                    }
+                }
+            } finally {
+                Engine.asHuman(before);
+            }
+        }
+        return s.toString();
     }
 }

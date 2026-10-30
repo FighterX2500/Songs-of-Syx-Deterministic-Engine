@@ -258,6 +258,36 @@ public final class Names {
         return draft;
     }
 
+    /**
+     * Hook in {@code UIProfile}'s constructor (SOS-98): the profile window's icon, which the top bar's button shows. The
+     * game builds the view before a session sets this PC's human, so the banner it passed was slot 0's: the host's on
+     * every PC. This one draws this PC's player's banner each time, so it also follows a banner change.
+     */
+    public static snake2d.util.sprite.SPRITE playerBannerIcon() {
+        return new snake2d.util.sprite.SPRITE() {
+
+            @Override
+            public int width() {
+                return FACTIONS.player().banner().BIG.width();
+            }
+
+            @Override
+            public int height() {
+                return FACTIONS.player().banner().BIG.height();
+            }
+
+            @Override
+            public void render(snake2d.SPRITE_RENDERER r, int x1, int x2, int y1, int y2) {
+                FACTIONS.player().banner().BIG.render(r, x1, x2, y1, y2);
+            }
+
+            @Override
+            public void renderTextured(snake2d.util.sprite.TextureCoords texture, int x1, int x2, int y1, int y2) {
+                FACTIONS.player().banner().BIG.renderTextured(texture, x1, x2, y1, y2);
+            }
+        };
+    }
+
     /** Hook in {@code UIProfile}'s faction name input: the faction's name and its capital's, after each edit. */
     public static boolean factionName(CharSequence name) {
         if (!Commands.capturing()) {
