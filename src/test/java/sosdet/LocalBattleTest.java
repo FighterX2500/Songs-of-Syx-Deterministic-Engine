@@ -189,6 +189,32 @@ class LocalBattleTest {
         assertTrue(s.localMessages.isEmpty(), "this PC loads no city back");
     }
 
+    /** Mod spec section 8: the fighter's city receives what the world sent it meanwhile (SOS-112). */
+    @Test
+    void aFrozenFightersTransactionsWaitForItsReturn() {
+        Session s = session(3);
+        s.localHuman = 3;
+        int[] applied = {0};
+        s.txnApplier = t -> applied[0]++;
+        LocalBattle b = s.localEngage(1234, 3);
+        s.ownTxns.accept(credits(3));
+        assertEquals(1, applied[0], "before the freeze the city still runs");
+        s.localsAt(b.freeze);
+        s.ownTxns.accept(credits(3));
+        assertEquals(1, applied[0], "the battle game would lose it");
+        assertEquals(1, s.heldTxns.size());
+        s.ownTxns.accept(credits(1));
+        assertEquals(1, applied[0], "another human's city isn't this PC's");
+        assertEquals(1, s.heldTxns.size());
+    }
+
+    private static sosdet.txn.Txn credits(int human) {
+        sosdet.txn.Txn t = new sosdet.txn.Txn();
+        t.kind = sosdet.txn.TxnKind.CREDITS;
+        t.human = human;
+        return t;
+    }
+
     @Test
     void stormWaitsUntilTheLastLocalBattleHasEnded() {
         Session s = session(0);

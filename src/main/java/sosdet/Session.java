@@ -255,10 +255,10 @@ final class Session {
      * While this PC views another human's city, its own human's wait until its city is back (SOS-82).
      */
     final java.util.function.Consumer<Txn> ownTxns = t -> {
-        if (t.human == cityHuman()) {
-            txnApplier().accept(t);
-        } else if (t.human == localHuman && frozen(localHuman)) {
+        if (t.human == localHuman && frozen(localHuman)) { // first: a local battle's PC runs no other city (SOS-112)
             this.heldTxns.add(sosdet.game.HeldTxn.of(t)); // the queue clears and reuses t after the step (SOS-97)
+        } else if (t.human == cityHuman()) {
+            txnApplier().accept(t);
         }
     };
 
