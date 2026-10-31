@@ -140,14 +140,20 @@ public final class Hooks {
         Session s = Engine.session();
         s.speedSeen(setSpeed);
         s.pace(now);
+        s.watchLead(now, setSpeed);
         double speed = frameSpeed(setSpeed); // a local battle's PC keeps the world's pace, whatever the battle's own speed
         if ((s.viewing() != null || s.localHere() != null) && s.ai().mode() == sosdet.ai.AiMode.PEER
                 && s.ai().confirmed() - s.clock.step() > VIEW_CATCH_UP_LAG) {
             speed *= VIEW_CATCH_UP; // a viewer behind the host runs faster until it has caught up (SOS-82), a battle PC too
         }
+        if (s.watchBehind() > VIEW_CATCH_UP_LAG) {
+            speed *= VIEW_CATCH_UP; // the host as a watcher, behind the world it leads
+        }
         if (s.viewing() != null && s.ai().mode() == sosdet.ai.AiMode.PEER) {
             // the viewer's limits, on this PC's clock: they only decide whether it asks the host to end the view
             s.viewLimit.update(now, Math.max(0, s.ai().confirmed() - s.clock.step()));
+        } else if (s.watchingBattle() != null) {
+            s.viewLimit.update(now, s.watchBehind());
         }
         return s.clock.stepsForFrame(now, gameSeconds, speed);
     }
@@ -211,8 +217,8 @@ public final class Hooks {
         if (s.ownCity) {
             s.takeRemovals(); // before this PC may run a step: no later report of a removed human is read (SOS-66)
         }
-        if (s.ownCity && s.battle == null && s.reportsFrom < 0 && s.reports(s.localHuman).current() == null
-                && !s.reports(s.localHuman).pending()) {
+        if (s.ownCity && s.battle == null && s.reportsFrom < 0 && !s.spectating()
+                && s.reports(s.localHuman).current() == null && !s.reports(s.localHuman).pending()) {
             // the load report goes out before this PC waits for the others' (SOS-46): with several humans every PC waits
             // for every other's first report, which none would send from a world part it may not run
             // taken at the last step run, so a regular report the next step takes is never a repeat of it
@@ -227,7 +233,8 @@ public final class Hooks {
         s.viewWorldReloads(); // every other PC reloads its world where the owner and the viewer load
         s.localBacks(); // after a local battle's result: its PC loads its city back, every other PC its world (SOS-93)
         boolean battleAwaited = s.battle != null && s.battle.awaiting; // the battle PC's battle isn't loaded yet
-        boolean waits = !s.ai().mayRun(s.clock.step() + 1) || !s.worldMayRun(s.clock.step() + 1);
+        boolean waits = !s.ai().mayRun(s.clock.step() + 1) || !s.worldMayRun(s.clock.step() + 1)
+                || !s.watchMayRun(s.clock.step() + 1);
         if (waits) {
             s.waited = true; // waiting for another PC: counted as held (SOS-90)
         }
@@ -250,6 +257,7 @@ public final class Hooks {
         }
         s.stepStartNanos = System.nanoTime(); // timing only, never fed to the simulation
         s.ai().stepBegin(s.clock.step());
+        s.localOrders(s.clock.step()); // a local battle's: the fighter's own, or a watcher's from the tape (SOS-109)
         if (s.battle != null && !s.battle.awaiting && s.deployTimer.step(s.clock.stepSeconds(), s.clock.agreedSpeed())) {
             sosdet.game.cmd.MapBattles.deployForAll(); // a human between two didn't press Start in time (SOS-83)
         }
@@ -273,6 +281,10 @@ public final class Hooks {
         }
         if (s.pvpEngageAt == step) { // a battle between two humans engages at a step set the step before (SOS-83)
             s.battleAhead = step;
+            return true;
+        }
+        if (s.ai().commandDue(step, sosdet.game.cmd.WorldBattles::isStorm)) {
+            s.battleAhead = step; // every PC saves before an assault too (spec §11, SOS-92)
             return true;
         }
         if (s.worldPromptOther >= 0) { // between two humans one Fight doesn't engage: only pvpEngageAt does
@@ -320,7 +332,11 @@ public final class Hooks {
             boolean battleRuns = s.battle != null && !s.battle.awaiting;
             long draws = s.ownCity && !battleRuns ? s.streams.worldDraws() : s.streams.drawsSinceLoad();
             long clock = HashLog.mix(HashLog.mix(HashLog.mix(HashLog.start(), step), draws), s.ai().applied());
+            s.clockParts[0] = draws;
+            s.clockParts[1] = s.ai().applied();
+            s.clockParts[2] = 0;
             if (s.ai().commanders().set()) {
+                s.clockParts[2] = s.ai().commanders().hash();
                 clock = HashLog.mix(clock, s.ai().commanders().hash()); // left out until a table is set (SOS-15)
             }
             if (s.ownCity && s.humans().length > 1) {
@@ -336,7 +352,7 @@ public final class Hooks {
                 }
             }
             s.part = -1; // the same part on every PC, whether or not this one ran city paths or a city tail (SOS-46)
-            s.hashes.take(step, clock, s.reportsHash(), s.source());
+            s.hashes.take(step, clock, s.clockParts, s.reportsHash(), s.source());
             s.viewHashes(step);
         }
         s.viewsEnd(step); // a thaw due next step is put off while a battle runs or a world prompt is open (SOS-82)
@@ -367,19 +383,19 @@ public final class Hooks {
     /** Patch 10, in the step: the world part runs on a local battle's PC whatever its battle view (SOS-93). */
     public static boolean localWorldPart(int part) {
         Session s = Engine.session();
-        return s != null && part == StepParts.WORLD_PART && s.localHere() != null;
+        return s != null && part == StepParts.WORLD_PART && s.localRuns();
     }
 
     /** Patch 10, in the step's city part: on a local battle's PC the world's clock runs every step (SOS-93, O3). */
     public static boolean localClock(GameResource r, int part) {
         Session s = Engine.session();
-        return s != null && part == StepParts.CITY && s.localHere() != null && StepParts.worldClock(r);
+        return s != null && part == StepParts.CITY && s.localRuns() && StepParts.worldClock(r);
     }
 
     /** True on a local battle's PC while it runs (SOS-93): the battle's Start keeps the world's tick count. */
     public static boolean localBattleHere() {
         Session s = Engine.session();
-        return s != null && s.localHere() != null;
+        return s != null && s.localRuns();
     }
 
     /**
@@ -439,11 +455,11 @@ public final class Hooks {
      */
     public static boolean localExit(Object result) {
         Session s = Engine.session();
-        LocalBattle b = s == null ? null : s.localHere();
-        if (b == null) {
+        if (s == null || !s.localRuns()) {
             return false;
         }
-        if (!b.resultSent) {
+        LocalBattle b = s.localHere(); // null on a watcher: the fighter's result is the one that counts
+        if (b != null && !b.resultSent) {
             b.resultSent = true;
             orderCapture(sosdet.ai.AiEntry.COMMAND, -1, sosdet.game.cmd.MapBattles.localResultCommand(b.human, result));
         }
@@ -466,7 +482,7 @@ public final class Hooks {
         if (s == null) {
             return speed;
         }
-        if (s.localHere() != null) {
+        if (s.localRuns()) {
             return s.clock.agreedSpeed();
         }
         return s.localCapped() ? Math.min(speed, s.clock.agreedSpeed()) : speed;
@@ -562,9 +578,10 @@ public final class Hooks {
     }
 
     /** In the world part at Storm's step: the assault begins on every PC ({@link Session#assaultBegin}). */
-    public static void assaultBegin(int attacker, int defender, Object spec, int[] armies, int men) {
+    public static void assaultBegin(int attacker, int defender, Object spec, int[] armies, int men, int[] divOwners,
+            int[] attackers, int[] attackerMen) {
         Session s = Engine.session();
-        s.assaultBegin(s.clock.step(), attacker, defender, spec, armies, men);
+        s.assaultBegin(s.clock.step(), attacker, defender, spec, armies, men, divOwners, attackers, attackerMen);
     }
 
     /** In the step, every PC: tells the mod of an event ({@link Notice}). */
@@ -591,7 +608,7 @@ public final class Hooks {
     /** The rig's {@code ASSAULT_END} in the world part: the running assault's invasion ends with {@code outcome}. */
     public static boolean assaultForce(int outcome) {
         Session s = Engine.session();
-        if (s == null || s.assault == null || !s.assault.started || s.assault.outcome >= 0 || outcome < Assault.HELD
+        if (s == null || s.assault == null || !s.assault.started || s.assault.endStep >= 0 || outcome < Assault.HELD
                 || outcome > Assault.RETREAT) {
             return false;
         }
@@ -602,9 +619,23 @@ public final class Hooks {
     /** {@code Invasion.update}, as the assault's invasion ends in the step: the same on every PC that runs the city. */
     public static void assaultOutcome(int outcome) {
         Session s = Engine.session();
-        if (s != null && s.assault != null && s.assault.started && s.assault.outcome < 0) {
-            s.assault.outcome = outcome;
+        if (s != null && s.assault != null && s.assault.started && s.assault.detected < 0) {
+            assaultSurvivors();
+            s.assault.detected = outcome;
         }
+    }
+
+    /** {@code Invasion}, before the invaders leave the city at the assault's end: those alive stay in their armies. */
+    public static void assaultSurvivors() {
+        Session s = Engine.session();
+        if (s != null && s.assault != null && s.assault.survivors < 0) {
+            s.assault.survivors = sosdet.game.GameAssault.invaders();
+        }
+    }
+
+    /** The host's {@link sosdet.ai.AiEntry#ASSAULT_END} at its step, every PC. */
+    public static void assaultEnded(long step, int outcome, int survivors) {
+        Engine.session().assaultEnded(step, outcome, survivors);
     }
 
     /**
@@ -658,10 +689,11 @@ public final class Hooks {
             }
             // in a battle the world stands still (spec §4) and no city runs: no reports are taken or read (plan 0006)
             boolean battleRuns = s.battle != null && !s.battle.awaiting;
-            if (!battleRuns && s.reports(s.localHuman).current() == null && !s.reports(s.localHuman).pending()) {
+            if (!battleRuns && !s.spectating() && s.reports(s.localHuman).current() == null
+                    && !s.reports(s.localHuman).pending()) {
                 s.takeReport(step, step);
             }
-            if (!battleRuns && Reports.takenAt(step) && !s.frozen(s.localHuman)) {
+            if (!battleRuns && Reports.takenAt(step) && !s.frozen(s.localHuman) && !s.spectating()) {
                 s.takeReport(step, s.reportAppliesAt(step)); // a viewer takes none: its city is unloaded (SOS-82)
             }
             s.part = part;
@@ -687,7 +719,7 @@ public final class Hooks {
                             + (h == s.localHuman ? " from PC " + s.reportsFrom : ""));
                 }
             }
-            s.currentHuman = 0;
+            s.currentHuman = s.living;
             s.ai().worldPart();
             if (s.pvpEngageAt == step && s.worldPrompt != null) { // both humans answered, or time ran out (SOS-83)
                 sosdet.game.cmd.WorldBattles.pvpEngage();
@@ -696,7 +728,7 @@ public final class Hooks {
             if (s.promptTimer.step(s.clock.stepSeconds(), s.clock.agreedSpeed()) && s.worldPromptTimeout != null) {
                 s.currentHuman = s.worldPromptHuman; // as the human asked, whose answer it stands in for (SOS-46)
                 s.worldPromptTimeout.run();
-                s.currentHuman = 0;
+                s.currentHuman = s.living;
             }
             return;
         }
@@ -732,11 +764,19 @@ public final class Hooks {
 
     /** True when the resource updates in this part of the step. */
     public static boolean updatesIn(GameResource r, int part) {
+        Session s = Engine.session();
+        if (s != null && part == StepParts.CITY && s.spectating() && s.viewing() == null) {
+            return StepParts.worldClock(r); // a spectator's old city stays loaded and never runs (SOS-111)
+        }
         return StepParts.updatesIn(r, part);
     }
 
     /** True when the resource's once-per-step work runs at the start of this part. */
     public static boolean afterTickIn(GameResource r, int part) {
+        Session s = Engine.session();
+        if (s != null && part == StepParts.CITY && s.spectating() && s.viewing() == null) {
+            return StepParts.worldClock(r) && StepParts.afterTickIn(r, part);
+        }
         return StepParts.afterTickIn(r, part);
     }
 
@@ -973,8 +1013,14 @@ public final class Hooks {
     public static void currentHuman(int slot) {
         Session s = Engine.session();
         if (s != null) {
-            s.currentHuman = slot;
+            s.currentHuman = slot == 0 ? s.living : slot;
         }
+    }
+
+    /** Whether the human in {@code slot} was eliminated and watches (SOS-111). */
+    public static boolean spectator(int slot) {
+        Session s = Engine.session();
+        return s != null && s.spectators[slot];
     }
 
     /**
@@ -1801,7 +1847,7 @@ public final class Hooks {
         Session s = Engine.session();
         // a local battle's general runs in the step on its own PC: only that PC runs the battle (SOS-93)
         s.jobs.run(s.clock.step(), orders, centres, trajectories, general, status,
-                s.ai().mode() == AiMode.IN_STEP || s.localHere() != null);
+                s.ai().mode() == AiMode.IN_STEP || s.localRuns());
     }
 
     /**
@@ -1810,7 +1856,7 @@ public final class Hooks {
      */
     public static boolean threadRunsInStep(boolean general) {
         Session s = Engine.session();
-        return s != null && !(general && s.ai().mode() == AiMode.HOST && s.localHere() == null);
+        return s != null && !(general && s.ai().mode() == AiMode.HOST && !s.localRuns());
     }
 
     /** What a battle thread's {@code working()} answers; {@code vanilla} is its own answer. */
@@ -1827,7 +1873,7 @@ public final class Hooks {
     /** The general's job starts; on the host this is its own thread, whose changes are captured from now on. */
     public static void aiGeneralJob() {
         Session s = Engine.session();
-        if (s != null && s.localHere() == null) { // a local battle's general captures nothing (SOS-93)
+        if (s != null && !s.localRuns()) { // a local battle's general captures nothing (SOS-93)
             s.ai().generalThreadIs(Thread.currentThread());
         }
     }
@@ -1849,13 +1895,19 @@ public final class Hooks {
      */
     public static boolean ordersCapturing() {
         Session s = Engine.session();
-        // a local battle's orders apply on its own PC, the only one running it (SOS-93)
-        return s != null && !s.streams.inStep() && !s.loading && s.ai().capturingOrders() && s.localHere() == null;
+        // a local battle's too: they apply at the next step, on the tape a watcher runs from (SOS-109)
+        return s != null && !s.streams.inStep() && !s.loading && s.ai().capturingOrders();
     }
 
     /** A player's order on this PC: into the host's log, through it on a peer. */
     public static void orderCapture(int kind, int div, byte[] payload) {
-        Engine.session().ai().captureOrder(kind, div, payload);
+        Session s = Engine.session();
+        LocalBattle b = s.localHere();
+        if (b != null && !(kind == sosdet.ai.AiEntry.COMMAND && sosdet.game.cmd.CommandParts.world(payload))) {
+            s.tape.add(kind, div, b.pc, payload); // the world's commands go through the log, as every PC's
+            return;
+        }
+        s.ai().captureOrder(kind, div, payload);
     }
 
     /** Who commands each battle division (SOS-15); null without a session, and then nothing is restricted. */
@@ -2043,7 +2095,7 @@ public final class Hooks {
         Session s = Engine.session();
         if (s != null && s.streams.isSimulationThread()) {
             // a local battle's world part runs as on every other PC, where no battle runs (SOS-93)
-            return battleRunning && !(s.part == StepParts.WORLD_PART && s.localHere() != null);
+            return battleRunning && !(s.part == StepParts.WORLD_PART && s.localRuns());
         }
         return localViewOpen;
     }

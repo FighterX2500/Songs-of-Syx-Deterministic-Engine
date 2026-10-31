@@ -240,13 +240,18 @@ public final class PromptAnswers {
             if (startAsked) {
                 return null;
             }
+            String wait = System.getenv("SOSDET_LOCAL_START"); // steps a local battle stays in deployment (SOS-109)
+            sosdet.LocalBattle fight = wait == null ? null : Engine.localBattle(Hooks.localHuman());
+            if (fight != null && Engine.step() < fight.freeze + Long.parseLong(wait)) {
+                return null;
+            }
             startAsked = true;
             if (!MapBattles.deploy()) {
-                battle.deploy(); // a local battle: its PC's own, no command (SOS-93)
-                String speed = System.getenv("SOSDET_LOCAL_SPEED"); // the fighting human's own speed
-                if (speed != null) {
-                    game.GAME.SPEED.speedSet(Double.parseDouble(speed));
-                }
+                battle.deploy();
+            }
+            String speed = System.getenv("SOSDET_LOCAL_SPEED"); // a local battle: the fighting human's own speed
+            if (speed != null && Hooks.localBattleHere()) {
+                game.GAME.SPEED.speedSet(Double.parseDouble(speed));
             }
             return "battle start";
         }

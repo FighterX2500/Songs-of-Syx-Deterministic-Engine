@@ -60,7 +60,7 @@ class HashLogTest {
     private static void run(HashLog log, FakeState state, long from, long to) {
         for (long s = from; s <= to; s++) {
             if (log.due(s)) {
-                log.take(s, s, 0, state);
+                log.take(s, s, new long[HashLog.CLOCK_PARTS], 0, state);
             }
         }
     }

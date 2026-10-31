@@ -189,6 +189,140 @@ class LocalBattleTest {
         assertTrue(s.localMessages.isEmpty(), "this PC loads no city back");
     }
 
+    private static View watch(Session s, int viewer, int owner, long freeze) {
+        View v = new View(viewer, s.pcOf(viewer), owner, s.pcOf(owner), freeze);
+        v.state = View.RUNNING;
+        v.battle = true;
+        s.views[viewer] = v;
+        return v;
+    }
+
+    /** Mod spec section 8: any other player can join a running NPC battle (SOS-109). */
+    @Test
+    void aBattleCanBeWatchedOnlyWhileItRuns() {
+        Session s = session(0);
+        LocalBattle b = s.localEngage(1234, 3);
+        assertEquals("That battle is starting or ending.", s.viewRefusal(0, 3, null));
+        s.localsAt(b.freeze);
+        assertNull(s.viewRefusal(0, 3, null));
+        assertEquals("A battle is running.", s.viewRefusal(3, 0, null), "a fighter watches nobody");
+        s.localResult(1400, 3, new Object[0]);
+        assertEquals("That battle is starting or ending.", s.viewRefusal(0, 3, null));
+    }
+
+    @Test
+    void aWatcherRunsTheFightersRoundsStepByStepWheneverItReachesThem() {
+        Session s = session(0);
+        LocalBattle b = s.localEngage(1234, 3);
+        s.localsAt(b.freeze);
+        long f = b.freeze + 30;
+        View v = watch(s, 0, 3, f);
+        LocalTape fighter = new LocalTape(Session.SLOTS);
+        fighter.watch(0);
+        fighter.record(f + 1, 5);
+        fighter.record(f + 2, 0);
+        assertTrue(s.watchMayRun(f), "the freeze step is the save's");
+        assertFalse(s.watchMayRun(f + 1), "no tape yet: the watcher waits, the fighter doesn't");
+        s.tape.in(fighter.out(0), v.ownerPc);
+        assertTrue(s.watchMayRun(f + 2));
+        assertFalse(s.watchMayRun(f + 3));
+        s.localOrders(f + 1);
+        assertFalse(s.localPaused());
+        assertEquals(4, s.localExtraRounds());
+        s.localOrders(f + 2);
+        assertTrue(s.localPaused());
+        assertEquals(0, s.localExtraRounds());
+        assertFalse(s.watchMayRun(f + 3));
+        s.removing[3] = true;
+        assertTrue(s.watchMayRun(f + 3), "a fighter's PC that has gone sends no more tape");
+    }
+
+    @Test
+    void theResultEndsTheWatchAndItsAfterBattleWaitsForTheWatchersThaw() {
+        Session s = session(0);
+        LocalBattle b = s.localEngage(1234, 3);
+        List<Object> seen = new ArrayList<>();
+        s.engaging = b;
+        Hooks.localEngaged(seen::add);
+        s.engaging = null;
+        s.localsAt(b.freeze);
+        View v = watch(s, 0, 3, b.freeze + 30);
+        s.localResult(1400, 3, new Object[0]);
+        assertTrue(v.thaw > 1400);
+        assertEquals("The battle is over.", v.reason());
+        b.back = true;
+        s.localAfter(1401);
+        assertTrue(seen.isEmpty(), "the watcher's game is still the battle's");
+        v.state = View.ENDED;
+        s.localAfter(v.thaw);
+        assertEquals(1, seen.size());
+    }
+
+    @Test
+    void aWatcherLeavesTheFightersTransactionsToTheFighter() {
+        Session s = session(0);
+        int[] applied = {0};
+        s.txnApplier = t -> applied[0]++;
+        LocalBattle b = s.localEngage(1234, 3);
+        s.localsAt(b.freeze);
+        watch(s, 0, 3, b.freeze + 30);
+        s.ownTxns.accept(credits(3));
+        assertEquals(0, applied[0], "it would change the watcher's battle, not the fighter's");
+        assertEquals(0, s.heldTxns.size());
+        s.ownTxns.accept(credits(0));
+        assertEquals(1, s.heldTxns.size(), "the watcher's own city waits for it");
+    }
+
+    /** A PC ahead of this one has thawed already: its first report mustn't be lost (W3, and SOS-95's symptom). */
+    @Test
+    void aThawReportFromAPcAheadIsKeptWhileThisPcStillSeesItsHumanFrozen() {
+        Session s = session(0);
+        LocalBattle b = s.localEngage(1234, 3);
+        s.localsAt(b.freeze);
+        assertTrue(s.frozen(3));
+        s.reportReceived(new sosdet.report.CityReport(SMALL, 3, 1500, 1530, 1560, new double[SMALL.size()],
+                new ArrayList<>()));
+        assertTrue(s.reports(3).pending(), "the thaw report waits for its step");
+    }
+
+    /** A watcher needs each order at a step, so the fighter's orders wait for the next step (SOS-109). */
+    @Test
+    void aFightersOrdersGoOnTheTapeNotInTheLog() {
+        Session s = session(3);
+        s.localHuman = 3;
+        LocalBattle b = s.localEngage(1234, 3);
+        s.localsAt(b.freeze);
+        Hooks.orderCapture(sosdet.ai.AiEntry.GUARD, 7, new byte[4]);
+        assertEquals(1, s.tape.queued().size());
+        assertEquals(b.pc, s.tape.queued().get(0).pc);
+    }
+
+    /** Mod spec section 8: the fighter's city receives what the world sent it meanwhile (SOS-112). */
+    @Test
+    void aFrozenFightersTransactionsWaitForItsReturn() {
+        Session s = session(3);
+        s.localHuman = 3;
+        int[] applied = {0};
+        s.txnApplier = t -> applied[0]++;
+        LocalBattle b = s.localEngage(1234, 3);
+        s.ownTxns.accept(credits(3));
+        assertEquals(1, applied[0], "before the freeze the city still runs");
+        s.localsAt(b.freeze);
+        s.ownTxns.accept(credits(3));
+        assertEquals(1, applied[0], "the battle game would lose it");
+        assertEquals(1, s.heldTxns.size());
+        s.ownTxns.accept(credits(1));
+        assertEquals(1, applied[0], "another human's city isn't this PC's");
+        assertEquals(1, s.heldTxns.size());
+    }
+
+    private static sosdet.txn.Txn credits(int human) {
+        sosdet.txn.Txn t = new sosdet.txn.Txn();
+        t.kind = sosdet.txn.TxnKind.CREDITS;
+        t.human = human;
+        return t;
+    }
+
     @Test
     void stormWaitsUntilTheLastLocalBattleHasEnded() {
         Session s = session(0);
@@ -315,7 +449,7 @@ class LocalBattleTest {
     void aHumanInALocalBattleIsNotViewedAndViewsNobody() {
         Session s = session(0);
         s.localEngage(1234, 3);
-        assertEquals("A battle is running.", s.viewRefusal(0, 3, null));
+        assertEquals("That battle is starting or ending.", s.viewRefusal(0, 3, null));
         assertEquals("A battle is running.", s.viewRefusal(3, 0, null));
     }
 

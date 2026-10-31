@@ -13,6 +13,7 @@ import game.time.TIME;
 import init.trade.TR;
 import init.trade.TRADABLE;
 import init.trade.TRADE_TYPE;
+import sosdet.Engine;
 import sosdet.Hooks;
 import sosdet.Notice;
 import sosdet.ai.CmdReader;
@@ -103,7 +104,14 @@ public final class HumanDeals {
 
     /** Why this PC's player can't cancel their treaties with the human in slot {@code to} now; null when they can. */
     public static String cancelRefusal(int to) {
-        return cancelRefusal(FACTIONS.player(), human(to));
+        return spectating() ? SPECTATOR : cancelRefusal(FACTIONS.player(), human(to));
+    }
+
+    private static final String SPECTATOR = "A spectator can't act in the game.";
+
+    /** On a spectator's PC the game's player is a living human, who must not act through it (SOS-111). */
+    private static boolean spectating() {
+        return Engine.spectating();
     }
 
     /** This PC's player declares war on the human in slot {@code to}: captured, applied at its step. */
@@ -116,7 +124,7 @@ public final class HumanDeals {
 
     /** Why this PC's player can't declare war on the human in slot {@code to} now; null when they can. */
     public static String warRefusal(int to) {
-        return warRefusal(FACTIONS.player(), human(to));
+        return spectating() ? SPECTATOR : warRefusal(FACTIONS.player(), human(to));
     }
 
     /** This PC's player sets their tariff on the human in slot {@code to}: captured, applied at its step. */
@@ -129,12 +137,12 @@ public final class HumanDeals {
 
     /** Why this PC's player can't set a tariff of {@code percent} on the human in slot {@code to} now; null when they can. */
     public static String tariffRefusal(int to, int percent) {
-        return tariffRefusal(FACTIONS.player(), human(to), percent);
+        return spectating() ? SPECTATOR : tariffRefusal(FACTIONS.player(), human(to), percent);
     }
 
     /** Why this PC's player can't propose {@code terms} to the human in slot {@code to} now; null when they can. */
     public static String proposeRefusal(int to, Terms terms) {
-        return refusal(FACTIONS.player(), human(to), terms);
+        return spectating() ? SPECTATOR : refusal(FACTIONS.player(), human(to), terms);
     }
 
     /** Why this PC's player can't accept the proposal {@code id} now; null when they can. */
@@ -383,14 +391,13 @@ public final class HumanDeals {
      * In the world part, every PC: what the attacker took after reaching the human {@code defender}'s throne (SOS-92
      * step D), as a deal the defender can't refuse. A sack moves {@code percent} of the defender's money and of each of
      * its goods, read from its city's report, by a caravan to the attacker's capital, removes {@code people}, and ends
-     * the war; vassalage makes the defender the attacker's vassal with a tribute of {@code percent}. Returns the money
-     * taken.
+     * the war; vassalage makes the defender the attacker's vassal with a tribute of {@code percent}; Eliminate is a sack
+     * of its share, and the session then retires the defender. Returns the money taken.
      */
-    static int assaultTerms(int defender, int attacker, int kind, int percent, int[] people) {
+    static int assaultTerms(int defender, int chooser, int[] attackers, int[] men, int kind, int percent, int[] people) {
         Faction d = human(defender);
-        Faction a = human(attacker);
         if (kind == AssaultTerms.VASSALAGE) {
-            execute(d, a, new Terms(DealBook.VASSAL, 0, 0, new int[0], new int[0], new int[0], new int[0], percent));
+            execute(d, human(chooser), new Terms(DealBook.VASSAL, 0, 0, new int[0], new int[0], new int[0], new int[0], percent));
             return 0;
         }
         int credits;
@@ -411,8 +418,16 @@ public final class HumanDeals {
         } finally {
             Hooks.currentHumanSwap(before);
         }
-        execute(d, a, new Terms(DealBook.CANCEL_ALL, credits, 0, goods, new int[0]));
-        takePeople(d, a, people);
+        int[] money = AssaultTerms.split(credits, men);
+        for (int i = 0; i < attackers.length; i++) { // by the men each brought (mod spec §9, SOS-92 E)
+            int[] removed = people.clone();
+            for (int p = 0; p < removed.length; p++) {
+                removed[p] = AssaultTerms.split(people[p], men)[i];
+            }
+            execute(d, human(attackers[i]), new Terms(DealBook.CANCEL_ALL, money[i], 0, AssaultTerms.goodsShare(goods, men, i),
+                    new int[0]));
+            takePeople(d, human(attackers[i]), removed);
+        }
         return credits;
     }
 

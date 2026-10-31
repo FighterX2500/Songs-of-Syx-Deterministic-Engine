@@ -55,6 +55,22 @@ public final class GameView {
         load(file(VIEW_SAVE));
     }
 
+    /** The battle's PC loads the save it just made for a watcher, as the watcher loads it (SOS-109). */
+    public static void loadSavedBattle(Object exiter, byte[] battle) {
+        GameResync.loadLocal(file(VIEW_SAVE), exiter, battle);
+    }
+
+    /** A watcher loads the battle's save, written over this PC's earlier one (SOS-109). */
+    public static void loadViewBattle(byte[] save, byte[] battle) {
+        Path file = file(VIEW_SAVE);
+        try {
+            Files.write(file, save);
+        } catch (IOException e) {
+            throw new IllegalStateException("SOSDET: the view save " + file + " can't be written", e);
+        }
+        GameResync.loadLocal(file, null, battle);
+    }
+
     /** Saves this PC's own game, between steps, and loads it back; the load runs between frames. */
     public static void reloadOwn() {
         Path file = file(RELOAD_SAVE);

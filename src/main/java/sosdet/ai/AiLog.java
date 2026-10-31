@@ -83,10 +83,14 @@ public final class AiLog {
     private long repeatsDropped;
     /** This PC's player only watches: its orders and commands are dropped, and how many were (SOS-15). */
     private volatile boolean watchOnly;
+    /** This watching PC commands soldiers in the city it watches: an assault's attacker (SOS-92). Never read in the step. */
+    private volatile boolean commanding;
     private long watchedDropped;
     /** Who commands each division, as the log last set it (SOS-15). */
     private final Commanders commanders = new Commanders();
     private static final int NOT_APPLYING = Integer.MIN_VALUE;
+    /** The answer to a world question, the one order a watching PC gives: the question holds its view open until it's answered. */
+    public static final int WORLD_ANSWER = 7951;
     private long appliedOrders;
     private final long[] appliedByKind = new long[AiEntry.KINDS];
     private final Recent recentAi = new Recent();
@@ -176,7 +180,8 @@ public final class AiLog {
      * to the host through {@link #ordersOut}. Either way it is applied at the step the host stamps.
      */
     public void captureOrder(int kind, int div, byte[] payload) {
-        if (watchOnly) {
+        boolean worldAnswer = kind == AiEntry.COMMAND && CmdReader.idOf(payload) == WORLD_ANSWER;
+        if (watchOnly && !worldAnswer && !(commanding && kind < AiEntry.SPEED)) {
             watchedDropped++;
             return;
         }
@@ -228,6 +233,14 @@ public final class AiLog {
             throw new IllegalStateException("SOSDET: only the host removes a human (mode " + mode + ")");
         }
         captured.add(new AiEntry(-1, -1, AiEntry.REMOVE, -1, 0, payload.clone()));
+    }
+
+    /** Host: the running assault's end ({@link AiEntry#ASSAULT_END}), applied at the step it stamps on every PC. */
+    public void captureAssaultEnd(byte[] payload) {
+        if (mode != AiMode.HOST) {
+            throw new IllegalStateException("SOSDET: only the host ends an assault (mode " + mode + ")");
+        }
+        captured.add(new AiEntry(-1, -1, AiEntry.ASSAULT_END, -1, 0, payload.clone()));
     }
 
     /**
@@ -284,6 +297,14 @@ public final class AiLog {
                     + " to " + MAX_DELAY_STEPS);
         }
         delay = steps;
+    }
+
+    /**
+     * Host, between steps: the world is at {@code step} for the other PCs though this one is behind it, watching a local
+     * battle: they may run on, and whatever this PC logs is stamped past the horizon as ever (SOS-109).
+     */
+    public void leadTo(long step) {
+        horizon = Math.max(horizon, step + delay);
     }
 
     /** The host's horizon as this PC knows it: the last step every entry is in for (SOS-90). */
@@ -381,6 +402,9 @@ public final class AiLog {
                 commanders.skip(); // its source doesn't command that division, on every PC alike
                 skipped = true;
             } else {
+                if (due.div >= 0) {
+                    commanders.claim(due.pc, due.div);
+                }
                 applyingPc = due.pc;
                 try {
                     applier.apply(due);
@@ -396,7 +420,8 @@ public final class AiLog {
             applied++;
             appliedByKind[due.kind]++;
             if (due.pc != AiEntry.AI && !skipped && due.kind != AiEntry.COMMANDERS && due.kind != AiEntry.HOLD
-                    && due.kind != AiEntry.REMOVE && due.kind != AiEntry.VIEW) { // the mod's or the engine's, no order
+                    && due.kind != AiEntry.REMOVE && due.kind != AiEntry.VIEW
+                    && due.kind != AiEntry.ASSAULT_END) { // the mod's or the engine's, no order
                 appliedOrders++;
             }
             if (mode == AiMode.PEER) {
@@ -645,6 +670,18 @@ public final class AiLog {
     /** This PC's player only watches (true) or acts again (false); any time, outside the step. */
     public void watchOnly(boolean on) {
         watchOnly = on;
+        if (!on) {
+            commanding = false;
+        }
+    }
+
+    /**
+     * In the step, on every PC alike: the table of an assault (SOS-92), or null and null at its end. {@code here}: this
+     * PC's player is the one who watches and commands.
+     */
+    public void assaultCommanders(int[] byDivision, int[] artilleryByArmy, boolean here) {
+        commanders.set(byDivision, artilleryByArmy);
+        commanding = here;
     }
 
     /** Orders and commands this PC's player gave while only watching, all dropped. */

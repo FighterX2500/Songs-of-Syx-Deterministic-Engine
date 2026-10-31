@@ -40,7 +40,7 @@ public final class GameHumans extends Savable {
     public static final int SPARES = 15;
     static final String KEY = "SOSDET_HUMANS";
     /** 2: each slot's retired flag (SOS-66). A version 1 section is read too: none of its humans is retired. */
-    private static final int VERSION = 2;
+    private static final int VERSION = 3;
     private static final String GAME_VERSION = " (SOSDET supports Songs of Syx V71, build 71.44)";
 
     private static final Field SELF = field(FACTIONS.class, "self");
@@ -69,6 +69,8 @@ public final class GameHumans extends Savable {
      * it owns nothing and nothing runs for it. Saved with the slots; a slot is never used again once retired.
      */
     private final boolean[] retired = new boolean[FACTIONS.MAX()];
+    /** Slots whose human left by elimination, a subset of {@link #retired} (SOS-111). */
+    private final boolean[] eliminated = new boolean[FACTIONS.MAX()];
     private final GameDeals deals = new GameDeals();
     private final GameTariffs tariffs = new GameTariffs();
     private final GameSieges sieges = new GameSieges();
@@ -153,6 +155,17 @@ public final class GameHumans extends Savable {
     }
 
     /** True for the slot of a human that was removed ({@link #retire}); false for any other slot. */
+    /** Whether the human in {@code slot} left by elimination: its player may come back to watch (SOS-111). */
+    /** A whole game loaded from before the human in {@code slot} left: its world is gone already, only the flags aren't. */
+    public void retiredAgain(int slot, boolean eliminatedToo) {
+        retired[slot] = true;
+        eliminated[slot] |= eliminatedToo;
+    }
+
+    public boolean eliminated(int slot) {
+        return eliminated[slot];
+    }
+
     public boolean retired(int slot) {
         return retired[slot];
     }
@@ -163,10 +176,11 @@ public final class GameHumans extends Savable {
      */
     public void retire(int slot) {
         human(slot);
-        if (slot == 0) {
-            throw new IllegalArgumentException("SOSDET: slot 0 is the host's human, which is never removed");
+        if (slot == 0 && !sosdet.Hooks.spectator(0)) {
+            throw new IllegalArgumentException("SOSDET: slot 0 is the host's human, removed only by elimination");
         }
         retired[slot] = true;
+        eliminated[slot] = sosdet.Hooks.spectator(slot);
         deals.book().dropHuman(slot); // their open deals close as dropped (SOS-72)
         tariffs.book().dropHuman(slot); // and their tariffs go, both ways (SOS-77)
         sieges.book().dropHuman(slot); // and the siege of their capital (SOS-92)
@@ -272,6 +286,7 @@ public final class GameHumans extends Savable {
             file.i(slot);
             file.l(ids[slot]);
             file.bool(retired[slot]);
+            file.bool(eliminated[slot]);
         }
     }
 
@@ -293,6 +308,7 @@ public final class GameHumans extends Savable {
             }
             ids[slot] = file.l();
             retired[slot] = version >= 2 && file.bool();
+            eliminated[slot] = version >= 3 && file.bool();
             last = slot;
         }
     }

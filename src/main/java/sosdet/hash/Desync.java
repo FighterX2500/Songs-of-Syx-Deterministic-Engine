@@ -18,13 +18,16 @@ public final class Desync {
     private final long[] remote;
     private final int[] divisions;
 
-    Desync(long step, int pc, long noticedAt, long[] local, long[] remote, int[] divisions) {
+    private final long[] clockParts;
+
+    Desync(long step, int pc, long noticedAt, long[] local, long[] remote, int[] divisions, long[] clockParts) {
         this.step = step;
         this.pc = pc;
         this.noticedAt = noticedAt;
         this.local = local.clone();
         this.remote = remote.clone();
         this.divisions = divisions.clone();
+        this.clockParts = clockParts.clone();
     }
 
     /** The names of the sections that differ, in {@link HashLog#SECTION_NAMES} order. */
@@ -56,6 +59,8 @@ public final class Desync {
             b.append(String.format(Locale.ROOT, "  %-12s %016x %016x%s%n", HashLog.SECTION_NAMES[i], local[i], remote[i],
                     local[i] != remote[i] ? "  DIFFERS" : ""));
         }
+        b.append(String.format(Locale.ROOT, "\nClock on this PC: %d world draws, %d AI log entries applied, commanders %016x%n",
+                clockParts[0], clockParts[1], clockParts[2]));
         b.append("\nDivisions whose soldiers differ: ").append(divisions.length == 0 ? "none" : "").append('\n');
         for (int d : divisions) {
             b.append("  ").append(d).append(": ").append(names.divisionName(d)).append('\n');

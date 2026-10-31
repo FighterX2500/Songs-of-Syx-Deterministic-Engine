@@ -6,6 +6,8 @@ import java.util.List;
 
 import game.faction.FACTIONS;
 import game.faction.Faction;
+import game.faction.diplomacy.DIP;
+import game.faction.npc.FactionNPC;
 import game.faction.player.Player;
 import game.time.TIME;
 import init.race.RACES;
@@ -19,9 +21,12 @@ import sosdet.game.GameHumans;
 import sosdet.game.siege.AssaultTerms;
 import sosdet.game.siege.SiegeBook;
 import sosdet.report.Field;
+import snake2d.util.datatypes.COORDINATE;
 import world.WORLD;
+import world.army.AD;
 import world.battle.WBattles;
 import world.battle.spec.WBattleSiege;
+import world.entity.army.WArmy;
 import world.map.regions.Region;
 
 /**
@@ -38,11 +43,33 @@ public final class Sieges {
     static final int WAIT_PASSED = 7971;
     static final int ASSAULT_END = 7972;
     static final int ASSAULT_TERMS = 7973;
+    static final int ARMY_TELEPORT = 7974;
+    static final int NPC_BESIEGE = 7975;
+    static final int ARMY_FILL = 7976;
 
     static final List<Command> ALL = List.of(new Command(SALLY, "siegeSally", r -> applySally()),
             new Command(WAIT_PASSED, "siegeWaitPassed", r -> applyWaitPassed(r.i())),
             new Command(ASSAULT_END, "assaultEndForTest", r -> Hooks.assaultForce(r.i())),
-            new Command(ASSAULT_TERMS, "assaultTerms", Sieges::applyTermsCommand));
+            new Command(ASSAULT_TERMS, "assaultTerms", Sieges::applyTermsCommand),
+            new Command(ARMY_FILL, "armyFillForTest", r -> {
+                WArmy a = Args.army(r);
+                if (a == null) {
+                    return false;
+                }
+                AD.supplies().fillAll(a);
+                return true;
+            }),
+            new Command(ARMY_TELEPORT, "armyTeleportForTest", r -> {
+                WArmy a = Args.army(r);
+                int tx = r.i();
+                int ty = r.i();
+                if (a == null) {
+                    return false;
+                }
+                a.teleport(tx, ty);
+                return true;
+            }),
+            new Command(NPC_BESIEGE, "npcBesiegeForTest", r -> applyNpcBesiege(r.i())));
 
     /** Patch 15's {@code WBattles.sosdetSally}: the engine compiles against the shipped game, without it. */
     private static final Method SALLY_OUT = sallyOutMethod();
@@ -108,8 +135,35 @@ public final class Sieges {
     public static void storm(int attacker, WBattleSiege siege) {
         Object[] built = sosdet.game.GameAssault.build(siege);
         int[] armies = (int[]) built[1];
+        int[] owners = (int[]) built[2];
+        int[] attackers = new int[owners.length + 1];
+        attackers[0] = attacker;
+        int n = 1;
+        for (int owner : owners) {
+            boolean known = false;
+            for (int i = 0; i < n; i++) {
+                known |= attackers[i] == owner;
+            }
+            if (!known) {
+                attackers[n++] = owner;
+            }
+        }
+        attackers = java.util.Arrays.copyOf(attackers, n);
+        int[] men = new int[n];
+        for (int i = 0; i < n; i++) {
+            men[i] = sosdet.game.GameAssault.menOf(attackers[i], armies);
+        }
         Hooks.assaultBegin(attacker, siege.besiged.faction().index(), built[0], armies,
-                sosdet.game.GameAssault.men(armies));
+                sosdet.game.GameAssault.men(armies), owners, attackers, men);
+    }
+
+    /** The furthest an ally's army stands from the capital's centre and still joins an assault, in tiles (owner, 2026-10-31). */
+    static final int ALLY_TILES = 3;
+
+    /** Whether {@code a}, on the side of the army {@code stormer} that storms {@code reg}, joins the assault (SOS-92 E). */
+    public static boolean joinsAssault(WArmy a, WArmy stormer, Region reg) {
+        return a.faction() == stormer.faction()
+                || Math.abs(a.ctx() - reg.cx()) <= ALLY_TILES && Math.abs(a.cty() - reg.cy()) <= ALLY_TILES;
     }
 
     // ---------------------------------------------------------------- after a taken throne (SOS-92 step D)
@@ -117,7 +171,7 @@ public final class Sieges {
     /** Why this PC's player can't choose these terms now, as a sentence; null when they can. */
     public static String termsRefusal(int kind, int percent, int[] people) {
         sosdet.Assault a = Engine.assaultTaken();
-        if (a == null || a.attacker != FACTIONS.player().index()) {
+        if (a == null || a.chooser != FACTIONS.player().index()) {
             return "There is no throne of yours to decide on.";
         }
         return AssaultTerms.refusal(kind, percent, people);
@@ -162,9 +216,14 @@ public final class Sieges {
         return AssaultTerms.limited(people, peopleInCity(slot));
     }
 
+    /** In the world part, every PC: the people Eliminate removes from the city of the human in {@code slot}. */
+    public static int[] peopleEliminated(int slot, int[] people) {
+        return AssaultTerms.eliminated(people, peopleInCity(slot));
+    }
+
     /** In the world part, every PC: the terms reach both players' cities and the world. Returns the money taken. */
-    public static int applyTerms(int defender, int attacker, int kind, int percent, int[] people) {
-        return HumanDeals.assaultTerms(defender, attacker, kind, percent, people);
+    public static int applyTerms(int defender, int chooser, int[] attackers, int[] men, int kind, int percent, int[] people) {
+        return HumanDeals.assaultTerms(defender, chooser, attackers, men, kind, percent, people);
     }
 
     /**
@@ -202,6 +261,64 @@ public final class Sieges {
             throw new IllegalStateException("SOSDET: a siege's wait outside a session's play");
         }
         Commands.capture(new CmdWriter(WAIT_PASSED).i(slot));
+    }
+
+    /** Test tooling, never a player's: the army's supplies are full, at the command's step on every PC alike. */
+    public static void fillForTest(WArmy a) {
+        if (!Commands.capturing()) {
+            throw new IllegalStateException("SOSDET: an army's supplies outside a session's play");
+        }
+        Commands.capture(Args.army(new CmdWriter(ARMY_FILL), a));
+    }
+
+    /** Test tooling, never a player's: the army stands at this tile, at the command's step on every PC alike. */
+    public static void teleportForTest(WArmy a, int tx, int ty) {
+        if (!Commands.capturing()) {
+            throw new IllegalStateException("SOSDET: an army's teleport outside a session's play");
+        }
+        Commands.capture(Args.army(new CmdWriter(ARMY_TELEPORT), a).i(tx).i(ty));
+    }
+
+    /**
+     * Test tooling, never a player's: the strongest NPC army goes to war with the human in {@code slot} and marches on
+     * their capital from next to it, at the command's step on every PC alike (SOS-92 F).
+     */
+    public static void npcBesiegeForTest(int slot) {
+        if (!Commands.capturing()) {
+            throw new IllegalStateException("SOSDET: an NPC's siege outside a session's play");
+        }
+        Commands.capture(new CmdWriter(NPC_BESIEGE).i(slot));
+    }
+
+    private static boolean applyNpcBesiege(int slot) {
+        Faction human = FACTIONS.getByIndex(slot);
+        Region capital = human.capitolRegion();
+        WArmy strongest = null;
+        for (int i = 0; i < WORLD.ENTITIES().armies.max(); i++) {
+            WArmy e = WORLD.ENTITIES().armies.tryGet(i);
+            if (e != null && e.faction() instanceof FactionNPC && e.faction().capitolRegion() != null
+                    && AD.men(null).get(e) > 0
+                    && (strongest == null || AD.power().get(e) > AD.power().get(strongest))) {
+                strongest = e;
+            }
+        }
+        if (capital == null || strongest == null) {
+            return false;
+        }
+        if (!DIP.WAR().is(strongest.faction(), human)) {
+            int before = Hooks.currentHumanSwap(human); // DIP.set reads the player for its war timer
+            try {
+                DIP.WAR().set(strongest.faction(), human);
+            } finally {
+                Hooks.currentHumanSwap(before);
+            }
+        }
+        COORDINATE tile = strongest.besigeTile(capital); // a capital's near tiles may be rock or sea, where an army is lost
+        if (tile != null) {
+            strongest.teleport(tile.x(), tile.y());
+        }
+        strongest.besiege(capital);
+        return true;
     }
 
     private static boolean applyWaitPassed(int slot) {

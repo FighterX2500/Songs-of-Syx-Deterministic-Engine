@@ -11,12 +11,14 @@ import settlement.entity.ENTITY;
 import settlement.entity.humanoid.Humanoid;
 import settlement.main.SETT;
 import settlement.room.military.artillery.ArtilleryInstance;
+import settlement.room.main.throne.THRONE;
 import settlement.room.military.artillery.ROOM_ARTILLERY;
 import sosdet.Assault;
 import sosdet.Hooks;
 import sosdet.report.Field;
 import world.WORLD;
 import world.army.AD;
+import world.army.ADDiv;
 import world.battle.spec.WBattleSiege;
 import world.entity.army.WArmy;
 
@@ -47,6 +49,18 @@ public final class GameAssault {
         }
     }
 
+    /** The men of {@code slot}'s armies among {@code armies}. */
+    public static int menOf(int slot, int[] armies) {
+        int men = 0;
+        for (int i : armies) {
+            WArmy a = WORLD.ENTITIES().armies.get(i);
+            if (a != null && a.added() && a.faction().index() == slot) {
+                men += AD.men(null).get(a);
+            }
+        }
+        return men;
+    }
+
     /** The men in the world's armies at {@code armies}. */
     public static int men(int[] armies) {
         int men = 0;
@@ -65,10 +79,11 @@ public final class GameAssault {
     }
 
     /**
-     * Rig tests only, in the city tail of the defender's city on every PC that runs it: the assault's invasion stops
-     * now, and its invaders and their artillery leave the city, as {@code Invador.update} clears them after an invasion.
+     * In the city tail of the defender's city, on every PC that runs it, for a player who left or a rig test: the assault's
+     * invasion stops now, and its invaders and their artillery leave the city, as {@code Invador.update} clears them after
+     * an invasion.
      */
-    public static void endForTest(int ref) {
+    public static void stop(int ref) {
         SETT.INVADOR().cancel(ref);
         for (ENTITY e : SETT.ENTITIES().getAllEnts()) {
             if (e instanceof Humanoid && ((Humanoid) e).indu().hType() == HTYPES.ENEMY()) {
@@ -86,6 +101,42 @@ public final class GameAssault {
         }
     }
 
+    /** The invaders alive in the city now: the same on every PC that runs it. */
+    public static int invaders() {
+        return GAME.ARMIES().enemy().men();
+    }
+
+    /** Test tooling: the fight as it stands here, in words. */
+    public static String fight() {
+        int nearest = Integer.MAX_VALUE;
+        for (ENTITY e : SETT.ENTITIES().getAllEnts()) {
+            if (e instanceof Humanoid && !e.isRemoved() && ((Humanoid) e).indu().hType() == HTYPES.ENEMY()) {
+                nearest = Math.min(nearest, Math.abs(e.tc().x() - THRONE.coo().x()) + Math.abs(e.tc().y() - THRONE.coo().y()));
+            }
+        }
+        return "invaders " + GAME.ARMIES().enemy().men() + ", nearest " + nearest + " tiles from the throne at " + THRONE.coo().x() + " "
+                + THRONE.coo().y() + "; defenders " + GAME.ARMIES().player().men();
+    }
+
+    private static void takeLosses(int[] armies, int men, int survivors) {
+        if (survivors < 0 || survivors >= men) {
+            return;
+        }
+        for (int i : armies) {
+            WArmy a = WORLD.ENTITIES().armies.get(i);
+            if (a == null || !a.added()) {
+                continue;
+            }
+            for (int d = a.divs().size() - 1; d >= 0; d--) {
+                ADDiv div = a.divs().get(d);
+                div.resolve((int) ((long) div.men() * survivors / men));
+            }
+            if (AD.men(null).get(a) == 0) {
+                a.disband();
+            }
+        }
+    }
+
     /** True while an invasion runs in this PC's city. */
     public static boolean invading() {
         return SETT.INVADOR().invading();
@@ -95,9 +146,13 @@ public final class GameAssault {
      * In the world part, every PC, once every view of the assault has thawed: the outcome reaches the world (mod plan
      * step B; the outcome windows are steps C and D). The defender held: the besieging armies are lost, as in vanilla,
      * and the siege ends. The invaders withdrew: the armies stay at the siege, and its wait starts over. The throne
-     * taken: the siege goes on until step D's choices exist.
+     * taken: the siege goes on until step D's choices exist. In both those cases the armies keep only the survivors of
+     * the {@code men} they sent, the same share of each division.
      */
-    public static void resolve(int defender, int outcome, int[] armies) {
+    public static void resolve(int defender, int outcome, int[] armies, int men, int survivors) {
+        if (outcome != Assault.HELD) {
+            takeLosses(armies, men, survivors);
+        }
         if (outcome == Assault.HELD) {
             for (int i : armies) {
                 WArmy a = WORLD.ENTITIES().armies.get(i);
