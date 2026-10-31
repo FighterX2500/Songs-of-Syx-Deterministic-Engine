@@ -42,6 +42,21 @@ class LocalTapeTest {
     }
 
     @Test
+    void aWatchThatEndsStillSendsWhatWasWritten() {
+        LocalTape fighter = new LocalTape(4);
+        LocalTape watcher = new LocalTape(4);
+        fighter.watch(1);
+        fighter.record(100, 1);
+        fighter.unwatch(1); // the thaw, within the frame: the watcher still needs step 100 to reach it
+        fighter.record(101, 1);
+        watcher.in(fighter.out(1), PC);
+        assertTrue(watcher.has(100));
+        assertFalse(watcher.has(101), "nothing is written after the watch ended");
+        fighter.record(102, 1);
+        assertEquals(0, fighter.out(1).length, "the tape for that watcher is gone once taken");
+    }
+
+    @Test
     void aStepMissingFromTheTapeIsAnError() {
         LocalTape fighter = new LocalTape(4);
         LocalTape watcher = new LocalTape(4);

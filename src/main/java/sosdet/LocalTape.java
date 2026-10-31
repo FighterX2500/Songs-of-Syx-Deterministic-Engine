@@ -40,6 +40,8 @@ final class LocalTape {
     private final ArrayList<AiEntry> queued = new ArrayList<>();
     /** The fighter: what each viewer slot hasn't taken yet; null for a slot that doesn't watch. */
     private final ByteArrayOutputStream[] out;
+    /** Watches that ended: no more steps, but what wasn't sent yet still goes, as the watcher runs behind the battle. */
+    private final boolean[] ending;
     /** The watcher: the steps it hasn't run yet, oldest first. */
     private final ArrayDeque<Step> in = new ArrayDeque<>();
     /** The last step of the tape this PC has. */
@@ -47,6 +49,7 @@ final class LocalTape {
 
     LocalTape(int slots) {
         out = new ByteArrayOutputStream[slots];
+        ending = new boolean[slots];
     }
 
     /** The fighter, between steps: an order for the next step. A slider dragged repeats a command: once is enough. */
@@ -72,18 +75,19 @@ final class LocalTape {
     /** The fighter: the human in {@code viewer} starts watching: the tape goes to it from the next step. */
     void watch(int viewer) {
         out[viewer] = new ByteArrayOutputStream();
+        ending[viewer] = false;
     }
 
-    /** The fighter: no more of the tape for the human in {@code viewer}. */
+    /** The fighter: no more of the tape for the human in {@code viewer}, once {@link #out} has taken what's written. */
     void unwatch(int viewer) {
-        out[viewer] = null;
+        ending[viewer] = true;
     }
 
     /** The fighter, at each step while someone watches: this step, for each viewer. */
     void record(long step, int rounds) {
-        for (ByteArrayOutputStream b : out) {
-            if (b != null) {
-                write(b, step, rounds);
+        for (int viewer = 0; viewer < out.length; viewer++) {
+            if (out[viewer] != null && !ending[viewer]) {
+                write(out[viewer], step, rounds);
             }
         }
     }
@@ -110,6 +114,10 @@ final class LocalTape {
     /** The fighter: the tape for {@code viewer} since the last call, for that viewer's {@link #in}; empty if none. */
     byte[] out(int viewer) {
         ByteArrayOutputStream b = out[viewer];
+        if (ending[viewer]) {
+            out[viewer] = null;
+            ending[viewer] = false;
+        }
         if (b == null || b.size() == 0) {
             return new byte[0];
         }
@@ -185,5 +193,6 @@ final class LocalTape {
         in.clear();
         reached = -1;
         java.util.Arrays.fill(out, null);
+        java.util.Arrays.fill(ending, false);
     }
 }
