@@ -10,9 +10,11 @@ import init.race.RACES;
 import init.type.HTYPES;
 import settlement.stats.Induvidual;
 import settlement.stats.STATS;
+import settlement.stats.colls.StatsHome;
 import snake2d.util.file.FileGetter;
 import snake2d.util.file.FilePutter;
 import util.data.DataO;
+import util.data.INT_O.INT_OE;
 import util.keymap.RMAPS;
 
 /**
@@ -30,6 +32,7 @@ final class GameSoldiers {
     private static final Field DATA_LOADER = field(DataO.class, "loader");
     private static final Field MAP_SAVER = field(RMAPS.class, "saver");
     private static final Field MAP_LOADER = field(RMAPS.class, "loader");
+    private static final Field ADDED = field(Induvidual.class, "added");
     private static final Constructor<?> NEW_DATA_SAVER = constructor(DataO.DataOSaver.class, DataO.class, FilePutter.class);
     private static final Constructor<?> NEW_DATA_LOADER = constructor(DataO.DataOLoader.class, DataO.class, FileGetter.class);
     private static final Constructor<?> NEW_MAP_SAVER = constructor(RMAPS.Saver.class, RMAPS.class, FilePutter.class);
@@ -42,6 +45,9 @@ final class GameSoldiers {
     private final Object[] loaders = new Object[owners.length];
     /** The game's own saver or loader while ours is lent. */
     private final Object[] kept = new Object[owners.length];
+    private final INT_OE<Induvidual> workRoom = stat(STATS.WORK().EMPLOYED.getClass(), STATS.WORK().EMPLOYED, "data");
+    private final INT_OE<Induvidual> homeTileX = stat(StatsHome.StatHome.class, STATS.HOME().GETTER, "xx");
+    private final INT_OE<Induvidual> homeTileY = stat(StatsHome.StatHome.class, STATS.HOME().GETTER, "yy");
 
     /** Makes the savers and loaders of the running game's layout: each loader reads the header its saver writes. */
     GameSoldiers() {
@@ -56,13 +62,35 @@ final class GameSoldiers {
         loaders[2] = make(NEW_MAP_LOADER, owners[2], g);
     }
 
+    /**
+     * The soldier as they leave their city, which is all another PC can read: not in any city's stats, and with no
+     * workplace or home, whose numbers mean something else in that PC's city (SOS-114). Vanilla's stored soldiers aren't
+     * in the stats either. The soldier itself stays as it was.
+     */
     void write(Induvidual i, FilePutter p) {
+        boolean added = i.added();
+        int room = workRoom.get(i);
+        int homeX = homeTileX.get(i);
+        int homeY = homeTileY.get(i);
+        setCity(i, false, 0, 0, 0);
         lend(saverFields, savers);
         try {
             i.save(p);
         } finally {
             giveBack(saverFields);
+            setCity(i, added, room, homeX, homeY);
         }
+    }
+
+    private void setCity(Induvidual i, boolean added, int room, int homeX, int homeY) {
+        try {
+            ADDED.setBoolean(i, added);
+        } catch (IllegalAccessException e) {
+            throw new IllegalStateException("SOSDET: cannot mark a soldier as out of their city" + VERSION, e);
+        }
+        workRoom.set(i, room);
+        homeTileX.set(i, homeX);
+        homeTileY.set(i, homeY);
     }
 
     Induvidual read(FileGetter g) throws IOException {
@@ -93,6 +121,16 @@ final class GameSoldiers {
             }
         } catch (IllegalAccessException e) {
             throw new IllegalStateException("SOSDET: cannot give back a soldier's saver or loader" + VERSION, e);
+        }
+    }
+
+    /** A stat's private {@code INT_OE<Induvidual>} data in {@code holder}; the game declares the fields with that type. */
+    @SuppressWarnings("unchecked")
+    private static INT_OE<Induvidual> stat(Class<?> owner, Object holder, String name) {
+        try {
+            return (INT_OE<Induvidual>) field(owner, name).get(holder);
+        } catch (IllegalAccessException e) {
+            throw new IllegalStateException("SOSDET: cannot read " + owner.getName() + "." + name + VERSION, e);
         }
     }
 
