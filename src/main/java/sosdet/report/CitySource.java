@@ -20,6 +20,10 @@ public interface CitySource {
         return false;
     }
 
+    /** The human in {@code slot} is retired, or eliminated, again in a game loaded from before that. */
+    default void retiredAgain(int slot, boolean eliminated) {
+    }
+
     /** Writes every field's values, in the layout's slots. */
     void fill(double[] values);
 

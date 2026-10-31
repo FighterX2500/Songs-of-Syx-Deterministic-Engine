@@ -156,6 +156,12 @@ public final class GameHumans extends Savable {
 
     /** True for the slot of a human that was removed ({@link #retire}); false for any other slot. */
     /** Whether the human in {@code slot} left by elimination: its player may come back to watch (SOS-111). */
+    /** A whole game loaded from before the human in {@code slot} left: its world is gone already, only the flags aren't. */
+    public void retiredAgain(int slot, boolean eliminatedToo) {
+        retired[slot] = true;
+        eliminated[slot] |= eliminatedToo;
+    }
+
     public boolean eliminated(int slot) {
         return eliminated[slot];
     }

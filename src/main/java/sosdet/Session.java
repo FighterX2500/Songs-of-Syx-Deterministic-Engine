@@ -502,6 +502,7 @@ final class Session {
             }
             sosdet.game.GameWorldLoad.save(localWorld);
             localMoves = sosdet.game.GameWorldLoad.unsaved();
+            rememberRetired();
             localBackLoading = true;
             sosdet.game.GameView.loadBeforeBattle();
         }
@@ -516,6 +517,7 @@ final class Session {
     void localBackWorld() {
         localBackLoading = false;
         loadWorld(localWorld, localMoves);
+        restoreRetired();
         localWorld = null;
         localMoves = null;
         part = StepParts.CITY;
@@ -723,6 +725,24 @@ final class Session {
         return v != null && v.state == View.RUNNING && !v.back ? v : null;
     }
 
+    /** Who was retired before a load of this PC's own older game, which the world load after it doesn't correct. */
+    private boolean[] retiredBefore;
+
+    private void rememberRetired() {
+        humans();
+        retiredBefore = retired.clone();
+    }
+
+    /** After that load: the humans retired since the older game was saved stay retired, or the world waits for them. */
+    private void restoreRetired() {
+        for (int slot = 0; slot < SLOTS; slot++) {
+            if (retiredBefore[slot]) {
+                city().retiredAgain(slot, spectators[slot]);
+            }
+        }
+        humans = null;
+    }
+
     /** This PC as a viewer: the world saved at the step before the thaw, loaded into its own game once that is back. */
     java.nio.file.Path viewWorld;
     /** The world's move remainders, which no save holds: put back after a view load or the load back. */
@@ -783,6 +803,7 @@ final class Session {
         }
         sosdet.game.GameWorldLoad.save(viewWorld);
         viewMoves = sosdet.game.GameWorldLoad.unsaved();
+        rememberRetired();
         viewBackLoading = true;
         sosdet.game.GameView.loadOwn();
     }
@@ -796,6 +817,7 @@ final class Session {
         viewBackLoading = false;
         v.back = true; // FACTIONS.player() is this PC's own human again: the world load keeps its city's part
         loadWorld(viewWorld, viewMoves);
+        restoreRetired();
         viewWorld = null;
         viewMoves = null;
         part = StepParts.CITY; // the city tail's work, before the thaw step's report is taken

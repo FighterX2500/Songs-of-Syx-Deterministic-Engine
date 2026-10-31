@@ -71,6 +71,16 @@ public final class Engine {
         return session != null;
     }
 
+    /** Debugging: what may hold the next step now, for a run that stopped. */
+    public static String holdWhy() {
+        Session s = required();
+        long next = s.clock.step() + 1;
+        return "step " + s.clock.step() + ": " + s.clock.limits() + ", log may run " + s.ai().mayRun(next) + ", world may run "
+                + s.worldMayRun(next) + ", watch may run " + s.watchMayRun(next) + ", view holds " + s.viewHolds(next)
+                + ", battle awaited " + (s.battle != null && s.battle.awaiting) + ", leaving " + s.battleLeaving
+                + ", battle hold " + s.battleHold + " go " + s.battleGo;
+    }
+
     /** The last step completed (0 before the first). */
     public static long step() {
         return required().clock.step();
