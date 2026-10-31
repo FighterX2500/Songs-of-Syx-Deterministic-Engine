@@ -332,7 +332,11 @@ public final class Hooks {
             boolean battleRuns = s.battle != null && !s.battle.awaiting;
             long draws = s.ownCity && !battleRuns ? s.streams.worldDraws() : s.streams.drawsSinceLoad();
             long clock = HashLog.mix(HashLog.mix(HashLog.mix(HashLog.start(), step), draws), s.ai().applied());
+            s.clockParts[0] = draws;
+            s.clockParts[1] = s.ai().applied();
+            s.clockParts[2] = 0;
             if (s.ai().commanders().set()) {
+                s.clockParts[2] = s.ai().commanders().hash();
                 clock = HashLog.mix(clock, s.ai().commanders().hash()); // left out until a table is set (SOS-15)
             }
             if (s.ownCity && s.humans().length > 1) {
@@ -348,7 +352,7 @@ public final class Hooks {
                 }
             }
             s.part = -1; // the same part on every PC, whether or not this one ran city paths or a city tail (SOS-46)
-            s.hashes.take(step, clock, s.reportsHash(), s.source());
+            s.hashes.take(step, clock, s.clockParts, s.reportsHash(), s.source());
             s.viewHashes(step);
         }
         s.viewsEnd(step); // a thaw due next step is put off while a battle runs or a world prompt is open (SOS-82)

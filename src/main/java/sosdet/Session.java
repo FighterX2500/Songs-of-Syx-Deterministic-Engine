@@ -101,6 +101,8 @@ final class Session {
     /** Host: the game speed last seen, so a change goes into the log once (B16). */
     double seenSpeed;
     /** Host: the pacing by the slowest PC and the speed governor (SOS-42). */
+    /** The clock section's counters at the last hash, for a desync report. */
+    final long[] clockParts = new long[HashLog.CLOCK_PARTS];
     final Pacer pacer = new Pacer(pc -> hashes.reached(pc), pc -> hashes.capacityOf(pc));
     /** Every PC's game speed follows the agreed one, and the host's governor runs (SOS-42). */
     boolean followSpeed;
@@ -1529,7 +1531,7 @@ final class Session {
                 continue;
             }
             long clock = HashLog.mix(HashLog.mix(HashLog.start(), step), cityDraws() - viewDrawsBase[v.viewer]);
-            h.take(step, clock, 0, source());
+            h.take(step, clock, clockParts, 0, source());
         }
     }
 
