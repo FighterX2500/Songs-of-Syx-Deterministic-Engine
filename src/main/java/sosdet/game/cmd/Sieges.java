@@ -6,6 +6,8 @@ import java.util.List;
 
 import game.faction.FACTIONS;
 import game.faction.Faction;
+import game.faction.diplomacy.DIP;
+import game.faction.npc.FactionNPC;
 import game.faction.player.Player;
 import game.time.TIME;
 import init.race.RACES;
@@ -20,6 +22,7 @@ import sosdet.game.siege.AssaultTerms;
 import sosdet.game.siege.SiegeBook;
 import sosdet.report.Field;
 import world.WORLD;
+import world.army.AD;
 import world.battle.WBattles;
 import world.battle.spec.WBattleSiege;
 import world.entity.army.WArmy;
@@ -40,6 +43,7 @@ public final class Sieges {
     static final int ASSAULT_END = 7972;
     static final int ASSAULT_TERMS = 7973;
     static final int ARMY_TELEPORT = 7974;
+    static final int NPC_BESIEGE = 7975;
 
     static final List<Command> ALL = List.of(new Command(SALLY, "siegeSally", r -> applySally()),
             new Command(WAIT_PASSED, "siegeWaitPassed", r -> applyWaitPassed(r.i())),
@@ -54,7 +58,8 @@ public final class Sieges {
                 }
                 a.teleport(tx, ty);
                 return true;
-            }));
+            }),
+            new Command(NPC_BESIEGE, "npcBesiegeForTest", r -> applyNpcBesiege(r.i())));
 
     /** Patch 15's {@code WBattles.sosdetSally}: the engine compiles against the shipped game, without it. */
     private static final Method SALLY_OUT = sallyOutMethod();
@@ -254,6 +259,45 @@ public final class Sieges {
             throw new IllegalStateException("SOSDET: an army's teleport outside a session's play");
         }
         Commands.capture(Args.army(new CmdWriter(ARMY_TELEPORT), a).i(tx).i(ty));
+    }
+
+    /**
+     * Test tooling, never a player's: the strongest NPC army goes to war with the human in {@code slot} and marches on
+     * their capital from next to it, at the command's step on every PC alike (SOS-92 F).
+     */
+    public static void npcBesiegeForTest(int slot) {
+        if (!Commands.capturing()) {
+            throw new IllegalStateException("SOSDET: an NPC's siege outside a session's play");
+        }
+        Commands.capture(new CmdWriter(NPC_BESIEGE).i(slot));
+    }
+
+    private static boolean applyNpcBesiege(int slot) {
+        Faction human = FACTIONS.getByIndex(slot);
+        Region capital = human.capitolRegion();
+        WArmy strongest = null;
+        for (int i = 0; i < WORLD.ENTITIES().armies.max(); i++) {
+            WArmy e = WORLD.ENTITIES().armies.tryGet(i);
+            if (e != null && e.faction() instanceof FactionNPC && e.faction().capitolRegion() != null
+                    && AD.men(null).get(e) > 0
+                    && (strongest == null || AD.power().get(e) > AD.power().get(strongest))) {
+                strongest = e;
+            }
+        }
+        if (capital == null || strongest == null) {
+            return false;
+        }
+        if (!DIP.WAR().is(strongest.faction(), human)) {
+            int before = Hooks.currentHumanSwap(human); // DIP.set reads the player for its war timer
+            try {
+                DIP.WAR().set(strongest.faction(), human);
+            } finally {
+                Hooks.currentHumanSwap(before);
+            }
+        }
+        strongest.teleport(capital.cx() + 4, capital.cy() + 4);
+        strongest.besiege(capital);
+        return true;
     }
 
     private static boolean applyWaitPassed(int slot) {

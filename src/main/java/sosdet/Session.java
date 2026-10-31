@@ -1797,6 +1797,10 @@ final class Session {
             ownCityBack(); // a local battle's PC too: its city as at the freeze (SOS-93)
             return;
         }
+        if (resync != null && battle != null && !battle.awaiting) {
+            battleResynced();
+            return;
+        }
         playerUpdateAcc = 0;
         viewHuman = -1; // a read as another human never outlives a load (SOS-46)
         for (Reports r : reports) {
@@ -1854,6 +1858,25 @@ final class Session {
         hashes = new HashLog();
         hashes.every(interval);
         hashes.worldOnly(ownCity);
+    }
+
+    /**
+     * A running battle's resync (plan 0006 M3): only the battle reloads. The world stood still and every PC's city waits
+     * in its own save, so the reports, the feeds and the queued transactions all stay.
+     */
+    private void battleResynced() {
+        Resync r = resync;
+        resync = null;
+        playerUpdateAcc = 0;
+        viewHuman = -1;
+        humans = null;
+        currentHuman = living;
+        battleConclude = null;
+        clock.resetTo(r.step);
+        clock.agreedSpeed(r.speed);
+        resyncDraws = r.draws;
+        hashes.rewind(r.step, r.hashEpoch);
+        ai().resyncIn(r.ai);
     }
 
     /**

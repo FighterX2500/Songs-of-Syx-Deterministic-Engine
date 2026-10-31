@@ -956,13 +956,14 @@ public final class Rig implements SCRIPT {
                 if (wresyncSaver) {
                     state = Engine.battle() != null ? Engine.battleResyncSave(wresyncSave) : Engine.worldResyncSave(wresyncSave);
                     Files.write(wresyncState, state);
-                    Files.write(done, new byte[0]);
+                    Files.write(done, Long.toString(Engine.step()).getBytes(StandardCharsets.US_ASCII));
                     event("worldresyncsaved", String.format(Locale.ROOT, "\"step\":%d,\"saveMs\":%.0f,\"saveBytes\":%d",
                             Engine.step(), (System.nanoTime() - t0) / 1e6, wresyncSave.toFile().length()));
                     t0 = System.nanoTime();
                 } else {
-                    if (!Files.exists(done)) {
-                        return; // copy 1 hasn't saved yet: stay held
+                    if (!Files.exists(done)
+                            || !new String(Files.readAllBytes(done), StandardCharsets.US_ASCII).equals(Long.toString(Engine.step()))) {
+                        return; // copy 1 hasn't saved this one yet: stay held
                     }
                     state = Files.readAllBytes(wresyncState);
                 }
@@ -1047,6 +1048,7 @@ public final class Rig implements SCRIPT {
         /** The first frame of the game loaded at a map battle's end (SOS-32): the run goes on at the same step. */
         private void battleReturned() {
             GAME.SPEED.speedSet(speed);
+            runOn(); // a battle's resync loads here too, and holds at its step
             event("battlereturned", "\"step\":" + Engine.step() + ",\"messages\":" + Engine.localMessagesBack());
         }
 

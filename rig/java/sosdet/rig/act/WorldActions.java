@@ -837,6 +837,11 @@ public final class WorldActions {
             });
             return true;
         }
+        case "npcbesiege": { // npcbesiege <slot>: the strongest NPC army goes to war with the human in <slot> and marches on its capital (SOS-92 F)
+            int slot = Integer.parseInt(a[1]);
+            Rig.later(() -> sosdet.game.cmd.Sieges.npcBesiegeForTest(slot));
+            return true;
+        }
         case "wbesiegehuman": { // wbesiegehuman <army> <slot> [capitol]: wbesiege on the human in <slot>'s region nearest the
             // army, one that isn't its capitol (or, with capitol, its capitol: refused, SOS-74)
             int army = Integer.parseInt(a[1]);

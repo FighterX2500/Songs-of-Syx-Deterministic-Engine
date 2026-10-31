@@ -207,7 +207,7 @@ public final class Engine {
         GameResync.save(file);
         s.clock.runUntil(step); // the host waits for its own load too
         return new Resync(step, s.seed, s.clock.agreedSpeed(), s.hashes.interval(), s.hashes.epoch() + 1,
-                s.streams.drawsSinceLoad(), s.ai().resyncOut(), GameResync.capture()).toBytes();
+                s.streams.drawsSinceLoad(), s.ai().resyncOut(), GameResync.captureLocal()).toBytes();
     }
 
     /** Every PC, at the hold step: loads the host's battle, which runs on from there on every PC alike. */
