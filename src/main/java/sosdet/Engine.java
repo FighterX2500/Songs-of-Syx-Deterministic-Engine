@@ -793,7 +793,7 @@ public final class Engine {
             throw new IllegalStateException("SOSDET: a world resync of human slots " + java.util.Arrays.toString(r.slots)
                     + " loaded in a game of slots " + java.util.Arrays.toString(s.humans()));
         }
-        if (s.reports(s.localHuman).current() == null) {
+        if (!s.spectating() && s.reports(s.localHuman).current() == null) { // a spectator's PC sends no reports
             throw new IllegalStateException("SOSDET: a world resync at step " + r.step + ", before the first city report:"
                     + " the load counts the soldiers away from it");
         }
