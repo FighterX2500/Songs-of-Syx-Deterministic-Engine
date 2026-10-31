@@ -55,7 +55,7 @@ public final class AiEntry {
 
     private static final String[] KIND_NAMES = {"path", "dest", "task", "guard", "running", "fireAtWill", "formation",
         "artillery", "holdFire", "ammo", "muster", "mopUp", "artilleryMuster", "artilleryFire", "teleport", "speed",
-        "command", "commanders", "hold", "remove", "view"};
+        "command", "commanders", "hold", "remove", "view", "assaultEnd"};
 
     /** The general, as opposed to a player's PC. */
     public static final int AI = -1;

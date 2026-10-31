@@ -16,6 +16,13 @@ class AiLogTest {
 
     private static final long START = 0x1234ABCDL;
 
+    @Test
+    void everyEntryKindHasAName() {
+        for (int kind = 0; kind < AiEntry.KINDS; kind++) {
+            assertFalse(AiEntry.kindName(kind).isEmpty()); // a desync report prints them
+        }
+    }
+
     /** Records what every PC applies, as (step, seq, kind, div, first payload int). */
     private static final class Recorder implements AiApplier {
         final List<String> applied = new ArrayList<>();
