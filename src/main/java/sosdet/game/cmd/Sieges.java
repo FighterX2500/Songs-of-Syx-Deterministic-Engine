@@ -45,11 +45,20 @@ public final class Sieges {
     static final int ASSAULT_TERMS = 7973;
     static final int ARMY_TELEPORT = 7974;
     static final int NPC_BESIEGE = 7975;
+    static final int ARMY_FILL = 7976;
 
     static final List<Command> ALL = List.of(new Command(SALLY, "siegeSally", r -> applySally()),
             new Command(WAIT_PASSED, "siegeWaitPassed", r -> applyWaitPassed(r.i())),
             new Command(ASSAULT_END, "assaultEndForTest", r -> Hooks.assaultForce(r.i())),
             new Command(ASSAULT_TERMS, "assaultTerms", Sieges::applyTermsCommand),
+            new Command(ARMY_FILL, "armyFillForTest", r -> {
+                WArmy a = Args.army(r);
+                if (a == null) {
+                    return false;
+                }
+                AD.supplies().fillAll(a);
+                return true;
+            }),
             new Command(ARMY_TELEPORT, "armyTeleportForTest", r -> {
                 WArmy a = Args.army(r);
                 int tx = r.i();
@@ -252,6 +261,14 @@ public final class Sieges {
             throw new IllegalStateException("SOSDET: a siege's wait outside a session's play");
         }
         Commands.capture(new CmdWriter(WAIT_PASSED).i(slot));
+    }
+
+    /** Test tooling, never a player's: the army's supplies are full, at the command's step on every PC alike. */
+    public static void fillForTest(WArmy a) {
+        if (!Commands.capturing()) {
+            throw new IllegalStateException("SOSDET: an army's supplies outside a session's play");
+        }
+        Commands.capture(Args.army(new CmdWriter(ARMY_FILL), a));
     }
 
     /** Test tooling, never a player's: the army stands at this tile, at the command's step on every PC alike. */
