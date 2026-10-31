@@ -573,7 +573,9 @@ public final class Engine {
 
     /**
      * The owner's PC, between steps at a view's freeze step: saves its game and returns it with its city's engine state,
-     * for the mod to send to the viewer's {@link #viewIn}; then this PC runs on. Null when no view waits for its save.
+     * for the mod to send to the {@link #viewIn} of every viewer who freezes at this step, as all of an assault's do; then
+     * this PC runs on. One save and one load for them all: a second reload here would lose the first viewer's city. Null
+     * when no view waits for its save.
      */
     public static byte[] viewOut() {
         Session s = required();
@@ -588,7 +590,11 @@ public final class Engine {
             byte[] state = ViewCity.cityState(s);
             double[] moves = GameWorldLoad.unsaved();
             byte[] battle = v.battle ? sosdet.game.GameResync.captureLocal() : new byte[0];
-            v.sent = true;
+            for (View o : s.views) {
+                if (o != null && o.owner == v.owner && o.freeze == v.freeze && o.frozen()) {
+                    o.sent = true;
+                }
+            }
             // the owner loads its save too: two PCs that load one save run its city alike, a loaded and an unloaded
             // game don't (plan 0013, rig run V82D)
             s.viewLoadStart(state, moves, v.viewer);

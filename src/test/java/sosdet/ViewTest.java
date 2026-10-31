@@ -252,10 +252,24 @@ class ViewTest {
         assertEquals("You are viewing a city already.", Engine.viewRefusal(3, 0));
         assertEquals("Its player is viewing another city.", Engine.viewRefusal(0, 3));
         assertEquals("Your own city is being viewed.", Engine.viewRefusal(5, 0));
+        assertEquals("Another player is viewing that city.", Engine.viewRefusal(0, 5));
         assertEquals("That city can't be viewed.", Engine.viewRefusal(0, 0));
         assertEquals("That city can't be viewed.", Engine.viewRefusal(0, 7), "not a human");
         s.battle = new OwnBattle(40, 0, 0, -1, 0);
         assertEquals("A battle is running.", Engine.viewRefusal(0, 5));
+    }
+
+    /** A second reload of the owner would lose the first view, so viewers share one freeze or wait (SOS-92 E). */
+    @Test
+    void viewersOfOneCityShareAFreezeOrAreRefused() {
+        Session s = session(5); // the owner's PC
+        s.viewEntry(10, 3, 5, 2);
+        s.viewEntry(10, 0, 5, 2);
+        s.viewsAt(30);
+        assertEquals(View.RUNNING, s.views[3].state());
+        assertEquals(View.RUNNING, s.views[0].state(), "both freeze at the same step");
+        s.views[0] = null;
+        assertEquals("Another player is viewing that city.", s.viewRefusal(0, 5, null));
     }
 
     @Test

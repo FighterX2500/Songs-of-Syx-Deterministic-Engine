@@ -746,6 +746,11 @@ final class Session {
         viewMoves = null;
         if (viewHashFor >= 0) {
             viewHashesFrom(viewHashFor);
+            for (View o : views) { // every viewer of this city, from the one load
+                if (o != null && o.viewer != viewHashFor && o.owner == localHuman && o.sent && o.frozen()) {
+                    viewHashesFrom(o.viewer);
+                }
+            }
         }
         lastViewLoadMs = (System.nanoTime() - viewLoadStarted) / 1e6;
         if (viewing() != null) {
@@ -1443,6 +1448,12 @@ final class Session {
         }
         if (battle != null) {
             return "A battle is running.";
+        }
+        for (View o : views) {
+            if (fight == null && o != null && o != self && o.owner == owner && (o.frozen() || o.state == View.SCHEDULED)
+                    && (self == null || o.freeze != self.freeze)) {
+                return "Another player is viewing that city."; // its owner's reload would lose that view
+            }
         }
         return worldPromptOrQuestion();
     }

@@ -48,7 +48,7 @@ REMOTE_WINDOW = (1600, 900)  # a watched remote copy's window (the laptop: 1920x
 RELAY, RELAY_SRC, RELAY_PORT = BUILD / "rig" / "relay", ROOT / "rig" / "relay" / "Relay.java", 47710
 # what a remote copy reads from the copies on this PC; everything else stays here
 SHARED = ("hashes.bin,ai-host.log,reports.bin,resync.save,resync.state,wresync.save,wresync.state,wresync.state.done,"
-          "battle.save,battle.done,view.save,view.done,view.hash,view.close,view.tape")
+          "battle.save,battle.done,view.save,view.done,view.hash,view.hash2,view.close,view.tape")
 
 
 def log(msg):

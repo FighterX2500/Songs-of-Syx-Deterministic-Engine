@@ -649,11 +649,13 @@ public final class Rig implements SCRIPT {
                         viewEndStep = -1;
                     }
                 }
-                sosdet.View v = Engine.view(viewViewer);
+                int me = sosdet.Hooks.localHuman();
+                // in an assault every human but the owner views, each from its own hashes (SOS-92 E)
+                int viewer = Engine.assault() != null && me != viewOwner ? me : viewViewer;
+                sosdet.View v = Engine.view(viewer);
                 if (v == null) {
                     return;
                 }
-                int me = sosdet.Hooks.localHuman();
                 if (!viewTraced && (me == viewOwner || me == viewViewer)) {
                     if (v.state() == sosdet.View.SCHEDULED && !viewTraceOn) {
                         viewTraceOn = true;
@@ -679,6 +681,7 @@ public final class Rig implements SCRIPT {
                         Files.write(viewDir.resolve("view.save"), out);
                         Files.write(viewDir.resolve("view.done"), Long.toString(v.freeze).getBytes(StandardCharsets.UTF_8));
                         Files.deleteIfExists(viewDir.resolve("view.hash"));
+                        Files.deleteIfExists(viewDir.resolve("view.hash2"));
                         Files.deleteIfExists(viewDir.resolve("view.tape"));
                         event("viewout", String.format(Locale.ROOT, "\"step\":%d,\"bytes\":%d,\"ms\":%.1f",
                                 Engine.step(), out.length, (System.nanoTime() - t0) / 1e6));
@@ -688,13 +691,15 @@ public final class Rig implements SCRIPT {
                         Files.write(viewDir.resolve("view.tape"), java.nio.ByteBuffer.allocate(4 + tape.length)
                                 .putInt(tape.length).put(tape).array(), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
                     }
-                    byte[] hashes = Engine.viewHashOut(viewViewer);
-                    if (hashes.length > 0) {
-                        Files.write(viewDir.resolve("view.hash"), hashes, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+                    for (int h = 0; h < 64; h++) {
+                        byte[] hashes = Engine.view(h) != null ? Engine.viewHashOut(h) : new byte[0];
+                        if (hashes.length > 0) {
+                            Files.write(viewDir.resolve(viewHashFile(h)), hashes, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+                        }
                     }
                     return;
                 }
-                if (local != viewViewer) {
+                if (local != viewer) {
                     return;
                 }
                 if (v.state() == sosdet.View.LOADING && Engine.step() == v.freeze) {
@@ -751,7 +756,7 @@ public final class Rig implements SCRIPT {
                     at += 4 + length;
                     viewTapeOffset += 4 + length;
                 }
-                byte[] in = readNew(viewDir.resolve("view.hash"), viewHashOffset);
+                byte[] in = readNew(viewDir.resolve(viewHashFile(viewer)), viewHashOffset);
                 viewHashOffset += in.length;
                 if (in.length > 0) {
                     Engine.viewHashIn(in);
@@ -786,6 +791,11 @@ public final class Rig implements SCRIPT {
                 event("viewerror", "\"trace\":\"" + clean(w.toString()) + "\""); // the test's view of a crash
                 throw e;
             }
+        }
+
+        /** The owner's hashes for this viewer: the rig's view, or the other viewer of an assault with three humans. */
+        private String viewHashFile(int viewer) {
+            return viewer == viewViewer ? "view.hash" : "view.hash2";
         }
 
         /** The per-step log's hash: the city, or in own-city mode the world only (each copy's city is its own). */
