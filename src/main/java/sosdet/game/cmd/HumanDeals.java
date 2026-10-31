@@ -13,6 +13,7 @@ import game.time.TIME;
 import init.trade.TR;
 import init.trade.TRADABLE;
 import init.trade.TRADE_TYPE;
+import sosdet.Engine;
 import sosdet.Hooks;
 import sosdet.Notice;
 import sosdet.ai.CmdReader;
@@ -103,7 +104,14 @@ public final class HumanDeals {
 
     /** Why this PC's player can't cancel their treaties with the human in slot {@code to} now; null when they can. */
     public static String cancelRefusal(int to) {
-        return cancelRefusal(FACTIONS.player(), human(to));
+        return spectating() ? SPECTATOR : cancelRefusal(FACTIONS.player(), human(to));
+    }
+
+    private static final String SPECTATOR = "A spectator can't act in the game.";
+
+    /** On a spectator's PC the game's player is a living human, who must not act through it (SOS-111). */
+    private static boolean spectating() {
+        return Engine.spectating();
     }
 
     /** This PC's player declares war on the human in slot {@code to}: captured, applied at its step. */
@@ -116,7 +124,7 @@ public final class HumanDeals {
 
     /** Why this PC's player can't declare war on the human in slot {@code to} now; null when they can. */
     public static String warRefusal(int to) {
-        return warRefusal(FACTIONS.player(), human(to));
+        return spectating() ? SPECTATOR : warRefusal(FACTIONS.player(), human(to));
     }
 
     /** This PC's player sets their tariff on the human in slot {@code to}: captured, applied at its step. */
@@ -129,12 +137,12 @@ public final class HumanDeals {
 
     /** Why this PC's player can't set a tariff of {@code percent} on the human in slot {@code to} now; null when they can. */
     public static String tariffRefusal(int to, int percent) {
-        return tariffRefusal(FACTIONS.player(), human(to), percent);
+        return spectating() ? SPECTATOR : tariffRefusal(FACTIONS.player(), human(to), percent);
     }
 
     /** Why this PC's player can't propose {@code terms} to the human in slot {@code to} now; null when they can. */
     public static String proposeRefusal(int to, Terms terms) {
-        return refusal(FACTIONS.player(), human(to), terms);
+        return spectating() ? SPECTATOR : refusal(FACTIONS.player(), human(to), terms);
     }
 
     /** Why this PC's player can't accept the proposal {@code id} now; null when they can. */
