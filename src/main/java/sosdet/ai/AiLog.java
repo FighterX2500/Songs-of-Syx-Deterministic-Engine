@@ -89,6 +89,8 @@ public final class AiLog {
     /** Who commands each division, as the log last set it (SOS-15). */
     private final Commanders commanders = new Commanders();
     private static final int NOT_APPLYING = Integer.MIN_VALUE;
+    /** The answer to a world question, the one order a watching PC gives: the question holds its view open until it's answered. */
+    public static final int WORLD_ANSWER = 7951;
     private long appliedOrders;
     private final long[] appliedByKind = new long[AiEntry.KINDS];
     private final Recent recentAi = new Recent();
@@ -178,7 +180,8 @@ public final class AiLog {
      * to the host through {@link #ordersOut}. Either way it is applied at the step the host stamps.
      */
     public void captureOrder(int kind, int div, byte[] payload) {
-        if (watchOnly && !(commanding && kind < AiEntry.SPEED)) {
+        boolean worldAnswer = kind == AiEntry.COMMAND && CmdReader.idOf(payload) == WORLD_ANSWER;
+        if (watchOnly && !worldAnswer && !(commanding && kind < AiEntry.SPEED)) {
             watchedDropped++;
             return;
         }

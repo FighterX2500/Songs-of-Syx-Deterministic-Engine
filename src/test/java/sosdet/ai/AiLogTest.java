@@ -342,6 +342,16 @@ class AiLogTest {
     }
 
     @Test
+    void aWatchingPlayerStillAnswersAWorldQuestion() {
+        AiLog peer = AiLog.peer(START, new ByPc());
+        peer.watchOnly(true);
+        peer.captureOrder(AiEntry.COMMAND, -1, new byte[] {(byte) (AiLog.WORLD_ANSWER >> 8), (byte) AiLog.WORLD_ANSWER, 1});
+        assertEquals(0, peer.watchedDropped(), "the question holds the view open until it is answered");
+        peer.captureOrder(AiEntry.COMMAND, -1, new byte[] {0, 7, 1});
+        assertEquals(1, peer.watchedDropped(), "any other command is dropped");
+    }
+
+    @Test
     void aWatchingPlayersOrdersAreDroppedBeforeAnyLog() {
         ByPc hr = new ByPc();
         AiLog host = AiLog.host(START, hr);
