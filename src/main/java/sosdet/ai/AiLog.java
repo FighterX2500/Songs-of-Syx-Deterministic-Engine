@@ -83,6 +83,8 @@ public final class AiLog {
     private long repeatsDropped;
     /** This PC's player only watches: its orders and commands are dropped, and how many were (SOS-15). */
     private volatile boolean watchOnly;
+    /** This watching PC commands soldiers in the city it watches: an assault's attacker (SOS-92). Never read in the step. */
+    private volatile boolean commanding;
     private long watchedDropped;
     /** Who commands each division, as the log last set it (SOS-15). */
     private final Commanders commanders = new Commanders();
@@ -176,7 +178,7 @@ public final class AiLog {
      * to the host through {@link #ordersOut}. Either way it is applied at the step the host stamps.
      */
     public void captureOrder(int kind, int div, byte[] payload) {
-        if (watchOnly) {
+        if (watchOnly && !(commanding && kind < AiEntry.SPEED)) {
             watchedDropped++;
             return;
         }
@@ -389,6 +391,9 @@ public final class AiLog {
                 commanders.skip(); // its source doesn't command that division, on every PC alike
                 skipped = true;
             } else {
+                if (due.div >= 0) {
+                    commanders.claim(due.pc, due.div);
+                }
                 applyingPc = due.pc;
                 try {
                     applier.apply(due);
@@ -653,6 +658,18 @@ public final class AiLog {
     /** This PC's player only watches (true) or acts again (false); any time, outside the step. */
     public void watchOnly(boolean on) {
         watchOnly = on;
+        if (!on) {
+            commanding = false;
+        }
+    }
+
+    /**
+     * In the step, on every PC alike: the table of an assault (SOS-92), or null and null at its end. {@code here}: this
+     * PC's player is the one who watches and commands.
+     */
+    public void assaultCommanders(int[] byDivision, int[] artilleryByArmy, boolean here) {
+        commanders.set(byDivision, artilleryByArmy);
+        commanding = here;
     }
 
     /** Orders and commands this PC's player gave while only watching, all dropped. */

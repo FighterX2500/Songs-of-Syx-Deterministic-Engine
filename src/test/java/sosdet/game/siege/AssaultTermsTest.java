@@ -12,6 +12,49 @@ class AssaultTermsTest {
 
     private static final int[] NONE = AssaultTerms.NO_PEOPLE;
 
+    @Test
+    void theAttackerWithTheMostMenChoosesAndTheFirstWinsATie() {
+        assertEquals(1, AssaultTerms.chooser(new int[] {40, 60}));
+        assertEquals(0, AssaultTerms.chooser(new int[] {50, 50}));
+    }
+
+    @Test
+    void spoilsSplitByTheMenBroughtAndTheChooserGetsTheRest() {
+        assertArrayEquals(new int[] {33, 67}, AssaultTerms.split(100, new int[] {1, 2}));
+        assertArrayEquals(new int[] {100}, AssaultTerms.split(100, new int[] {7}));
+        assertArrayEquals(new int[] {5, 0}, AssaultTerms.split(5, new int[] {0, 0}));
+    }
+
+    @Test
+    void eliminateTakesItsShareOnly() {
+        assertNull(AssaultTerms.refusal(AssaultTerms.ELIMINATE, 90, NONE));
+        assertNotNull(AssaultTerms.refusal(AssaultTerms.ELIMINATE, 80, NONE));
+        assertNotNull(AssaultTerms.refusal(AssaultTerms.ELIMINATE, 90, new int[] {1, 2}));
+    }
+
+    @Test
+    void eliminateRemovesNinetyPercentAndFreesWhoeverHasNoFate() {
+        int[] in = {60, 40};
+        int[] out = AssaultTerms.eliminated(new int[] {10, 20, 0, 0, 5, 0}, in);
+        assertEquals(10, out[AssaultTerms.MOVED]);
+        assertEquals(20, out[AssaultTerms.KILLED]);
+        assertEquals(5, out[AssaultTerms.FATES + AssaultTerms.KILLED]);
+        int all = 0;
+        for (int n : out) {
+            all += n;
+        }
+        assertEquals(90, all);
+        assertEquals(30, out[AssaultTerms.FREED], "the rest of the first race, up to its 60");
+        assertEquals(25, out[AssaultTerms.FATES + AssaultTerms.FREED]);
+    }
+
+    @Test
+    void eliminateWithNoChoiceFreesTheShare() {
+        int[] out = AssaultTerms.eliminated(NONE, new int[] {7, 3});
+        assertEquals(7, out[AssaultTerms.FREED]);
+        assertEquals(2, out[AssaultTerms.FATES + AssaultTerms.FREED]);
+    }
+
     private static int[] people(int... counts) {
         return counts;
     }

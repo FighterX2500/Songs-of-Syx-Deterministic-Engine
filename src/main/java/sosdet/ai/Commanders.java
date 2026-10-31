@@ -7,11 +7,17 @@ import java.nio.ByteBuffer;
  * the host's AI general ({@link AiEntry#AI}). The host sets it through its log, so every PC changes it at the same
  * step. An order or AI change from a source that does not command its division is skipped, on every PC alike. Until
  * the first table, and after a cleared one, nothing is restricted, as before.
+ *
+ * <p>In an assault (SOS-92) a division can also be claimable by a PC ({@link #claimBy}): the general runs it until that
+ * PC's first order for it, which makes the PC its commander. So an attacker who leaves a division alone doesn't leave it
+ * standing until the invasion's 5-day retreat, with the world held.
  */
 public final class Commanders {
 
     /** No table: every order and every change of the general applies. */
     public static final int UNSET = -2;
+    /** {@code CLAIMABLE - pc}: the general's until that PC orders it. */
+    private static final int CLAIMABLE = -3;
 
     /** By battle division, then by army for the artillery; null when unset. Replaced whole, never changed in place. */
     private volatile int[] byDivision;
@@ -45,6 +51,16 @@ public final class Commanders {
         return AiEntry.ints(all);
     }
 
+    /** The table value for a division or artillery the general runs until {@code pc}'s first order for it. */
+    public static int claimBy(int pc) {
+        return CLAIMABLE - pc;
+    }
+
+    /** Whether table value {@code holder} lets source {@code pc} (a PC, or the general) change what it holds. */
+    private static boolean holds(int holder, int pc) {
+        return holder == pc || (holder <= CLAIMABLE && (pc == AiEntry.AI || holder == claimBy(pc)));
+    }
+
     private static int check(int pc, String what) {
         if (pc < AiEntry.AI) {
             throw new IllegalArgumentException("SOSDET: commander " + pc + " for " + what + " (a PC from 0, or AI -1)");
@@ -74,6 +90,33 @@ public final class Commanders {
         ownArmy = armyOf(localPc);
     }
 
+    /** A table set by the step itself on every PC (an assault's), not through the log; null and null clear it. */
+    void set(int[] divisions, int[] artillery) {
+        byDivision = divisions;
+        artilleryByArmy = artillery;
+        ownArmy = armyOf(localPc);
+    }
+
+    /** {@code pc}'s entry for division {@code div} applies: if the division was claimable by it, it commands it now. */
+    void claim(int pc, int div) {
+        byDivision = claimed(byDivision, div, pc);
+    }
+
+    /** As {@link #claim}, for an army's artillery. */
+    public void claimArtillery(int pc, int army) {
+        artilleryByArmy = claimed(artilleryByArmy, army, pc);
+    }
+
+    /** Replaced whole, as the table always is: the UI reads it outside the step. */
+    private static int[] claimed(int[] table, int i, int pc) {
+        if (table == null || pc == AiEntry.AI || i < 0 || i >= table.length || table[i] != claimBy(pc)) {
+            return table;
+        }
+        int[] t = table.clone();
+        t[i] = pc;
+        return t;
+    }
+
     void localPc(int pc) {
         localPc = pc;
         ownArmy = armyOf(pc);
@@ -86,13 +129,13 @@ public final class Commanders {
     /** Whether an entry from {@code pc} may change division {@code div}. */
     public boolean allows(int pc, int div) {
         int[] d = byDivision;
-        return d == null || div >= 0 && div < d.length && d[div] == pc;
+        return d == null || div >= 0 && div < d.length && holds(d[div], pc);
     }
 
     /** Whether an entry from {@code pc} may change a piece of army {@code army}'s artillery. */
     public boolean allowsArtillery(int pc, int army) {
         int[] a = artilleryByArmy;
-        return a == null || army >= 0 && army < a.length && a[army] == pc;
+        return a == null || army >= 0 && army < a.length && holds(a[army], pc);
     }
 
     /** The UI on this PC: whether its player may select division {@code div}. */
@@ -191,7 +234,7 @@ public final class Commanders {
         }
         int perArmy = d.length / artilleryByArmy.length;
         for (int i = 0; i < d.length; i++) {
-            if (d[i] == pc) {
+            if (holds(d[i], pc)) {
                 return i / perArmy;
             }
         }

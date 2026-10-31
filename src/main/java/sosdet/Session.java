@@ -175,6 +175,12 @@ final class Session {
      * own. Never read in the step (SOS-46).
      */
     int viewHuman = -1;
+    /** Humans eliminated in an assault whose PCs stay, watching (SOS-111). The same on every PC. */
+    final boolean[] spectators = new boolean[SLOTS];
+    /** Spectators whose PC left, by the log's step on every PC: no view is opened for them any more. */
+    final boolean[] spectatorGone = new boolean[SLOTS];
+    /** The lowest human still playing: the one the game reads as the player when no human acts (slot 0 until it is out). */
+    int living;
     /** Game time since the player's own faction update last ran in the city part; 0 after every load. */
     double playerUpdateAcc;
     /** The slots a game has ({@code FACTIONS.MAX()}). */
@@ -554,7 +560,7 @@ final class Session {
             try {
                 after.accept(b.result);
             } finally {
-                currentHuman = 0;
+                currentHuman = living;
                 streams.reseed(worldSeed(step));
                 streams.worldDraws(worldDraws);
             }
@@ -796,7 +802,7 @@ final class Session {
         }
         part = -1;
         heldTxns.clear();
-        ai().watchOnly(false);
+        ai().watchOnly(spectating());
         viewLimit.stop();
         viewLimit.battle(-1);
     }
@@ -871,12 +877,32 @@ final class Session {
      */
     void viewEntry(long step, int viewer, int owner, int ownerPc) {
         if (owner < 0) {
+            if (ownerPc == View.RETREAT) {
+                assaultRetreat(viewer);
+                return;
+            }
             int why = ownerPc < 0 || ownerPc > View.LAST_ASKED ? View.CLOSED : ownerPc;
             View v = views[viewer];
+            Assault a = assault;
+            boolean assaultView = a != null && a.endStep < 0 && v != null && assaultView(v, a);
+            if (assaultView && why == View.CLOSED && !spectators[viewer]) {
+                return; // nobody walks out of an assault: only its end or a PC's limit ends this view
+            }
             endView(viewer, step, why, v != null && v.battle ? View.battleSentence(why) : View.sentence(why));
+            if (assaultView && a.started && a.attacks(viewer)) {
+                commandAssault(a);
+            }
             return;
         }
         views[viewer] = new View(viewer, pcOf(viewer), owner, ownerPc, nextReportStep(step));
+    }
+
+    /** At its step, every PC: an attacker in the running assault orders the retreat, for every attacker (mod spec §9). */
+    private void assaultRetreat(int human) {
+        Assault a = assault;
+        if (a != null && a.started && a.outcome < 0 && a.attacks(human)) {
+            a.forced = Assault.RETREAT;
+        }
     }
 
     // ------------------------------------------------------------ the assault on a human's capital (SOS-92 step B)
@@ -934,15 +960,16 @@ final class Session {
      * other human views the defender's city from the next report step, where the world holds; the invasion starts at
      * the step after it ({@link #assaultStep}).
      */
-    void assaultBegin(long step, int attacker, int defender, Object spec, int[] armies, int men) {
+    void assaultBegin(long step, int attacker, int defender, Object spec, int[] armies, int men, int[] divOwners,
+            int[] attackers, int[] attackerMen) {
         String why = assaultRefusal();
         if (why != null) {
             throw new IllegalStateException("SOSDET: an assault at step " + step + ": " + why);
         }
         long freeze = nextReportStep(step);
-        assault = new Assault(step, attacker, defender, freeze, spec, armies, men);
+        assault = new Assault(step, attacker, defender, freeze, spec, armies, men, divOwners, attackers, attackerMen);
         for (int h : humans()) {
-            if (h != defender && !retired(h)) {
+            if (h != defender && (!retired(h) || watching(h))) {
                 views[h] = new View(h, pcOf(h), defender, pcOf(defender), freeze);
             }
         }
@@ -956,12 +983,22 @@ final class Session {
      */
     void assaultStep(long step) {
         Assault a = assault;
-        if (a == null || a.endStep >= 0 || step <= a.freeze) {
+        if (a == null || a.endStep >= 0) {
+            return;
+        }
+        if (anyGone(a)) {
+            if (a.started && cityHuman() == a.defender) {
+                sosdet.game.GameAssault.stop(a.invasionRef);
+            }
+            assaultOver(step, "A player left."); // no result: what they held goes with them (mod spec §11)
+            return;
+        }
+        if (step <= a.freeze) {
             return;
         }
         if (!a.started) {
             for (View v : views) {
-                if (assaultView(v, a) && v.state == View.CANCELLED) {
+                if (assaultView(v, a) && v.state == View.CANCELLED && !spectators[v.viewer]) { // a spectator only misses it
                     assaultOver(step, "the view of human " + v.viewer + " couldn't start: " + v.reason);
                     return;
                 }
@@ -975,11 +1012,13 @@ final class Session {
                 }
             }
             a.started = true;
+            commandAssault(a);
             return;
         }
-        if (a.forced >= 0 && a.outcome < 0) { // rig tests only: the invasion ends as the test asked
+        if (a.forced >= 0 && a.outcome < 0) { // the attackers' retreat; in a rig test, the outcome the test asked for
+            a.survivors = sosdet.game.GameAssault.invaders();
             if (cityHuman() == a.defender) {
-                sosdet.game.GameAssault.endForTest(a.invasionRef);
+                sosdet.game.GameAssault.stop(a.invasionRef);
             }
             a.outcome = a.forced;
         }
@@ -990,6 +1029,48 @@ final class Session {
         }
     }
 
+    /** Every PC alike, in the step: the removal of the defender or an attacker has applied. */
+    private boolean anyGone(Assault a) {
+        boolean gone = removeDue[a.defender] || retired(a.defender);
+        for (int h : a.attackers) {
+            gone |= removeDue[h] || retired(h);
+        }
+        return gone;
+    }
+
+    /** Whether this attacker's view of the assault still runs: while it doesn't, the general runs their soldiers. */
+    private boolean commands(int human, Assault a) {
+        View v = views[human];
+        return assaultView(v, a) && v.thaw < 0 && v.state != View.CANCELLED && v.state != View.ENDED;
+    }
+
+    /**
+     * Every PC, in the city tail as the invasion starts: the defender commands the city's soldiers and artillery, and
+     * each attacker their own invaders, each division claimed by their first order for it; until then the general runs
+     * it. Again when an attacker's view ends early: the general runs those invaders from there.
+     */
+    private void commandAssault(Assault a) {
+        int divisions = sosdet.game.OwnArmy.divisions();
+        int armies = sosdet.game.OwnArmy.armies();
+        int perArmy = divisions / armies;
+        int defender = pcOf(a.defender);
+        int attacker = commands(a.attacker, a) ? sosdet.ai.Commanders.claimBy(pcOf(a.attacker)) : sosdet.ai.AiEntry.AI;
+        int[] byDivision = new int[divisions];
+        for (int i = 0; i < divisions; i++) {
+            int army = i / perArmy;
+            byDivision[i] = army == 0 ? defender : army == 1 ? attacker : sosdet.ai.AiEntry.AI;
+        }
+        for (int i = 0; i < a.divOwners.length && i < perArmy; i++) { // the invasion fills army 1 in its own order
+            int owner = a.divOwners[i];
+            byDivision[perArmy + i] = commands(owner, a) ? sosdet.ai.Commanders.claimBy(pcOf(owner)) : sosdet.ai.AiEntry.AI;
+        }
+        int[] artillery = new int[armies];
+        for (int k = 0; k < armies; k++) {
+            artillery[k] = k == 0 ? defender : k == 1 ? attacker : sosdet.ai.AiEntry.AI;
+        }
+        ai().assaultCommanders(byDivision, artillery, a.attacks(localHuman) && commands(localHuman, a));
+    }
+
     private static boolean assaultView(View v, Assault a) {
         return v != null && v.owner == a.defender && v.freeze == a.freeze;
     }
@@ -998,6 +1079,9 @@ final class Session {
         Assault a = assault;
         a.cancelled = cancelled;
         a.endStep = step;
+        if (a.started) {
+            ai().assaultCommanders(null, null, false);
+        }
         for (View v : views) {
             if (assaultView(v, a)) {
                 endView(v.viewer, step, View.GAME, "The assault is over.");
@@ -1034,7 +1118,7 @@ final class Session {
         assault = null;
         lastAssault = a;
         if (a.cancelled == null) {
-            sosdet.game.GameAssault.resolve(a.defender, a.outcome, a.armies);
+            sosdet.game.GameAssault.resolve(a.defender, a.outcome, a.armies, a.men, a.survivors);
             assaultOutcome = a;
             if (a.outcome == Assault.TAKEN) {
                 a.termsDue = step + TERMS_WINDOWS * windowSteps(clock.agreedSpeed());
@@ -1052,24 +1136,79 @@ final class Session {
      */
     boolean assaultTerms(int attacker, int kind, int percent, int[] people) {
         Assault a = taken;
-        if (a == null || a.attacker != attacker || AssaultTerms.refusal(kind, percent, people) != null) {
+        if (a == null || a.chooser != attacker || AssaultTerms.refusal(kind, percent, people) != null) {
             return false;
         }
-        int[] removed = sosdet.game.cmd.Sieges.peopleLimited(a.defender, people);
-        a.termsCredits = sosdet.game.cmd.Sieges.applyTerms(a.defender, a.attacker, kind, percent, removed);
+        int[] removed = kind == AssaultTerms.ELIMINATE ? sosdet.game.cmd.Sieges.peopleEliminated(a.defender, people)
+                : sosdet.game.cmd.Sieges.peopleLimited(a.defender, people);
+        a.termsCredits = sosdet.game.cmd.Sieges.applyTerms(a.defender, a.chooser, a.attackers, a.attackerMen, kind, percent, removed);
         a.termsPeople = removed;
         a.termsKind = kind;
         a.termsPercent = percent;
         taken = null;
         assaultTermsOutcome = a;
+        if (kind == AssaultTerms.ELIMINATE) {
+            spectators[a.defender] = true;
+            removing[a.defender] = true;
+            removeDue[a.defender] = true; // the next world part, after what was taken has left (mod spec §9, SOS-111)
+        }
         return true;
+    }
+
+    /** This PC's player was eliminated and watches: its city never runs again, and nothing it does reaches the game. */
+    boolean spectating() {
+        return spectators[localHuman];
+    }
+
+    /** Whether the eliminated human in {@code slot} has a PC here to watch with, the same on every PC. */
+    private boolean watching(int slot) {
+        if (!spectators[slot] || spectatorGone[slot]) {
+            return false;
+        }
+        for (int h : pcHumans) {
+            if (h == slot) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Host: a resumed spectator's PC is no peer of the pace (mod spec §11). */
+    void spectatorsLeavePace() {
+        for (int pc = 0; pc < pcHumans.length; pc++) {
+            if (pcHumans[pc] >= 0 && spectators[pcHumans[pc]]) {
+                pacer.drop(pc);
+            }
+        }
+    }
+
+    /** After a load: the humans the save holds as eliminated watch on. */
+    private void spectatorsLoaded() {
+        for (int h : humans()) {
+            spectators[h] |= city().eliminated(h);
+        }
+        spectatorsChanged();
+    }
+
+    /** Recounts {@link #living} and, on a spectator's PC, keeps its orders out. Every PC, after a retirement or a load. */
+    void spectatorsChanged() {
+        living = 0;
+        for (int h : humans()) {
+            if (!retired(h)) {
+                living = h;
+                break;
+            }
+        }
+        if (spectating()) {
+            ai().watchOnly(true);
+        }
     }
 
     /** Every PC, in the world part: the default terms once the attacker's choice is due. */
     void assaultTermsDue(long step) {
         Assault a = taken;
         if (a != null && step >= a.termsDue) {
-            assaultTerms(a.attacker, AssaultTerms.DEFAULT_KIND, AssaultTerms.DEFAULT_PERCENT, AssaultTerms.NO_PEOPLE);
+            assaultTerms(a.chooser, AssaultTerms.DEFAULT_KIND, AssaultTerms.DEFAULT_PERCENT, AssaultTerms.NO_PEOPLE);
         }
     }
 
@@ -1233,8 +1372,8 @@ final class Session {
      * when it is in the log already, or null for a view still to ask for ({@code Engine.viewRefusal}).
      */
     String viewRefusal(int viewer, int owner, View self) {
-        if (viewer == owner || !isHuman(viewer) || !isHuman(owner) || retired(viewer) || retired(owner)
-                || removing[viewer] || removing[owner]) {
+        if (viewer == owner || !isHuman(viewer) || !isHuman(owner) || retired(viewer) && !watching(viewer)
+                || retired(owner) || removing[viewer] || removing[owner]) {
             return "That city can't be viewed.";
         }
         if (locals[viewer] != null) {
@@ -1395,11 +1534,12 @@ final class Session {
 
     /** Every PC, as a removal entry applies: its realm is freed in the next world part with no battle running. */
     void humanRemoved(int slot) {
-        if (!isHuman(slot) || slot == 0) {
+        if (!isHuman(slot) || slot == 0 && !spectators[0]) {
             throw new IllegalStateException("SOSDET: a removal of slot " + slot + ", no human but the host's");
         }
         if (retired(slot)) {
-            return; // retired already, after a load before its step (dueWithoutReports)
+            spectatorGone[slot] = spectators[slot]; // the entry of Engine.spectatorLeft: its PC watches no more
+            return; // or retired already, after a load before its step (dueWithoutReports)
         }
         removing[slot] = true;
         removeDue[slot] = true;
@@ -1411,7 +1551,7 @@ final class Session {
      * once it knows of the removal, so every PC that runs it retires that human here alike.
      */
     void dueWithoutReports() {
-        for (int slot = 1; slot < SLOTS; slot++) {
+        for (int slot = 0; slot < SLOTS; slot++) {
             if (removing[slot] && !removeDue[slot] && !retired(slot) && reports(slot).current() == null
                     && !reports(slot).pending()) {
                 removeDue[slot] = true;
@@ -1424,7 +1564,7 @@ final class Session {
      * world-battle prompt or question asking that human closes unanswered, so nothing of it applies.
      */
     void retireDue() {
-        for (int slot = 1; slot < SLOTS; slot++) {
+        for (int slot = 0; slot < SLOTS; slot++) {
             if (!removeDue[slot]) {
                 continue;
             }
@@ -1439,6 +1579,10 @@ final class Session {
             removing[slot] = false;
             reports(slot).clear();
             locals[slot] = null; // its battle ends with it: no result will come, and its armies and the speed go free
+            if (spectators[slot]) {
+                pacer.drop(pcOf(slot)); // a spectator never limits the speed (SOS-111)
+                spectatorsChanged();
+            }
         }
     }
 
@@ -1479,7 +1623,8 @@ final class Session {
         if (part == StepParts.WORLD_PART) {
             return currentHuman;
         }
-        return viewHuman >= 0 ? viewHuman : cityHuman(); // a viewed city's player is its owner (SOS-82)
+        int h = viewHuman >= 0 ? viewHuman : cityHuman(); // a viewed city's player is its owner (SOS-82)
+        return spectators[h] ? living : h; // a spectator's own human has no realm left for the game to read (SOS-111)
     }
 
     /** The ordinal of the human in {@code slot} among the human slots; 0 for slot 0 and while a game loads (SOS-46). */
@@ -1609,7 +1754,10 @@ final class Session {
             }
         }
         humans = null;
-        currentHuman = 0;
+        if (ownCity) {
+            spectatorsLoaded();
+        }
+        currentHuman = living;
         reportFeed.clear();
         for (sosdet.report.ReportFeed f : feedsIn.values()) {
             f.clear();
@@ -1670,7 +1818,7 @@ final class Session {
         viewLoad = null;
         viewHuman = -1;
         humans = null;
-        currentHuman = 0;
+        currentHuman = living;
         battleConclude = null;
         resyncDraws = streams.drawsSinceLoad(); // the load's own draws don't count, as in a resync
         ViewCity.restoreCity(this, state);
@@ -1684,7 +1832,7 @@ final class Session {
     private void ownCityBack() {
         viewHuman = -1;
         humans = null;
-        currentHuman = 0;
+        currentHuman = living;
         battleConclude = null;
         resyncDraws = streams.drawsSinceLoad();
         ViewCity.restoreCity(this, ownCityState);

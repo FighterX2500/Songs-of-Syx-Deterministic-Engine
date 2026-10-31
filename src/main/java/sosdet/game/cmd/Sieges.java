@@ -22,6 +22,7 @@ import sosdet.report.Field;
 import world.WORLD;
 import world.battle.WBattles;
 import world.battle.spec.WBattleSiege;
+import world.entity.army.WArmy;
 import world.map.regions.Region;
 
 /**
@@ -108,8 +109,35 @@ public final class Sieges {
     public static void storm(int attacker, WBattleSiege siege) {
         Object[] built = sosdet.game.GameAssault.build(siege);
         int[] armies = (int[]) built[1];
+        int[] owners = (int[]) built[2];
+        int[] attackers = new int[owners.length + 1];
+        attackers[0] = attacker;
+        int n = 1;
+        for (int owner : owners) {
+            boolean known = false;
+            for (int i = 0; i < n; i++) {
+                known |= attackers[i] == owner;
+            }
+            if (!known) {
+                attackers[n++] = owner;
+            }
+        }
+        attackers = java.util.Arrays.copyOf(attackers, n);
+        int[] men = new int[n];
+        for (int i = 0; i < n; i++) {
+            men[i] = sosdet.game.GameAssault.menOf(attackers[i], armies);
+        }
         Hooks.assaultBegin(attacker, siege.besiged.faction().index(), built[0], armies,
-                sosdet.game.GameAssault.men(armies));
+                sosdet.game.GameAssault.men(armies), owners, attackers, men);
+    }
+
+    /** The furthest an ally's army stands from the capital's centre and still joins an assault, in tiles (owner, 2026-10-31). */
+    static final int ALLY_TILES = 3;
+
+    /** Whether {@code a}, on the side of the army {@code stormer} that storms {@code reg}, joins the assault (SOS-92 E). */
+    public static boolean joinsAssault(WArmy a, WArmy stormer, Region reg) {
+        return a.faction() == stormer.faction()
+                || Math.abs(a.ctx() - reg.cx()) <= ALLY_TILES && Math.abs(a.cty() - reg.cy()) <= ALLY_TILES;
     }
 
     // ---------------------------------------------------------------- after a taken throne (SOS-92 step D)
@@ -117,7 +145,7 @@ public final class Sieges {
     /** Why this PC's player can't choose these terms now, as a sentence; null when they can. */
     public static String termsRefusal(int kind, int percent, int[] people) {
         sosdet.Assault a = Engine.assaultTaken();
-        if (a == null || a.attacker != FACTIONS.player().index()) {
+        if (a == null || a.chooser != FACTIONS.player().index()) {
             return "There is no throne of yours to decide on.";
         }
         return AssaultTerms.refusal(kind, percent, people);
@@ -162,9 +190,14 @@ public final class Sieges {
         return AssaultTerms.limited(people, peopleInCity(slot));
     }
 
+    /** In the world part, every PC: the people Eliminate removes from the city of the human in {@code slot}. */
+    public static int[] peopleEliminated(int slot, int[] people) {
+        return AssaultTerms.eliminated(people, peopleInCity(slot));
+    }
+
     /** In the world part, every PC: the terms reach both players' cities and the world. Returns the money taken. */
-    public static int applyTerms(int defender, int attacker, int kind, int percent, int[] people) {
-        return HumanDeals.assaultTerms(defender, attacker, kind, percent, people);
+    public static int applyTerms(int defender, int chooser, int[] attackers, int[] men, int kind, int percent, int[] people) {
+        return HumanDeals.assaultTerms(defender, chooser, attackers, men, kind, percent, people);
     }
 
     /**

@@ -32,6 +32,8 @@ public final class View {
     public static final int GAME = 4;
     /** The reasons the viewer's PC asks the host to end a view with ({@link Engine#viewEnd(int, int)}). */
     static final int LAST_ASKED = DESYNC;
+    /** Not an end: an attacker orders the retreat from an assault, as a view's end entry reaches every PC (mod spec §9). */
+    public static final int RETREAT = 5;
 
     /** The viewer's human and PC. */
     public final int viewer;

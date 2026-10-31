@@ -204,6 +204,7 @@ public final class GameAi implements AiApplier {
             c.skip(); // its source doesn't command that army's artillery (SOS-15)
             return;
         }
+        c.claimArtillery(e.pc, a.army().index());
         if (e.kind == AiEntry.ARTILLERY) {
             a.targetCooSet(e.intAt(2), e.intAt(3), e.intAt(4) != 0, e.intAt(5) != 0);
         } else if (e.kind == AiEntry.ARTILLERY_MUSTER) {

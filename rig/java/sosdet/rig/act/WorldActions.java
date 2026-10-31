@@ -725,7 +725,9 @@ public final class WorldActions {
         case "wassault": // wassault: notes the assault running, the last one over and a throne awaiting terms (SOS-92 B, D)
             Rig.later(() -> {
                 sosdet.Assault last = Engine.lastAssault();
-                Rig.note("wassault step " + Engine.step() + ": now " + Engine.assault() + "; last " + last + "; invading "
+                Rig.note("wassault step " + Engine.step() + ": spectating " + Engine.spectating() + " commanders " + Engine.commanderOf(120) + "," + Engine.commanderOf(121)
+                        + " not commanded " + Engine.ordersNotCommanded() + " watch dropped " + Engine.watchedDropped()
+                        + ": now " + Engine.assault() + "; last " + last + "; invading "
                         + settlement.main.SETT.INVADOR().invading() + "; taken " + Engine.assaultTaken()
                         + (last != null && last.termsKind() >= 0 ? "; terms " + sosdet.game.siege.AssaultTerms.name(last.termsKind())
                                 + " " + last.termsPercent() + "% credits " + last.termsCredits() + " people "
@@ -737,6 +739,27 @@ public final class WorldActions {
                                 + "; prisoners here " + prisonersHere() : ""));
             });
             return true;
+        case "assaultorders": { // assaultorders stop|centre: this human orders every invading division as a battle's UI would
+            // (SOS-92): each stops, or marches to the city's centre; a division not yours stays as it was
+            boolean stop = a[1].equals("stop");
+            Rig.later(() -> {
+                int n = 0;
+                for (Div d : GAME.ARMIES().armies().get(1).divisions()) {
+                    if (d.menNrOf() == 0) {
+                        continue;
+                    }
+                    if (stop) {
+                        d.order().task.set(new game.battle.thread.order.BattleOrderTask().stop(d));
+                    } else {
+                        int cx = settlement.main.SETT.PWIDTH / 2;
+                        GAME.ARMIES().placer.deploy(d, cx - 64, cx + 64, settlement.main.SETT.PHEIGHT / 2, settlement.main.SETT.PHEIGHT / 2);
+                    }
+                    n++;
+                }
+                Rig.note("assault orders " + a[1] + ": " + n + " divisions");
+            });
+            return true;
+        }
         case "wassaultend": { // wassaultend <held|taken|retreat>: the running assault's invasion ends so, on every copy (test tooling, SOS-92 D)
             int outcome = java.util.List.of("held", "taken", "retreat").indexOf(a[1]);
             if (outcome < 0) {
@@ -750,7 +773,8 @@ public final class WorldActions {
         }
         case "wterms": { // wterms <sack|vassalage> <percent> [moved:killed:freed]: this human, the attacker, chooses what to
                          // take (SOS-92 D); the people are of the defender's largest race
-            int kind = a[1].equals("sack") ? sosdet.game.siege.AssaultTerms.SACK : sosdet.game.siege.AssaultTerms.VASSALAGE;
+            int kind = a[1].equals("sack") ? sosdet.game.siege.AssaultTerms.SACK : a[1].equals("eliminate") ? sosdet.game.siege.AssaultTerms.ELIMINATE
+                    : sosdet.game.siege.AssaultTerms.VASSALAGE;
             int percent = Integer.parseInt(a[2]);
             Rig.later(() -> {
                 int[] people = a.length > 3 ? termsPeople(a[3]) : sosdet.game.siege.AssaultTerms.NO_PEOPLE;

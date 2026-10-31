@@ -472,7 +472,7 @@ public final class Engine {
         if (s.streams.inStep()) {
             throw new IllegalStateException("SOSDET: a view is ended between steps, not inside one");
         }
-        if (why < View.CLOSED || why > View.LAST_ASKED) {
+        if ((why < View.CLOSED || why > View.LAST_ASKED) && why != View.RETREAT) {
             throw new IllegalArgumentException("SOSDET: a view's end for reason " + why + ", not " + View.CLOSED
                     + " to " + View.LAST_ASKED);
         }
@@ -875,6 +875,11 @@ public final class Engine {
      * {@code FACTIONS.player()} is this human, and the city part runs only its city; in the world part it is the human
      * the world is working on. Set it at step 0, on every PC; slot 0 by default.
      */
+    /** This PC's human, also while it views another player's city, when the game's player is that city's owner. */
+    public static int local() {
+        return required().localHuman;
+    }
+
     public static void localHuman(int slot) {
         Session s = required();
         if (s.clock.step() != 0) {
@@ -941,6 +946,39 @@ public final class Engine {
         s.ai().captureRemove(AiEntry.ints(slot, (int) (cutoff >>> 32), (int) cutoff));
         s.pacer.drop(pc); // its PC is gone: the host's pace waits for it no more
         s.ai().pcGone(pc); // and none of its orders still to come goes into the log
+    }
+
+    /**
+     * Host, between steps: the PC of the spectator in {@code slot} left (mod spec §11). Nobody waited for it; from the
+     * logged step no PC opens a view for it.
+     */
+    public static void spectatorLeft(int slot) {
+        Session s = required();
+        if (s.ai().mode() != AiMode.HOST) {
+            throw new IllegalStateException("SOSDET: the host hears a spectator leave (mode " + s.ai().mode() + ")");
+        }
+        if (!s.spectators[slot]) {
+            throw new IllegalArgumentException("SOSDET: slot " + slot + " has no spectator");
+        }
+        s.ai().captureRemove(AiEntry.ints(slot, -1, -1));
+        s.ai().pcGone(s.pcOf(slot));
+    }
+
+    /** The one human not retired once others are, the last player standing (mod spec §11); -1 when there is none. */
+    public static int lastHuman() {
+        Session s = required();
+        int last = -1;
+        int gone = 0;
+        for (int h : s.humans()) {
+            if (s.retired(h)) {
+                gone++;
+            } else if (last >= 0) {
+                return -1;
+            } else {
+                last = h;
+            }
+        }
+        return gone > 0 ? last : -1;
     }
 
     /**
@@ -1083,6 +1121,16 @@ public final class Engine {
     public static int besiegedSince(int slot) {
         required();
         return Sieges.besiegedSince(slot);
+    }
+
+    /** Between steps: this PC's player was eliminated and watches (SOS-111): nothing done here reaches the game. */
+    public static boolean spectating() {
+        return required().spectating();
+    }
+
+    /** Between steps: the human in {@code slot} was eliminated and watches from their PC (SOS-111). */
+    public static boolean spectator(int slot) {
+        return required().spectators[slot];
     }
 
     /** The assault on a human's capital running or waiting for its views to thaw, or null (SOS-92 step B). */
@@ -1399,7 +1447,9 @@ public final class Engine {
      * turns pacing off.
      */
     public static void pace(int[] pcs, long lead) {
-        required().pacer.peers(pcs, lead);
+        Session s = required();
+        s.pacer.peers(pcs, lead);
+        s.spectatorsLeavePace();
     }
 
     /**
@@ -1419,7 +1469,8 @@ public final class Engine {
      * act again; either takes effect at once, since a dropped order never reaches any log (SOS-15).
      */
     public static void watchOnly(boolean on) {
-        required().ai().watchOnly(on);
+        Session s = required();
+        s.ai().watchOnly(on || s.spectating());
     }
 
     /** A battle division or artillery commanded by the host's AI general (SOS-15). */

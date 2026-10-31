@@ -77,6 +77,16 @@ public final class WorldBattles {
         return new CmdReader(payload).i() == ENGAGE;
     }
 
+    /** Whether a command's payload storms a human's capital, read without applying it: the save before it (SOS-92). */
+    public static boolean isStorm(byte[] payload) {
+        if (CmdReader.idOf(payload) != DECIDE || new CmdReader(payload).i() != AUTO) {
+            return false;
+        }
+        Object open = Hooks.worldPrompt();
+        return open instanceof WBattleSiege && Sieges.humanCapital(((WBattleSiege) open).besiged)
+                && Sieges.stormRefusal(((WBattleSiege) open).besiged) == null;
+    }
+
     // ------------------------------------------------------------------ decisions (inside the step, on every PC)
 
     /**

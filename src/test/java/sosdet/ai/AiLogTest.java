@@ -395,6 +395,83 @@ class AiLogTest {
         assertEquals(host.commanders().hash(), peer.commanders().hash());
     }
 
+    /** An assault with the peer as attacker: divisions 0 and 1 the host's, 2 and 3 the general's until the peer orders them. */
+    private static final int[] ASSAULT = {0, 0, Commanders.claimBy(1), Commanders.claimBy(1)};
+    private static final int[] ASSAULT_GUNS = {0, Commanders.claimBy(1)};
+
+    @Test
+    void anAttackersFirstOrderTakesItsDivisionFromTheGeneralOnEveryPc() throws InterruptedException {
+        ByPc hr = new ByPc();
+        AiLog host = AiLog.host(START, hr);
+        ByPc pr = new ByPc();
+        AiLog peer = AiLog.peer(START, pr);
+        peer.localPc(1);
+        host.assaultCommanders(ASSAULT, ASSAULT_GUNS, false);
+        peer.assaultCommanders(ASSAULT, ASSAULT_GUNS, true);
+        host.stepBegin(1); // stamped 31
+        captureOnGeneralThread(host, AiEntry.TASK, 2, 5); // unclaimed: the general still runs it
+        host.stepBegin(2);
+        peer.captureOrder(AiEntry.GUARD, 2, AiEntry.ints(1));
+        host.ordersIn(1, peer.ordersOut());
+        for (long s = 3; s <= 32; s++) {
+            host.stepBegin(s);
+        }
+        captureOnGeneralThread(host, AiEntry.TASK, 2, 5); // claimed by now: skipped
+        captureOnGeneralThread(host, AiEntry.TASK, 3, 5); // the other one stays the general's
+        for (long s = 33; s <= 64; s++) {
+            host.stepBegin(s);
+        }
+        peer.logIn(host.logOut());
+        for (long s = 1; s <= 64; s++) {
+            peer.stepBegin(s);
+        }
+        assertEquals(3, hr.applied.size(), hr.applied.toString());
+        assertEquals(hr.applied, pr.applied);
+        assertEquals(1, host.commanders().skipped());
+        assertEquals(1, peer.commanders().skipped());
+        assertEquals(1, host.commanders().of(2));
+        assertEquals(Commanders.claimBy(1), host.commanders().of(3));
+        assertEquals(host.commanders().hash(), peer.commanders().hash());
+    }
+
+    @Test
+    void anAttackerCommandsWhoTheyMayClaimAndNoOneElseDoes() {
+        AiLog host = AiLog.host(START, new ByPc());
+        host.assaultCommanders(ASSAULT, ASSAULT_GUNS, false);
+        Commanders c = host.commanders();
+        assertTrue(c.allows(1, 2), "the attacker's first order applies");
+        assertTrue(c.allows(AiEntry.AI, 2), "the general runs it until then");
+        assertFalse(c.allows(0, 2), "the defender never");
+        assertFalse(c.allows(1, 0), "the attacker doesn't command the defender's soldiers");
+        assertFalse(c.commandsHere(2), "the host is the defender here");
+        AiLog peer = AiLog.peer(START, new ByPc());
+        peer.localPc(1);
+        peer.assaultCommanders(ASSAULT, ASSAULT_GUNS, true);
+        assertEquals(1, peer.commanders().ownArmy(), "the attacker's own army is the invaders");
+        assertTrue(peer.commanders().commandsHere(2));
+        assertTrue(c.allowsArtillery(1, 1));
+        c.claimArtillery(1, 1);
+        assertFalse(c.allowsArtillery(AiEntry.AI, 1), "the attacker's order took that artillery");
+        host.assaultCommanders(null, null, false);
+        assertTrue(c.allows(0, 2), "the assault's end clears the table");
+    }
+
+    @Test
+    void anAttackerWatchingSendsDivisionOrdersOnly() {
+        AiLog peer = AiLog.peer(START, new Recorder());
+        peer.localPc(1);
+        peer.watchOnly(true);
+        peer.assaultCommanders(ASSAULT, ASSAULT_GUNS, true);
+        peer.captureOrder(AiEntry.GUARD, 2, AiEntry.ints(1));
+        peer.captureOrder(AiEntry.SPEED, -1, AiEntry.ints(1));
+        peer.captureOrder(AiEntry.COMMAND, -1, AiEntry.ints(1));
+        assertEquals(2, peer.watchedDropped(), "time and city commands stay the city's");
+        peer.watchOnly(false);
+        peer.watchOnly(true);
+        peer.captureOrder(AiEntry.GUARD, 3, AiEntry.ints(1));
+        assertEquals(3, peer.watchedDropped(), "the next watch isn't the assault's");
+    }
+
     @Test
     void aResyncCarriesTheTableAndAClearedOneRestrictsNothing() {
         AiLog host = AiLog.host(START, new ByPc());
