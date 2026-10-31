@@ -100,6 +100,8 @@ final class Session {
 
     /** Host: the game speed last seen, so a change goes into the log once (B16). */
     double seenSpeed;
+    /** The result a battle's second army won, while its prompt is open (SOS-116). */
+    world.battle.spec.WBattleResult army1Result;
     /** Host: the pacing by the slowest PC and the speed governor (SOS-42). */
     /** The clock section's counters at the last hash, for a desync report. */
     final long[] clockParts = new long[HashLog.CLOCK_PARTS];
@@ -2186,6 +2188,10 @@ final class Session {
             localSpeed(speed, System.nanoTime()); // the fighting human's alone (spec §8)
             return;
         }
+        if (battleVoting()) {
+            battleSpeedPressed(speed);
+            return;
+        }
         if (speed <= 0 || speed == seenSpeed) {
             return; // paused, or no change
         }
@@ -2261,6 +2267,60 @@ final class Session {
             holdLogged = false;
             clock.holdAt(StepClock.NO_LIMIT);
         }
+    }
+
+    /** True while a battle on every PC runs: its commanders choose its speed (spec §8). */
+    boolean battleVoting() {
+        return battle != null && !battle.awaiting;
+    }
+
+    /** This PC, every frame of a battle: a commander's press of a speed button is their vote. A spectator's does nothing. */
+    private void battleSpeedPressed(double speed) {
+        if (speed <= 0) {
+            return;
+        }
+        if (!battle.speedSeen) {
+            battle.speedSeen = true; // what the load left, not a press
+            seenSpeed = speed;
+        } else if (speed != seenSpeed) {
+            seenSpeed = speed;
+            if (commander(pcOf(localHuman)) >= 0) {
+                sosdet.game.cmd.MapBattles.speedVote(Math.max(speed, 1)); // vanilla's 0.25x isn't offered (spec §4)
+            }
+        }
+    }
+
+    /** The vote's commander number of the PC {@code pc}, or -1 for a spectator. */
+    private int commander(int pc) {
+        if (pc == battle.pc) {
+            return 0;
+        }
+        return battle.other >= 0 && pc == pcOf(battle.other) ? 1 : -1;
+    }
+
+    /** Every PC, inside the step: a commander's vote; the speed changes at the step a majority forms (spec §8). */
+    boolean battleVote(int fromPc, double speed) {
+        if (!battleVoting() || commander(fromPc) < 0) {
+            return false;
+        }
+        int c = commander(fromPc);
+        double settled = battle.speedVote.vote(c, speed);
+        notice(Notice.SPEED_VOTE, c == 0 ? battle.human : battle.other, -1, (int) Math.round(speed));
+        speedNotice = "SOSDET: battle speed " + speedText(clock.agreedSpeed()) + ", " + battle.speedVote.count(speed) + " of "
+                + battle.speedVote.commanders() + " for " + speedText(speed);
+        speedNoticeUntil = System.nanoTime() + 5 * Pacer.SECOND;
+        if (settled > 0 && settled != clock.agreedSpeed()) {
+            battleSpeed(settled);
+        }
+        return true;
+    }
+
+    /** Every PC, inside the step: a battle's speed; the host's governor starts again from it. */
+    void battleSpeed(double speed) {
+        if (ai().mode() == AiMode.HOST) {
+            pacer.wanted(speed, System.nanoTime());
+        }
+        Hooks.agreedSpeed(speed, speed, -1);
     }
 
     /** A speed change for every PC at its step: the agreed speed, the host player's, the PC that held it down or -1. */

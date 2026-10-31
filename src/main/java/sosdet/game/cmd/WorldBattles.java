@@ -189,7 +189,7 @@ public final class WorldBattles {
         } else if (open instanceof WBattleSpec) {
             applyDecide(AUTO);
         } else if (open instanceof WBattleResult) {
-            boolean won = ((WBattleResult) open).result == BATTLE_RESULT.VICTORY || Hooks.resultForArmy1(true);
+            boolean won = Hooks.resultWon((WBattleResult) open);
             applyAccept(won ? new int[RACES.all().size()] : null, won ? new int[RESOURCES.ALL().size()] : null, 0);
         } else if (open instanceof WBattleSiege.Result) {
             applySiegeResult(OCCUPY, 0.1, 0.1, new int[RACES.all().size()], new int[TR.ALL().size()], 0);

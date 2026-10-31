@@ -21,6 +21,12 @@ public final class OwnBattle {
     sosdet.report.CityReport otherReport;
     /** Between two humans: army 1's commanders retreated it, inside the step; army 0 wins (SOS-83). */
     boolean army1Retreat;
+    /** The commanders' speed vote: {@link #human} is commander 0, {@link #other} commander 1 (spec §8). */
+    final BattleSpeedVote speedVote;
+    /** The agreed speed at Engage, the same on every PC; it comes back after the battle (spec §8). */
+    double speedBefore;
+    /** This PC's game speed as the loaded battle first runs: a press is a change from it. */
+    boolean speedSeen;
     /** The world stream's draw count at Engage, the same on every PC; put back after the generation and the battle. */
     final long worldDraws;
     /** The battle PC's battle save is still to be loaded: no step runs past {@link #step} until it is. */
@@ -34,6 +40,7 @@ public final class OwnBattle {
         this.pc = pc;
         this.other = other;
         this.worldDraws = worldDraws;
+        this.speedVote = new BattleSpeedVote(other >= 0 ? 2 : 1);
     }
 
     /** True until every PC has loaded the battle PC's battle. */

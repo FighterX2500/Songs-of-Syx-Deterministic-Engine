@@ -482,6 +482,9 @@ public final class Hooks {
         if (s == null) {
             return speed;
         }
+        if (s.battleVoting()) {
+            return speed <= 0 ? speed : s.clock.agreedSpeed(); // a press is a vote until the commanders agree (spec §8)
+        }
         if (s.localRuns()) {
             return s.clock.agreedSpeed();
         }
@@ -2210,6 +2213,12 @@ public final class Hooks {
         return s == null || s.deployReady(s.ai().applyingPc());
     }
 
+    /** Inside the speed vote's command: true when the PC giving it commands the battle (spec §8). */
+    public static boolean battleSpeedVote(double speed) {
+        Session s = Engine.session();
+        return s != null && s.battleVote(s.ai().applyingPc(), speed);
+    }
+
     /** The other human the open world-battle prompt asks, between two humans; -1 for none (SOS-83). */
     public static int worldPromptOther() {
         Session s = Engine.session();
@@ -2228,12 +2237,23 @@ public final class Hooks {
         return s != null && s.battle != null && s.battle.army1Retreat;
     }
 
-    /**
-     * In the result panel of a battle between two humans: true when {@code army0Lost}, so the second army's human won and
-     * answers it, seeing the result from their own side (SOS-83).
-     */
-    public static boolean resultForArmy1(boolean army0Lost) {
-        return army0Lost && battleBetweenHumans();
+    /** True when the result's winner chooses captives and spoils: army 0's human, or army 1's between two humans (SOS-116). */
+    public static boolean resultWon(world.battle.spec.WBattleResult r) {
+        return r.result == world.battle.spec.BATTLE_RESULT.VICTORY || resultArmy1(r);
+    }
+
+    /** True when {@code r} is a battle's between two humans, won by the second army, whose human answers it. */
+    public static boolean resultArmy1(world.battle.spec.WBattleResult r) {
+        Session s = Engine.session();
+        return s != null && s.army1Result == r;
+    }
+
+    /** Patch 15, as a battle's result opens, before its record goes (SOS-116). */
+    public static void battleResult(world.battle.spec.WBattleResult r, boolean army0Lost) {
+        Session s = Engine.session();
+        if (s != null && army0Lost && battleBetweenHumans()) {
+            s.army1Result = r;
+        }
     }
 
     /**
@@ -2440,7 +2460,11 @@ public final class Hooks {
             s.streams.leave();
         }
         if (s.battle != null && !s.battle.awaiting) {
+            double before = s.battle.speedBefore;
             s.battle = null; // every PC is back in its own city: the reports go on (plan 0006)
+            s.battleSpeed(before); // the world's speed comes back (spec §8)
+            GAME.SPEED.speedSet(before); // the save's speed isn't the player's: no change to send
+            s.seenSpeed = before;
             Engine.feedHeldReports(s);
         }
     }
@@ -2480,7 +2504,9 @@ public final class Hooks {
         }
         OwnBattle b = new OwnBattle(step, human, s.pcOf(human), other, s.streams.worldDraws());
         b.otherReport = other >= 0 ? s.reports(other).current() : null; // a battle load clears the reports (SOS-83)
+        b.speedBefore = s.clock.agreedSpeed();
         s.battle = b;
+        s.battleSpeed(1); // as vanilla's battle opens; then the commanders' vote (spec §8)
         s.battleEndsViews(step); // every PC loads the battle: no view lives through it (SOS-82)
         s.streams.reseed(s.battleSeed(step));
         try {

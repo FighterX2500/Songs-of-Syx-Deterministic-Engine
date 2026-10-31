@@ -33,6 +33,7 @@ public final class MapBattles {
     static final int RESTART = 7963;
     /** A local battle's result, from its PC to every PC (SOS-93). */
     static final int LOCAL_RESULT = 7964;
+    static final int SPEED_VOTE = 7965;
 
     /** The save the battle's generation writes ({@code BattleState.setGenerate}). */
     private static final String BATTLE_SAVE = "__battle";
@@ -81,7 +82,8 @@ public final class MapBattles {
                 b.reloadBattle();
                 return true;
             }),
-            new Command(LOCAL_RESULT, "battleLocalResult", MapBattles::applyLocalResult));
+            new Command(LOCAL_RESULT, "battleLocalResult", MapBattles::applyLocalResult),
+            new Command(SPEED_VOTE, "battleSpeedVote", r -> Hooks.battleSpeedVote(r.d())));
 
     private MapBattles() {
     }
@@ -193,6 +195,13 @@ public final class MapBattles {
         }
         Commands.capture(new CmdWriter(DEPLOY));
         return true;
+    }
+
+    /** This PC's commander pressed a speed button in a battle on every PC: their vote (spec §8). */
+    public static void speedVote(double speed) {
+        if (Commands.capturing()) {
+            Commands.capture(new CmdWriter(SPEED_VOTE).d(speed));
+        }
     }
 
     /** Hook in the battle panel's retreat, once confirmed: in a session (true) a command. */
