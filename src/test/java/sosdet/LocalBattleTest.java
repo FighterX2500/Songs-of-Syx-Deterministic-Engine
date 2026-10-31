@@ -1,5 +1,6 @@
 package sosdet;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -197,6 +198,166 @@ class LocalBattleTest {
         return v;
     }
 
+    /** A battle of human 3 with human 0 as an ally, two divisions per army: one of each human's, then the enemy's. */
+    private static LocalBattle withAlly(Session s) {
+        s.allies = new int[] {0};
+        s.allyAnswers = new int[] {1};
+        LocalBattle b = s.localEngage(1234, 3);
+        b.roster.owners = new int[] {3, 0, -1, -1};
+        s.localsAt(b.freeze);
+        return b;
+    }
+
+    /** Rig run S9E: a save's old counter would run a loaded-back city behind the PCs that loaded nothing. */
+    @Test
+    void aLoadKeepsTheUpdateCounterOnTheStep() {
+        Session s = session(0);
+        assertEquals(500, s.updateLoaded(500), "before the first step the save's");
+        s.updateSeen(501);
+        assertEquals(500, s.updateLoaded(123), "at step 0, the first step not run yet");
+    }
+
+    /** Mod spec section 8, SOS-119: the ally's PC follows the battle by itself, on every PC alike. */
+    @Test
+    void anAllysViewStartsByItselfOnEveryPc() {
+        for (int local : new int[] {0, 3}) {
+            Session s = session(local);
+            LocalBattle b = withAlly(s);
+            View v = s.views[0];
+            assertNotNull(v, "the ally's view");
+            assertEquals(3, v.owner);
+            assertEquals(b.pc, v.ownerPc);
+            assertTrue(v.freeze > b.freeze, "after the battle's own generation");
+            s.localsAt(v.freeze);
+            s.viewsAt(v.freeze);
+            assertTrue(v.frozen());
+            s.localsAt(v.freeze + 1);
+            assertSame(v, s.views[0], "one view, not a new one each step");
+            Engine.end();
+        }
+    }
+
+    /** A prompt for the ally waits with the fighter's: it would end their view of the battle (spec section 8). */
+    @Test
+    void anAllysPromptsWaitForTheBattle() {
+        Session s = session(0);
+        LocalBattle b = withAlly(s);
+        assertFalse(s.localBusy(0), "not without a result still to come");
+        b.after = r -> { };
+        assertTrue(s.localBusy(0));
+        assertTrue(s.localBusy(3));
+        assertFalse(s.localBusy(1));
+    }
+
+    /** Mod spec section 8: each commander gives orders only to their own divisions; NPCs on the side go to the fighter. */
+    @Test
+    void theTwoPcsOfABattleWithAnAllyEachCommandTheirOwnDivisions() {
+        Session s = session(3);
+        withAlly(s);
+        assertTrue(s.ai().commanders().allows(1, 0), "the fighter's own");
+        assertFalse(s.ai().commanders().allows(0, 0), "not the ally's to order");
+        assertTrue(s.ai().commanders().allows(0, 1), "the ally's own");
+        assertFalse(s.ai().commanders().allows(1, 1), "not the fighter's to order");
+        assertTrue(s.ai().commanders().allows(sosdet.ai.AiEntry.AI, 2), "the enemy is the general's");
+    }
+
+    /** The other PCs hold no table, so a battle PC's mustn't reach the hash: S9G desynced on its clock at the freeze. */
+    @Test
+    void aLocalTableIsInNoHash() {
+        Session s = session(3);
+        withAlly(s);
+        assertTrue(s.ai().commanders().set());
+        assertFalse(s.ai().commanders().hashed());
+    }
+
+    @Test
+    void anotherPcHoldsNoTable() {
+        Session s = session(0);
+        s.allies = new int[] {0};
+        s.allyAnswers = new int[] {0};
+        LocalBattle b = s.localEngage(1234, 3);
+        s.localsAt(b.freeze);
+        assertNull(s.views[0], "who didn't answer stays out");
+        assertFalse(s.ai().commanders().set());
+    }
+
+    /** Mod spec section 8, ADR 0009: the battle runs on two PCs: the first who joined is the ally. */
+    @Test
+    void anNpcBattleTakesOneAlly() {
+        Session s = session(3);
+        s.allies = new int[] {0, 7};
+        s.allyAnswers = new int[] {1, 1};
+        LocalBattle b = s.localEngage(1234, 3);
+        assertArrayEquals(new int[] {3, 0}, b.roster.commanders);
+    }
+
+    /** ADR 0009: the ally's order reaches the fighter's PC through the log; its tape carries it from the ally's PC. */
+    @Test
+    void anAllysOrderGoesOnTheFightersTapeOnlyThere() {
+        Session fighter = session(3);
+        withAlly(fighter);
+        fighter.currentHuman = 0;
+        fighter.localAllyOrder(sosdet.ai.AiEntry.PATH, 1, new byte[] {1});
+        assertEquals(1, fighter.tape.queued().size());
+        assertEquals(0, fighter.tape.queued().get(0).pc, "from the ally's PC");
+        fighter.tape.clearQueued();
+        fighter.currentHuman = 3;
+        fighter.localAllyOrder(sosdet.ai.AiEntry.PATH, 1, new byte[] {1});
+        assertEquals(0, fighter.tape.queued().size(), "only an ally's order comes this way");
+        Engine.end();
+
+        Session other = session(0);
+        withAlly(other);
+        other.currentHuman = 0;
+        other.localAllyOrder(sosdet.ai.AiEntry.PATH, 1, new byte[] {1});
+        assertEquals(0, other.tape.queued().size(), "the ally's own PC applies it from the tape");
+    }
+
+    /** Mod spec section 8: the commanders' vote sets the speed; either can pause. */
+    @Test
+    void theCommandersVoteAndEitherPauses() {
+        Session s = session(3);
+        LocalBattle b = withAlly(s);
+        s.currentHuman = 3;
+        s.localVote(5);
+        assertEquals(1, b.votedSpeed, "one of two votes changes nothing");
+        s.currentHuman = 0;
+        s.localVote(5);
+        assertEquals(5, b.votedSpeed);
+        s.localVote(0);
+        assertTrue(b.paused);
+        s.currentHuman = 3;
+        s.localVote(5);
+        assertFalse(b.paused, "a press goes on");
+        assertEquals(5, b.votedSpeed);
+    }
+
+    @Test
+    void aRetreatLeavesTheAllyFighting() {
+        Session s = session(3);
+        LocalBattle b = withAlly(s);
+        assertEquals(0, s.retreatSide(0));
+        assertEquals(1, b.roster.leaving, "the ally's army goes; the fighter stays");
+    }
+
+    /** The world around a local battle reads every human's own values, on the battle's PC too (SOS-119). */
+    @Test
+    void theWorldPartReadsNoBattleBonuses() {
+        Session s = session(3);
+        LocalBattle b = withAlly(s);
+        assertSame(b.roster, s.running());
+        s.part = sosdet.game.StepParts.WORLD_PART;
+        assertNull(s.running());
+    }
+
+    @Test
+    void theResultTellsEveryPcWhoLeftTheField() {
+        Session s = session(0);
+        LocalBattle b = withAlly(s);
+        s.localGone(3, new int[] {0});
+        assertArrayEquals(new int[] {0}, b.roster.goneHumans());
+    }
+
     /** Mod spec section 8: any other player can join a running NPC battle (SOS-109). */
     @Test
     void aBattleCanBeWatchedOnlyWhileItRuns() {
@@ -223,7 +384,7 @@ class LocalBattleTest {
         fighter.record(f + 2, 0);
         assertTrue(s.watchMayRun(f), "the freeze step is the save's");
         assertFalse(s.watchMayRun(f + 1), "no tape yet: the watcher waits, the fighter doesn't");
-        s.tape.in(fighter.out(0), v.ownerPc);
+        s.tape.in(fighter.out(0));
         assertTrue(s.watchMayRun(f + 2));
         assertFalse(s.watchMayRun(f + 3));
         s.localOrders(f + 1);

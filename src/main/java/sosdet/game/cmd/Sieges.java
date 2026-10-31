@@ -46,6 +46,7 @@ public final class Sieges {
     static final int ARMY_TELEPORT = 7974;
     static final int NPC_BESIEGE = 7975;
     static final int ARMY_FILL = 7976;
+    static final int NPC_WAR = 7977;
 
     static final List<Command> ALL = List.of(new Command(SALLY, "siegeSally", r -> applySally()),
             new Command(WAIT_PASSED, "siegeWaitPassed", r -> applyWaitPassed(r.i())),
@@ -69,7 +70,8 @@ public final class Sieges {
                 a.teleport(tx, ty);
                 return true;
             }),
-            new Command(NPC_BESIEGE, "npcBesiegeForTest", r -> applyNpcBesiege(r.i())));
+            new Command(NPC_BESIEGE, "npcBesiegeForTest", r -> applyNpcBesiege(r.i())),
+            new Command(NPC_WAR, "npcWarForTest", r -> applyNpcWar(r.i(), r.i())));
 
     /** Patch 15's {@code WBattles.sosdetSally}: the engine compiles against the shipped game, without it. */
     private static final Method SALLY_OUT = sallyOutMethod();
@@ -290,6 +292,30 @@ public final class Sieges {
         Commands.capture(new CmdWriter(NPC_BESIEGE).i(slot));
     }
 
+    /** Test tooling, never a player's: the NPC faction in {@code npc} is at war with the human in {@code slot} (SOS-119). */
+    public static void npcWarForTest(int slot, int npc) {
+        if (!Commands.capturing()) {
+            throw new IllegalStateException("SOSDET: an NPC's war outside a session's play");
+        }
+        Commands.capture(new CmdWriter(NPC_WAR).i(slot).i(npc));
+    }
+
+    private static boolean applyNpcWar(int slot, int npc) {
+        atWar(FACTIONS.getByIndex(npc), FACTIONS.getByIndex(slot));
+        return true;
+    }
+
+    private static void atWar(Faction npc, Faction human) {
+        if (!DIP.WAR().is(npc, human)) {
+            int before = Hooks.currentHumanSwap(human); // DIP.set reads the player for its war timer
+            try {
+                DIP.WAR().set(npc, human);
+            } finally {
+                Hooks.currentHumanSwap(before);
+            }
+        }
+    }
+
     private static boolean applyNpcBesiege(int slot) {
         Faction human = FACTIONS.getByIndex(slot);
         Region capital = human.capitolRegion();
@@ -305,14 +331,7 @@ public final class Sieges {
         if (capital == null || strongest == null) {
             return false;
         }
-        if (!DIP.WAR().is(strongest.faction(), human)) {
-            int before = Hooks.currentHumanSwap(human); // DIP.set reads the player for its war timer
-            try {
-                DIP.WAR().set(strongest.faction(), human);
-            } finally {
-                Hooks.currentHumanSwap(before);
-            }
-        }
+        atWar(strongest.faction(), human);
         COORDINATE tile = strongest.besigeTile(capital); // a capital's near tiles may be rock or sea, where an army is lost
         if (tile != null) {
             strongest.teleport(tile.x(), tile.y());

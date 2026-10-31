@@ -91,6 +91,9 @@ public final class AiLog {
     private static final int NOT_APPLYING = Integer.MIN_VALUE;
     /** The answer to a world question, the one order a watching PC gives: the question holds its view open until it's answered. */
     public static final int WORLD_ANSWER = 7951;
+    /** An ally's order and a commander's vote in a local battle: a watching PC's, but these go through (SOS-119). */
+    public static final int LOCAL_ORDER = 7966;
+    public static final int LOCAL_VOTE = 7967;
     private long appliedOrders;
     private final long[] appliedByKind = new long[AiEntry.KINDS];
     private final Recent recentAi = new Recent();
@@ -180,7 +183,8 @@ public final class AiLog {
      * to the host through {@link #ordersOut}. Either way it is applied at the step the host stamps.
      */
     public void captureOrder(int kind, int div, byte[] payload) {
-        boolean worldAnswer = kind == AiEntry.COMMAND && CmdReader.idOf(payload) == WORLD_ANSWER;
+        int id = kind == AiEntry.COMMAND ? CmdReader.idOf(payload) : -1;
+        boolean worldAnswer = id == WORLD_ANSWER || id == LOCAL_ORDER || id == LOCAL_VOTE;
         if (watchOnly && !worldAnswer && !(commanding && kind < AiEntry.SPEED)) {
             watchedDropped++;
             return;
@@ -682,6 +686,28 @@ public final class AiLog {
     public void assaultCommanders(int[] byDivision, int[] artilleryByArmy, boolean here) {
         commanders.set(byDivision, artilleryByArmy);
         commanding = here;
+    }
+
+    /**
+     * An order from a local battle's tape, inside the step: by the same rules as an entry of this log, so the command
+     * knows the PC that gave it and a division obeys only its commander (SOS-119).
+     */
+    public void applyTaped(AiEntry e) {
+        if (e.div >= 0 && !commanders.allows(e.pc, e.div)) {
+            commanders.skip();
+            return;
+        }
+        applyingPc = e.pc;
+        try {
+            applier.apply(e);
+        } finally {
+            applyingPc = NOT_APPLYING;
+        }
+    }
+
+    /** On the two PCs running a local battle with an ally: its table, or null and null at its end (SOS-119). */
+    public void localCommanders(int[] byDivision, int[] artilleryByArmy) {
+        commanders.setLocal(byDivision, artilleryByArmy);
     }
 
     /** Orders and commands this PC's player gave while only watching, all dropped. */

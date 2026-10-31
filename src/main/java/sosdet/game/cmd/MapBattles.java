@@ -33,6 +33,10 @@ public final class MapBattles {
     static final int RESTART = 7963;
     /** A local battle's result, from its PC to every PC (SOS-93). */
     static final int LOCAL_RESULT = 7964;
+    static final int SPEED_VOTE = 7965;
+    /** An ally's order and a commander's vote in a local battle, through the log to the battle's PCs (SOS-119). */
+    static final int LOCAL_ORDER = sosdet.ai.AiLog.LOCAL_ORDER;
+    static final int LOCAL_VOTE = sosdet.ai.AiLog.LOCAL_VOTE;
 
     /** The save the battle's generation writes ({@code BattleState.setGenerate}). */
     private static final String BATTLE_SAVE = "__battle";
@@ -61,6 +65,9 @@ public final class MapBattles {
                 if (Hooks.battleRetreatSide() < 0) {
                     return false; // only a side's own commanders retreat it (SOS-83)
                 }
+                if (Hooks.battleArmyLeaves()) {
+                    return true; // an ally fights on: the battle goes on without this army (spec §8)
+                }
                 b.liveRetreat(); // when army 1 retreats, the patched liveRetreat gives army 0 the victory
                 return true;
             }),
@@ -81,7 +88,18 @@ public final class MapBattles {
                 b.reloadBattle();
                 return true;
             }),
-            new Command(LOCAL_RESULT, "battleLocalResult", MapBattles::applyLocalResult));
+            new Command(LOCAL_RESULT, "battleLocalResult", MapBattles::applyLocalResult),
+            new Command(SPEED_VOTE, "battleSpeedVote", r -> Hooks.battleSpeedVote(r.d())),
+            new Command(LOCAL_ORDER, "battleLocalOrder", r -> {
+                int kind = r.i();
+                int div = r.i();
+                byte[] payload = new byte[r.i()];
+                for (int i = 0; i < payload.length; i++) {
+                    payload[i] = (byte) r.i();
+                }
+                return Hooks.localAllyOrder(kind, div, payload);
+            }),
+            new Command(LOCAL_VOTE, "battleLocalVote", r -> Hooks.localVote(r.d())));
 
     private MapBattles() {
     }
@@ -91,7 +109,7 @@ public final class MapBattles {
      * the player's divisions' survivors as a count with their mean combat experience (owner, 2026-10-30: vanilla's
      * {@code resolve(int, double)}), and the captives by race. Read on the battle PC from vanilla's result.
      */
-    public static byte[] localResultCommand(int human, Object result) {
+    public static byte[] localResultCommand(int human, Object result, int[] gone) {
         BattleStateResult r = (BattleStateResult) result;
         CmdWriter w = new CmdWriter(LOCAL_RESULT).i(human).i(r.result.ordinal()).i(r.playerLosses).i(r.enemyLosses);
         w.i(r.enemySurvivors.length);
@@ -117,6 +135,10 @@ public final class MapBattles {
         w.i(r.enemyCaptured.length);
         for (int v : r.enemyCaptured) {
             w.i(v);
+        }
+        w.i(gone.length);
+        for (int h : gone) {
+            w.i(h);
         }
         return w.bytes();
     }
@@ -150,6 +172,11 @@ public final class MapBattles {
             captured[i] = r.i();
         }
         result[6] = captured;
+        int[] gone = new int[r.i()];
+        for (int i = 0; i < gone.length; i++) {
+            gone[i] = r.i();
+        }
+        Hooks.localGone(human, gone);
         return Hooks.localResult(human, result);
     }
 
@@ -193,6 +220,29 @@ public final class MapBattles {
         }
         Commands.capture(new CmdWriter(DEPLOY));
         return true;
+    }
+
+    /** An ally's order in a local battle, for the log. */
+    public static byte[] localOrderCommand(int kind, int div, byte[] payload) {
+        CmdWriter w = new CmdWriter(LOCAL_ORDER).i(kind).i(div).i(payload.length);
+        for (byte b : payload) {
+            w.i(b);
+        }
+        return w.bytes();
+    }
+
+    /** A commander's speed button in a local battle with an ally: a vote, or 0 to pause. */
+    public static void localVote(double speed) {
+        if (Commands.capturing()) {
+            Commands.capture(new CmdWriter(LOCAL_VOTE).d(speed));
+        }
+    }
+
+    /** This PC's commander pressed a speed button in a battle on every PC: their vote (spec §8). */
+    public static void speedVote(double speed) {
+        if (Commands.capturing()) {
+            Commands.capture(new CmdWriter(SPEED_VOTE).d(speed));
+        }
     }
 
     /** Hook in the battle panel's retreat, once confirmed: in a session (true) a command. */

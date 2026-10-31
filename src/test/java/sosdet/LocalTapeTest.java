@@ -14,6 +14,21 @@ class LocalTapeTest {
 
     private static final int PC = 2;
 
+    /** SOS-119: an ally's order keeps its own PC on the tape, so the table lets it through and no other. */
+    @Test
+    void anOrderKeepsThePcItCameFrom() {
+        LocalTape fighter = new LocalTape(4);
+        LocalTape watcher = new LocalTape(4);
+        fighter.watch(1);
+        fighter.add(AiEntry.PATH, 7, PC, new byte[] {1});
+        fighter.add(AiEntry.PATH, 8, 3, new byte[] {2});
+        fighter.record(100, 1);
+        watcher.in(fighter.out(1));
+        LocalTape.Step s = watcher.take(100);
+        assertEquals(PC, s.orders[0].pc);
+        assertEquals(3, s.orders[1].pc);
+    }
+
     @Test
     void aWatcherGetsEachStepOnceInOrderWithItsRoundsAndOrders() {
         LocalTape fighter = new LocalTape(4);
@@ -23,10 +38,10 @@ class LocalTapeTest {
         fighter.record(100, 5);
         fighter.clearQueued();
         fighter.record(101, 0); // paused
-        watcher.in(fighter.out(1), PC);
+        watcher.in(fighter.out(1));
         assertEquals(0, fighter.out(1).length, "the tape is taken once");
         fighter.record(102, 25);
-        watcher.in(fighter.out(1), PC);
+        watcher.in(fighter.out(1));
 
         assertTrue(watcher.has(102));
         assertFalse(watcher.has(103));
@@ -49,7 +64,7 @@ class LocalTapeTest {
         fighter.record(100, 1);
         fighter.unwatch(1); // the thaw, within the frame: the watcher still needs step 100 to reach it
         fighter.record(101, 1);
-        watcher.in(fighter.out(1), PC);
+        watcher.in(fighter.out(1));
         assertTrue(watcher.has(100));
         assertFalse(watcher.has(101), "nothing is written after the watch ended");
         fighter.record(102, 1);
@@ -64,9 +79,9 @@ class LocalTapeTest {
         fighter.record(100, 1);
         fighter.out(1); // lost
         fighter.record(101, 1);
-        watcher.in(fighter.out(1), PC);
+        watcher.in(fighter.out(1));
         fighter.record(103, 1);
-        assertThrows(IllegalStateException.class, () -> watcher.in(fighter.out(1), PC));
+        assertThrows(IllegalStateException.class, () -> watcher.in(fighter.out(1)));
         assertThrows(IllegalStateException.class, () -> watcher.take(100));
     }
 
@@ -101,6 +116,6 @@ class LocalTapeTest {
         fighter.record(100, 1);
         byte[] bytes = fighter.out(1);
         bytes[7] = 9;
-        assertThrows(IllegalStateException.class, () -> new LocalTape(4).in(bytes, PC));
+        assertThrows(IllegalStateException.class, () -> new LocalTape(4).in(bytes));
     }
 }

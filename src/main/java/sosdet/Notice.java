@@ -8,7 +8,7 @@ package sosdet;
  * @param kind   {@link #WAR} and the others
  * @param first  a faction's index, see the kind
  * @param second the other faction's index, -1 when the kind has none
- * @param value  the tariff's percent; else 0
+ * @param value  the tariff's percent, the speed voted for; else 0
  */
 public record Notice(long step, int kind, int first, int second, int value) {
 
@@ -26,4 +26,12 @@ public record Notice(long step, int kind, int first, int second, int value) {
     public static final int BATTLE = 5;
     /** {@code first} set a tariff of {@code value} percent on {@code second}. */
     public static final int TARIFF = 6;
+    /** {@code first} voted for a battle speed of {@code value}. */
+    public static final int SPEED_VOTE = 7;
+    /** The ally {@code first} joined the battle of {@code second}. */
+    public static final int ALLY_JOINED = 8;
+    /** The ally {@code first} stayed out of the battle of {@code second}. */
+    public static final int ALLY_OUT = 9;
+    /** {@code first} retreated its army, its ally fighting on. */
+    public static final int ARMY_LEFT = 10;
 }

@@ -100,6 +100,16 @@ final class Session {
 
     /** Host: the game speed last seen, so a change goes into the log once (B16). */
     double seenSpeed;
+    /** The humans the open prompt asks to join its battle, and their answers: 0 none yet, 1 Join, 2 Stay out (SOS-118). */
+    int[] allies = NO_ARMIES;
+    int[] allyAnswers = NO_ARMIES;
+    int[] alliesNext = NO_ARMIES;
+    /** The humans who left the battle the open result is about, so their armies go as it's accepted (SOS-118). */
+    int[] resultLeft = NO_ARMIES;
+    /** Several humans won the battle: whose share is open (SOS-118). */
+    ResultShares shares;
+    /** The result a battle's second army won, while its prompt is open (SOS-116). */
+    world.battle.spec.WBattleResult army1Result;
     /** Host: the pacing by the slowest PC and the speed governor (SOS-42). */
     /** The clock section's counters at the last hash, for a desync report. */
     final long[] clockParts = new long[HashLog.CLOCK_PARTS];
@@ -313,6 +323,8 @@ final class Session {
     private long watchLeadAt;
 
     /** The local battle whose Engage runs now, inside its step: vanilla's Engage hands it its parts. */
+    /** A local battle whose after-battle runs now, on every PC (SOS-119). */
+    LocalBattle resulting;
     LocalBattle engaging;
     /** The battle PC between its result's step and the next: the world it ran, for its own city loaded back. */
     private java.nio.file.Path localWorld;
@@ -326,11 +338,13 @@ final class Session {
 
     /** Every PC, at the Engage step: the battle of {@code human} runs on its PC only, from the next report step. */
     LocalBattle localEngage(long step, int human) {
-        LocalBattle b = new LocalBattle(step, human, pcOf(human), nextReportStep(step), closedPromptArmies, null);
+        // one ally: the battle runs on two PCs only (spec §8), and a battle takes one watcher's load (plan 0017)
+        int[] allies = alliesJoined(human, 1);
+        LocalBattle b = new LocalBattle(step, human, pcOf(human), nextReportStep(step), closedPromptArmies, null, allies);
         locals[human] = b;
         closedPromptArmies = NO_ARMIES;
         for (View v : views) {
-            if (v != null && (v.viewer == human || v.owner == human)) {
+            if (v != null && (b.roster.commander(v.viewer) >= 0 || b.roster.commander(v.owner) >= 0)) {
                 endView(v.viewer, step, View.GAME, "A battle started."); // the city goes under the battle map
             }
         }
@@ -346,10 +360,14 @@ final class Session {
             LocalBattle b = locals[slot];
             if (b != null && b.state == LocalBattle.ENGAGED && b.freeze == step) {
                 b.state = LocalBattle.RUNNING;
+                localCommanders(b.roster);
                 if (ai().mode() == AiMode.HOST && b.pc != ai().localPc()) {
                     b.away = true; // it generates the battle, seconds in one step: the others don't wait
                     pacer.away(b.pc, true);
                 }
+            }
+            if (b != null) {
+                allyWatches(step, b);
             }
             if (b != null && b.thaw == step && b.after != null) {
                 b.thaw = nextReportStep(step + 1); // its after-battle waits for another human's prompt: it comes first
@@ -361,6 +379,38 @@ final class Session {
                 }
             }
         }
+    }
+
+    /**
+     * Every PC: an ally's PC follows the battle from the fighter's tape, as a watcher's does (SOS-119). It starts once
+     * nothing else holds its view, and again after a view the game ended or a desync; not after the ally left it, or
+     * their PC fell too far behind (spec section 16).
+     */
+    private void allyWatches(long step, LocalBattle b) {
+        if (!b.roster.allies() || b.state != LocalBattle.RUNNING || b.resultStep >= 0) {
+            return;
+        }
+        int ally = b.roster.commanders[b.roster.leads];
+        View v = views[ally];
+        if (v != null && v.state != View.ENDED && v.state != View.CANCELLED) {
+            return;
+        }
+        if (v == null || v.freeze <= b.freeze || v.why == View.GAME || v.why == View.DESYNC) {
+            views[ally] = new View(ally, pcOf(ally), b.human, b.pc, nextReportStep(step + 1));
+        }
+    }
+
+    /** The two PCs running a battle with an ally: who commands what, from the battle's start to its end (SOS-119). */
+    private void localCommanders(BattleRoster r) {
+        if (!r.allies() || r.owners == null || r.commander(localHuman) < 0) {
+            return;
+        }
+        int fighter = pcOf(r.commanders[0]);
+        int[] byDivision = new int[r.owners.length];
+        for (int i = 0; i < byDivision.length; i++) {
+            byDivision[i] = r.owners[i] >= 0 ? pcOf(r.owners[i]) : i < byDivision.length / 2 ? fighter : sosdet.ai.AiEntry.AI;
+        }
+        ai().localCommanders(byDivision, new int[] {fighter, sosdet.ai.AiEntry.AI});
     }
 
     /** The host: a battle PC that generated its battle and has caught up is waited for again. */
@@ -479,6 +529,17 @@ final class Session {
         return true;
     }
 
+    /** The result command, on every PC: those who left the field earlier, which only the battle's PCs saw (SOS-119). */
+    void localGone(int human, int[] gone) {
+        LocalBattle b = human >= 0 && human < SLOTS ? locals[human] : null;
+        if (b == null || b.resultStep >= 0) {
+            return;
+        }
+        for (int h : gone) {
+            b.roster.gone[b.roster.commander(h)] = true;
+        }
+    }
+
     /**
      * Between steps, after a local battle's result step: the battle PC saves the world it ran and loads its own city
      * as saved at the freeze, then the world into it ({@link #localBackWorld}); every other PC reloads its own world at
@@ -491,6 +552,9 @@ final class Session {
                 continue;
             }
             b.back = true;
+            if (b.roster.allies() && b.roster.commander(localHuman) >= 0) {
+                ai().localCommanders(null, null);
+            }
             if (b.human != localHuman) {
                 if (!viewBackLoading) { // a watcher's load back resets the same
                     reloadOwnWorld();
@@ -543,7 +607,12 @@ final class Session {
      * result has been asked (spec §8). A prompt that would ask it stays in the game's queue; it opens after that.
      */
     boolean localBusy(int faction) {
-        return faction >= 0 && faction < SLOTS && locals[faction] != null && locals[faction].after != null;
+        for (LocalBattle b : locals) {
+            if (b != null && b.after != null && b.roster.commander(faction) >= 0) {
+                return true; // an ally's prompts wait too: one would end their view of the battle (SOS-119)
+            }
+        }
+        return false;
     }
 
     /**
@@ -561,9 +630,11 @@ final class Session {
             long worldDraws = streams.worldDraws();
             streams.reseed(battleSeed(step));
             currentHuman = b.human; // as the human whose battle it was, whose result prompt opens
+            resulting = b;
             try {
                 after.accept(b.result);
             } finally {
+                resulting = null;
                 currentHuman = living;
                 streams.reseed(worldSeed(step));
                 streams.worldDraws(worldDraws);
@@ -609,7 +680,7 @@ final class Session {
             tape.record(step, localPaused ? 0 : localRounds);
             java.util.ArrayList<sosdet.ai.AiEntry> orders = tape.queued();
             for (int i = 0; i < orders.size(); i++) {
-                ai().applier().apply(orders.get(i));
+                ai().applyTaped(orders.get(i));
             }
             tape.clearQueued();
             return;
@@ -625,7 +696,7 @@ final class Session {
         LocalTape.Step t = tape.take(step);
         watchRounds = t.rounds;
         for (sosdet.ai.AiEntry e : t.orders) {
-            ai().applier().apply(e);
+            ai().applyTaped(e);
         }
     }
 
@@ -1982,6 +2053,9 @@ final class Session {
         for (int i = 0; i < divisions; i++) {
             int army = i / (divisions / armies);
             byDivision[i] = army == 0 ? battle.pc : army == 1 ? army1 : sosdet.ai.AiEntry.AI;
+            if (battle.roster.owners != null && battle.roster.owners[i] >= 0) {
+                byDivision[i] = pcOf(battle.roster.owners[i]); // each human commands their own army (spec §8); an NPC ally's goes to the side's first
+            }
         }
         int[] artillery = new int[armies];
         for (int a = 0; a < armies; a++) {
@@ -1995,15 +2069,16 @@ final class Session {
      * two humans it waits for both sides' commanders, each PC pressing for its own army; any other battle starts at once.
      */
     boolean deployReady(int fromPc) {
-        if (battle == null || battle.other < 0) {
+        if (battle == null) {
+            return roster() == null || !roster().allies() || fromPc == pcOf(roster().commanders[0]); // the fighter's Start
+        }
+        if (battle.other < 0) {
             return true;
         }
-        if (fromPc == battle.pc) {
-            battle.deployReady |= 1;
-        } else if (fromPc == pcOf(battle.other)) {
-            battle.deployReady |= 2;
+        if (commander(fromPc) >= 0) {
+            battle.deployReady |= 1 << commander(fromPc);
         }
-        if (battle.deployReady != 3) {
+        if (battle.deployReady != (1 << roster().commanders.length) - 1) {
             return false;
         }
         deployTimer.close();
@@ -2016,17 +2091,75 @@ final class Session {
      * from the other human's PC. With no own-city battle (co-op) it is army 0, as in vanilla.
      */
     int retreatSide(int fromPc) {
-        if (battle == null) {
+        if (roster() == null || battle == null && !roster().allies()) {
             return 0;
         }
-        if (fromPc == battle.pc) {
-            return 0;
+        int c = commander(fromPc);
+        if (c < 0 || roster().gone[c]) {
+            return -1;
         }
-        if (battle.other >= 0 && fromPc == pcOf(battle.other)) {
+        if (roster().allyStays(c)) {
+            roster().leaving = c;
+        } else if (roster().sides[c] == 1 && battle != null) {
             battle.army1Retreat = true;
-            return 1;
         }
-        return -1;
+        return roster().sides[c];
+    }
+
+    /**
+     * Inside the Retreat command, after {@link #retreatSide}: true when the army left the field and the battle goes on
+     * (mod spec §8). Otherwise it was its side's last army, which vanilla's retreat ends the battle for.
+     */
+    boolean armyLeaves() {
+        if (roster().leaving < 0) {
+            return false;
+        }
+        int c = roster().leaving;
+        roster().leaving = -1;
+        BattleAllies.leave(this, c);
+        roster().gone[c] = true;
+        notice(Notice.ARMY_LEFT, roster().commanders[c], -1, 0);
+        double settled = roster().speedVote.leave(c);
+        if (battle == null) {
+            LocalBattle b = localHere();
+            if (b != null && settled > 0) {
+                b.votedSpeed = settled;
+            }
+        } else if (settled > 0 && settled != clock.agreedSpeed()) {
+            battleSpeed(settled);
+        }
+        return true;
+    }
+
+    /** True when every human the open prompt asked to join has answered. */
+    boolean alliesAnswered() {
+        for (int a : allyAnswers) {
+            if (a == 0) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** The allies who answered Join; the chat hears of each who was asked (SOS-118). */
+    int[] alliesJoined(int lead) {
+        return alliesJoined(lead, allies.length);
+    }
+
+    /** As {@link #alliesJoined(int)}, for a battle that takes {@code most} allies: the first who said yes. */
+    int[] alliesJoined(int lead, int most) {
+        int[] joined = new int[allies.length];
+        int n = 0;
+        for (int i = 0; i < allies.length; i++) {
+            boolean in = allyAnswers[i] == 1 && n < most;
+            if (in) {
+                joined[n++] = allies[i];
+            }
+            notice(in ? Notice.ALLY_JOINED : Notice.ALLY_OUT, allies[i], lead, 0);
+        }
+        allies = NO_ARMIES;
+        allyAnswers = NO_ARMIES;
+        return java.util.Arrays.copyOf(joined, n);
     }
 
     /**
@@ -2182,8 +2315,22 @@ final class Session {
      * every PC switches at the stamped step. A peer's own speed only sets its pace.
      */
     void speedSeen(double speed) {
-        if (localHere() != null) {
+        LocalBattle fought = localHere();
+        if (fought != null && fought.roster.allies()) {
+            localPressed(fought, speed);
+            localSpeed(fought.paused ? 0 : fought.votedSpeed, System.nanoTime());
+            return;
+        }
+        if (fought != null) {
             localSpeed(speed, System.nanoTime()); // the fighting human's alone (spec §8)
+            return;
+        }
+        if (allyHere() != null) {
+            localPressed(locals[allyHere().owner], speed);
+            return;
+        }
+        if (battleVoting()) {
+            battleSpeedPressed(speed);
             return;
         }
         if (speed <= 0 || speed == seenSpeed) {
@@ -2261,6 +2408,149 @@ final class Session {
             holdLogged = false;
             clock.holdAt(StepClock.NO_LIMIT);
         }
+    }
+
+    /** Who fights the battle this PC is in, at Engage, while it runs or as its result opens; null outside one (SOS-118). */
+    BattleRoster roster() {
+        if (battle != null) {
+            return battle.roster;
+        }
+        if (engaging != null) {
+            return engaging.roster;
+        }
+        if (resulting != null) {
+            return resulting.roster;
+        }
+        LocalBattle b = localHere();
+        if (b != null) {
+            return b.roster;
+        }
+        View v = watchingBattle();
+        return v == null || locals[v.owner] == null ? null : locals[v.owner].roster;
+    }
+
+    /** {@link #roster} while its battle is on the map with its owners set; null otherwise. Soldiers' bonuses read this. */
+    BattleRoster running() {
+        if (battle == null && part == StepParts.WORLD_PART) {
+            return null; // the world runs on around a local battle: it reads every human's own values
+        }
+        BattleRoster r = battle != null && battle.awaiting ? null : roster();
+        return r == null || r.owners == null ? null : r;
+    }
+
+    /** The game's update counter at step 0, as every PC's counts one per step; unset before the first step. */
+    private int updateBase;
+    private boolean updateBaseSet;
+
+    /** A step starts, the counter already counted for it. */
+    void updateSeen(int updateI) {
+        if (!updateBaseSet) {
+            updateBase = updateI - (int) clock.step() - 1;
+            updateBaseSet = true;
+        }
+    }
+
+    /** The counter after a load between steps: the step's, however old the save; before the first step, the save's. */
+    int updateLoaded(int saved) {
+        return updateBaseSet ? updateBase + (int) clock.step() : saved;
+    }
+
+    /** This PC's view while its player fights as an ally in another's local battle, until its city is back; else null. */
+    View allyHere() {
+        View v = watchingBattle();
+        return v != null && locals[v.owner] != null && locals[v.owner].roster.ally(localHuman) ? v : null;
+    }
+
+    /** A commander's PC in a local battle, every frame: a press of the speed buttons goes to every PC as a vote. */
+    private void localPressed(LocalBattle b, double speed) {
+        if (b.seenSpeed < 0) {
+            b.seenSpeed = speed;
+        } else if (speed != b.seenSpeed) {
+            b.seenSpeed = speed;
+            sosdet.game.cmd.MapBattles.localVote(Math.max(speed, 0));
+        }
+    }
+
+    /** Inside the step: the current human's vote in their local battle, or 0 to pause it (spec §8, SOS-119). */
+    void localVote(double speed) {
+        for (LocalBattle b : locals) {
+            int c = b == null ? -1 : b.roster.commander(currentHuman);
+            if (c < 0 || b.roster.gone[c] || b.state != LocalBattle.RUNNING) {
+                continue;
+            }
+            b.paused = speed <= 0;
+            double settled = speed <= 0 ? 0 : b.roster.speedVote.vote(c, speed);
+            if (settled > 0) {
+                b.votedSpeed = settled;
+            }
+            if (speed > 0 && b.roster.commander(localHuman) >= 0) {
+                notice(Notice.SPEED_VOTE, currentHuman, -1, (int) Math.round(speed));
+            }
+        }
+    }
+
+    /** Inside the step, on every PC: the current human's order as an ally: the battle's PC puts it on the tape (SOS-119). */
+    void localAllyOrder(int kind, int div, byte[] payload) {
+        LocalBattle b = localHere();
+        if (b != null && b.roster.ally(currentHuman)) {
+            tape.add(kind, div, pcOf(currentHuman), payload);
+        }
+    }
+
+    /** True while a battle on every PC runs: its commanders choose its speed (spec §8). */
+    boolean battleVoting() {
+        return battle != null && !battle.awaiting;
+    }
+
+    /** This PC, every frame of a battle: a commander's press of a speed button is their vote. A spectator's does nothing. */
+    private void battleSpeedPressed(double speed) {
+        if (speed <= 0) {
+            return;
+        }
+        if (!battle.speedSeen) {
+            battle.speedSeen = true; // what the load left, not a press
+            seenSpeed = speed;
+        } else if (speed != seenSpeed) {
+            seenSpeed = speed;
+            if (commander(pcOf(localHuman)) >= 0) {
+                sosdet.game.cmd.MapBattles.speedVote(Math.max(speed, 1)); // vanilla's 0.25x isn't offered (spec §4)
+            }
+        }
+    }
+
+    /** The vote's commander number of the PC {@code pc}, or -1 for a spectator. */
+    private int commander(int pc) {
+        for (int c = 0; c < roster().commanders.length; c++) {
+            if (pc == pcOf(roster().commanders[c])) {
+                return c;
+            }
+        }
+        return -1;
+    }
+
+    /** Every PC, inside the step: a commander's vote; the speed changes at the step a majority forms (spec §8). */
+    boolean battleVote(int fromPc, double speed) {
+        if (!battleVoting() || commander(fromPc) < 0 || roster().gone[commander(fromPc)]) {
+            return false;
+        }
+        int c = commander(fromPc);
+        double settled = roster().speedVote.vote(c, speed);
+        notice(Notice.SPEED_VOTE, roster().commanders[c], -1, (int) Math.round(speed));
+        speedNotice = "SOSDET: battle speed " + speedText(clock.agreedSpeed()) + ", " + roster().speedVote.count(speed) + " of "
+                + roster().speedVote.commanders() + " for " + speedText(speed);
+        speedNoticeUntil = System.nanoTime() + 5 * Pacer.SECOND;
+        if (settled > 0 && settled != clock.agreedSpeed()) {
+            battleSpeed(settled);
+        }
+        return true;
+    }
+
+    /** Every PC, inside the step: a battle's speed; the host's governor starts again from it. */
+    void battleSpeed(double speed) {
+        if (ai().mode() == AiMode.HOST) {
+            pacer.wanted(speed, System.nanoTime());
+        }
+        Hooks.agreedSpeed(speed, speed, -1);
     }
 
     /** A speed change for every PC at its step: the agreed speed, the host player's, the PC that held it down or -1. */

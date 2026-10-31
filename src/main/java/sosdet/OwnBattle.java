@@ -17,10 +17,16 @@ public final class OwnBattle {
     public final int other;
     /** Between two humans: which side's commanders pressed Start (bit 0 army 0's, bit 1 army 1's), inside the step. */
     int deployReady;
+    /** Who fights it (SOS-118). */
+    final BattleRoster roster;
     /** Between two humans: the other human's city report at Engage, the same on every PC; army 1 fights with its values. */
     sosdet.report.CityReport otherReport;
     /** Between two humans: army 1's commanders retreated it, inside the step; army 0 wins (SOS-83). */
     boolean army1Retreat;
+    /** The agreed speed at Engage, the same on every PC; it comes back after the battle (spec §8). */
+    double speedBefore;
+    /** This PC's game speed as the loaded battle first runs: a press is a change from it. */
+    boolean speedSeen;
     /** The world stream's draw count at Engage, the same on every PC; put back after the generation and the battle. */
     final long worldDraws;
     /** The battle PC's battle save is still to be loaded: no step runs past {@link #step} until it is. */
@@ -29,11 +35,16 @@ public final class OwnBattle {
     boolean sent;
 
     OwnBattle(long step, int human, int pc, int other, long worldDraws) {
+        this(step, human, pc, other, worldDraws, new int[0]);
+    }
+
+    OwnBattle(long step, int human, int pc, int other, long worldDraws, int[] allies) {
         this.step = step;
         this.human = human;
         this.pc = pc;
         this.other = other;
         this.worldDraws = worldDraws;
+        this.roster = new BattleRoster(human, other, allies);
     }
 
     /** True until every PC has loaded the battle PC's battle. */

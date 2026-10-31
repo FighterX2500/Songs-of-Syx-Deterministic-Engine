@@ -36,6 +36,7 @@ public final class WorldBattles {
     static final int DECIDE = 7900;
     static final int RESULT_ACCEPT = 7901;
     static final int SIEGE_RESULT = 7902;
+    static final int ALLY_ANSWER = 7903;
 
     /** {@link #decide} choices. */
     public static final int AUTO = 1;
@@ -55,9 +56,7 @@ public final class WorldBattles {
             new Command(RESULT_ACCEPT, "worldBattleAccept", r -> {
                 int[] slaves = ints(r);
                 int[] spoils = ints(r);
-                double mercy = r.d();
-                int[] captured = ints(r);
-                return applyAccept(slaves, spoils, mercy, captured, ints(r));
+                return applyAccept(slaves, spoils, r.d());
             }),
             new Command(SIEGE_RESULT, "worldSiegeResult", r -> {
                 int choice = r.i();
@@ -66,7 +65,8 @@ public final class WorldBattles {
                 int[] slaves = ints(r);
                 int[] spoils = ints(r);
                 return applySiegeResult(choice, devastation, death, slaves, spoils, r.d());
-            }));
+            }),
+            new Command(ALLY_ANSWER, "worldBattleAlly", r -> Hooks.worldPromptAllyAnswer(r.i() != 0)));
 
     private WorldBattles() {
     }
@@ -113,6 +113,9 @@ public final class WorldBattles {
         if (sallyAgainst >= 0 && choice == AUTO) {
             return false; // a sally against another human is fought or called off (SOS-83)
         }
+        if (choice == ENGAGE && Hooks.worldPromptWaitsForAllies()) {
+            return true; // it engages once they've answered or the time ran out (SOS-118)
+        }
         if (choice == AUTO && spec instanceof WBattleSiege && Sieges.stormRefusal(((WBattleSiege) spec).besiged) != null) {
             return false; // a human's capital is stormed only after its wait, by the assault (SOS-92)
         }
@@ -139,7 +142,7 @@ public final class WorldBattles {
         return true;
     }
 
-    private static boolean applyAccept(int[] slaves, int[] spoils, double mercy, int[] captured, int[] lost) {
+    private static boolean applyAccept(int[] slaves, int[] spoils, double mercy) {
         Object open = Hooks.worldPrompt();
         if (!(open instanceof WBattleResult) || !Hooks.worldPromptAnswerer()) {
             return false;
@@ -148,12 +151,7 @@ public final class WorldBattles {
         if (slaves != null) {
             AD.stats().mercy().incD(FACTIONS.player(), mercy);
         }
-        WBattleResult result = (WBattleResult) open;
-        if (captured != null) { // what a defeat ships: counted from a garrison, which reads differently on each PC
-            System.arraycopy(captured, 0, result.capturedRaces, 0, captured.length);
-            System.arraycopy(lost, 0, result.lostResources, 0, lost.length);
-        }
-        result.accept(slaves, spoils);
+        ((WBattleResult) open).accept(slaves, spoils);
         return true;
     }
 
@@ -187,7 +185,9 @@ public final class WorldBattles {
      */
     static void timedOut() {
         Object open = Hooks.worldPrompt();
-        if (open instanceof WBattleSpec && Hooks.worldPromptSally() >= 0) {
+        if (open instanceof WBattleSpec && Hooks.worldPromptFought()) {
+            Hooks.worldPromptEngageNext(); // Fight was chosen: allies who didn't answer stay out (SOS-118)
+        } else if (open instanceof WBattleSpec && Hooks.worldPromptSally() >= 0) {
             applyDecide(RETREAT); // a sally against another human: the garrison stays in, and the siege goes on (SOS-83)
         } else if (open instanceof WBattleSpec && Hooks.worldPromptBetweenHumans()) {
             Hooks.worldPromptEngageNext(); // between two humans the battle is always fought (spec §8, SOS-83)
@@ -196,9 +196,8 @@ public final class WorldBattles {
         } else if (open instanceof WBattleSpec) {
             applyDecide(AUTO);
         } else if (open instanceof WBattleResult) {
-            boolean victory = ((WBattleResult) open).result == BATTLE_RESULT.VICTORY;
-            applyAccept(victory ? new int[RACES.all().size()] : null, victory ? new int[RESOURCES.ALL().size()] : null, 0,
-                    new int[RACES.all().size()], new int[RESOURCES.ALL().size()]);
+            boolean won = Hooks.resultWon((WBattleResult) open);
+            applyAccept(won ? new int[RACES.all().size()] : null, won ? new int[RESOURCES.ALL().size()] : null, 0);
         } else if (open instanceof WBattleSiege.Result) {
             applySiegeResult(OCCUPY, 0.1, 0.1, new int[RACES.all().size()], new int[TR.ALL().size()], 0);
         }
@@ -211,7 +210,7 @@ public final class WorldBattles {
     public static void pvpEngage() {
         WBattleSpec spec = (WBattleSpec) Hooks.worldPrompt();
         int attacker = Hooks.worldPromptHuman();
-        int defender = Hooks.worldPromptOther();
+        int defender = Hooks.worldPromptOther() >= 0 ? Hooks.worldPromptOther() : Hooks.worldPromptSally();
         Hooks.worldPromptClose();
         Hooks.ownCityEngage(attacker, defender, spec::engage);
     }
@@ -273,11 +272,16 @@ public final class WorldBattles {
         CmdWriter w = new CmdWriter(RESULT_ACCEPT);
         ints(w, slaves);
         ints(w, spoils);
-        w.d(mercy);
-        WBattleResult open = Hooks.worldPrompt() instanceof WBattleResult ? (WBattleResult) Hooks.worldPrompt() : null;
-        ints(w, open == null ? null : open.capturedRaces);
-        ints(w, open == null ? null : open.lostResources);
-        Commands.capture(w);
+        Commands.capture(w.d(mercy));
+        return true;
+    }
+
+    /** This PC's player answers Join or Stay out; false outside a session (SOS-118). */
+    public static boolean allyAnswer(boolean join) {
+        if (!Commands.capturing()) {
+            return false;
+        }
+        Commands.capture(new CmdWriter(ALLY_ANSWER).i(join ? 1 : 0));
         return true;
     }
 

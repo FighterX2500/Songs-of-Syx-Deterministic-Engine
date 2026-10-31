@@ -826,6 +826,80 @@ public final class WorldActions {
             });
             return true;
         }
+        case "allyanswer": // allyanswer join|out|none: how this player answers an ally's prompt (SOS-118)
+            PromptAnswers.ally = a[1].equals("join") ? 1 : a[1].equals("out") ? 2 : 0;
+            return true;
+        case "wbowners": // wbowners: notes each commander's divisions, men and a boost in the battle (SOS-118)
+            Rig.later(() -> Rig.note(sosdet.Hooks.battleOwnersLine()));
+            return true;
+        case "wbretreat": // wbretreat: the battle panel's retreat (SOS-118)
+            Rig.later(() -> Rig.note("retreat " + sosdet.game.cmd.MapBattles.retreat()));
+            return true;
+        case "wnpcwar": { // wnpcwar <faction>: the NPC in that slot is at war with this player (SOS-119)
+            int npc = Integer.parseInt(a[1]);
+            Rig.later(() -> sosdet.game.cmd.Sieges.npcWarForTest(FACTIONS.player().index(), npc));
+            return true;
+        }
+        case "wtonpc": { // wtonpc <army> <slot> <dx> <dy>: the army stands that far from the first army of the NPC in <slot> (SOS-119)
+            int army = Integer.parseInt(a[1]);
+            int slot = Integer.parseInt(a[2]);
+            int dx = Integer.parseInt(a[3]);
+            int dy = Integer.parseInt(a[4]);
+            Rig.later(() -> {
+                for (int i = 0; i < WORLD.ENTITIES().armies.max(); i++) {
+                    WArmy e = WORLD.ENTITIES().armies.tryGet(i);
+                    if (e != null && e.faction() != null && e.faction().index() == slot && AD.men(null).get(e) > 0) {
+                        sosdet.game.cmd.Sieges.teleportForTest(army(army), e.ctx() + dx, e.cty() + dy);
+                        Rig.note("wtonpc: army " + e.armyIndex() + " of " + slot + ", men " + AD.men(null).get(e) + ", at " + e.ctx() + "," + e.cty());
+                        return;
+                    }
+                }
+                Rig.note("wtonpc: no army of " + slot);
+            });
+            return true;
+        }
+        case "wnpcs": { // wnpcs: notes the five strongest NPC armies: faction, men, power, tile, at war with this player (SOS-119)
+            Rig.later(() -> {
+                java.util.ArrayList<WArmy> all = new java.util.ArrayList<>();
+                for (int i = 0; i < WORLD.ENTITIES().armies.max(); i++) {
+                    WArmy e = WORLD.ENTITIES().armies.tryGet(i);
+                    if (e != null && e.faction() != null && !(e.faction() instanceof game.faction.player.Player) && AD.men(null).get(e) > 0) {
+                        all.add(e);
+                    }
+                }
+                all.sort((x, y) -> Double.compare(AD.power().get(y), AD.power().get(x)));
+                StringBuilder t = new StringBuilder("npc armies " + all.size() + ":");
+                for (int i = 0; i < Math.min(5, all.size()); i++) {
+                    WArmy e = all.get(i);
+                    t.append(" [").append(e.armyIndex()).append(" faction ").append(e.faction().index()).append(" men ").append(AD.men(null).get(e))
+                            .append(" power ").append(AD.power().get(e)).append(" at ").append(e.ctx()).append(",").append(e.cty())
+                            .append(DIP.WAR().is(e.faction(), FACTIONS.player()) ? " war" : " peace").append(" ").append(e.state()).append("]");
+                }
+                Rig.note(t.toString());
+            });
+            return true;
+        }
+        case "wborder": { // wborder <tx> <ty>: every division this player may select moves there, as the battle map's order (SOS-119)
+            int x = Integer.parseInt(a[1]) * init.constant.C.TILE_SIZE;
+            int y = Integer.parseInt(a[2]) * init.constant.C.TILE_SIZE;
+            Rig.later(() -> {
+                int n = 0;
+                for (game.battle.div.Div d : sosdet.game.OwnArmy.own().divisions()) {
+                    if (d.menNrOf() > 0 && sosdet.game.OwnArmy.selectable(d)) {
+                        game.GAME.ARMIES().placer.deploy(d, x, x + 12 * init.constant.C.TILE_SIZE, y + n * 3 * init.constant.C.TILE_SIZE,
+                                y + n * 3 * init.constant.C.TILE_SIZE);
+                        n++;
+                    }
+                }
+                Rig.note("wborder: " + n + " divisions ordered");
+            });
+            return true;
+        }
+        case "wbspeed": { // wbspeed <speed>: the speed button, in a battle a vote (SOS-117)
+            double speed = Double.parseDouble(a[1]);
+            Rig.later(() -> game.GAME.SPEED.speedSet(speed));
+            return true;
+        }
         case "wteleport": { // wteleport <army> <slot> <dx> <dy>: the army stands at those tiles from the capital of the human in <slot>
             int army = Integer.parseInt(a[1]);
             int slot = Integer.parseInt(a[2]);
