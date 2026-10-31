@@ -21,6 +21,7 @@ import sosdet.game.GameHumans;
 import sosdet.game.siege.AssaultTerms;
 import sosdet.game.siege.SiegeBook;
 import sosdet.report.Field;
+import snake2d.util.datatypes.COORDINATE;
 import world.WORLD;
 import world.army.AD;
 import world.battle.WBattles;
@@ -295,7 +296,10 @@ public final class Sieges {
                 Hooks.currentHumanSwap(before);
             }
         }
-        strongest.teleport(capital.cx() + 4, capital.cy() + 4);
+        COORDINATE tile = strongest.besigeTile(capital); // a capital's near tiles may be rock or sea, where an army is lost
+        if (tile != null) {
+            strongest.teleport(tile.x(), tile.y());
+        }
         strongest.besiege(capital);
         return true;
     }
