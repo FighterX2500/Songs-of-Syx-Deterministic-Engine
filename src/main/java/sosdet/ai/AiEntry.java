@@ -43,14 +43,19 @@ public final class AiEntry {
      * not a battle change.
      */
     public static final int VIEW = 20;
-    static final int KINDS = 21;
+    /**
+     * The host ends the running assault (SOS-92): the payload is the outcome (-1 for none) and the invaders alive. Every
+     * PC ends it at this entry's step, also a PC whose view ended and that no longer runs the city; not a battle change.
+     */
+    public static final int ASSAULT_END = 21;
+    static final int KINDS = 22;
     public static String kindName(int kind) {
         return KIND_NAMES[kind];
     }
 
     private static final String[] KIND_NAMES = {"path", "dest", "task", "guard", "running", "fireAtWill", "formation",
         "artillery", "holdFire", "ammo", "muster", "mopUp", "artilleryMuster", "artilleryFire", "teleport", "speed",
-        "command", "commanders", "hold", "remove", "view"};
+        "command", "commanders", "hold", "remove", "view", "assaultEnd"};
 
     /** The general, as opposed to a player's PC. */
     public static final int AI = -1;
@@ -65,6 +70,11 @@ public final class AiEntry {
     /** Who gave it: {@link #AI}, or the player's PC as the mod numbers it (the host's own player is 0). */
     public final int pc;
     private final byte[] payload;
+
+    /** An order outside the log, for a local battle's tape (SOS-109). */
+    public static AiEntry order(int kind, int div, int pc, byte[] payload) {
+        return new AiEntry(-1, -1, kind, div, pc, payload.clone());
+    }
 
     AiEntry(long step, int seq, int kind, int div, int pc, byte[] payload) {
         if (kind < 0 || kind >= KINDS) {

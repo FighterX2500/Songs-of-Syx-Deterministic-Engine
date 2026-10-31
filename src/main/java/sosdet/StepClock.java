@@ -119,6 +119,11 @@ final class StepClock {
         return lastStep;
     }
 
+    /** The limits on the next step, for a stall's diagnosis. */
+    String limits() {
+        return "last " + lastStep + ", pace cap " + paceCap + ", hold at " + holdAt;
+    }
+
     void paceCap(long cap) {
         paceCap = cap;
     }

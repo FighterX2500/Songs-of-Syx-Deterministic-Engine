@@ -10,6 +10,8 @@ import java.nio.file.Path;
 
 import game.GAME;
 import game.battle.state.BattleState;
+import game.battle.state.BattleStateExiter;
+import game.battle.state.BattleStateResult;
 import game.battle.thread.general.Strategos2000;
 import game.battle.thread.general.offence.Strategos2000UpdaterOffense;
 import game.save.GameLoader;
@@ -31,6 +33,7 @@ public final class GameResync {
     private static final Field THRONE_TIMER = field(BattleState.class, "throneTimer");
     private static final Field DEPLOYING = field(BattleState.class, "deploying");
     private static final Field CONCLUDED = field(BattleState.class, "concluded");
+    private static final Field RESOLVE = field(BattleState.class, "resolve");
     private static final Field PREV_UPDATE = field(Strategos2000.class, "prevUpdate");
     private static final Field OLD_DIVS = field(Strategos2000.class, "oldDivs");
     private static final Field OFFENSE = field(Strategos2000.class, "offense");
@@ -38,6 +41,8 @@ public final class GameResync {
     private static final Field FLANKING = field(className("game.battle.thread.general.offence.Context"), "flanking");
     /** The save's own size limit, as vanilla's GameSaver uses. */
     private static final int SAVE_BYTES_PER_TILE = 120;
+    /** Where {@link #capture} puts the battle's {@code concluded}. */
+    private static final int CONCLUDED_AT = 1 + 8;
     private static final ACTION NO_PROGRESS = () -> { };
 
     private GameResync() {
@@ -71,14 +76,49 @@ public final class GameResync {
         }.set();
     }
 
+    /**
+     * Loads the local battle saved in {@code file} on the battle's PC or a watcher's, and reopens it: no save holds a
+     * {@code BattleState}. {@code exiter} is the one {@link #exiter()} kept, or null for a watcher, whose battle never
+     * exits; {@code state} is from {@link #captureLocal} (plan 0017, SOS-109).
+     */
+    public static void loadLocal(Path file, Object exiter, byte[] state) {
+        BattleStateExiter e = exiter != null ? (BattleStateExiter) exiter : new BattleStateExiter() {
+            @Override
+            public void afterExit(BattleStateResult res) {
+                throw new IllegalStateException("SOSDET: a watcher's battle has no exit");
+            }
+        };
+        double speed = GAME.SPEED.speedTarget();
+        load(file, () -> {
+            BattleState.setLoaded(e, file, false);
+            GAME.SPEED.speedSet(speed); // the save's speed isn't this player's
+        }, state);
+    }
+
+    /** The running battle's way out, which goes through a load unchanged. */
+    public static Object exiter() {
+        return get(RESOLVE, VIEW.b().state());
+    }
+
+    /**
+     * {@link #capture}, for {@link #loadLocal}: a battle won or lost counts as still running, so the next step opens
+     * its panel again on every PC, as no load keeps it.
+     */
+    public static byte[] captureLocal() {
+        byte[] state = capture();
+        state[CONCLUDED_AT] = 0;
+        return state;
+    }
+
     /** What the save leaves out, now. */
     public static byte[] capture() {
         BattleState battle = VIEW.b().state();
         Strategos2000 general = GAME.BATTLE_THREADS().strat;
-        ByteBuffer b = ByteBuffer.allocate(1 + 8 + 1 + 8 + 4 + 8);
+        ByteBuffer b = ByteBuffer.allocate(1 + 8 + 1 + 1 + 8 + 4 + 8);
         b.put((byte) (battle != null ? 1 : 0));
         b.putDouble(battle != null ? getDouble(THRONE_TIMER, battle) : 0);
         b.put((byte) (battle != null && getBoolean(CONCLUDED, battle) ? 1 : 0));
+        b.put((byte) (battle != null && getBoolean(DEPLOYING, battle) ? 1 : 0));
         b.putDouble(getDouble(PREV_UPDATE, general));
         b.putInt(getInt(OLD_DIVS, general));
         b.putDouble(getDouble(FLANKING, get(CONTEXT, get(OFFENSE, general))));
@@ -86,14 +126,15 @@ public final class GameResync {
     }
 
     /**
-     * Restores what {@link #capture} took. A battle continues where it was: past deployment, its jobs running, without
-     * {@code BattleState.deploy}, which would also restart the game's tick count.
+     * Restores what {@link #capture} took. A battle continues where it was, its jobs running if it is past deployment,
+     * without {@code BattleState.deploy}, which would also restart the game's tick count.
      */
     private static void apply(byte[] state) {
         ByteBuffer b = ByteBuffer.wrap(state);
         boolean inBattle = b.get() != 0;
         double throneTimer = b.getDouble();
         boolean concluded = b.get() != 0;
+        boolean deploying = b.get() != 0;
         BattleState battle = VIEW.b().state();
         if (inBattle != (battle != null)) {
             throw new IllegalStateException("SOSDET: the resync save was taken " + (inBattle ? "in" : "outside")
@@ -102,8 +143,10 @@ public final class GameResync {
         if (battle != null) {
             set(THRONE_TIMER, battle, throneTimer);
             set(CONCLUDED, battle, concluded);
-            set(DEPLOYING, battle, false);
-            GAME.BATTLE_THREADS().unpause(false); // opening the battle view paused the jobs
+            set(DEPLOYING, battle, deploying);
+            if (!deploying) {
+                GAME.BATTLE_THREADS().unpause(false); // opening the battle view paused the jobs
+            }
         }
         Strategos2000 general = GAME.BATTLE_THREADS().strat;
         set(PREV_UPDATE, general, b.getDouble());

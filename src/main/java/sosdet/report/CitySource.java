@@ -12,8 +12,16 @@ public interface CitySource {
     int[] humans();
 
     /** True for a human slot whose human was removed (SOS-66): it sends no report and nothing runs for it. */
+    default boolean eliminated(int slot) {
+        return false;
+    }
+
     default boolean retired(int slot) {
         return false;
+    }
+
+    /** The human in {@code slot} is retired, or eliminated, again in a game loaded from before that. */
+    default void retiredAgain(int slot, boolean eliminated) {
     }
 
     /** Writes every field's values, in the layout's slots. */

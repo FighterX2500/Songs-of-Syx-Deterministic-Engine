@@ -173,6 +173,16 @@ public final class GameReport implements CitySource {
     }
 
     @Override
+    public void retiredAgain(int slot, boolean eliminated) {
+        GameHumans.get().retiredAgain(slot, eliminated);
+    }
+
+    @Override
+    public boolean eliminated(int slot) {
+        return GameHumans.get().eliminated(slot);
+    }
+
+    @Override
     public boolean retired(int slot) {
         return GameHumans.get().retired(slot);
     }

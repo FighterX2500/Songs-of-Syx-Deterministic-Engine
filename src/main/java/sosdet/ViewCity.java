@@ -11,28 +11,32 @@ import sosdet.report.InputKind;
 
 /**
  * A city as it moves to another PC for a view (plan 0013, SOS-82): the owner's game save, and the engine's state of
- * that city the save leaves out. The same state keeps the viewer's own city while it is unloaded. Protocol version 1.
+ * that city the save leaves out. The same state keeps the viewer's own city while it is unloaded. Protocol version 2:
+ * a local battle's state, for a watch (SOS-109).
  */
 final class ViewCity {
 
     static final int MAGIC = 0x53445643; // "SDVC"
-    static final int VERSION = 1;
+    static final int VERSION = 2;
 
     /** The step the save was taken at: the view's freeze step. */
     final long step;
     final byte[] state;
     /** The world's state no save holds: move remainders and pool sizes ({@code GameWorldLoad#unsaved}). */
     final double[] moves;
+    /** The local battle a save holds ({@code GameResync.captureLocal}); empty for a city. */
+    final byte[] battle;
     final byte[] save;
 
-    private ViewCity(long step, byte[] state, double[] moves, byte[] save) {
+    private ViewCity(long step, byte[] state, double[] moves, byte[] battle, byte[] save) {
         this.step = step;
         this.state = state;
         this.moves = moves;
+        this.battle = battle;
         this.save = save;
     }
 
-    static byte[] toBytes(long step, byte[] state, double[] moves, byte[] save) {
+    static byte[] toBytes(long step, byte[] state, double[] moves, byte[] battle, byte[] save) {
         ByteArrayOutputStream b = new ByteArrayOutputStream(save.length + state.length + 32);
         try (DataOutputStream out = new DataOutputStream(b)) {
             out.writeInt(MAGIC);
@@ -44,6 +48,8 @@ final class ViewCity {
             for (double m : moves) {
                 out.writeDouble(m);
             }
+            out.writeInt(battle.length);
+            out.write(battle);
             out.writeInt(save.length);
             out.write(save);
         } catch (IOException e) {
@@ -67,9 +73,11 @@ final class ViewCity {
             for (int i = 0; i < moves.length; i++) {
                 moves[i] = in.readDouble();
             }
+            byte[] battle = new byte[in.readInt()];
+            in.readFully(battle);
             byte[] save = new byte[in.readInt()];
             in.readFully(save);
-            return new ViewCity(step, state, moves, save);
+            return new ViewCity(step, state, moves, battle, save);
         } catch (IOException e) {
             throw new IllegalStateException("SOSDET: a view's city is cut short", e);
         }

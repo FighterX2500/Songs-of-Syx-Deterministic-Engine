@@ -22,7 +22,7 @@ import view.main.VIEW;
 public final class StepPrompts {
 
     static final int ANSWER = 7950;
-    static final int WORLD_ANSWER = 7951;
+    static final int WORLD_ANSWER = sosdet.ai.AiLog.WORLD_ANSWER;
 
     static final List<Command> ALL = List.of(
             new Command(ANSWER, "stepPromptAnswer", StepPrompts::apply),

@@ -71,6 +71,16 @@ public final class Engine {
         return session != null;
     }
 
+    /** Debugging: what may hold the next step now, for a run that stopped. */
+    public static String holdWhy() {
+        Session s = required();
+        long next = s.clock.step() + 1;
+        return "step " + s.clock.step() + ": " + s.clock.limits() + ", log may run " + s.ai().mayRun(next) + ", world may run "
+                + s.worldMayRun(next) + ", watch may run " + s.watchMayRun(next) + ", view holds " + s.viewHolds(next)
+                + ", battle awaited " + (s.battle != null && s.battle.awaiting) + ", leaving " + s.battleLeaving
+                + ", battle hold " + s.battleHold + " go " + s.battleGo;
+    }
+
     /** The last step completed (0 before the first). */
     public static long step() {
         return required().clock.step();
@@ -188,6 +198,39 @@ public final class Engine {
         }
         s.resync = r; // taken up when the load begins (Hooks.loadBegin)
         GameResync.load(file, afterSet, r.game);
+    }
+
+    /**
+     * Host, own-city mode, between steps, held at a desync's hold step in a battle on the battle map: the battle saved
+     * as it stands, and the engine's state at this step, for every PC's {@link #battleResyncLoad}, this PC's too (mod
+     * spec §8 Desyncs; plan 0006 M3).
+     */
+    public static byte[] battleResyncSave(Path file) {
+        Session s = required();
+        if (s.battle == null || s.battle.awaiting) {
+            throw new IllegalStateException("SOSDET: a battle resync with no battle running");
+        }
+        if (s.streams.inStep()) {
+            throw new IllegalStateException("SOSDET: a resync is saved between steps, not inside one");
+        }
+        long step = s.clock.step();
+        GameResync.save(file);
+        s.clock.runUntil(step); // the host waits for its own load too
+        return new Resync(step, s.seed, s.clock.agreedSpeed(), s.hashes.interval(), s.hashes.epoch() + 1,
+                s.streams.drawsSinceLoad(), s.ai().resyncOut(), GameResync.captureLocal()).toBytes();
+    }
+
+    /** Every PC, at the hold step: loads the host's battle, which runs on from there on every PC alike. */
+    public static void battleResyncLoad(Path file, byte[] state) {
+        Session s = required();
+        if (s.battle == null || s.battle.awaiting) {
+            throw new IllegalStateException("SOSDET: a battle resync with no battle running");
+        }
+        Resync r = Resync.fromBytes(state);
+        s.resync = r; // taken up when the load begins (Hooks.loadBegin)
+        GameResync.loadLocal(file, GameResync.exiter(), r.game);
+        s.endDesyncHold(r.step);
+        s.clock.runUntil(r.step);
     }
 
     private static void refuseOwnCity(Session s, String call) {
@@ -472,7 +515,7 @@ public final class Engine {
         if (s.streams.inStep()) {
             throw new IllegalStateException("SOSDET: a view is ended between steps, not inside one");
         }
-        if (why < View.CLOSED || why > View.LAST_ASKED) {
+        if ((why < View.CLOSED || why > View.LAST_ASKED) && why != View.RETREAT) {
             throw new IllegalArgumentException("SOSDET: a view's end for reason " + why + ", not " + View.CLOSED
                     + " to " + View.LAST_ASKED);
         }
@@ -540,7 +583,9 @@ public final class Engine {
 
     /**
      * The owner's PC, between steps at a view's freeze step: saves its game and returns it with its city's engine state,
-     * for the mod to send to the viewer's {@link #viewIn}; then this PC runs on. Null when no view waits for its save.
+     * for the mod to send to the {@link #viewIn} of every viewer who freezes at this step, as all of an assault's do; then
+     * this PC runs on. One save and one load for them all: a second reload here would lose the first viewer's city. Null
+     * when no view waits for its save.
      */
     public static byte[] viewOut() {
         Session s = required();
@@ -554,12 +599,22 @@ public final class Engine {
             byte[] save = sosdet.game.GameView.saveForView();
             byte[] state = ViewCity.cityState(s);
             double[] moves = GameWorldLoad.unsaved();
-            v.sent = true;
+            byte[] battle = v.battle ? sosdet.game.GameResync.captureLocal() : new byte[0];
+            for (View o : s.views) {
+                if (o != null && o.owner == v.owner && o.freeze == v.freeze && o.frozen()) {
+                    o.sent = true;
+                }
+            }
             // the owner loads its save too: two PCs that load one save run its city alike, a loaded and an unloaded
             // game don't (plan 0013, rig run V82D)
             s.viewLoadStart(state, moves, v.viewer);
-            sosdet.game.GameView.loadSaved();
-            return ViewCity.toBytes(v.freeze, state, moves, save);
+            if (v.battle) {
+                s.tape.watch(v.viewer);
+                sosdet.game.GameView.loadSavedBattle(sosdet.game.GameResync.exiter(), battle);
+            } else {
+                sosdet.game.GameView.loadSaved();
+            }
+            return ViewCity.toBytes(v.freeze, state, moves, battle, save);
         }
         return null;
     }
@@ -590,7 +645,13 @@ public final class Engine {
         s.ownCityState = ViewCity.cityState(s);
         s.ai().watchOnly(true);
         s.viewLoadStart(c.state, c.moves, s.localHuman);
-        sosdet.game.GameView.loadView(c.save);
+        if (v.battle) {
+            s.tape.clear();
+            s.viewLimit.battle(s.watchBehindSteps());
+            sosdet.game.GameView.loadViewBattle(c.save, c.battle);
+        } else {
+            sosdet.game.GameView.loadView(c.save);
+        }
     }
 
     /**
@@ -659,6 +720,21 @@ public final class Engine {
         }
     }
 
+    /** The battle's PC: its tape for the watcher in {@code viewer} since the last call, for that watcher; may be empty. */
+    public static byte[] viewTapeOut(int viewer) {
+        return required().tape.out(viewer);
+    }
+
+    /** The watcher's PC: more of the battle's tape, in order; each step runs when this PC reaches it (SOS-109). */
+    public static void viewTapeIn(byte[] bytes) {
+        Session s = required();
+        View v = s.views[s.localHuman];
+        if (v == null) {
+            throw new IllegalStateException("SOSDET: a battle's tape with no view of this PC's human");
+        }
+        s.tape.in(bytes, v.ownerPc);
+    }
+
     /** The viewer's PC: the first difference between its copy of the viewed city and the owner's city, or null. */
     public static Desync viewDesync() {
         Session s = required();
@@ -673,10 +749,10 @@ public final class Engine {
         return h == null ? 0 : h.compared();
     }
 
-    /** How many steps this PC is behind the host's last confirmed step (0 on the host): a viewer's catching up. */
+    /** How many steps this PC is behind the host's last confirmed step, or the host behind the world it leads as a watcher. */
     public static long behindHost() {
         Session s = required();
-        return s.ai().mode() == AiMode.PEER ? Math.max(0, s.ai().confirmed() - s.clock.step()) : 0;
+        return s.ai().mode() == AiMode.PEER ? Math.max(0, s.ai().confirmed() - s.clock.step()) : s.watchBehind();
     }
 
     /**
@@ -727,7 +803,7 @@ public final class Engine {
             throw new IllegalStateException("SOSDET: a world resync of human slots " + java.util.Arrays.toString(r.slots)
                     + " loaded in a game of slots " + java.util.Arrays.toString(s.humans()));
         }
-        if (s.reports(s.localHuman).current() == null) {
+        if (!s.spectating() && s.reports(s.localHuman).current() == null) { // a spectator's PC sends no reports
             throw new IllegalStateException("SOSDET: a world resync at step " + r.step + ", before the first city report:"
                     + " the load counts the soldiers away from it");
         }
@@ -848,6 +924,11 @@ public final class Engine {
      * {@code FACTIONS.player()} is this human, and the city part runs only its city; in the world part it is the human
      * the world is working on. Set it at step 0, on every PC; slot 0 by default.
      */
+    /** This PC's human, also while it views another player's city, when the game's player is that city's owner. */
+    public static int local() {
+        return required().localHuman;
+    }
+
     public static void localHuman(int slot) {
         Session s = required();
         if (s.clock.step() != 0) {
@@ -914,6 +995,39 @@ public final class Engine {
         s.ai().captureRemove(AiEntry.ints(slot, (int) (cutoff >>> 32), (int) cutoff));
         s.pacer.drop(pc); // its PC is gone: the host's pace waits for it no more
         s.ai().pcGone(pc); // and none of its orders still to come goes into the log
+    }
+
+    /**
+     * Host, between steps: the PC of the spectator in {@code slot} left (mod spec §11). Nobody waited for it; from the
+     * logged step no PC opens a view for it.
+     */
+    public static void spectatorLeft(int slot) {
+        Session s = required();
+        if (s.ai().mode() != AiMode.HOST) {
+            throw new IllegalStateException("SOSDET: the host hears a spectator leave (mode " + s.ai().mode() + ")");
+        }
+        if (!s.spectators[slot]) {
+            throw new IllegalArgumentException("SOSDET: slot " + slot + " has no spectator");
+        }
+        s.ai().captureRemove(AiEntry.ints(slot, -1, -1));
+        s.ai().pcGone(s.pcOf(slot));
+    }
+
+    /** The one human not retired once others are, the last player standing (mod spec §11); -1 when there is none. */
+    public static int lastHuman() {
+        Session s = required();
+        int last = -1;
+        int gone = 0;
+        for (int h : s.humans()) {
+            if (s.retired(h)) {
+                gone++;
+            } else if (last >= 0) {
+                return -1;
+            } else {
+                last = h;
+            }
+        }
+        return gone > 0 ? last : -1;
     }
 
     /**
@@ -1056,6 +1170,16 @@ public final class Engine {
     public static int besiegedSince(int slot) {
         required();
         return Sieges.besiegedSince(slot);
+    }
+
+    /** Between steps: this PC's player was eliminated and watches (SOS-111): nothing done here reaches the game. */
+    public static boolean spectating() {
+        return required().spectating();
+    }
+
+    /** Between steps: the human in {@code slot} was eliminated and watches from their PC (SOS-111). */
+    public static boolean spectator(int slot) {
+        return required().spectators[slot];
     }
 
     /** The assault on a human's capital running or waiting for its views to thaw, or null (SOS-92 step B). */
@@ -1372,7 +1496,9 @@ public final class Engine {
      * turns pacing off.
      */
     public static void pace(int[] pcs, long lead) {
-        required().pacer.peers(pcs, lead);
+        Session s = required();
+        s.pacer.peers(pcs, lead);
+        s.spectatorsLeavePace();
     }
 
     /**
@@ -1392,7 +1518,8 @@ public final class Engine {
      * act again; either takes effect at once, since a dropped order never reaches any log (SOS-15).
      */
     public static void watchOnly(boolean on) {
-        required().ai().watchOnly(on);
+        Session s = required();
+        s.ai().watchOnly(on || s.spectating());
     }
 
     /** A battle division or artillery commanded by the host's AI general (SOS-15). */

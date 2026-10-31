@@ -130,6 +130,9 @@ public final class GameAi implements AiApplier {
         case AiEntry.VIEW:
             Hooks.viewEntry(e.step, e.intAt(0), e.intAt(1), e.intAt(2)); // SOS-82
             return;
+        case AiEntry.ASSAULT_END:
+            Hooks.assaultEnded(e.step, e.intAt(0), e.intAt(1)); // SOS-92
+            return;
         case AiEntry.TELEPORT:
             ArrayList<Div> divs = new ArrayList<>(e.ints());
             Commanders c = Hooks.commanders();
@@ -204,6 +207,7 @@ public final class GameAi implements AiApplier {
             c.skip(); // its source doesn't command that army's artillery (SOS-15)
             return;
         }
+        c.claimArtillery(e.pc, a.army().index());
         if (e.kind == AiEntry.ARTILLERY) {
             a.targetCooSet(e.intAt(2), e.intAt(3), e.intAt(4) != 0, e.intAt(5) != 0);
         } else if (e.kind == AiEntry.ARTILLERY_MUSTER) {

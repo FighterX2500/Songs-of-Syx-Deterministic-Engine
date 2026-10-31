@@ -725,18 +725,63 @@ public final class WorldActions {
         case "wassault": // wassault: notes the assault running, the last one over and a throne awaiting terms (SOS-92 B, D)
             Rig.later(() -> {
                 sosdet.Assault last = Engine.lastAssault();
-                Rig.note("wassault step " + Engine.step() + ": now " + Engine.assault() + "; last " + last + "; invading "
-                        + settlement.main.SETT.INVADOR().invading() + "; taken " + Engine.assaultTaken()
+                Rig.note("wassault step " + Engine.step() + ": spectating " + Engine.spectating() + " commanders " + Engine.commanderOf(120) + "," + Engine.commanderOf(121)
+                        + " not commanded " + Engine.ordersNotCommanded() + " watch dropped " + Engine.watchedDropped()
+                        + ": now " + Engine.assault() + "; last " + last + "; invading "
+                        + settlement.main.SETT.INVADOR().invading() + (Engine.assault() != null ? "; " + sosdet.game.GameAssault.fight() : "")
+                        + "; taken " + Engine.assaultTaken()
                         + (last != null && last.termsKind() >= 0 ? "; terms " + sosdet.game.siege.AssaultTerms.name(last.termsKind())
                                 + " " + last.termsPercent() + "% credits " + last.termsCredits() + " people "
                                 + last.termsPeople(sosdet.game.siege.AssaultTerms.MOVED) + " moved "
                                 + last.termsPeople(sosdet.game.siege.AssaultTerms.KILLED) + " killed "
                                 + last.termsPeople(sosdet.game.siege.AssaultTerms.FREED) + " freed; in the city "
-                                + java.util.Arrays.stream(sosdet.game.cmd.Sieges.peopleInCity(last.defender)).sum()
+                                + (last.termsKind() == sosdet.game.siege.AssaultTerms.ELIMINATE ? "none, it's gone"
+                                        : java.util.Arrays.stream(sosdet.game.cmd.Sieges.peopleInCity(last.defender)).sum())
                                 + "; attacker's mercy " + world.army.AD.stats().mercy().getD(FACTIONS.getByIndex(last.attacker))
                                 + "; prisoners here " + prisonersHere() : ""));
             });
             return true;
+        case "assaultnudge": // assaultnudge [battle]: forced desync of an assault: on this PC only, a soldier's injuries turn
+            // fatal (SOS-92 G); with battle, only while a battle runs on the battle map
+            boolean battleOnly = a.length > 1;
+            Rig.later(() -> {
+                if (battleOnly && (Engine.battle() == null || Engine.battle().awaiting())) {
+                    Rig.note("assaultnudge: no battle at step " + Engine.step());
+                    return;
+                }
+                for (settlement.entity.ENTITY e : settlement.main.SETT.ENTITIES().getAllEnts()) {
+                    if (e instanceof settlement.entity.humanoid.Humanoid && !e.isRemoved()
+                            && ((settlement.entity.humanoid.Humanoid) e).division() != null) {
+                        settlement.stats.STATS.NEEDS().INJURIES.COUNT.indu().set(((settlement.entity.humanoid.Humanoid) e).indu(),
+                                settlement.stats.STATS.NEEDS().INJURIES.COUNT.indu().max(((settlement.entity.humanoid.Humanoid) e).indu()));
+                        Rig.note("assaultnudge at step " + Engine.step());
+                        return;
+                    }
+                }
+                Rig.note("assaultnudge: no soldier");
+            });
+            return true;
+        case "assaultorders": { // assaultorders stop|centre: this human orders every invading division as a battle's UI would
+            // (SOS-92): each stops, or marches to the city's centre; a division not yours stays as it was
+            boolean stop = a[1].equals("stop");
+            Rig.later(() -> {
+                int n = 0;
+                for (Div d : GAME.ARMIES().armies().get(1).divisions()) {
+                    if (d.menNrOf() == 0) {
+                        continue;
+                    }
+                    if (stop) {
+                        d.order().task.set(new game.battle.thread.order.BattleOrderTask().stop(d));
+                    } else {
+                        int cx = settlement.main.SETT.PWIDTH / 2;
+                        GAME.ARMIES().placer.deploy(d, cx - 64, cx + 64, settlement.main.SETT.PHEIGHT / 2, settlement.main.SETT.PHEIGHT / 2);
+                    }
+                    n++;
+                }
+                Rig.note("assault orders " + a[1] + ": " + n + " divisions");
+            });
+            return true;
+        }
         case "wassaultend": { // wassaultend <held|taken|retreat>: the running assault's invasion ends so, on every copy (test tooling, SOS-92 D)
             int outcome = java.util.List.of("held", "taken", "retreat").indexOf(a[1]);
             if (outcome < 0) {
@@ -750,7 +795,8 @@ public final class WorldActions {
         }
         case "wterms": { // wterms <sack|vassalage> <percent> [moved:killed:freed]: this human, the attacker, chooses what to
                          // take (SOS-92 D); the people are of the defender's largest race
-            int kind = a[1].equals("sack") ? sosdet.game.siege.AssaultTerms.SACK : sosdet.game.siege.AssaultTerms.VASSALAGE;
+            int kind = a[1].equals("sack") ? sosdet.game.siege.AssaultTerms.SACK : a[1].equals("eliminate") ? sosdet.game.siege.AssaultTerms.ELIMINATE
+                    : sosdet.game.siege.AssaultTerms.VASSALAGE;
             int percent = Integer.parseInt(a[2]);
             Rig.later(() -> {
                 int[] people = a.length > 3 ? termsPeople(a[3]) : sosdet.game.siege.AssaultTerms.NO_PEOPLE;
@@ -778,6 +824,23 @@ public final class WorldActions {
                 Engine.declareWar(slot);
                 Rig.note("declares war on slot " + slot);
             });
+            return true;
+        }
+        case "wteleport": { // wteleport <army> <slot> <dx> <dy>: the army stands at those tiles from the capital of the human in <slot>
+            int army = Integer.parseInt(a[1]);
+            int slot = Integer.parseInt(a[2]);
+            int dx = Integer.parseInt(a[3]);
+            int dy = Integer.parseInt(a[4]);
+            Rig.later(() -> {
+                Region cap = FACTIONS.getByIndex(slot).capitolRegion();
+                sosdet.game.cmd.Sieges.teleportForTest(army(army), cap.cx() + dx, cap.cy() + dy);
+                Rig.note("wteleport of army " + army + " to " + (cap.cx() + dx) + "," + (cap.cy() + dy));
+            });
+            return true;
+        }
+        case "npcbesiege": { // npcbesiege <slot>: the strongest NPC army goes to war with the human in <slot> and marches on its capital (SOS-92 F)
+            int slot = Integer.parseInt(a[1]);
+            Rig.later(() -> sosdet.game.cmd.Sieges.npcBesiegeForTest(slot));
             return true;
         }
         case "wbesiegehuman": { // wbesiegehuman <army> <slot> [capitol]: wbesiege on the human in <slot>'s region nearest the

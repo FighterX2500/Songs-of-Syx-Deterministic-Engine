@@ -219,6 +219,28 @@ public final class GameHash implements StateSource {
         return part(w, 10, HashLog.mix(h, Double.doubleToLongBits(TIME.currentSecond())));
     }
 
+    /** Each NPC's goods, rates and total rates hashed apart: two PCs' reports then name the NPC and the value. */
+    private static String describeNpcStocks() {
+        StringBuilder b = new StringBuilder();
+        LIST<FactionNPC> npcs = FACTIONS.NPCs();
+        LIST<TRADABLE> goods = TR.ALL();
+        for (int i = 0; i < npcs.size(); i++) {
+            FactionNPC f = npcs.get(i);
+            long amounts = HashLog.start();
+            long rates = HashLog.start();
+            long totals = HashLog.start();
+            for (int k = 0; k < goods.size(); k++) {
+                NPCRes r = f.res(goods.get(k));
+                amounts = HashLog.mix(amounts, Double.doubleToLongBits(r.amount()));
+                rates = HashLog.mix(rates, Double.doubleToLongBits(r.rate()));
+                totals = HashLog.mix(totals, Double.doubleToLongBits(r.rateTot()));
+            }
+            b.append(String.format(Locale.ROOT, "  npc stock %d: goods %016x, rates %016x, total rates %016x%n", f.index(), amounts,
+                    rates, totals));
+        }
+        return b.toString();
+    }
+
     /** Every active NPC's goods and production rates, which otherwise show only when a trade spends them (SOS-93). */
     private static long npcStocks(long h) {
         LIST<FactionNPC> npcs = FACTIONS.NPCs();
@@ -394,7 +416,7 @@ public final class GameHash implements StateSource {
     public String describeWorld(long step) {
         for (int slot = 0; kept != null && slot < KEPT; slot++) {
             if (keptCount > slot && keptStep[slot] == step && world[slot] != null) {
-                return world[slot].describe() + GameRelations.describe(); // the opinions now, not at the step
+                return world[slot].describe() + GameRelations.describe() + describeNpcStocks(); // the opinions and stocks now, not at the step
             }
         }
         return "  (not kept)" + System.lineSeparator();

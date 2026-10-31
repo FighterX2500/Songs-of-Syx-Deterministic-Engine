@@ -24,6 +24,8 @@ public final class HashLog {
     public static final int DEFAULT_INTERVAL = 30;
     /** Hashes kept for comparing with late ones: 32 s at the default interval. */
     public static final int RING = 64;
+    /** The clock section's counters, kept for a desync report: world draws, AI log entries applied, the commanders. */
+    public static final int CLOCK_PARTS = 3;
 
     public static final int CLOCK = 0;
     public static final int SOLDIERS = 1;
@@ -49,6 +51,7 @@ public final class HashLog {
     private int divisions = -1;
     // the ring, allocated at the first hash
     private long[] steps;
+    private long[][] clockParts;
     private long[][] sections;
     private long[][] divisionHashes;
     private int taken;
@@ -122,7 +125,7 @@ public final class HashLog {
      * Hashes the state at the end of {@code step}; {@code clock} is the engine's own counters, already mixed, and
      * {@code report} the city report in force.
      */
-    public void take(long step, long clock, long report, StateSource source) {
+    public void take(long step, long clock, long[] parts, long report, StateSource source) {
         long t0 = System.nanoTime();
         if (steps == null) {
             allocate(source.divisions());
@@ -132,6 +135,7 @@ public final class HashLog {
         long[] div = divisionHashes[slot];
         Arrays.fill(div, FNV_OFFSET);
         sec[CLOCK] = clock;
+        System.arraycopy(parts, 0, clockParts[slot], 0, parts.length);
         sec[REPORT] = report;
         source.hash(sec, div);
         if (worldOnly) {
@@ -168,6 +172,7 @@ public final class HashLog {
         divisions = divs;
         steps = new long[RING];
         sections = new long[RING][SECTIONS];
+        clockParts = new long[RING][CLOCK_PARTS];
         divisionHashes = new long[RING][divs];
         out = ByteBuffer.allocate(HEADER_BYTES + RING * recordBytes());
     }
@@ -325,7 +330,7 @@ public final class HashLog {
                 diff[n++] = d;
             }
         }
-        desync = new Desync(rec[0], pc, lastStep, sections[slot], remoteSections, Arrays.copyOf(diff, n));
+        desync = new Desync(rec[0], pc, lastStep, sections[slot], remoteSections, Arrays.copyOf(diff, n), clockParts[slot]);
     }
 
     /** One other PC's incoming hashes: bytes not yet read, and records for steps this PC has not reached. */
