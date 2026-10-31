@@ -38,7 +38,7 @@ A `HumanStart` holds the race key, faction name, banner (vanilla's banner data) 
 
 **One PC builds; every PC loads its save (recommended).** World generation draws from the game's global random stream and from per-frame print callbacks. Making it identical on every PC would mean auditing all of world generation for determinism. Building once and sending the save (about 3 MB for Mogus-72) avoids that. The mod sends the save over its network, as it will send resync saves. The map step's terrain hash stays a check before Confirm.
 
-**Routes (spec §5: a route between any two humans 6–15 tiles apart).** `GenPlayer.fixWays` → `WORLD.TERRAIN().secretFixWays()` already makes the terrain traversable. The plan is a rig check after `buildWorld`: a path exists, by land or water, between every pair of humans 6–15 tiles apart. If the check fails on test maps, the fix is a road between them; that is decided then.
+**Routes (spec §5: a route between any two humans 6–15 tiles apart).** `GenPlayer.fixWays` → `WORLD.TERRAIN().secretFixWays()` already makes the terrain traversable. The plan is a rig check after `buildWorld`: a path exists, by land or water, between every pair of humans 6–15 tiles apart. If the check fails on test maps, the fix is a road between them; that is decided then. It never failed: `GeneratorValidator` joins every legal city site. The market's walk was the gap, and SOS-120 closed it: two humans 6 to 15 tiles apart with a trade stance are each other's partners along that path.
 
 **The 6-tile rule** is checked twice:
 - by `locationProblem`, which the mod's picker calls on every PC;

@@ -12,6 +12,8 @@ public final class HumanStart {
     public static final int MAX_HUMANS = 16;
     /** No human's location may be closer than this to another's, in tiles (mod spec §5). */
     public static final double MIN_DISTANCE = 6;
+    /** Two humans at most this far apart, in tiles, are guaranteed a connection they can trade along (mod spec §5). */
+    public static final double MAX_ROUTE_DISTANCE = 15;
 
     /** The race's key, as {@code Race.key}. */
     public final String race;
@@ -62,6 +64,12 @@ public final class HumanStart {
             }
         }
         return null;
+    }
+
+    /** Whether two locations are in range of the guaranteed connection: 6 to 15 tiles, as {@link #tooClose} measures. */
+    public static boolean inRouteRange(int tx, int ty, int otherTx, int otherTy) {
+        double d = Math.hypot(tx - otherTx, ty - otherTy);
+        return d >= MIN_DISTANCE && d <= MAX_ROUTE_DISTANCE;
     }
 
     /** Why these humans can't start a world, or null: their number and the distances between their locations. */
