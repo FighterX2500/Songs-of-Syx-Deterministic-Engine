@@ -508,6 +508,12 @@ public final class Hooks {
         return s.allyHere() != null || b != null && b.roster.allies();
     }
 
+    /** True while this PC's speed press is a commander's vote: a battle on every PC, a sally's too, or a joined local one. */
+    public static boolean speedVoteHere() {
+        Session s = Engine.session();
+        return s != null && (s.battleVoting() || localCommander());
+    }
+
     /** Inside a commander's vote or pause in a local battle (SOS-119). */
     public static boolean localVote(double speed) {
         Session s = Engine.session();
