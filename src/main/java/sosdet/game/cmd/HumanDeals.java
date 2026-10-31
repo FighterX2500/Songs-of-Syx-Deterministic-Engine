@@ -412,15 +412,12 @@ public final class HumanDeals {
         }
         int[] money = AssaultTerms.split(credits, men);
         for (int i = 0; i < attackers.length; i++) { // by the men each brought (mod spec §9, SOS-92 E)
-            int[] share = goods.clone();
-            for (int g = 1; g < share.length; g += 2) {
-                share[g] = AssaultTerms.split(goods[g], men)[i];
-            }
             int[] removed = people.clone();
             for (int p = 0; p < removed.length; p++) {
                 removed[p] = AssaultTerms.split(people[p], men)[i];
             }
-            execute(d, human(attackers[i]), new Terms(DealBook.CANCEL_ALL, money[i], 0, share, new int[0]));
+            execute(d, human(attackers[i]), new Terms(DealBook.CANCEL_ALL, money[i], 0, AssaultTerms.goodsShare(goods, men, i),
+                    new int[0]));
             takePeople(d, human(attackers[i]), removed);
         }
         return credits;

@@ -95,6 +95,20 @@ public final class AssaultTerms {
         return out;
     }
 
+    /** Attacker {@code i}'s part of {@code goods}, index and amount pairs; a good it gets none of is left out. */
+    public static int[] goodsShare(int[] goods, int[] men, int i) {
+        int[] share = new int[goods.length];
+        int n = 0;
+        for (int g = 0; g < goods.length; g += 2) {
+            int amount = split(goods[g + 1], men)[i];
+            if (amount > 0) {
+                share[n++] = goods[g];
+                share[n++] = amount;
+            }
+        }
+        return java.util.Arrays.copyOf(share, n);
+    }
+
     /** The most people a sack of a city with {@code inCity} people by race removes in all. */
     public static int peopleLimit(int[] inCity) {
         return share(total(inCity), MAX_SACK);

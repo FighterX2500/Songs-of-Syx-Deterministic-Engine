@@ -18,6 +18,15 @@ class AssaultTermsTest {
         assertEquals(0, AssaultTerms.chooser(new int[] {50, 50}));
     }
 
+    /** S92A: an ally's share of a scarce good rounds down to nothing, and a deal can't hold a good of 0. */
+    @Test
+    void aGoodThatRoundsToNothingIsLeftOutOfTheShare() {
+        int[] goods = {39, 2, 40, 90};
+        int[] men = {1, 3};
+        assertArrayEquals(new int[] {40, 22}, AssaultTerms.goodsShare(goods, men, 0));
+        assertArrayEquals(new int[] {39, 2, 40, 68}, AssaultTerms.goodsShare(goods, men, 1));
+    }
+
     @Test
     void spoilsSplitByTheMenBroughtAndTheChooserGetsTheRest() {
         assertArrayEquals(new int[] {33, 67}, AssaultTerms.split(100, new int[] {1, 2}));
