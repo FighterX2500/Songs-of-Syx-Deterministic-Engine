@@ -55,7 +55,9 @@ public final class WorldBattles {
             new Command(RESULT_ACCEPT, "worldBattleAccept", r -> {
                 int[] slaves = ints(r);
                 int[] spoils = ints(r);
-                return applyAccept(slaves, spoils, r.d());
+                double mercy = r.d();
+                int[] captured = ints(r);
+                return applyAccept(slaves, spoils, mercy, captured, ints(r));
             }),
             new Command(SIEGE_RESULT, "worldSiegeResult", r -> {
                 int choice = r.i();
@@ -137,7 +139,7 @@ public final class WorldBattles {
         return true;
     }
 
-    private static boolean applyAccept(int[] slaves, int[] spoils, double mercy) {
+    private static boolean applyAccept(int[] slaves, int[] spoils, double mercy, int[] captured, int[] lost) {
         Object open = Hooks.worldPrompt();
         if (!(open instanceof WBattleResult) || !Hooks.worldPromptAnswerer()) {
             return false;
@@ -146,7 +148,12 @@ public final class WorldBattles {
         if (slaves != null) {
             AD.stats().mercy().incD(FACTIONS.player(), mercy);
         }
-        ((WBattleResult) open).accept(slaves, spoils);
+        WBattleResult result = (WBattleResult) open;
+        if (captured != null) { // what a defeat ships: counted from a garrison, which reads differently on each PC
+            System.arraycopy(captured, 0, result.capturedRaces, 0, captured.length);
+            System.arraycopy(lost, 0, result.lostResources, 0, lost.length);
+        }
+        result.accept(slaves, spoils);
         return true;
     }
 
@@ -190,7 +197,8 @@ public final class WorldBattles {
             applyDecide(AUTO);
         } else if (open instanceof WBattleResult) {
             boolean victory = ((WBattleResult) open).result == BATTLE_RESULT.VICTORY;
-            applyAccept(victory ? new int[RACES.all().size()] : null, victory ? new int[RESOURCES.ALL().size()] : null, 0);
+            applyAccept(victory ? new int[RACES.all().size()] : null, victory ? new int[RESOURCES.ALL().size()] : null, 0,
+                    new int[RACES.all().size()], new int[RESOURCES.ALL().size()]);
         } else if (open instanceof WBattleSiege.Result) {
             applySiegeResult(OCCUPY, 0.1, 0.1, new int[RACES.all().size()], new int[TR.ALL().size()], 0);
         }
@@ -265,7 +273,11 @@ public final class WorldBattles {
         CmdWriter w = new CmdWriter(RESULT_ACCEPT);
         ints(w, slaves);
         ints(w, spoils);
-        Commands.capture(w.d(mercy));
+        w.d(mercy);
+        WBattleResult open = Hooks.worldPrompt() instanceof WBattleResult ? (WBattleResult) Hooks.worldPrompt() : null;
+        ints(w, open == null ? null : open.capturedRaces);
+        ints(w, open == null ? null : open.lostResources);
+        Commands.capture(w);
         return true;
     }
 
