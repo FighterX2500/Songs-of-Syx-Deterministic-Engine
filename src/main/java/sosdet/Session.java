@@ -889,7 +889,15 @@ final class Session {
                 return; // nobody walks out of an assault: only its end or a PC's limit ends this view
             }
             endView(viewer, step, why, v != null && v.battle ? View.battleSentence(why) : View.sentence(why));
-            if (assaultView && a.started && a.attacks(viewer)) {
+            if (assaultView && a.started && why == View.DESYNC) {
+                a.reopen = true; // the owner's reload would lose every other view too: all reload together
+                for (View o : views) {
+                    if (assaultView(o, a)) {
+                        endView(o.viewer, step, View.DESYNC, "The assault's view reloads.");
+                    }
+                }
+            }
+            if (assaultView && a.started && (a.attacks(viewer) || a.reopen)) {
                 commandAssault(a);
             }
             return;
@@ -900,7 +908,7 @@ final class Session {
     /** At its step, every PC: an attacker in the running assault orders the retreat, for every attacker (mod spec §9). */
     private void assaultRetreat(int human) {
         Assault a = assault;
-        if (a != null && a.started && a.outcome < 0 && a.attacks(human)) {
+        if (a != null && a.started && a.endStep < 0 && a.attacks(human)) {
             a.forced = Assault.RETREAT;
         }
     }
@@ -993,8 +1001,16 @@ final class Session {
             assaultOver(step, "A player left."); // no result: what they held goes with them (mod spec §11)
             return;
         }
+        if (a.reopen) {
+            assaultReopen(step, a);
+            return;
+        }
         if (step <= a.freeze) {
             return;
+        }
+        if (a.recommand) {
+            a.recommand = false;
+            commandAssault(a);
         }
         if (!a.started) {
             for (View v : views) {
@@ -1015,18 +1031,55 @@ final class Session {
             commandAssault(a);
             return;
         }
-        if (a.forced >= 0 && a.outcome < 0) { // the attackers' retreat; in a rig test, the outcome the test asked for
-            a.survivors = sosdet.game.GameAssault.invaders();
-            if (cityHuman() == a.defender) {
-                sosdet.game.GameAssault.stop(a.invasionRef);
-            }
-            a.outcome = a.forced;
+        if (ai().mode() != sosdet.ai.AiMode.HOST || a.endLogged) {
+            return; // only the host ends it: a PC whose view ended no longer runs the city
         }
-        if (a.outcome >= 0) {
-            assaultOver(step, null);
+        if (cityHuman() != a.defender) {
+            logAssaultEnd(a, -1, 0); // the host's own view ended: no PC can tell the outcome here
+        } else if (a.forced >= 0) {
+            logAssaultEnd(a, a.forced, sosdet.game.GameAssault.invaders()); // the attackers' retreat; or a rig test's
+        } else if (a.detected >= 0) {
+            logAssaultEnd(a, a.detected, a.survivors);
         } else if (!sosdet.game.GameAssault.invading()) {
-            assaultOver(step, "the invasion stopped"); // the game dropped it: no room to fight in
+            logAssaultEnd(a, -1, 0); // the game dropped it: no room to fight in
         }
+    }
+
+    /** Once every view of the assault has thawed, all open again at one freeze, from the city as it stands then. */
+    private void assaultReopen(long step, Assault a) {
+        for (View v : views) {
+            if (assaultView(v, a) && v.state != View.ENDED && v.state != View.CANCELLED) {
+                return;
+            }
+        }
+        long freeze = nextReportStep(step);
+        for (int h : humans()) {
+            if (h != a.defender && (!retired(h) || watching(h))) {
+                views[h] = new View(h, pcOf(h), a.defender, pcOf(a.defender), freeze);
+            }
+        }
+        a.freeze = freeze;
+        a.reopen = false;
+        a.recommand = true;
+    }
+
+    private void logAssaultEnd(Assault a, int outcome, int survivors) {
+        a.endLogged = true;
+        ai().captureAssaultEnd(sosdet.ai.AiEntry.ints(outcome, survivors));
+    }
+
+    /** At the logged step, every PC: the assault ends with the outcome the host's city reached (SOS-92). */
+    void assaultEnded(long step, int outcome, int survivors) {
+        Assault a = assault;
+        if (a == null || a.endStep >= 0) {
+            return; // a player left first
+        }
+        if (a.detected < 0 && cityHuman() == a.defender && sosdet.game.GameAssault.invading()) {
+            sosdet.game.GameAssault.stop(a.invasionRef); // the invasion didn't end by itself: a retreat
+        }
+        a.outcome = outcome;
+        a.survivors = survivors;
+        assaultOver(step, outcome < 0 ? "the invasion stopped" : null);
     }
 
     /** Every PC alike, in the step: the removal of the defender or an attacker has applied. */
@@ -1180,14 +1233,6 @@ final class Session {
                 pacer.drop(pc);
             }
         }
-    }
-
-    /** After a load: the humans the save holds as eliminated watch on. */
-    private void spectatorsLoaded() {
-        for (int h : humans()) {
-            spectators[h] |= city().eliminated(h);
-        }
-        spectatorsChanged();
     }
 
     /** Recounts {@link #living} and, on a spectator's PC, keeps its orders out. Every PC, after a retirement or a load. */
@@ -1491,9 +1536,15 @@ final class Session {
             boolean[] r = new boolean[SLOTS];
             for (int h : hs) {
                 r[h] = city().retired(h);
+                spectators[h] |= city().eliminated(h); // who the save holds as eliminated watches on
             }
             retired = r;
             humans = hs;
+            int was = living;
+            spectatorsChanged();
+            if (currentHuman == was) {
+                currentHuman = living;
+            }
         }
         return humans;
     }
@@ -1754,9 +1805,6 @@ final class Session {
             }
         }
         humans = null;
-        if (ownCity) {
-            spectatorsLoaded();
-        }
         currentHuman = living;
         reportFeed.clear();
         for (sosdet.report.ReportFeed f : feedsIn.values()) {

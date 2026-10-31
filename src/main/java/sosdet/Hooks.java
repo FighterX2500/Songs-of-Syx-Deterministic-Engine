@@ -604,7 +604,7 @@ public final class Hooks {
     /** The rig's {@code ASSAULT_END} in the world part: the running assault's invasion ends with {@code outcome}. */
     public static boolean assaultForce(int outcome) {
         Session s = Engine.session();
-        if (s == null || s.assault == null || !s.assault.started || s.assault.outcome >= 0 || outcome < Assault.HELD
+        if (s == null || s.assault == null || !s.assault.started || s.assault.endStep >= 0 || outcome < Assault.HELD
                 || outcome > Assault.RETREAT) {
             return false;
         }
@@ -615,10 +615,15 @@ public final class Hooks {
     /** {@code Invasion.update}, as the assault's invasion ends in the step: the same on every PC that runs the city. */
     public static void assaultOutcome(int outcome) {
         Session s = Engine.session();
-        if (s != null && s.assault != null && s.assault.started && s.assault.outcome < 0) {
+        if (s != null && s.assault != null && s.assault.started && s.assault.detected < 0) {
             s.assault.survivors = sosdet.game.GameAssault.invaders();
-            s.assault.outcome = outcome;
+            s.assault.detected = outcome;
         }
+    }
+
+    /** The host's {@link sosdet.ai.AiEntry#ASSAULT_END} at its step, every PC. */
+    public static void assaultEnded(long step, int outcome, int survivors) {
+        Engine.session().assaultEnded(step, outcome, survivors);
     }
 
     /**

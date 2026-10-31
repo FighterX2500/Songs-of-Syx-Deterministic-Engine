@@ -39,11 +39,22 @@ public final class Sieges {
     static final int WAIT_PASSED = 7971;
     static final int ASSAULT_END = 7972;
     static final int ASSAULT_TERMS = 7973;
+    static final int ARMY_TELEPORT = 7974;
 
     static final List<Command> ALL = List.of(new Command(SALLY, "siegeSally", r -> applySally()),
             new Command(WAIT_PASSED, "siegeWaitPassed", r -> applyWaitPassed(r.i())),
             new Command(ASSAULT_END, "assaultEndForTest", r -> Hooks.assaultForce(r.i())),
-            new Command(ASSAULT_TERMS, "assaultTerms", Sieges::applyTermsCommand));
+            new Command(ASSAULT_TERMS, "assaultTerms", Sieges::applyTermsCommand),
+            new Command(ARMY_TELEPORT, "armyTeleportForTest", r -> {
+                WArmy a = Args.army(r);
+                int tx = r.i();
+                int ty = r.i();
+                if (a == null) {
+                    return false;
+                }
+                a.teleport(tx, ty);
+                return true;
+            }));
 
     /** Patch 15's {@code WBattles.sosdetSally}: the engine compiles against the shipped game, without it. */
     private static final Method SALLY_OUT = sallyOutMethod();
@@ -235,6 +246,14 @@ public final class Sieges {
             throw new IllegalStateException("SOSDET: a siege's wait outside a session's play");
         }
         Commands.capture(new CmdWriter(WAIT_PASSED).i(slot));
+    }
+
+    /** Test tooling, never a player's: the army stands at this tile, at the command's step on every PC alike. */
+    public static void teleportForTest(WArmy a, int tx, int ty) {
+        if (!Commands.capturing()) {
+            throw new IllegalStateException("SOSDET: an army's teleport outside a session's play");
+        }
+        Commands.capture(Args.army(new CmdWriter(ARMY_TELEPORT), a).i(tx).i(ty));
     }
 
     private static boolean applyWaitPassed(int slot) {

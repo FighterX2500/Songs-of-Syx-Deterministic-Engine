@@ -43,7 +43,12 @@ public final class AiEntry {
      * not a battle change.
      */
     public static final int VIEW = 20;
-    static final int KINDS = 21;
+    /**
+     * The host ends the running assault (SOS-92): the payload is the outcome (-1 for none) and the invaders alive. Every
+     * PC ends it at this entry's step, also a PC whose view ended and that no longer runs the city; not a battle change.
+     */
+    public static final int ASSAULT_END = 21;
+    static final int KINDS = 22;
     public static String kindName(int kind) {
         return KIND_NAMES[kind];
     }

@@ -739,6 +739,20 @@ public final class WorldActions {
                                 + "; prisoners here " + prisonersHere() : ""));
             });
             return true;
+        case "assaultnudge": // assaultnudge: forced desync of an assault: on this PC only, a soldier's injuries turn fatal (SOS-92 G)
+            Rig.later(() -> {
+                for (settlement.entity.ENTITY e : settlement.main.SETT.ENTITIES().getAllEnts()) {
+                    if (e instanceof settlement.entity.humanoid.Humanoid && !e.isRemoved()
+                            && ((settlement.entity.humanoid.Humanoid) e).division() != null) {
+                        settlement.stats.STATS.NEEDS().INJURIES.COUNT.indu().set(((settlement.entity.humanoid.Humanoid) e).indu(),
+                                settlement.stats.STATS.NEEDS().INJURIES.COUNT.indu().max(((settlement.entity.humanoid.Humanoid) e).indu()));
+                        Rig.note("assaultnudge at step " + Engine.step());
+                        return;
+                    }
+                }
+                Rig.note("assaultnudge: no soldier");
+            });
+            return true;
         case "assaultorders": { // assaultorders stop|centre: this human orders every invading division as a battle's UI would
             // (SOS-92): each stops, or marches to the city's centre; a division not yours stays as it was
             boolean stop = a[1].equals("stop");
@@ -801,6 +815,18 @@ public final class WorldActions {
                 }
                 Engine.declareWar(slot);
                 Rig.note("declares war on slot " + slot);
+            });
+            return true;
+        }
+        case "wteleport": { // wteleport <army> <slot> <dx> <dy>: the army stands at those tiles from the capital of the human in <slot>
+            int army = Integer.parseInt(a[1]);
+            int slot = Integer.parseInt(a[2]);
+            int dx = Integer.parseInt(a[3]);
+            int dy = Integer.parseInt(a[4]);
+            Rig.later(() -> {
+                Region cap = FACTIONS.getByIndex(slot).capitolRegion();
+                sosdet.game.cmd.Sieges.teleportForTest(army(army), cap.cx() + dx, cap.cy() + dy);
+                Rig.note("wteleport of army " + army + " to " + (cap.cx() + dx) + "," + (cap.cy() + dy));
             });
             return true;
         }

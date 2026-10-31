@@ -130,6 +130,9 @@ public final class GameAi implements AiApplier {
         case AiEntry.VIEW:
             Hooks.viewEntry(e.step, e.intAt(0), e.intAt(1), e.intAt(2)); // SOS-82
             return;
+        case AiEntry.ASSAULT_END:
+            Hooks.assaultEnded(e.step, e.intAt(0), e.intAt(1)); // SOS-92
+            return;
         case AiEntry.TELEPORT:
             ArrayList<Div> divs = new ArrayList<>(e.ints());
             Commanders c = Hooks.commanders();

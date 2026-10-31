@@ -21,8 +21,8 @@ public final class Assault {
     public final long step;
     public final int attacker;
     public final int defender;
-    /** Every human's view freezes here; the invasion starts at the next step. */
-    public final long freeze;
+    /** Every human's view freezes here; the invasion starts at the next step. A resync of the assault moves it on. */
+    public volatile long freeze;
     /** The invasion, built at Storm's step from the besieging armies ({@code InvasionSpec}). */
     final Object spec;
     /** The besieging armies' indices: the world's armies the invasion came from. */
@@ -38,8 +38,16 @@ public final class Assault {
     public final int chooser;
     /** The invasion is running in the defender's city. */
     volatile boolean started;
-    /** {@link #HELD}, {@link #TAKEN} or {@link #RETREAT}; -1 while it runs. */
+    /** {@link #HELD}, {@link #TAKEN} or {@link #RETREAT}, once the host's log ended it; -1 while it runs. */
     volatile int outcome = -1;
+    /** The outcome this PC's city reached, on a PC that runs it; the host's goes in the log. -1 until then. */
+    volatile int detected = -1;
+    /** The host logged the end. */
+    volatile boolean endLogged;
+    /** A view lost step with the city: every view ends, and all open again from the city's new save (mod spec §9). */
+    volatile boolean reopen;
+    /** Those views opened: the players take their soldiers back as the new freeze passes. */
+    volatile boolean recommand;
     /** The invaders alive as the invasion ended; -1 until then (SOS-92 C). */
     volatile int survivors = -1;
     /** The step the invasion ended at; -1 while it runs. */
@@ -48,7 +56,7 @@ public final class Assault {
     volatile String cancelled;
     /** The invasion's reference in the defender's city, once it runs there. */
     volatile int invasionRef = -1;
-    /** Rig tests only: the outcome the invasion ends with at the next city tail; -1 when none. */
+    /** The attackers' retreat, or in a rig test the outcome asked for: the host logs it next; -1 when none. */
     volatile int forced = -1;
     /** After {@link #TAKEN}: the step the attacker's choice is due by; then the default applies (SOS-92 D). */
     volatile long termsDue = -1;
