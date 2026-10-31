@@ -732,7 +732,7 @@ public final class Engine {
         if (v == null) {
             throw new IllegalStateException("SOSDET: a battle's tape with no view of this PC's human");
         }
-        s.tape.in(bytes, v.ownerPc);
+        s.tape.in(bytes);
     }
 
     /** The viewer's PC: the first difference between its copy of the viewed city and the owner's city, or null. */

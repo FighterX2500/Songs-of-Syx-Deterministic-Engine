@@ -43,6 +43,7 @@ final class GameEvents extends Savable {
     private static final Method RAID_SAVE = GameRelations.method(RAIDING.class, "sosdetSave", int.class, FilePutter.class);
     private static final Method RAID_LOAD = GameRelations.method(RAIDING.class, "sosdetLoad", int.class, FileGetter.class);
     private static final MethodHandle WAR_COUNT = handle(EventDiplomacy.class, "sosdetWarCount", double.class);
+    private static final MethodHandle PHASE = handle(EventDiplomacy.class, "sosdetPhase", double.class);
     private static final MethodHandle REBELLION_TIMER = handle(EventWorldRebellion.class, "sosdetTimer", double.class);
     private static final MethodHandle RAID = handle(RAIDING.class, "current", RaidingCurrent.class);
 
@@ -96,6 +97,9 @@ final class GameEvents extends Savable {
         EventDiplomacy dip = GAME.events().world.dip;
         EventWorldRebellion rebellion = GAME.events().rebellion;
         RAIDING raids = GAME.raiders();
+        if (n > 1) {
+            h = HashLog.mix(h, Double.doubleToLongBits(phase(dip)));
+        }
         for (int k = 1; k < n; k++) {
             h = HashLog.mix(h, Double.doubleToLongBits(warCount(dip, k)));
             h = HashLog.mix(h, Double.doubleToLongBits(rebellionTimer(rebellion, k)));
@@ -122,6 +126,17 @@ final class GameEvents extends Savable {
             out[o + 2] = r == null ? -1 : r.army.power;
         }
         return Math.max(0, n - 1);
+    }
+
+    /** Where the world's day of diplomacy stands: it decides the step each human's war timer moves at (SOS-119). */
+    private static double phase(EventDiplomacy dip) {
+        try {
+            return (double) PHASE.invokeExact(dip, 0);
+        } catch (RuntimeException | Error e) {
+            throw e;
+        } catch (Throwable e) {
+            throw new IllegalStateException("SOSDET: the diplomacy's phase", e);
+        }
     }
 
     private static double warCount(EventDiplomacy dip, int k) {

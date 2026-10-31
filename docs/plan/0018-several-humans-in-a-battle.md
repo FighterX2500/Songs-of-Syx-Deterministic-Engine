@@ -75,6 +75,28 @@ A battle has held two humans: `OwnBattle.human` and `other`. Vanilla's two armie
 
 M1 and M2 stand alone. M3 to M7 go together, and M8 comes last. Determinism: everything here runs in the battle step or feeds the hash, so `.claude/rules/determinism.md` applies, and no per-PC value enters the step.
 
+## Results
+
+All on the three-copy rig, each to step 26000 with every copy identical and no desync.
+
+- **S8D, S8F, S8G (a battle between players):** an ally joins by answer and stays out by answer; each human's bonuses are their own, the same on every copy; the groups deploy apart; an ally's order moves only their divisions; the ally's retreat leaves the lead fighting; the shares came to 7 captives and 296 spoils, and 1 captive and 87 spoils, on a 71 to 22 men side.
+- **S9N, S9P (an ally in an NPC battle):** the ally's view starts by itself, the fighter's game and the ally's stayed equal over 479 view hashes, the ally's order moved their men from a mean x of 418 to 305, both retreats went through, and the result reached every PC.
+
+Three bugs came out of these runs:
+
+- A local battle's commanders table sits on two PCs only, and it was in the clock hash and resync state. It's now outside both (`Commanders.setLocal`, `hashed`).
+- A local battle's tape applied orders past the log's checks, so a command didn't know its PC and a division took any PC's order. `AiLog.applyTaped` applies the same rules.
+- A save holds the game's update counter as it was, so a city loaded back after a battle ran behind the PCs that loaded nothing. `Hooks.updateLoaded` keeps the counter on the step, and `EventDiplomacy.sosdetPhase` is now hashed.
+- The war timer desync of S9E, S9J and S9Q to S9T. `DipWarPlayer.init` fills its list in two loops over `FACTIONS.NPCs()`, so an NPC is in it twice, as in vanilla. `ArrayList` has one shared iterator, so a nested loop over that list ends the outer one early. A PC that just loaded has cold caches, and something inside `validEnemy` then runs such a loop: the first loop stops, every NPC is in the list once, and `attack` is half the other PCs'. War timers move once a day, about 25,000 steps here, so it showed long after the load. `init` now loops by index. A viewer's load back could set it off too.
+
+The rig's relay sent every file as append-only, so a marker rewritten longer (`6873`, then `11418`) arrived as `68738`. Markers and saves now go whole when they change.
+
+Not tested by a run:
+
+- A leaving army's survivors in a close fight: in every run the enemy outnumbered it about 5 to 1, and the 40% penalty killed all of it, as the rule says. `BattleRulesTest` covers the numbers.
+- A resync inside a battle with allies.
+- A win over an NPC with an ally in a fought battle: an NPC weaker than the side withdraws, so a real fight means the side is the weaker one.
+
 ## Open
 
 The mod's spec §16: a commander who drops out with allies still in the battle. Today's Continue without them ends the battle with no result.

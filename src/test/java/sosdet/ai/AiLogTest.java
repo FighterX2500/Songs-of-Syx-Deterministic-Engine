@@ -412,6 +412,21 @@ class AiLogTest {
         assertEquals(host.commanders().hash(), peer.commanders().hash());
     }
 
+    /** SOS-119: a local battle's tape goes by the table too, and a command on it knows the PC that gave it. */
+    @Test
+    void aTapedOrderObeysTheLocalTable() {
+        int[] from = {-9};
+        AiLog[] log = new AiLog[1];
+        log[0] = AiLog.host(START, e -> from[0] = log[0].applyingPc());
+        log[0].localCommanders(new int[] {0, 1, AiEntry.AI, AiEntry.AI}, new int[] {0, AiEntry.AI});
+        log[0].applyTaped(AiEntry.order(AiEntry.GUARD, 0, 1, AiEntry.ints(1)));
+        assertEquals(-9, from[0], "not that PC's division");
+        assertEquals(1, log[0].commanders().skipped());
+        log[0].applyTaped(AiEntry.order(AiEntry.GUARD, 1, 1, AiEntry.ints(1)));
+        assertEquals(1, from[0]);
+        assertFalse(log[0].commanders().hashed(), "only the battle's PCs hold the table");
+    }
+
     /** An assault with the peer as attacker: divisions 0 and 1 the host's, 2 and 3 the general's until the peer orders them. */
     private static final int[] ASSAULT = {0, 0, Commanders.claimBy(1), Commanders.claimBy(1)};
     private static final int[] ASSAULT_GUNS = {0, Commanders.claimBy(1)};

@@ -28,4 +28,10 @@ public record Notice(long step, int kind, int first, int second, int value) {
     public static final int TARIFF = 6;
     /** {@code first} voted for a battle speed of {@code value}. */
     public static final int SPEED_VOTE = 7;
+    /** The ally {@code first} joined the battle of {@code second}. */
+    public static final int ALLY_JOINED = 8;
+    /** The ally {@code first} stayed out of the battle of {@code second}. */
+    public static final int ALLY_OUT = 9;
+    /** {@code first} retreated its army, its ally fighting on. */
+    public static final int ARMY_LEFT = 10;
 }

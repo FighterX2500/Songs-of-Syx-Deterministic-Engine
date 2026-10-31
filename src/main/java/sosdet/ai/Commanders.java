@@ -22,6 +22,8 @@ public final class Commanders {
     /** By battle division, then by army for the artillery; null when unset. Replaced whole, never changed in place. */
     private volatile int[] byDivision;
     private volatile int[] artilleryByArmy;
+    /** The table is a local battle's, which only the two PCs running it hold: no hash or resync state has it (SOS-119). */
+    private volatile boolean local;
     /** This PC's number, and the army whose divisions it commands first (0, the player's, when none). */
     private int localPc;
     private volatile int ownArmy;
@@ -70,6 +72,7 @@ public final class Commanders {
 
     /** A {@link AiEntry#COMMANDERS} entry, at its step. */
     void apply(AiEntry e) {
+        local = false;
         int divisions = e.intAt(0);
         int armies = e.intAt(1);
         if (divisions == 0) {
@@ -92,9 +95,16 @@ public final class Commanders {
 
     /** A table set by the step itself on every PC (an assault's), not through the log; null and null clear it. */
     void set(int[] divisions, int[] artillery) {
+        local = false;
         byDivision = divisions;
         artilleryByArmy = artillery;
         ownArmy = armyOf(localPc);
+    }
+
+    /** A table only this PC and the other one running a local battle hold; null and null clear it. */
+    void setLocal(int[] divisions, int[] artillery) {
+        set(divisions, artillery);
+        local = divisions != null;
     }
 
     /** {@code pc}'s entry for division {@code div} applies: if the division was claimable by it, it commands it now. */
@@ -124,6 +134,11 @@ public final class Commanders {
 
     public boolean set() {
         return byDivision != null;
+    }
+
+    /** True while a table every PC holds is set: only then is it in the state hash. */
+    public boolean hashed() {
+        return byDivision != null && !local;
     }
 
     /** Whether an entry from {@code pc} may change division {@code div}. */
@@ -186,7 +201,7 @@ public final class Commanders {
 
     /** The table for a resync state: the counts, then the payload ints. */
     void writeTo(ByteBuffer b) {
-        int[] d = byDivision;
+        int[] d = local ? null : byDivision;
         int[] a = artilleryByArmy;
         b.putLong(skipped);
         b.putInt(d == null ? 0 : d.length).putInt(a == null ? 0 : a.length);
@@ -201,7 +216,7 @@ public final class Commanders {
     }
 
     int bytes() {
-        int[] d = byDivision;
+        int[] d = local ? null : byDivision;
         return 8 + 8 + (d == null ? 0 : 4 * (d.length + artilleryByArmy.length));
     }
 

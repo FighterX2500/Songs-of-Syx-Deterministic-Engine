@@ -14,12 +14,12 @@ import sosdet.ai.AiEntry;
  * What a local battle's PC does in each step, for the PCs that watch it (plan 0017, SOS-109): the rounds it ran and the
  * orders it applied. A watcher runs the same steps later, at its own pace, from this tape, so it never needs the
  * fighter to wait. The orders of the player apply at the next step on the fighter too, from {@link #add}, so the step
- * they apply at is on the tape. Protocol version 1. Game thread.
+ * they apply at is on the tape, with the PC each came from (an ally's, SOS-119). Protocol version 2. Game thread.
  */
 final class LocalTape {
 
     static final int MAGIC = 0x53445454; // "SDTT"
-    static final int VERSION = 1;
+    static final int VERSION = 2;
 
     /** One step of the tape: {@code rounds} is 0 for a paused battle. */
     static final class Step {
@@ -102,6 +102,7 @@ final class LocalTape {
                 AiEntry e = queued.get(i);
                 d.writeInt(e.kind);
                 d.writeInt(e.div);
+                d.writeInt(e.pc);
                 byte[] payload = e.payload();
                 d.writeInt(payload.length);
                 d.write(payload);
@@ -135,8 +136,8 @@ final class LocalTape {
         return whole.toByteArray();
     }
 
-    /** The watcher: more of the tape, in order; the orders apply as if from the battle's PC. */
-    void in(byte[] bytes, int pc) {
+    /** The watcher: more of the tape, in order; each order applies as from the PC that gave it. */
+    void in(byte[] bytes) {
         try (DataInputStream d = new DataInputStream(new ByteArrayInputStream(bytes))) {
             int magic = d.readInt();
             int version = d.readInt();
@@ -152,6 +153,7 @@ final class LocalTape {
                 for (int i = 0; i < n; i++) {
                     int kind = d.readInt();
                     int div = d.readInt();
+                    int pc = d.readInt();
                     byte[] payload = new byte[d.readInt()];
                     d.readFully(payload);
                     orders[i] = AiEntry.order(kind, div, pc, payload);

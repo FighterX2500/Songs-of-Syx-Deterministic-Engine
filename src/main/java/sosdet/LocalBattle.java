@@ -20,6 +20,13 @@ public final class LocalBattle {
     public final int pc;
     /** The step every PC freezes the human at, and the battle PC generates the battle at: the next report step. */
     public final long freeze;
+    /** Who fights it: the human, and allies who joined (SOS-119). */
+    final BattleRoster roster;
+    /** The speed the commanders' vote settled on, and that one of them paused it (SOS-119). */
+    double votedSpeed = 1;
+    boolean paused;
+    /** This PC's game speed as last seen, as a press is a vote; -1 before the first frame. */
+    double seenSpeed = -1;
     /** The battle's armies, which wait in place until the battle's result applies. */
     int[] armies;
     /** The battle PC: vanilla's Engage, run at {@link #freeze}; null once run. */
@@ -41,12 +48,17 @@ public final class LocalBattle {
     volatile int state = ENGAGED;
 
     LocalBattle(long engage, int human, int pc, long freeze, int[] armies, Runnable generate) {
+        this(engage, human, pc, freeze, armies, generate, new int[0]);
+    }
+
+    LocalBattle(long engage, int human, int pc, long freeze, int[] armies, Runnable generate, int[] allies) {
         this.engage = engage;
         this.human = human;
         this.pc = pc;
         this.freeze = freeze;
         this.armies = armies;
         this.generate = generate;
+        this.roster = new BattleRoster(human, -1, allies);
     }
 
     public int state() {

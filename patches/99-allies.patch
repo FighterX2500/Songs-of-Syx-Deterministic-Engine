@@ -1,0 +1,91 @@
+diff -ru -U2 a/game/battle/state/BattleStateGenArmy.java b/game/battle/state/BattleStateGenArmy.java
+--- a/game/battle/state/BattleStateGenArmy.java	2026-01-09 09:08:36.000000000 +0500
++++ b/game/battle/state/BattleStateGenArmy.java	2026-10-31 17:59:59.571693300 +0500
+@@ -42,17 +42,29 @@
+ 		
+ 		ArmyFormation ff = player ? GAME.battle().formations.player : GAME.battle().formations.all.rnd();
+ 		
+-		ArrayList<ArmyFormationDiv> divs = ff.getFirstRow(ss); 
++		ArrayList<ArmyFormationDiv> sosdetAll = ff.getFirstRow(ss); // SOSDET: each human's divisions apart, side by side (SOS-118) 
+ 		
+ 		
+ 		int w = 12;
+-		int cx = SETT.TILE_BOUNDS.cX()+d.x()*120 + d.next(2).x()*w/2;
+-		int cy = SETT.TILE_BOUNDS.cY()+d.y()*120 + d.next(2).y()*w/2;
+-		
++		final int sosdetCx = SETT.TILE_BOUNDS.cX()+d.x()*120 + d.next(2).x()*w/2;
++		final int sosdetCy = SETT.TILE_BOUNDS.cY()+d.y()*120 + d.next(2).y()*w/2;
++		int cx = sosdetCx;
++		int cy = sosdetCy;
++
+ 		int depth = 0;
+-		for (; depth < 256 && !divs.isEmpty(); depth += w+1) {
+-			for (int width = 0; width < 220; width++) {
+-				if (divs.isEmpty())
++		int sosdetDepth = 0;
++		int sosdetGroups = sosdet.Hooks.battleGroups(player);
++		for (int sosdetG = 0; sosdetG < sosdetGroups; sosdetG++) {
++		ArrayList<ArmyFormationDiv> divs = new ArrayList<>(sosdetAll.size());
++		for (ArmyFormationDiv sosdetD : sosdetAll)
++			if (sosdet.Hooks.battleGroup(player, sosdetD.divID) == sosdetG)
++				divs.add(sosdetD);
++		int sosdetOff = sosdet.Hooks.battleGroupOffset(player, sosdetG);
++		cx = sosdetCx + d.next(2).x()*sosdetOff;
++		cy = sosdetCy + d.next(2).y()*sosdetOff;
++		for (depth = 0; depth < 256 && !divs.isEmpty(); depth += w+1) {
++			for (int width = 0; width < 220-Math.abs(sosdetOff); width++) {
++if (divs.isEmpty())
+ 					break;
+ 				int x1 = cx + depth*d.x() + d.next(2).x()*width;
+ 				int y1 = cy + depth*d.y() + d.next(2).y()*width;
+@@ -82,6 +94,11 @@
+ 			}
+ 		}
+ 		
++		sosdetDepth = Math.max(sosdetDepth, depth);
++		}
++		depth = sosdetDepth;
++		cx = sosdetCx;
++		cy = sosdetCy;
+ 		depth += BattleStateArt.placeArt(cx, cy, depth, d, art, artrace, player);
+ 		
+ 		
+diff -ru -U2 a/game/boosting/tmp/TBooster.java b/game/boosting/tmp/TBooster.java
+--- a/game/boosting/tmp/TBooster.java	2026-06-22 09:58:06.000000000 +0500
++++ b/game/boosting/tmp/TBooster.java	2026-10-31 17:59:59.570696600 +0500
+@@ -86,6 +86,8 @@
+ 		
+ 		@Override
+ 		public double vGet(Div div) {
++			if (sosdet.Hooks.reportOwner(div) >= 0)
++				return sosdet.Hooks.ownerBoostClP(this, sosdet.Hooks.reportOwner(div)); // SOSDET: a second human's, from its report (SOS-118)
+ 			Faction f = div.faction();
+ 			if (f == FACTIONS.player())
+ 				return GAME.BOOST().popcl.add(HCLASS_RACE.clP(div.info.race()),target);
+@@ -96,6 +98,8 @@
+ 		
+ 		@Override
+ 		public double vGet(Induvidual indu) {
++			if (sosdet.Hooks.reportOwner(indu) >= 0)
++				return sosdet.Hooks.ownerBoostClP(this, sosdet.Hooks.reportOwner(indu)); // SOSDET: a second human's, from its report (SOS-118)
+ 			double d=  GAME.BOOST().popcl.add(indu.popCL(), target);
+ 			if (indu.player())
+ 				d += GAME.BOOST().factions.add(FACTIONS.player(), target);
+@@ -139,6 +143,8 @@
+ 		
+ 		@Override
+ 		public double vGet(Div div) {
++			if (sosdet.Hooks.reportOwner(div) >= 0)
++				return sosdet.Hooks.ownerBoostClP(this, sosdet.Hooks.reportOwner(div)); // SOSDET: a second human's, from its report (SOS-118)
+ 			Faction f = div.faction();
+ 			if (f == FACTIONS.player())
+ 				return GAME.BOOST().popcl.mul(HCLASS_RACE.clP(div.info.race()),target);
+@@ -149,6 +155,8 @@
+ 		
+ 		@Override
+ 		public double vGet(Induvidual indu) {
++			if (sosdet.Hooks.reportOwner(indu) >= 0)
++				return sosdet.Hooks.ownerBoostClP(this, sosdet.Hooks.reportOwner(indu)); // SOSDET: a second human's, from its report (SOS-118)
+ 			return GAME.BOOST().popcl.mul(indu.popCL(),target) * GAME.BOOST().factions.mul(FACTIONS.player(),target);
+ 		}
+ 		

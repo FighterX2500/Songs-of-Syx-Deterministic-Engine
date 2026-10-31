@@ -36,6 +36,7 @@ public final class WorldBattles {
     static final int DECIDE = 7900;
     static final int RESULT_ACCEPT = 7901;
     static final int SIEGE_RESULT = 7902;
+    static final int ALLY_ANSWER = 7903;
 
     /** {@link #decide} choices. */
     public static final int AUTO = 1;
@@ -64,7 +65,8 @@ public final class WorldBattles {
                 int[] slaves = ints(r);
                 int[] spoils = ints(r);
                 return applySiegeResult(choice, devastation, death, slaves, spoils, r.d());
-            }));
+            }),
+            new Command(ALLY_ANSWER, "worldBattleAlly", r -> Hooks.worldPromptAllyAnswer(r.i() != 0)));
 
     private WorldBattles() {
     }
@@ -110,6 +112,9 @@ public final class WorldBattles {
         int sallyAgainst = Hooks.worldPromptSally();
         if (sallyAgainst >= 0 && choice == AUTO) {
             return false; // a sally against another human is fought or called off (SOS-83)
+        }
+        if (choice == ENGAGE && Hooks.worldPromptWaitsForAllies()) {
+            return true; // it engages once they've answered or the time ran out (SOS-118)
         }
         if (choice == AUTO && spec instanceof WBattleSiege && Sieges.stormRefusal(((WBattleSiege) spec).besiged) != null) {
             return false; // a human's capital is stormed only after its wait, by the assault (SOS-92)
@@ -180,7 +185,9 @@ public final class WorldBattles {
      */
     static void timedOut() {
         Object open = Hooks.worldPrompt();
-        if (open instanceof WBattleSpec && Hooks.worldPromptSally() >= 0) {
+        if (open instanceof WBattleSpec && Hooks.worldPromptFought()) {
+            Hooks.worldPromptEngageNext(); // Fight was chosen: allies who didn't answer stay out (SOS-118)
+        } else if (open instanceof WBattleSpec && Hooks.worldPromptSally() >= 0) {
             applyDecide(RETREAT); // a sally against another human: the garrison stays in, and the siege goes on (SOS-83)
         } else if (open instanceof WBattleSpec && Hooks.worldPromptBetweenHumans()) {
             Hooks.worldPromptEngageNext(); // between two humans the battle is always fought (spec §8, SOS-83)
@@ -203,7 +210,7 @@ public final class WorldBattles {
     public static void pvpEngage() {
         WBattleSpec spec = (WBattleSpec) Hooks.worldPrompt();
         int attacker = Hooks.worldPromptHuman();
-        int defender = Hooks.worldPromptOther();
+        int defender = Hooks.worldPromptOther() >= 0 ? Hooks.worldPromptOther() : Hooks.worldPromptSally();
         Hooks.worldPromptClose();
         Hooks.ownCityEngage(attacker, defender, spec::engage);
     }
@@ -266,6 +273,15 @@ public final class WorldBattles {
         ints(w, slaves);
         ints(w, spoils);
         Commands.capture(w.d(mercy));
+        return true;
+    }
+
+    /** This PC's player answers Join or Stay out; false outside a session (SOS-118). */
+    public static boolean allyAnswer(boolean join) {
+        if (!Commands.capturing()) {
+            return false;
+        }
+        Commands.capture(new CmdWriter(ALLY_ANSWER).i(join ? 1 : 0));
         return true;
     }
 

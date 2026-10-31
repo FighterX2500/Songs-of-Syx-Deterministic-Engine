@@ -64,6 +64,7 @@ public final class Relay {
 
     /** Remote path -> bytes the other PC has (as far as we know); absent: not sent yet in this process. */
     private final Map<String, Long> sent = new HashMap<>();
+    private final Map<String, Long> stamps = new HashMap<>();
     /** NEED answers from the reader: remote path -> the other PC's length. */
     private final ConcurrentLinkedQueue<Object[]> needs = new ConcurrentLinkedQueue<>();
     /** Our command in flight: id and text; null when none. */
@@ -229,6 +230,11 @@ public final class Relay {
         return busy;
     }
 
+    /** A marker or a save is written anew, not appended: a second battle's "11418" over "6873" isn't a longer file. */
+    private static boolean rewritten(String name) {
+        return name.endsWith(".done") || name.endsWith(".save") || name.endsWith(".state");
+    }
+
     private boolean sendFile(DataOutputStream out, Path f, String remote) throws IOException {
         long size;
         try {
@@ -237,7 +243,9 @@ public final class Relay {
             return false;
         }
         Long have = sent.get(remote);
-        boolean reset = have == null || size < have;
+        long stamp = rewritten(remote) ? Files.getLastModifiedTime(f).toMillis() : 0;
+        Long seen = stamps.put(remote, stamp);
+        boolean reset = have == null || size < have || seen != null && seen != stamp;
         long from = reset ? 0 : have;
         if (!reset && from == size) {
             return false;

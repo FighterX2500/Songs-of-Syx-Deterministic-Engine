@@ -1,6 +1,6 @@
 diff -ru -U2 a/game/battle/util/Power.java b/game/battle/util/Power.java
 --- a/game/battle/util/Power.java	2026-05-18 14:41:46.000000000 +0500
-+++ b/game/battle/util/Power.java	2026-10-31 06:20:26.791896600 +0500
++++ b/game/battle/util/Power.java	2026-10-31 22:45:03.869978600 +0500
 @@ -46,7 +46,9 @@
  	
  	private double minPower = -1;
@@ -32,7 +32,7 @@ diff -ru -U2 a/game/battle/util/Power.java b/game/battle/util/Power.java
  		double d = pget(div);
 diff -ru -U2 a/game/faction/diplomacy/deal/DealBools.java b/game/faction/diplomacy/deal/DealBools.java
 --- a/game/faction/diplomacy/deal/DealBools.java	2026-05-18 09:29:22.000000000 +0500
-+++ b/game/faction/diplomacy/deal/DealBools.java	2026-10-31 06:20:26.792889400 +0500
++++ b/game/faction/diplomacy/deal/DealBools.java	2026-10-31 22:45:03.869978600 +0500
 @@ -286,7 +286,7 @@
  //			if (DIP.get(a.f(), b.f()).minLoyalty > 0 && DIP.get(a.f(), b.f()).minLoyalty > ss.minLoyalty)
  //				return ¤¤pDowngrade;
@@ -53,7 +53,7 @@ diff -ru -U2 a/game/faction/diplomacy/deal/DealBools.java b/game/faction/diploma
  			}else if (f != b.f() && DIP.WAR().is(a.f(), f)) {
 diff -ru -U2 a/game/faction/diplomacy/DipWarPlayer.java b/game/faction/diplomacy/DipWarPlayer.java
 --- a/game/faction/diplomacy/DipWarPlayer.java	2026-04-04 17:39:24.000000000 +0500
-+++ b/game/faction/diplomacy/DipWarPlayer.java	2026-10-31 06:20:26.792889400 +0500
++++ b/game/faction/diplomacy/DipWarPlayer.java	2026-10-31 22:45:03.877953600 +0500
 @@ -42,20 +42,32 @@
  	public final Str warName = new Str(64);
  	public final Str teamName = new Str(64);
@@ -91,7 +91,7 @@ diff -ru -U2 a/game/faction/diplomacy/DipWarPlayer.java b/game/faction/diplomacy
  							teamName.clear().add(other.race().kingMessage().COALITION_NAME.rnd());
  							warName.clear().add(other.race().kingMessage().WAR_CAUSE_DEFEND.rnd()).insert(0, other.name);
  						}
-@@ -71,7 +83,8 @@
+@@ -71,15 +83,17 @@
  	
  	
  	private void init() {
@@ -101,7 +101,34 @@ diff -ru -U2 a/game/faction/diplomacy/DipWarPlayer.java b/game/faction/diplomacy
  			return;
  		
  		upI = GAME.updateI();
-@@ -254,8 +267,9 @@
+-		
++
+ 		{
+-			bPotential.clear();
+-			potential.clearSloppy();
+-			for (FactionNPC ff : FACTIONS.NPCs()) {
++bPotential.clear();
++potential.clearSloppy();
++			for (int sosdetI = 0; sosdetI < FACTIONS.NPCs().size(); sosdetI++) { // SOSDET: by index: the list has one iterator, and a cold cache inside validEnemy, cold only on a PC that just loaded, cut a for-each short (SOS-119)
++				FactionNPC ff = FACTIONS.NPCs().get(sosdetI);
+ 				if (validEnemy(ff)) {
+ 					bPotential.set(ff.index(), true);
+ 					potential.add(ff);
+@@ -95,10 +109,11 @@
+ 			
+ 			willing.clearSloppy();
+ 			
+-			for (FactionNPC ff : FACTIONS.NPCs()) {
++			for (int sosdetI = 0; sosdetI < FACTIONS.NPCs().size(); sosdetI++) { // SOSDET: by index, as above
++				FactionNPC ff = FACTIONS.NPCs().get(sosdetI);
+ 				if (validEnemy(ff)) {
+ 					coalitionPow += AD.power().get(ff);
+-					willing.add(ff);
++willing.add(ff);
+ 					bPotential.set(ff.index(), true);
+ 					potential.add(ff);
+ 				}else if (DIP.WAR().is(ff)) {
+@@ -254,8 +269,9 @@
  	}
  	
  	public double distress(Faction f) {
@@ -112,7 +139,7 @@ diff -ru -U2 a/game/faction/diplomacy/DipWarPlayer.java b/game/faction/diplomacy
  			return d.distress;
  		
  		d.upI = GAME.updateI();
-@@ -336,6 +350,17 @@
+@@ -336,6 +352,17 @@
  		
  	}
  	
@@ -132,7 +159,7 @@ diff -ru -U2 a/game/faction/diplomacy/DipWarPlayer.java b/game/faction/diplomacy
  		int upI = -120;
 diff -ru -U2 a/game/faction/FWorth.java b/game/faction/FWorth.java
 --- a/game/faction/FWorth.java	2026-06-25 10:49:36.000000000 +0500
-+++ b/game/faction/FWorth.java	2026-10-31 06:20:26.792889400 +0500
++++ b/game/faction/FWorth.java	2026-10-31 22:45:03.870972700 +0500
 @@ -58,8 +58,8 @@
  			}
  			for (int ei = 0; ei < STATS.EQUIP().BATTLE_ALL().size(); ei++) {
@@ -175,7 +202,7 @@ diff -ru -U2 a/game/faction/FWorth.java b/game/faction/FWorth.java
  			return cache[f.index()];
 diff -ru -U2 a/game/faction/player/emmi/Emissaries.java b/game/faction/player/emmi/Emissaries.java
 --- a/game/faction/player/emmi/Emissaries.java	2026-03-25 20:23:06.000000000 +0500
-+++ b/game/faction/player/emmi/Emissaries.java	2026-10-31 06:20:26.793886400 +0500
++++ b/game/faction/player/emmi/Emissaries.java	2026-10-31 22:45:03.870972700 +0500
 @@ -107,7 +107,10 @@
  	public final LIST<EmiType<?>> all = new ArrayList<>(assimilate, assasinate, flatter, sabotage);
  
@@ -257,7 +284,7 @@ diff -ru -U2 a/game/faction/player/emmi/Emissaries.java b/game/faction/player/em
  	public int spent() {
 diff -ru -U2 a/game/faction/player/PTitles.java b/game/faction/player/PTitles.java
 --- a/game/faction/player/PTitles.java	2026-06-12 10:34:58.000000000 +0500
-+++ b/game/faction/player/PTitles.java	2026-10-31 06:20:26.793886400 +0500
++++ b/game/faction/player/PTitles.java	2026-10-31 22:45:03.871969200 +0500
 @@ -146,8 +146,13 @@
  		bos = new BoostCompound<PTitle>(boosters, titles) {
  
@@ -311,7 +338,7 @@ diff -ru -U2 a/game/faction/player/PTitles.java b/game/faction/player/PTitles.ja
  		
 diff -ru -U2 a/game/raiding/RaidingMap.java b/game/raiding/RaidingMap.java
 --- a/game/raiding/RaidingMap.java	2026-06-11 11:15:38.000000000 +0500
-+++ b/game/raiding/RaidingMap.java	2026-10-31 06:20:26.793886400 +0500
++++ b/game/raiding/RaidingMap.java	2026-10-31 22:45:03.871969200 +0500
 @@ -55,6 +55,7 @@
  	
  	private boolean dirty = true;
@@ -385,7 +412,7 @@ diff -ru -U2 a/game/raiding/RaidingMap.java b/game/raiding/RaidingMap.java
  			}
 diff -ru -U2 a/game/raiding/RaidingUtil.java b/game/raiding/RaidingUtil.java
 --- a/game/raiding/RaidingUtil.java	2026-02-06 15:19:52.000000000 +0500
-+++ b/game/raiding/RaidingUtil.java	2026-10-31 06:20:26.794883500 +0500
++++ b/game/raiding/RaidingUtil.java	2026-10-31 22:45:03.871969200 +0500
 @@ -42,7 +42,7 @@
  		
  		double p = RD.MILITARY().power.getD(reg);
@@ -452,7 +479,7 @@ diff -ru -U2 a/game/raiding/RaidingUtil.java b/game/raiding/RaidingUtil.java
  			
 diff -ru -U2 a/util/data/DOUBLE_O.java b/util/data/DOUBLE_O.java
 --- a/util/data/DOUBLE_O.java	2024-05-08 10:24:34.000000000 +0500
-+++ b/util/data/DOUBLE_O.java	2026-10-31 06:20:26.794883500 +0500
++++ b/util/data/DOUBLE_O.java	2026-10-31 22:45:03.871969200 +0500
 @@ -28,8 +28,8 @@
  		
  		@Override
@@ -466,7 +493,7 @@ diff -ru -U2 a/util/data/DOUBLE_O.java b/util/data/DOUBLE_O.java
  			}
 diff -ru -U2 a/world/army/ADPower.java b/world/army/ADPower.java
 --- a/world/army/ADPower.java	2025-12-09 10:56:44.000000000 +0500
-+++ b/world/army/ADPower.java	2026-10-31 06:20:26.794883500 +0500
++++ b/world/army/ADPower.java	2026-10-31 22:45:03.872972900 +0500
 @@ -46,7 +46,8 @@
  	}
  	
@@ -492,7 +519,7 @@ diff -ru -U2 a/world/army/ADPower.java b/world/army/ADPower.java
  			int p = 0;
 diff -ru -U2 a/world/map/pathing/WPath.java b/world/map/pathing/WPath.java
 --- a/world/map/pathing/WPath.java	2025-09-12 16:12:40.000000000 +0500
-+++ b/world/map/pathing/WPath.java	2026-10-31 06:20:26.794883500 +0500
++++ b/world/map/pathing/WPath.java	2026-10-31 22:45:03.872972900 +0500
 @@ -204,7 +204,8 @@
  	public boolean moving(RECTANGLEE e) {
  		
@@ -505,7 +532,7 @@ diff -ru -U2 a/world/map/pathing/WPath.java b/world/map/pathing/WPath.java
  		
 diff -ru -U2 a/world/region/building/RDBuildPoints.java b/world/region/building/RDBuildPoints.java
 --- a/world/region/building/RDBuildPoints.java	2026-06-17 10:48:04.000000000 +0500
-+++ b/world/region/building/RDBuildPoints.java	2026-10-31 06:20:26.796878400 +0500
++++ b/world/region/building/RDBuildPoints.java	2026-10-31 22:45:03.872972900 +0500
 @@ -60,7 +60,7 @@
  	}
  	
@@ -678,7 +705,7 @@ diff -ru -U2 a/world/region/building/RDBuildPoints.java b/world/region/building/
  		}
 diff -ru -U2 a/world/region/building/RDLevelsTmp.java b/world/region/building/RDLevelsTmp.java
 --- a/world/region/building/RDLevelsTmp.java	2026-06-17 10:48:06.000000000 +0500
-+++ b/world/region/building/RDLevelsTmp.java	2026-10-31 06:20:26.796878400 +0500
++++ b/world/region/building/RDLevelsTmp.java	2026-10-31 22:45:03.873965100 +0500
 @@ -29,7 +29,7 @@
  	}
  	
@@ -690,7 +717,7 @@ diff -ru -U2 a/world/region/building/RDLevelsTmp.java b/world/region/building/RD
  	}
 diff -ru -U2 a/world/region/pop/RDRaces.java b/world/region/pop/RDRaces.java
 --- a/world/region/pop/RDRaces.java	2026-06-08 10:30:50.000000000 +0500
-+++ b/world/region/pop/RDRaces.java	2026-10-31 06:20:26.796878400 +0500
++++ b/world/region/pop/RDRaces.java	2026-10-31 22:45:03.873965100 +0500
 @@ -4,7 +4,6 @@
  import game.boosting.BSourceInfo;
  import game.boosting.Boostable;
@@ -726,7 +753,7 @@ diff -ru -U2 a/world/region/pop/RDRaces.java b/world/region/pop/RDRaces.java
  			return all.get(vVill.get(ran).get(reg)).race;
 diff -ru -U2 a/world/region/RDBoostCache.java b/world/region/RDBoostCache.java
 --- a/world/region/RDBoostCache.java	2024-11-22 17:46:48.000000000 +0500
-+++ b/world/region/RDBoostCache.java	2026-10-31 06:20:26.795881100 +0500
++++ b/world/region/RDBoostCache.java	2026-10-31 22:45:03.873965100 +0500
 @@ -29,6 +29,8 @@
  	public double get(Region reg) {
  		if (reg == null)
@@ -738,7 +765,7 @@ diff -ru -U2 a/world/region/RDBoostCache.java b/world/region/RDBoostCache.java
  			cache.set(reg, upI);
 diff -ru -U2 a/world/region/RDDistance.java b/world/region/RDDistance.java
 --- a/world/region/RDDistance.java	2026-06-17 10:48:04.000000000 +0500
-+++ b/world/region/RDDistance.java	2026-10-31 06:20:26.795881100 +0500
++++ b/world/region/RDDistance.java	2026-10-31 22:45:03.874961800 +0500
 @@ -47,32 +47,39 @@
  	private static CharSequence ¤¤Borders = "¤Borders";
  	private static CharSequence ¤¤Reachable = "¤Reachable";
@@ -1042,7 +1069,7 @@ diff -ru -U2 a/world/region/RDDistance.java b/world/region/RDDistance.java
  			else {
 diff -ru -U2 a/world/region/RDMilitaryGar.java b/world/region/RDMilitaryGar.java
 --- a/world/region/RDMilitaryGar.java	2026-07-01 08:35:36.000000000 +0500
-+++ b/world/region/RDMilitaryGar.java	2026-10-31 06:20:26.799870000 +0500
++++ b/world/region/RDMilitaryGar.java	2026-10-31 22:45:03.874961800 +0500
 @@ -53,16 +53,18 @@
  	private final ArrayList<WDIV> res = new ArrayList<>(128);
  	private Region lReg = null;

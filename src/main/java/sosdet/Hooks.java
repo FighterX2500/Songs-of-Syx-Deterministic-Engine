@@ -279,7 +279,7 @@ public final class Hooks {
         if (s.battleAhead == step) {
             return true;
         }
-        if (s.pvpEngageAt == step) { // a battle between two humans engages at a step set the step before (SOS-83)
+        if (s.pvpEngageAt == step && (s.worldPromptOther >= 0 || s.worldPromptSally >= 0)) { // a battle between two humans engages at a step set the step before (SOS-83)
             s.battleAhead = step;
             return true;
         }
@@ -335,7 +335,7 @@ public final class Hooks {
             s.clockParts[0] = draws;
             s.clockParts[1] = s.ai().applied();
             s.clockParts[2] = 0;
-            if (s.ai().commanders().set()) {
+            if (s.ai().commanders().hashed()) {
                 s.clockParts[2] = s.ai().commanders().hash();
                 clock = HashLog.mix(clock, s.ai().commanders().hash()); // left out until a table is set (SOS-15)
             }
@@ -461,7 +461,58 @@ public final class Hooks {
         LocalBattle b = s.localHere(); // null on a watcher: the fighter's result is the one that counts
         if (b != null && !b.resultSent) {
             b.resultSent = true;
-            orderCapture(sosdet.ai.AiEntry.COMMAND, -1, sosdet.game.cmd.MapBattles.localResultCommand(b.human, result));
+            orderCapture(sosdet.ai.AiEntry.COMMAND, -1, sosdet.game.cmd.MapBattles.localResultCommand(b.human, result, b.roster.goneHumans()));
+        }
+        return true;
+    }
+
+    /** Patch 10, as a step starts: see {@link #updateLoaded}. */
+    public static void updateSeen(int updateI) {
+        Engine.session().updateSeen(updateI);
+    }
+
+    /**
+     * Patch 10, a save's load: the game's update counter. It counts one per step on every PC, but a save holds it as it
+     * was: a city loaded back after a battle or a view would run behind the other PCs, and the world's caches keyed on it
+     * would refresh at other steps there (rig run S9E, a desync on a human's war timer 11,000 steps after the battles).
+     */
+    public static int updateLoaded(int saved) {
+        Session s = Engine.session();
+        return s == null ? saved : s.updateLoaded(saved);
+    }
+
+    /** Inside the result command: see {@link Session#localGone}. */
+    public static void localGone(int human, int[] gone) {
+        Session s = Engine.session();
+        if (s != null) {
+            s.localGone(human, gone);
+        }
+    }
+
+    /** Inside an ally's order in a local battle (SOS-119). */
+    public static boolean localAllyOrder(int kind, int div, byte[] payload) {
+        Session s = Engine.session();
+        if (s != null) {
+            s.localAllyOrder(kind, div, payload);
+        }
+        return true;
+    }
+
+    /** True on the PC of a commander in a local battle with an ally, where a speed button is a vote (SOS-119). */
+    public static boolean localCommander() {
+        Session s = Engine.session();
+        if (s == null) {
+            return false;
+        }
+        LocalBattle b = s.localHere();
+        return s.allyHere() != null || b != null && b.roster.allies();
+    }
+
+    /** Inside a commander's vote or pause in a local battle (SOS-119). */
+    public static boolean localVote(double speed) {
+        Session s = Engine.session();
+        if (s != null) {
+            s.localVote(speed);
         }
         return true;
     }
@@ -1214,6 +1265,26 @@ public final class Hooks {
         return army1Report(v, Field.BOOST_CLP);
     }
 
+    /** A boost value of the human {@code owner} in the battle, from their report at Engage (SOS-118). */
+    public static double ownerBoost(BValue v, int owner) {
+        return ownerReport(v, Field.BOOST, owner);
+    }
+
+    /** As {@link #ownerBoost}, on that human's city population class. */
+    public static double ownerBoostClP(BValue v, int owner) {
+        return ownerReport(v, Field.BOOST_CLP, owner);
+    }
+
+    private static double ownerReport(BValue v, Field f, int owner) {
+        Session s = Engine.session();
+        int i = s.city().indexOf(Field.BOOST, v);
+        if (i >= 0) {
+            return s.roster().reports[s.roster().commander(owner)].get(f, i);
+        }
+        s.reportMiss(v);
+        return 0;
+    }
+
     private static double army1Report(BValue v, Field f) {
         Session s = Engine.session();
         int i = s.city().indexOf(Field.BOOST, v);
@@ -1906,8 +1977,13 @@ public final class Hooks {
     public static void orderCapture(int kind, int div, byte[] payload) {
         Session s = Engine.session();
         LocalBattle b = s.localHere();
-        if (b != null && !(kind == sosdet.ai.AiEntry.COMMAND && sosdet.game.cmd.CommandParts.world(payload))) {
+        boolean world = kind == sosdet.ai.AiEntry.COMMAND && sosdet.game.cmd.CommandParts.world(payload);
+        if (b != null && !world) {
             s.tape.add(kind, div, b.pc, payload); // the world's commands go through the log, as every PC's
+            return;
+        }
+        if (!world && s.allyHere() != null) { // through the log to the battle's PC, which puts it on the tape (SOS-119)
+            s.ai().captureOrder(sosdet.ai.AiEntry.COMMAND, -1, sosdet.game.cmd.MapBattles.localOrderCommand(kind, div, payload));
             return;
         }
         s.ai().captureOrder(kind, div, payload);
@@ -1974,6 +2050,9 @@ public final class Hooks {
         s.worldPromptOtherNext = -1;
         s.worldPromptSally = -1;
         s.worldPromptSallyNext = -1;
+        s.allies = Session.NO_ARMIES;
+        s.allyAnswers = Session.NO_ARMIES;
+        s.alliesNext = Session.NO_ARMIES;
         s.worldPromptReady = 0;
         s.pvpEngageAt = -1;
         s.promptTimer.close();
@@ -2158,16 +2237,24 @@ public final class Hooks {
             // between two humans the winner chooses (SOS-83): army 0's human on a victory, else the other human
             world.battle.spec.WBattleResult r = (world.battle.spec.WBattleResult) decides;
             boolean army0Won = r.result == world.battle.spec.BATTLE_RESULT.VICTORY;
-            s.worldPromptHuman = army0Won ? s.battle.human : s.battle.other;
-            s.battleOutcome = new BattleOutcome(s.clock.step(), army0Won ? s.battle.human : s.battle.other,
-                    army0Won ? s.battle.other : s.battle.human, r.result == world.battle.spec.BATTLE_RESULT.RETREAT
+            int[] winners = s.battle.roster.stillIn(army0Won ? 0 : 1);
+            int lead = winners.length > 0 ? winners[0] : army0Won ? s.battle.human : s.battle.other;
+            s.worldPromptHuman = lead;
+            s.battleOutcome = new BattleOutcome(s.clock.step(), lead, army0Won ? s.battle.other : s.battle.human,
+                    s.battle.roster.onSide(army0Won ? 1 : 0), r.result == world.battle.spec.BATTLE_RESULT.RETREAT
                             || s.battle.army1Retreat, army0Won ? r.player.losses() : r.enemy.losses(),
                     army0Won ? r.enemy.losses() : r.player.losses());
+        }
+        if (s.shares != null && decides instanceof world.battle.spec.WBattleResult) {
+            s.worldPromptHuman = s.shares.human();
         }
         s.worldPromptOther = s.worldPromptOtherNext;
         s.worldPromptOtherNext = -1;
         s.worldPromptSally = s.worldPromptSallyNext;
         s.worldPromptSallyNext = -1;
+        s.allies = s.alliesNext;
+        s.allyAnswers = new int[s.allies.length];
+        s.alliesNext = Session.NO_ARMIES;
         s.worldPromptReady = 0;
         s.pvpEngageAt = -1;
         // the prompt ends a view (SOS-82): both humans' between two humans (SOS-83)
@@ -2188,6 +2275,198 @@ public final class Hooks {
         if (s != null) {
             s.worldPromptOtherNext = other;
         }
+    }
+
+    /** In the world part, just before such a prompt opens: the humans on the two sides, who may be allies to ask (SOS-118). */
+    public static void worldPromptAllies(int[] a, int[] b) {
+        Session s = Engine.session();
+        if (s != null) {
+            int second = s.worldPromptOtherNext >= 0 ? s.worldPromptOtherNext : s.worldPromptSallyNext;
+            s.alliesNext = BattleAllies.asked(s, s.currentHuman, second, a, b);
+        }
+    }
+
+    /** Inside the ally's answer: true when the prompt asked the current human and this is their first answer (SOS-118). */
+    public static boolean worldPromptAllyAnswer(boolean join) {
+        Session s = Engine.session();
+        if (s == null || s.worldPrompt == null) {
+            return false;
+        }
+        for (int i = 0; i < s.allies.length; i++) {
+            if (s.allies[i] == s.currentHuman && s.allyAnswers[i] == 0) {
+                s.allyAnswers[i] = join ? 1 : 2;
+                if (s.worldPromptReady == 3 && s.alliesAnswered()) {
+                    worldPromptEngageNext();
+                }
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** True while the open prompt waits for this PC's player to answer Join or Stay out. */
+    public static boolean worldPromptAsksAlly() {
+        Session s = Engine.session();
+        if (s == null || s.worldPrompt == null) {
+            return false;
+        }
+        for (int i = 0; i < s.allies.length; i++) {
+            if (s.allies[i] == s.localHuman && s.allyAnswers[i] == 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Inside the defender's Fight of a sally: true when it waits for allies who haven't answered yet (SOS-118). */
+    public static boolean worldPromptWaitsForAllies() {
+        Session s = Engine.session();
+        if (s.alliesAnswered()) {
+            return false;
+        }
+        s.worldPromptReady = 3;
+        return true;
+    }
+
+    /** Patch 15: true while a battle between humans engages or runs. */
+    public static boolean battleShares() {
+        Session s = Engine.session();
+        return s != null && s.roster() != null;
+    }
+
+    /** Patch 15, a battle's side as it engages: true for a human who isn't in the battle (SOS-118). */
+    public static boolean battleStaysOut(game.faction.Faction f) {
+        Session s = Engine.session();
+        return f instanceof Player && s.roster().commander(f.index()) < 0;
+    }
+
+    /** Patch 15: a side's division slots, see {@link BattleRules#slots}. */
+    public static int[] battleSlots(int[] wanted, int slots) {
+        return BattleRules.slots(wanted, slots);
+    }
+
+    /** Patch 15, at Engage on every PC: each division's human, army by army (SOS-118). */
+    public static void battleOwners(int[] player, int[] enemy) {
+        if (battleShares()) {
+            BattleAllies.owners(Engine.session().roster(), player, enemy);
+        }
+    }
+
+    /** Patch 99, the deployment: the groups side {@code player} stands in. */
+    public static int battleGroups(boolean player) {
+        Session s = Engine.session();
+        return s == null || s.roster() == null || s.roster().owners == null ? 1 : BattleAllies.groups(s.roster(), player ? 0 : 1);
+    }
+
+    public static int battleGroup(boolean player, int di) {
+        Session s = Engine.session();
+        return s == null || s.roster() == null || s.roster().owners == null ? 0 : BattleAllies.group(s.roster(), player ? 0 : 1, di);
+    }
+
+    public static int battleGroupOffset(boolean player, int g) {
+        Session s = Engine.session();
+        return battleGroups(player) == 1 ? 0 : BattleAllies.groupOffset(s.roster(), player ? 0 : 1, g);
+    }
+
+    /** Patch 99, the result: what the armies that left before the end kept (SOS-118). */
+    public static void battleLeft(settlement.stats.Induvidual[][] player, int[] enemy) {
+        Session s = Engine.session();
+        if (s != null && s.roster() != null) {
+            BattleAllies.survivors(s.roster(), player, enemy);
+        }
+    }
+
+    /** Patch 15, a result accepted: true for a human who left the field while their ally fought on (SOS-118). */
+    public static boolean battleLeft(game.faction.Faction f) {
+        Session s = Engine.session();
+        if (s == null || f == null) {
+            return false;
+        }
+        for (int h : s.resultLeft) {
+            if (h == f.index()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Each commander's divisions, men and a boost in the battle, for the rig and the log. */
+    public static String battleOwnersLine() {
+        Session s = Engine.session();
+        return s == null || s.roster() == null || s.roster().owners == null ? "no battle" : BattleAllies.line(s.roster());
+    }
+
+    /** Patch 15, Accept of a result: the winner it's from when several humans share it, else -1. */
+    public static int resultShareHuman(world.battle.spec.WBattleResult r) {
+        Session s = Engine.session();
+        return s == null || s.shares == null ? -1 : s.shares.human();
+    }
+
+    /** Patch 15, after a share shipped: true when the next winner's window is to open, its share in the result. */
+    public static boolean resultShareNext(world.battle.spec.WBattleResult r) {
+        Session s = Engine.session();
+        if (s.shares.next()) {
+            s.shares.fill(r.capturedRaces, r.lostResources);
+            return true;
+        }
+        s.shares = null;
+        return false;
+    }
+
+    /** Patches 14 and 15: true for a human fighting as an ally in the battle running now. */
+    public static boolean battleAlly(game.faction.Faction f) {
+        Session s = Engine.session();
+        BattleRoster r = s == null ? null : s.running();
+        return r != null && r.ally(f.index());
+    }
+
+    /** Patch 14: the ally who owns the division, or -1. */
+    public static int allyOf(game.battle.div.Div d) {
+        Session s = Engine.session();
+        BattleRoster r = s == null ? null : s.running();
+        if (r == null) {
+            return -1;
+        }
+        int o = r.owners[d.index()];
+        return o >= 0 && r.ally(o) ? o : -1;
+    }
+
+    public static int allyOf(settlement.stats.Induvidual i) {
+        game.battle.div.Div d = settlement.stats.STATS.BATTLE().DIV.get(i);
+        return d == null ? -1 : allyOf(d);
+    }
+
+    /** The faction a soldier fights for by bonuses: their division's ally, or their side's. */
+    public static game.faction.Faction boostFaction(settlement.stats.Induvidual i) {
+        int a = allyOf(i);
+        return a >= 0 ? FACTIONS.getByIndex(a) : i.faction();
+    }
+
+    public static game.faction.Faction boostFaction(game.battle.div.Div d) {
+        int a = allyOf(d);
+        return a >= 0 ? FACTIONS.getByIndex(a) : d.faction();
+    }
+
+    /** Patch 15: army 1's slot stands for its human, for a value the world holds. */
+    public static game.faction.Faction boostFaction(game.faction.Faction f) {
+        game.faction.Faction h = f == null ? null : battleArmy1Human(f);
+        return h != null ? h : f;
+    }
+
+    /** Patch 99: the division's human when their values come from a report: an ally, or army 1's; else -1. */
+    public static int reportOwner(game.battle.div.Div d) {
+        Session s = Engine.session();
+        BattleRoster r = s == null ? null : s.running();
+        if (r == null) {
+            return -1;
+        }
+        int o = r.owners[d.index()];
+        return o >= 0 && o != r.commanders[0] ? o : -1;
+    }
+
+    public static int reportOwner(settlement.stats.Induvidual i) {
+        game.battle.div.Div d = settlement.stats.STATS.BATTLE().DIV.get(i);
+        return d == null ? -1 : reportOwner(d);
     }
 
     /**
@@ -2231,6 +2510,12 @@ public final class Hooks {
         return s == null ? 0 : s.retreatSide(s.ai().applyingPc());
     }
 
+    /** Inside the Retreat command: see {@link Session#armyLeaves}. */
+    public static boolean battleArmyLeaves() {
+        Session s = Engine.session();
+        return s != null && s.roster() != null && s.armyLeaves();
+    }
+
     /** In the battle's result, built inside the step: army 1 retreated, in a battle between two humans (SOS-83). */
     public static boolean battleArmy1Retreats() {
         Session s = Engine.session();
@@ -2249,11 +2534,15 @@ public final class Hooks {
     }
 
     /** Patch 15, as a battle's result opens, before its record goes (SOS-116). */
-    public static void battleResult(world.battle.spec.WBattleResult r, boolean army0Lost) {
+    public static void battleResult(world.battle.spec.WBattleResult r, boolean army0Lost, int[] men0, int[] men1) {
         Session s = Engine.session();
-        if (s != null && army0Lost && battleBetweenHumans()) {
+        if (s == null || s.roster() == null) {
+            return;
+        }
+        if (army0Lost && battleBetweenHumans()) {
             s.army1Result = r;
         }
+        BattleAllies.shares(s, r, army0Lost, men0, men1);
     }
 
     /**
@@ -2262,7 +2551,8 @@ public final class Hooks {
      */
     public static CharSequence concludeTitle(CharSequence title, boolean army0Won, CharSequence victory, CharSequence defeat) {
         Session s = Engine.session();
-        if (s == null || s.battle == null || s.battle.other < 0 || s.ai().localPc() != s.pcOf(s.battle.other)) {
+        if (s == null || s.battle == null || s.battle.other < 0 || s.roster().commander(s.localHuman) < 0
+                || s.roster().sides[s.roster().commander(s.localHuman)] != 1) {
             return title;
         }
         return army0Won ? defeat : victory;
@@ -2307,9 +2597,15 @@ public final class Hooks {
     public static void worldPromptFight() {
         Session s = Engine.session();
         s.worldPromptReady |= s.currentHuman == s.worldPromptHuman ? 1 : 2;
-        if (s.worldPromptReady == 3) {
+        if (s.worldPromptReady == 3 && s.alliesAnswered()) {
             worldPromptEngageNext();
         }
+    }
+
+    /** True when a sally's Fight waits for allies, so its time-out still fights (SOS-118). */
+    public static boolean worldPromptFought() {
+        Session s = Engine.session();
+        return s != null && s.worldPromptReady == 3;
     }
 
     /** Inside the step: the battle between two humans engages at the next step, answered or not (SOS-83). */
@@ -2487,6 +2783,10 @@ public final class Hooks {
             // against NPCs: on the human's PC only, the world running on (SOS-93). Every PC runs vanilla's Engage, which
             // keeps the two sides for the result; the battle PC's generation waits for the freeze step
             LocalBattle b = s.localEngage(step, human);
+            b.armies = BattleAllies.inBattle(b.roster, b.armies);
+            for (int c = 0; c < b.roster.commanders.length; c++) {
+                b.roster.reports[c] = s.reports(b.roster.commanders[c]).current();
+            }
             long worldDraws = s.streams.worldDraws();
             s.engaging = b;
             s.streams.reseed(s.battleSeed(step));
@@ -2502,8 +2802,11 @@ public final class Hooks {
         if (other >= 0) {
             s.notice(Notice.BATTLE, human, other, 0);
         }
-        OwnBattle b = new OwnBattle(step, human, s.pcOf(human), other, s.streams.worldDraws());
+        OwnBattle b = new OwnBattle(step, human, s.pcOf(human), other, s.streams.worldDraws(), s.alliesJoined(human));
         b.otherReport = other >= 0 ? s.reports(other).current() : null; // a battle load clears the reports (SOS-83)
+        for (int c = 0; c < b.roster.commanders.length; c++) {
+            b.roster.reports[c] = s.reports(b.roster.commanders[c]).current();
+        }
         b.speedBefore = s.clock.agreedSpeed();
         s.battle = b;
         s.battleSpeed(1); // as vanilla's battle opens; then the commanders' vote (spec §8)

@@ -71,6 +71,10 @@ public final class PromptAnswers {
     /** The simulation's yes/no question last answered (Yes), by its key. */
     private long answeredQuestion = -1;
 
+    /** How this player answers an ally's prompt: 1 Join, 2 Stay out, 0 not at all (SOS-118). */
+    public static int ally;
+    private Object allyAnswered;
+
     /** After a frame, outside the step: answers the open prompt if it is new. Returns its name, or null. */
     public String answer() {
         BattleState battle = VIEW.b().state();
@@ -79,6 +83,11 @@ public final class PromptAnswers {
         }
         battleFrom = -1;
         startAsked = retreatAsked = closeAsked = restartAsked = false;
+        if (Hooks.worldPromptAsksAlly() && ally != 0 && allyAnswered != Hooks.worldPrompt()) {
+            allyAnswered = Hooks.worldPrompt();
+            WorldBattles.allyAnswer(ally == 1);
+            return ally == 1 ? "ally join" : "ally stays out";
+        }
         long question = Hooks.stepPromptOldest();
         if (question >= 0 && question != answeredQuestion) {
             answeredQuestion = question;
@@ -113,18 +122,28 @@ public final class PromptAnswers {
             return open instanceof WBattleSiege ? "siege auto" : "battle auto";
         }
         if (open instanceof WBattleResult) {
-            if (((WBattleResult) open).result != BATTLE_RESULT.VICTORY) {
+            WBattleResult result = (WBattleResult) open;
+            if (!Hooks.resultWon(result)) {
                 boolean sent = WorldBattles.accept(null, null, 0); // as the Accept button after a defeat
                 return sent ? "defeat accept" : "defeat accept not captured";
             }
-            boolean sent = WorldBattles.accept(new int[RACES.all().size()], new int[RESOURCES.ALL().size()], 0);
-            return sent ? "victory accept" : "victory accept not captured";
+            boolean sent = WorldBattles.accept(result.capturedRaces.clone(), result.lostResources.clone(), 0); // all of it
+            return (sent ? "victory accept " : "victory accept not captured ") + sum(result.capturedRaces) + " captives, "
+                    + sum(result.lostResources) + " spoils";
         }
         if (open instanceof WBattleSiege.Result) {
             WorldBattles.siegeResult(WorldBattles.OCCUPY, 0, 0, new int[RACES.all().size()], new int[TR.ALL().size()], 0);
             return "siege occupy";
         }
         throw new IllegalStateException("SOSDET rig: unknown world prompt " + open.getClass().getName());
+    }
+
+    private static int sum(int[] a) {
+        int n = 0;
+        for (int v : a) {
+            n += v;
+        }
+        return n;
     }
 
     /** waitOut: reports a prompt as it opens and as it closes, unanswered. */

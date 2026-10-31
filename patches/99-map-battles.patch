@@ -1,6 +1,6 @@
 diff -ru -U2 a/game/battle/state/BattleState.java b/game/battle/state/BattleState.java
 --- a/game/battle/state/BattleState.java	2026-01-31 08:38:56.000000000 +0500
-+++ b/game/battle/state/BattleState.java	2026-10-30 15:32:13.695190300 +0500
++++ b/game/battle/state/BattleState.java	2026-10-31 17:59:51.315827900 +0500
 @@ -94,7 +94,8 @@
  	
  	private void view() {
@@ -73,7 +73,7 @@ diff -ru -U2 a/game/battle/state/BattleState.java b/game/battle/state/BattleStat
  //			if (timer >= 10) {
 diff -ru -U2 a/game/battle/state/BattleStateExiter.java b/game/battle/state/BattleStateExiter.java
 --- a/game/battle/state/BattleStateExiter.java	2025-08-29 11:08:26.000000000 +0500
-+++ b/game/battle/state/BattleStateExiter.java	2026-10-30 15:32:13.698147700 +0500
++++ b/game/battle/state/BattleStateExiter.java	2026-10-31 17:59:51.315827900 +0500
 @@ -10,12 +10,15 @@
  	
  	public void exit(BATTLE_RESULT res, int plosses, int elosses) {
@@ -93,7 +93,7 @@ diff -ru -U2 a/game/battle/state/BattleStateExiter.java b/game/battle/state/Batt
  			
 diff -ru -U2 a/game/battle/state/BattleStateResult.java b/game/battle/state/BattleStateResult.java
 --- a/game/battle/state/BattleStateResult.java	2026-06-17 10:48:06.000000000 +0500
-+++ b/game/battle/state/BattleStateResult.java	2026-10-30 15:32:13.699174100 +0500
++++ b/game/battle/state/BattleStateResult.java	2026-10-31 17:59:51.319848200 +0500
 @@ -24,6 +24,33 @@
  	public final BATTLE_RESULT result;
  	public final int playerLosses;
@@ -162,9 +162,17 @@ diff -ru -U2 a/game/battle/state/BattleStateResult.java b/game/battle/state/Batt
  							enemyCaptured[h.race().index]++;
  						}else {
  							enemySurvivors[d.indexArmy()] ++;
+@@ -83,6 +128,7 @@
+ 			}
+ 		}
+ 		
++		sosdet.Hooks.battleLeft(playerSurvivors, enemySurvivors); // SOSDET: the armies that left before the end (SOS-118)
+ 		wash();
+ 	}
+ 	
 diff -ru -U2 a/view/battle/IDeploy.java b/view/battle/IDeploy.java
 --- a/view/battle/IDeploy.java	2025-09-12 16:12:40.000000000 +0500
-+++ b/view/battle/IDeploy.java	2026-10-30 15:32:13.696182600 +0500
++++ b/view/battle/IDeploy.java	2026-10-31 17:59:51.316830100 +0500
 @@ -17,7 +17,8 @@
  	private final GButt.ButtPanel butt = new GButt.ButtPanel(Dic.¤¤Start) {
  		@Override
