@@ -190,6 +190,39 @@ public final class Engine {
         GameResync.load(file, afterSet, r.game);
     }
 
+    /**
+     * Host, own-city mode, between steps, held at a desync's hold step in a battle on the battle map: the battle saved
+     * as it stands, and the engine's state at this step, for every PC's {@link #battleResyncLoad}, this PC's too (mod
+     * spec §8 Desyncs; plan 0006 M3).
+     */
+    public static byte[] battleResyncSave(Path file) {
+        Session s = required();
+        if (s.battle == null || s.battle.awaiting) {
+            throw new IllegalStateException("SOSDET: a battle resync with no battle running");
+        }
+        if (s.streams.inStep()) {
+            throw new IllegalStateException("SOSDET: a resync is saved between steps, not inside one");
+        }
+        long step = s.clock.step();
+        GameResync.save(file);
+        s.clock.runUntil(step); // the host waits for its own load too
+        return new Resync(step, s.seed, s.clock.agreedSpeed(), s.hashes.interval(), s.hashes.epoch() + 1,
+                s.streams.drawsSinceLoad(), s.ai().resyncOut(), GameResync.capture()).toBytes();
+    }
+
+    /** Every PC, at the hold step: loads the host's battle, which runs on from there on every PC alike. */
+    public static void battleResyncLoad(Path file, byte[] state) {
+        Session s = required();
+        if (s.battle == null || s.battle.awaiting) {
+            throw new IllegalStateException("SOSDET: a battle resync with no battle running");
+        }
+        Resync r = Resync.fromBytes(state);
+        s.resync = r; // taken up when the load begins (Hooks.loadBegin)
+        GameResync.loadLocal(file, GameResync.exiter(), r.game);
+        s.endDesyncHold(r.step);
+        s.clock.runUntil(r.step);
+    }
+
     private static void refuseOwnCity(Session s, String call) {
         if (s.ownCity) {
             throw new IllegalStateException("SOSDET: " + call + " reloads the whole game, this PC's city too; in own-city"

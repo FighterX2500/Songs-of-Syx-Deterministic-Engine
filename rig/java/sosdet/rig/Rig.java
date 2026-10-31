@@ -641,7 +641,8 @@ public final class Rig implements SCRIPT {
                     // the viewer's copy hit a limit: the host logs the end, as the mod's host does on VIEW_CLOSE
                     String why = new String(Files.readAllBytes(close), StandardCharsets.UTF_8).trim();
                     if (!why.isEmpty()) {
-                        viewCloseTaken = true;
+                        viewCloseTaken = Engine.assault() == null;
+                        Files.delete(close);
                         Engine.viewEnd(viewViewer, Integer.parseInt(why));
                         event("viewend", String.format(Locale.ROOT, "\"step\":%d,\"viewer\":%d,\"why\":%s",
                                 Engine.step(), viewViewer, why));
@@ -764,6 +765,13 @@ public final class Rig implements SCRIPT {
                     }
                     event("viewdesync", String.format(Locale.ROOT, "\"step\":%d,\"at\":%d,\"sections\":[%s]", d.step,
                             Engine.step(), sections));
+                    if (Engine.assault() != null) { // an assault's lost view reopens (SOS-92 G)
+                        if (aiHost) {
+                            Engine.viewEnd(viewViewer, sosdet.View.DESYNC);
+                        } else {
+                            Files.write(viewDir.resolve("view.close"), Integer.toString(sosdet.View.DESYNC).getBytes(StandardCharsets.UTF_8));
+                        }
+                    }
                 }
                 if (Engine.step() >= viewNextStatus) {
                     viewNextStatus = Engine.step() + 150;
@@ -946,7 +954,7 @@ public final class Rig implements SCRIPT {
             byte[] state;
             try {
                 if (wresyncSaver) {
-                    state = Engine.worldResyncSave(wresyncSave);
+                    state = Engine.battle() != null ? Engine.battleResyncSave(wresyncSave) : Engine.worldResyncSave(wresyncSave);
                     Files.write(wresyncState, state);
                     Files.write(done, new byte[0]);
                     event("worldresyncsaved", String.format(Locale.ROOT, "\"step\":%d,\"saveMs\":%.0f,\"saveBytes\":%d",
@@ -961,7 +969,11 @@ public final class Rig implements SCRIPT {
             } catch (IOException e) {
                 throw new IllegalStateException("SOSDET rig: world resync files " + wresyncState, e);
             }
-            Engine.worldResyncLoad(wresyncSave, state);
+            if (Engine.battle() != null) {
+                Engine.battleResyncLoad(wresyncSave, state);
+            } else {
+                Engine.worldResyncLoad(wresyncSave, state);
+            }
             event("worldresynced", String.format(Locale.ROOT, "\"step\":%d,\"loadMs\":%.0f", Engine.step(),
                     (System.nanoTime() - t0) / 1e6));
             wresyncStep = -1;

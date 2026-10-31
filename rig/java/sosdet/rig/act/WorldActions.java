@@ -734,13 +734,20 @@ public final class WorldActions {
                                 + last.termsPeople(sosdet.game.siege.AssaultTerms.MOVED) + " moved "
                                 + last.termsPeople(sosdet.game.siege.AssaultTerms.KILLED) + " killed "
                                 + last.termsPeople(sosdet.game.siege.AssaultTerms.FREED) + " freed; in the city "
-                                + java.util.Arrays.stream(sosdet.game.cmd.Sieges.peopleInCity(last.defender)).sum()
+                                + (last.termsKind() == sosdet.game.siege.AssaultTerms.ELIMINATE ? "none, it's gone"
+                                        : java.util.Arrays.stream(sosdet.game.cmd.Sieges.peopleInCity(last.defender)).sum())
                                 + "; attacker's mercy " + world.army.AD.stats().mercy().getD(FACTIONS.getByIndex(last.attacker))
                                 + "; prisoners here " + prisonersHere() : ""));
             });
             return true;
-        case "assaultnudge": // assaultnudge: forced desync of an assault: on this PC only, a soldier's injuries turn fatal (SOS-92 G)
+        case "assaultnudge": // assaultnudge [battle]: forced desync of an assault: on this PC only, a soldier's injuries turn
+            // fatal (SOS-92 G); with battle, only while a battle runs on the battle map
+            boolean battleOnly = a.length > 1;
             Rig.later(() -> {
+                if (battleOnly && (Engine.battle() == null || Engine.battle().awaiting())) {
+                    Rig.note("assaultnudge: no battle at step " + Engine.step());
+                    return;
+                }
                 for (settlement.entity.ENTITY e : settlement.main.SETT.ENTITIES().getAllEnts()) {
                     if (e instanceof settlement.entity.humanoid.Humanoid && !e.isRemoved()
                             && ((settlement.entity.humanoid.Humanoid) e).division() != null) {

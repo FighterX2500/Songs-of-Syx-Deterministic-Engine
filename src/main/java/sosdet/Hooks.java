@@ -616,8 +616,16 @@ public final class Hooks {
     public static void assaultOutcome(int outcome) {
         Session s = Engine.session();
         if (s != null && s.assault != null && s.assault.started && s.assault.detected < 0) {
-            s.assault.survivors = sosdet.game.GameAssault.invaders();
+            assaultSurvivors();
             s.assault.detected = outcome;
+        }
+    }
+
+    /** {@code Invasion}, before the invaders leave the city at the assault's end: those alive stay in their armies. */
+    public static void assaultSurvivors() {
+        Session s = Engine.session();
+        if (s != null && s.assault != null && s.assault.survivors < 0) {
+            s.assault.survivors = sosdet.game.GameAssault.invaders();
         }
     }
 
