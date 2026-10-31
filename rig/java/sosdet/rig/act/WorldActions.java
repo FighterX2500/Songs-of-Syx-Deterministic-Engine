@@ -728,7 +728,8 @@ public final class WorldActions {
                 Rig.note("wassault step " + Engine.step() + ": spectating " + Engine.spectating() + " commanders " + Engine.commanderOf(120) + "," + Engine.commanderOf(121)
                         + " not commanded " + Engine.ordersNotCommanded() + " watch dropped " + Engine.watchedDropped()
                         + ": now " + Engine.assault() + "; last " + last + "; invading "
-                        + settlement.main.SETT.INVADOR().invading() + "; taken " + Engine.assaultTaken()
+                        + settlement.main.SETT.INVADOR().invading() + (Engine.assault() != null ? "; " + sosdet.game.GameAssault.fight() : "")
+                        + "; taken " + Engine.assaultTaken()
                         + (last != null && last.termsKind() >= 0 ? "; terms " + sosdet.game.siege.AssaultTerms.name(last.termsKind())
                                 + " " + last.termsPercent() + "% credits " + last.termsCredits() + " people "
                                 + last.termsPeople(sosdet.game.siege.AssaultTerms.MOVED) + " moved "

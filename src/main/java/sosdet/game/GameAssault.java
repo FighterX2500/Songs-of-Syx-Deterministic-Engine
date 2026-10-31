@@ -11,6 +11,7 @@ import settlement.entity.ENTITY;
 import settlement.entity.humanoid.Humanoid;
 import settlement.main.SETT;
 import settlement.room.military.artillery.ArtilleryInstance;
+import settlement.room.main.throne.THRONE;
 import settlement.room.military.artillery.ROOM_ARTILLERY;
 import sosdet.Assault;
 import sosdet.Hooks;
@@ -103,6 +104,18 @@ public final class GameAssault {
     /** The invaders alive in the city now: the same on every PC that runs it. */
     public static int invaders() {
         return GAME.ARMIES().enemy().men();
+    }
+
+    /** Test tooling: the fight as it stands here, in words. */
+    public static String fight() {
+        int nearest = Integer.MAX_VALUE;
+        for (ENTITY e : SETT.ENTITIES().getAllEnts()) {
+            if (e instanceof Humanoid && !e.isRemoved() && ((Humanoid) e).indu().hType() == HTYPES.ENEMY()) {
+                nearest = Math.min(nearest, Math.abs(e.tc().x() - THRONE.coo().x()) + Math.abs(e.tc().y() - THRONE.coo().y()));
+            }
+        }
+        return "invaders " + GAME.ARMIES().enemy().men() + ", nearest " + nearest + " tiles from the throne at " + THRONE.coo().x() + " "
+                + THRONE.coo().y() + "; defenders " + GAME.ARMIES().player().men();
     }
 
     private static void takeLosses(int[] armies, int men, int survivors) {
