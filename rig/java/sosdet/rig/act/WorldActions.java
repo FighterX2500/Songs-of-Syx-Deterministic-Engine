@@ -48,11 +48,17 @@ public final class WorldActions {
     /** sallyother: waiting for a world prompt that asks another human (test tooling: one rig process, one run). */
     private static boolean sallyAwaiting;
 
+    /** whover: the capital the map shows as hovered, every frame (test tooling: one rig process, one run). */
+    private static Region hovering;
+
     /**
      * After each frame, outside the step, as the prompt answers: with {@code sallyother} queued, sallies out once a
      * world-battle prompt that asks another human is open, such as the besieger's siege window (SOS-92).
      */
     public static void afterFrame() {
+        if (hovering != null) {
+            WORLD.OVERLAY().regionOutline.add(hovering); // the map's hover lasts one frame
+        }
         if (!sallyAwaiting || Hooks.worldPrompt() == null || Hooks.worldPromptHuman() == FACTIONS.player().index()) {
             return;
         }
@@ -78,6 +84,11 @@ public final class WorldActions {
                 view.main.VIEW.world().window.setZoomout(1);
                 view.main.VIEW.world().window.centererTile.set(x, y);
             });
+            return true;
+        }
+        case "whover": { // whover SLOT: the map shows that human's capital as hovered, for a screenshot (with --window)
+            int slot = Integer.parseInt(a[1]);
+            Rig.later(() -> hovering = FACTIONS.getByIndex(slot).capitolRegion());
             return true;
         }
         case "wshot": // wshot: a screenshot into the copy's data folder
