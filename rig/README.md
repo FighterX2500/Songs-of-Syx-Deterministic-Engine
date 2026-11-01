@@ -98,6 +98,8 @@ ig.py city --tag NW --copies 3 --humans 3 --new-world 4242 --steps 6000 --save M
 
 `--make-humans A,B` (with `--humans N`, SOS-77): the N - 1 NPC slots that become humans, instead of the first ones. A human trades only with capitals it reaches (never across unclaimed land, except a human 6 to 15 tiles away, SOS-120) and has a trade stance with, so pick NPCs that border the player for a market run: the probe `wtradeinfo` lists a city's trade partners with distance and toll. The market run: `--copies 3 --humans 3 --make-humans 2,24 --steps 45000 --save Mogus-72-19f86f1e048-47002c-0-121c.save --no-invade`, with `dealpropose`, `export-resource RES_FURNITURE`, `export-price RES_FURNITURE 30`, `tariff 2 50` and the `deals` probe (plan 0010). Resource arguments take a key (`RES_FURNITURE` or `FURNITURE`) or an index.
 
+`--new-world-at 'x,y;x,y;...'` (with `--new-world`, SOS-122): the humans' tiles, such as a playtest's, instead of the rig's own choice. The log gives each pair's tiles apart and tiles walked.
+
 `--difficulty MODE` (with `--new-world`, SOS-69): after the build, every human gets that difficulty mode (`newworld SEED auto N MODE`, a file in the game's `player/mode` folder such as `00_FIRST_NAME`), as the mod's world build gives the lobby's. Without it the humans have none, and the difficulty's boosters never enter the run. Example, the SOS-69 check: `--copies 2 --humans 2 --new-world 4242 --difficulty 00_FIRST_NAME --world-resync 600 --steps 2400`.
 
 In `--cmds`, `k: <action>` is copy k's player's action, so each human acts for itself; the other copies get it through the host's log at the same step.
@@ -110,6 +112,14 @@ Probes for a player. Each notes what it reads between steps and changes nothing:
 - `wrelations [npc slot]`: the NPC's king, and its stance, stored opinion entries, dealings, opinion and trust toward each human.
 - `wwar`: each human's potential enemies as the next war timer reads them, with their trust, and the war timer.
 - `wevents`: each human's war timer and warner, rebellion timer and realm cursor, raid and raid timer.
+- `wroutes`: the capitals, and between every two humans the tiles apart, the path armies walk, and whether the market's walk reaches.
+- `wstock N`: NPC N's goods, rates and total rates, and every recipe's boost for it.
+- `wmap X1 Y1 X2 Y2`: a map of those tiles: land, roads, the path network.
+- `wfired`: how often each scripted event has fired in this city.
+- `wwalkto ARMY SLOT`: the army walks the route to that human's capital, stopping 2 tiles short (SOS-122).
+- `wnewarmy`: a new army at the capital. `wlook X Y`: the world view on that tile, zoomed out once; `wshot`: a screenshot (with `--window`). The world view's move order needs a tile on the path network; `wroutes` lists some as a route's `way`.
+- `wglobal KEY`: this city rolls scripted event KEY as its roller would (SOS-125); `wfired` then shows which cities ran it.
+- `wconv`: the first NPC's king's religion weights, read live and as the world part reads them: only the first may differ per PC (SOS-121).
 - `wsprite <army>`: the call the army's sprite makes each frame it is drawn (`WPath.moving`), on this copy only. Rig copies don't draw the world map, so a UI call that writes world state shows only with this probe (PT3).
 
 World actions for several humans: `wpeace` makes the peace deal with the strongest NPC at war with this human, at the denari it asks. `wraiderpay` and `wallyhelp` answer this human's own raider. `wbesiegenear` skips settlements of other humans. `wsiege` notes each human capital's siege (its start, the days to the assault, Storm's refusal, and whether a goods deal could go) and this human's sally refusal; `sally` sallies this human out of its besieged capital, and `sallyother` does so as soon as a world prompt asking another human is open, such as the besieger's siege window (SOS-92). `siegewait <slot>` makes the siege of that human's capital old enough that its wait has passed, at its step on every copy (test tooling), and `wassault` notes the assault running and the last one over (SOS-92 B).

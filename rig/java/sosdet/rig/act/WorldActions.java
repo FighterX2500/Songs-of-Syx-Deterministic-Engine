@@ -70,6 +70,51 @@ public final class WorldActions {
     /** Queues the action named by {@code a[0]} to run outside the step; false if this area has no such action. */
     public static boolean run(String[] a) {
         switch (a[0]) {
+        case "wlook": { // wlook X Y: the world view, zoomed out once, on that tile, for a screenshot (with --window)
+            int x = Integer.parseInt(a[1]);
+            int y = Integer.parseInt(a[2]);
+            Rig.later(() -> {
+                view.main.VIEW.world().activate();
+                view.main.VIEW.world().window.setZoomout(1);
+                view.main.VIEW.world().window.centererTile.set(x, y);
+            });
+            return true;
+        }
+        case "wshot": // wshot: a screenshot into the copy's data folder
+            Rig.later(() -> snake2d.CORE.getGraphics().makeScreenShot());
+            return true;
+        case "wwalkto": { // wwalkto <army> <slot>: the army walks the route to that human's capital, stopping 2 tiles short
+            int army = Integer.parseInt(a[1]);
+            int slot = Integer.parseInt(a[2]);
+            Rig.later(() -> {
+                WArmy w = army(army);
+                world.map.regions.Region to = world.WORLD.REGIONS().getByIndex(slot);
+                int x = -1;
+                int y = -1;
+                double best = Double.MAX_VALUE;
+                for (snake2d.PathTile p = world.WORLD.PATH().path(w.ctx(), w.cty(), to.cx(), to.cy()); p != null; p = p.getParent()) {
+                    double d = Math.hypot(p.x() - to.cx(), p.y() - to.cy());
+                    if (d >= 2 && d < best) {
+                        best = d;
+                        x = p.x();
+                        y = p.y();
+                    }
+                }
+                if (x < 0) {
+                    throw new IllegalStateException("no route to slot " + slot);
+                }
+                w.setDestination(x, y);
+                Rig.note("wwalkto " + slot + " toward " + x + "," + y);
+            });
+            return true;
+        }
+        case "wnewarmy": // wnewarmy: a new army at the capital, as the autopilot's army (SOS-122)
+            Rig.later(() -> {
+                if (!World.armyCreate(-1, -1)) {
+                    throw new IllegalStateException("no session");
+                }
+            });
+            return true;
         case "wmove": { // wmove <army> <dx> <dy>: the army tool's move order, to a tile this far from the army
             int army = Integer.parseInt(a[1]);
             int dx = Integer.parseInt(a[2]);
@@ -149,6 +194,34 @@ public final class WorldActions {
         case "wtrade": // wtrade: notes each human's trade partners (the capitals its traders reach, SOS-77) and its stance with
             // every other human, read as that human between steps (SOS-101)
             Rig.later(() -> Rig.note(tradeRoutes()));
+            return true;
+        case "wroutes": // wroutes: notes the capitals, and between every two humans the tiles apart, the path armies and
+            // caravans walk, the land it crosses, and whether the market's own walk reaches (SOS-120)
+            Rig.later(() -> Rig.note(humanRoutes()));
+            return true;
+        case "wstock": { // wstock N: notes NPC N's goods, rates and total rates, and every recipe's boost for it (the 2026-11-01 desync)
+            int npc = Integer.parseInt(a[1]);
+            Rig.later(() -> Rig.note(npcStock(npc)));
+            return true;
+        }
+        case "wmap": { // wmap X1 Y1 X2 Y2: notes the terrain and walking edges of those tiles (SOS-120)
+            int x1 = Integer.parseInt(a[1]);
+            int y1 = Integer.parseInt(a[2]);
+            int x2 = Integer.parseInt(a[3]);
+            int y2 = Integer.parseInt(a[4]);
+            Rig.later(() -> Rig.note(tileMap(x1, y1, x2, y2)));
+            return true;
+        }
+        case "wfired": // wfired: notes how often each scripted event has fired in this city (the 2026-11-01 desync)
+            Rig.later(() -> Rig.note(firedEvents()));
+            return true;
+        case "wglobal": { // wglobal KEY: this city rolls scripted event KEY, as its roller would (SOS-125)
+            String key = a[1];
+            Rig.later(() -> Rig.note(rollEvent(key)));
+            return true;
+        }
+        case "wconv": // wconv: notes an NPC king's religion weights read live and as the world part reads them (SOS-121)
+            Rig.later(() -> Rig.note(conversionWeights()));
             return true;
         case "wprofile": // wprofile: turns the step profile on (SOS-106), then each call notes each game part's mean ms a step since the last
             Rig.later(() -> Rig.note(Engine.stepProfile()));
@@ -1358,6 +1431,170 @@ public final class WorldActions {
             s.append(' ').append(res.key).append(String.format(java.util.Locale.ROOT, " %.1f (%d)", net, counted));
             if (++shown == 8) {
                 break;
+            }
+        }
+        return s.toString();
+    }
+
+    /** {@code wevents}. */
+    /** The first NPC's king's weight for each religion, read as the UI reads it and as the world part reads it: only the first may differ per PC. */
+    private static String conversionWeights() {
+        settlement.stats.Induvidual king = FACTIONS.NPCs().get(0).court().king().roy().induvidual;
+        StringBuilder live = new StringBuilder();
+        StringBuilder world = new StringBuilder();
+        try {
+            java.lang.reflect.Method session = Engine.class.getDeclaredMethod("session");
+            session.setAccessible(true);
+            Object s = session.invoke(null);
+            java.lang.reflect.Field part = s.getClass().getDeclaredField("part");
+            part.setAccessible(true);
+            int was = part.getInt(s);
+            for (init.religion.Religion r : init.religion.RELIGIONS.ALL()) {
+                part.setInt(s, was);
+                live.append(' ').append(String.format(java.util.Locale.ROOT, "%.4f", r.conversionCity.get(king)));
+                part.setInt(s, sosdet.game.StepParts.WORLD_PART);
+                world.append(' ').append(String.format(java.util.Locale.ROOT, "%.4f", r.conversionCity.get(king)));
+            }
+            part.setInt(s, was);
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException("SOSDET rig: wconv needs Engine.session, Session.part", e);
+        }
+        return "wconv live" + live + " world" + world;
+    }
+
+    private static String rollEvent(String key) {
+        game.event.engine.Event e = sosdet.game.cmd.Events.byKey(key);
+        if (e == null) {
+            return "wglobal: no event " + key;
+        }
+        boolean can = GAME.EVENT().can(e);
+        boolean rolled = GAME.EVENT().trySet(e);
+        boolean forced = !rolled && Hooks.globalEventRolled(e, key); // a new city may not meet its conditions
+        return "wglobal " + key + " can " + can + " rolled " + rolled + " forced " + forced + " at step " + Engine.step();
+    }
+
+    private static String firedEvents() {
+        StringBuilder s = new StringBuilder("wfired step ").append(Engine.step());
+        snake2d.util.sets.LIST<game.event.engine.Event> all = sosdet.game.cmd.Events.all();
+        for (int i = 0; i < all.size(); i++) {
+            int n = GAME.EVENT().occ(all.get(i));
+            if (n > 0) {
+                s.append(' ').append(all.get(i).key).append(':').append(n);
+            }
+        }
+        game.event.engine.Event now = GAME.EVENT().current();
+        return s.append(" current ").append(now == null ? "none" : now.key).toString();
+    }
+
+    /** {@code wstock}. */
+    private static String npcStock(int index) {
+        game.faction.npc.FactionNPC f = (game.faction.npc.FactionNPC) FACTIONS.getByIndex(index);
+        StringBuilder s = new StringBuilder("wstock step ").append(Engine.step()).append(' ').append(f.name)
+                .append(" workforce ").append(Double.toHexString(f.stockpile.workforce()));
+        for (init.trade.TRADABLE t : init.trade.TR.ALL()) {
+            game.faction.npc.stockpile.NPCRes r = f.res(t);
+            s.append(" | good ").append(t.index()).append(' ').append(Double.toHexString(r.amount())).append(' ')
+                    .append(Double.toHexString(r.rate())).append(' ').append(Double.toHexString(r.rateTot()));
+        }
+        for (settlement.recipe.Recipe r : settlement.main.SETT.RECIPES().all()) {
+            s.append(" | recipe ").append(r.index).append(' ').append(Double.toHexString(r.bo.get(f)));
+            for (game.boosting.Booster b : r.bo.all()) {
+                s.append(" [").append(b.getClass().getSimpleName()).append(' ').append(Double.toHexString(b.get(f))).append(']');
+            }
+        }
+        return s.toString();
+    }
+
+    /** {@code wmap}: one row per line; {@code #} mountain, {@code ~} big water, {@code f} forest, {@code .} land, upper case or {@code *} with no edge out. */
+    private static String tileMap(int x1, int y1, int x2, int y2) {
+        StringBuilder s = new StringBuilder("wmap ").append(x1).append(',').append(y1).append(" to ").append(x2).append(',').append(y2);
+        for (int y = y1; y <= y2; y++) {
+            s.append(" | ").append(y).append(' ');
+            for (int x = x1; x <= x2; x++) {
+                int edges = 0;
+                for (snake2d.util.datatypes.DIR d : snake2d.util.datatypes.DIR.ALL) {
+                    if (world.WORLD.PATH().map.can(x, y, d)) {
+                        edges++;
+                    }
+                }
+                char c = world.WORLD.WATER().isBig.is(x, y) ? '~' : world.WORLD.MOUNTAIN().coversTile(x, y) ? '#'
+                        : world.WORLD.FOREST().amount.get(x, y) == 1.0 ? 'f' : '.';
+                s.append(edges == 0 ? (c == '.' ? '*' : Character.toUpperCase(c)) : c);
+            }
+        }
+        s.append(" || edges");
+        for (int y = y1; y <= y2; y++) {
+            s.append(" | ").append(y).append(' ');
+            for (int x = x1; x <= x2; x++) {
+                int edges = 0;
+                for (snake2d.util.datatypes.DIR d : snake2d.util.datatypes.DIR.ALL) {
+                    if (world.WORLD.PATH().map.can(x, y, d)) {
+                        edges++;
+                    }
+                }
+                s.append(edges);
+            }
+        }
+        return s.toString();
+    }
+
+    /** {@code wroutes} (SOS-120). */
+    private static String humanRoutes() {
+        StringBuilder s = new StringBuilder("wroutes step ").append(Engine.step()).append(':');
+        for (game.faction.Faction f : FACTIONS.active()) {
+            if (f.capitolRegion() != null) {
+                s.append(" | ").append(f.index()).append(' ').append(f.name).append(" at ").append(f.capitolRegion().cx())
+                        .append(',').append(f.capitolRegion().cy());
+            }
+        }
+        int[] hs = Hooks.humanSlots();
+        for (int i = 0; i < hs.length; i++) {
+            for (int j = i + 1; j < hs.length; j++) {
+                world.map.regions.Region a = FACTIONS.getByIndex(hs[i]).capitolRegion();
+                world.map.regions.Region b = FACTIONS.getByIndex(hs[j]).capitolRegion();
+                if (a == null || b == null) {
+                    continue;
+                }
+                s.append(" || ").append(FACTIONS.getByIndex(hs[i]).name).append(" to ").append(FACTIONS.getByIndex(hs[j]).name)
+                        .append(String.format(java.util.Locale.ROOT, ": %.1f tiles", Math.hypot(a.cx() - b.cx(), a.cy() - b.cy())));
+                snake2d.PathTile t = world.WORLD.PATH().path(a.cx(), a.cy(), b.cx(), b.cy(),
+                        world.map.pathing.WRegFinder.Treaty.DUMMY);
+                if (t == null) {
+                    s.append(", no path");
+                    continue;
+                }
+                s.append(", cost ").append((int) t.getValue());
+                StringBuilder way = new StringBuilder();
+                StringBuilder land = new StringBuilder();
+                String last = "";
+                int n = 0;
+                for (snake2d.PathTile p = t; p != null; p = p.getParent()) {
+                    if (n++ % 5 == 0) {
+                        way.append(' ').append(p.x()).append(',').append(p.y());
+                    }
+                    world.map.regions.Region r = world.WORLD.REGIONS().map.get(p.x(), p.y());
+                    String here = r == null ? "none" : r.faction() == null ? "unclaimed" : r.faction().name.toString();
+                    if (!here.equals(last)) {
+                        land.append(land.length() == 0 ? "" : ">").append(here);
+                        last = here;
+                    }
+                }
+                s.append(", ").append(n).append(" path tiles, land ").append(land).append(", way").append(way);
+                final world.map.regions.Region target = b;
+                world.map.pathing.WRegSel to = new world.map.pathing.WRegSel() {
+                    @Override
+                    public boolean is(world.map.regions.Region r) {
+                        return r == target;
+                    }
+                };
+                world.map.pathing.WRegFinder.RegDist strict;
+                try { // a patched member: the rig compiles against the vanilla jar
+                    strict = world.WORLD.PATH().regFinder.single(a.cx(), a.cy(), (world.map.pathing.WRegFinder.Treaty)
+                            world.map.pathing.WRegFinder.Treaty.class.getField("FACTION_REACHABLE_HUMAN_TRADE").get(null), to);
+                } catch (ReflectiveOperationException e) {
+                    throw new IllegalStateException("SOSDET rig: wroutes", e);
+                }
+                s.append(", market walk ").append(strict == null ? "stops" : "reaches, " + strict.distance);
             }
         }
         return s.toString();

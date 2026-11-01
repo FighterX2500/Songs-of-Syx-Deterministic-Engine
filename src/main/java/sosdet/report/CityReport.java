@@ -19,8 +19,8 @@ import sosdet.hash.HashLog;
 public final class CityReport {
 
     static final int MAGIC = 0x53444352; // "SDCR"
-    /** 6: the next report's first step ({@link #nextAt}, SOS-90). */
-    public static final int PROTOCOL_VERSION = 6;
+    /** 7: global event inputs (SOS-125). 6: the next report's first step ({@link #nextAt}, SOS-90). */
+    public static final int PROTOCOL_VERSION = 7;
 
     /** The faction whose city this is. */
     public final int faction;

@@ -7,6 +7,7 @@ import java.lang.invoke.MethodType;
 import java.lang.reflect.Method;
 
 import game.GAME;
+import game.event.engine.Event;
 import game.events.faction.player.EventDiplomacy;
 import game.events.world.EventWorldRebellion;
 import game.raiding.RAIDING;
@@ -16,7 +17,9 @@ import game.save.Savable;
 import snake2d.util.file.FileGetter;
 import snake2d.util.file.FilePutter;
 import sosdet.Hooks;
+import sosdet.game.cmd.Events;
 import sosdet.hash.HashLog;
+import sosdet.report.GlobalEvents;
 
 /**
  * The event timers and raids of every human but the one in slot 0 (SOS-46 M4): each human's diplomacy entries and war
@@ -34,7 +37,7 @@ final class GameEvents extends Savable {
      * 2: an end marker after the last human (SOS-52). The section is the save's last, and vanilla's FileGetter.d
      * refuses a file's last 8 bytes, so the last raid timer could not be read; GameSaver.load hid that by dropping it.
      */
-    private static final int VERSION = 2;
+    private static final int VERSION = 3; // 3: the global events under way (SOS-125)
     private static final int END = 0x53444545; // "SDEE"
     private static final Method DIP_SAVE = GameRelations.method(EventDiplomacy.class, "sosdetSave", int.class, FilePutter.class);
     private static final Method DIP_LOAD = GameRelations.method(EventDiplomacy.class, "sosdetLoad", int.class, FileGetter.class);
@@ -65,13 +68,14 @@ final class GameEvents extends Savable {
             GameRelations.call(REBELLION_SAVE, GAME.events().rebellion, k, file);
             GameRelations.call(RAID_SAVE, GAME.raiders(), k, file);
         }
+        saveGlobal(file);
         file.i(END);
     }
 
     @Override
     protected void load(FileGetter file) throws IOException {
         int version = file.i();
-        if (version != VERSION && version != 1) { // 1 is 2 without the end marker
+        if (version < 1 || version > VERSION) { // 1 is 2 without the end marker
             throw new IOException("SOSDET: an events section of version " + version + ", this engine reads " + VERSION);
         }
         int[] s = humans.slots();
@@ -82,9 +86,41 @@ final class GameEvents extends Savable {
             GameRelations.load(REBELLION_LOAD, GAME.events().rebellion, k, file);
             GameRelations.load(RAID_LOAD, GAME.raiders(), k, file);
         }
+        Hooks.globalEventList().clear();
+        if (version >= 3) {
+            loadGlobal(file);
+        }
         int end = version == 1 ? END : file.i();
         if (end != END) {
             throw new IOException("SOSDET: an events section without its end marker (" + Integer.toHexString(end) + ")");
+        }
+    }
+
+    /** Each event by its number and key, since the numbers can change with the game's event files. */
+    private static void saveGlobal(FilePutter file) {
+        GlobalEvents g = Hooks.globalEventList();
+        file.i(g.size());
+        for (int i = 0; i < g.size(); i++) {
+            GlobalEvents.Entry e = g.get(i);
+            file.i(e.event);
+            file.chars(Events.all().get(e.event).key);
+            file.i(e.twin);
+            file.chars(Events.all().get(e.twin).key);
+            file.i(e.origin);
+            file.d(e.second);
+        }
+    }
+
+    private static void loadGlobal(FileGetter file) throws IOException {
+        int n = file.i();
+        for (int i = 0; i < n; i++) {
+            Event e = GAME.EVENT().read(file.i(), file.chars());
+            Event twin = GAME.EVENT().read(file.i(), file.chars());
+            int origin = file.i();
+            double second = file.d();
+            if (e != null && twin != null) {
+                Hooks.globalEventList().load(e.allIndex, twin.allIndex, origin, second);
+            }
         }
     }
 

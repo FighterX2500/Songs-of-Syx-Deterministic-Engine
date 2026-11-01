@@ -21,6 +21,7 @@ import game.raiding.RaidingCurrent;
 import init.trade.TR;
 import init.trade.TRADABLE;
 import init.trade.TRADE_TYPE;
+import snake2d.util.sets.LIST;
 import sosdet.ai.CmdReader;
 import sosdet.ai.CmdWriter;
 import view.ui.message.MessageSection;
@@ -40,6 +41,7 @@ public final class Events {
     static final int RAIDER_ALLY_HELP = 9002;
     static final int KILLER_SUSPECT = 9003;
 
+    private static final Field ALL_EVENTS = field(Event.class, "all");
     private static final Field HANDLER_MESSAGE = field(EVENT_HANDLER.class, "mess");
     private static final Class<?> EVENT_MESSAGE = type("game.event.engine.EventMessage");
     private static final Field MESSAGE_DATA = field(EVENT_MESSAGE, "data");
@@ -231,6 +233,27 @@ public final class Events {
         } catch (ClassNotFoundException e) {
             throw new IllegalStateException("SOSDET: no game class " + name + " (V71.44 expected)", e);
         }
+    }
+
+    /** The game's scripted events, in their game numbers; the list is package-private. */
+    @SuppressWarnings("unchecked") // the field is the game's list of Event
+    public static LIST<Event> all() {
+        try {
+            return (LIST<Event>) ALL_EVENTS.get(null);
+        } catch (IllegalAccessException e) {
+            throw new IllegalStateException("SOSDET: cannot read " + ALL_EVENTS, e);
+        }
+    }
+
+    /** The event with this key, or null. */
+    public static Event byKey(String key) {
+        LIST<Event> all = all();
+        for (int i = 0; i < all.size(); i++) {
+            if (all.get(i).key.equals(key)) {
+                return all.get(i);
+            }
+        }
+        return null;
     }
 
     private static Field field(Class<?> c, String name) {

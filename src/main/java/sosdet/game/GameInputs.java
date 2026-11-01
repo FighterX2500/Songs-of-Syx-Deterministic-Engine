@@ -19,14 +19,17 @@ import game.faction.npc.FactionNPC;
 import game.faction.royalty.NPCCourt;
 import game.faction.royalty.Royalty;
 import game.faction.royalty.opinion.ROPINION;
+import game.time.TIME;
 import settlement.battle.invasion.Invador;
 import settlement.stats.Induvidual;
 import snake2d.util.file.FileGetter;
 import snake2d.util.file.FilePutter;
 import sosdet.game.cmd.Args;
 import sosdet.Hooks;
+import sosdet.game.cmd.Events;
 import sosdet.report.CityReport;
 import sosdet.report.EventMarks;
+import sosdet.report.GlobalEvents;
 import sosdet.report.Input;
 import sosdet.report.InputKind;
 import sosdet.report.SentSupplies;
@@ -50,7 +53,11 @@ public final class GameInputs implements Consumer<CityReport> {
     private final GameCodec codec = new GameCodec(1 << 20);
     /** Made at first use: the game's stats and maps are set up by then. */
     private GameSoldiers soldiers;
+    /** A global event's life: longer than any event a city can be running. */
+    private static final int KEEP_DAYS = 32;
+
     private final SentSupplies sent;
+    private final GlobalEvents globals;
     private final EventMarks marks;
     /** True while the reports applied are this PC's own: only those settle what its city has sent (SOS-38). */
     private final BooleanSupplier ownReports;
@@ -59,9 +66,10 @@ public final class GameInputs implements Consumer<CityReport> {
     /** {@code Invador.tell(int, int, int, int)}: patch 14-report-reads adds it. */
     private final Method tell;
 
-    public GameInputs(SentSupplies sent, EventMarks marks, BooleanSupplier ownReports) {
+    public GameInputs(SentSupplies sent, EventMarks marks, GlobalEvents globals, BooleanSupplier ownReports) {
         this.sent = sent;
         this.marks = marks;
+        this.globals = globals;
         this.ownReports = ownReports;
         try {
             addSoldier = WDivStoredAll.class.getMethod("add", Induvidual.class, Div.class);
@@ -179,6 +187,31 @@ public final class GameInputs implements Consumer<CityReport> {
         return new Input(InputKind.EVENT_ACTION, 0, codec.written());
     }
 
+    /** SOS-125: city {@code origin} rolled a global event, for the world part to order. */
+    public Input globalEvent(Object event, int origin) {
+        Event e = (Event) event;
+        FilePutter p = codec.hashBegin();
+        p.i(e.allIndex);
+        p.chars(e.key);
+        return new Input(InputKind.GLOBAL_EVENT, origin, codec.written());
+    }
+
+    private void applyGlobalEvent(int origin, byte[] data) {
+        Event e;
+        try {
+            FileGetter g = codec.reader(data);
+            e = GAME.EVENT().read(g.i(), g.chars());
+        } catch (IOException x) {
+            throw new IllegalStateException("SOSDET: cannot read city " + origin + "'s global event", x);
+        }
+        if (e == null) {
+            return;
+        }
+        String twinKey = GlobalEvents.twin(e.key);
+        Event twin = twinKey == null ? e : Events.byKey(twinKey);
+        globals.roll(e.allIndex, twin.allIndex, origin, TIME.currentSecond(), KEEP_DAYS * TIME.secondsPerDay());
+    }
+
     @Override
     public void accept(CityReport r) {
         for (Input in : r.inputs) {
@@ -242,6 +275,9 @@ public final class GameInputs implements Consumer<CityReport> {
                 break;
             case EVENT_ACTION:
                 applyEventAction(in.data());
+                break;
+            case GLOBAL_EVENT:
+                applyGlobalEvent(in.arg, in.data());
                 break;
             default:
                 throw new IllegalStateException("SOSDET: no applier for input kind " + in.kind);

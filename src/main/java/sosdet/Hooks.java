@@ -35,6 +35,7 @@ import sosdet.game.cmd.HumanDeals;
 import sosdet.game.cmd.PlanStash;
 import sosdet.hash.HashLog;
 import sosdet.report.CityReport;
+import sosdet.report.GlobalEvents;
 import sosdet.report.Field;
 import sosdet.report.Reports;
 import sosdet.txn.TransferLog;
@@ -1843,6 +1844,49 @@ public final class Hooks {
         }
         s.cityInputs.add(s.inputs().eventAction(action, event, context));
         return true;
+    }
+
+    /**
+     * A city rolled event {@code key} (SOS-125): a global event travels in the city's report and starts when the world
+     * part has ordered it, so no city starts one alone. True when it travels.
+     */
+    public static boolean globalEventRolled(Object event, String key) {
+        Session s = Engine.session();
+        if (s == null || !GlobalEvents.global(key)) {
+            return false;
+        }
+        s.cityInputs.add(s.inputs().globalEvent(event, FACTIONS.player().index()));
+        return true;
+    }
+
+    /** How many global events are under way: each city's event handler reads them every step. */
+    public static int globalEvents() {
+        Session s = Engine.session();
+        return s == null ? 0 : s.globalEvents.size();
+    }
+
+    public static int globalEvent(int i) {
+        return Engine.session().globalEvents.get(i).event;
+    }
+
+    /** The event's other variant, or the event itself. */
+    public static int globalEventTwin(int i) {
+        return Engine.session().globalEvents.get(i).twin;
+    }
+
+    public static double globalEventSecond(int i) {
+        return Engine.session().globalEvents.get(i).second;
+    }
+
+    /** Whether this city runs event {@code i}, not only reads its message: a world news event runs on one city. */
+    public static boolean globalEventRuns(int i, String key) {
+        return !GlobalEvents.news(key) || Engine.session().globalEvents.get(i).origin == FACTIONS.player().index();
+    }
+
+    /** The list a save reads and writes; a game with no session has none. */
+    public static GlobalEvents globalEventList() {
+        Session s = Engine.session();
+        return s == null ? new GlobalEvents() : s.globalEvents;
     }
 
     /**

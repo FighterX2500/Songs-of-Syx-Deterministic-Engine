@@ -64,14 +64,17 @@ final class RigHumans {
      * (SOS-55): human 0 at the first free location from the map's centre outwards, the others 7 to 15 tiles from it where
      * the terrain allows, so the 6-15-tile route rule is exercised. Every human takes this game's player's race. Reports the humans, their
      * locations and a path check between every two of them 6 to 15 tiles apart (mod spec §5). With a fourth word, every
-     * human gets that difficulty mode after the build, as the mod's world build gives the lobby's (SOS-69).
+     * human gets that difficulty mode after the build, as the mod's world build gives the lobby's (SOS-69). {@code <seed>
+     * at x,y;x,y;...} puts the humans at those tiles instead, such as a playtest's (SOS-122). The route check gives the
+     * tiles walked.
      */
     static String newWorld(String args) {
         String[] a = args.trim().split("\\s+");
-        if (a.length < 3 || a.length > 4 || !a[1].equals("auto")) {
-            throw new IllegalArgumentException("SOSDET rig: newworld <seed> auto <n> [difficulty], not " + args);
+        if (a.length < 3 || a.length > 4 || !(a[1].equals("auto") || a[1].equals("at"))) {
+            throw new IllegalArgumentException("SOSDET rig: newworld <seed> auto <n> | at <x,y;x,y;...> [difficulty], not " + args);
         }
-        int n = Integer.parseInt(a[2]);
+        String[] at = a[1].equals("at") ? a[2].split(";") : new String[0];
+        int n = a[1].equals("at") ? at.length : Integer.parseInt(a[2]);
         // the rig builds in the game it loaded, unlike the mod's fresh game: its NPCs and armies go while they still exist
         while (FACTIONS.NPCs().size() > 0) {
             FACTIONS.remove(FACTIONS.NPCs().get(0), false);
@@ -90,7 +93,11 @@ final class RigHumans {
         int[] ys = new int[n];
         int cx = WORLD.TWIDTH() / 2;
         int cy = WORLD.THEIGHT() / 2;
-        for (int k = 0; k < n; k++) {
+        for (int k = 0; k < at.length; k++) {
+            xs[k] = Integer.parseInt(at[k].split(",")[0]);
+            ys[k] = Integer.parseInt(at[k].split(",")[1]);
+        }
+        for (int k = at.length > 0 ? n : 0; k < n; k++) {
             boolean found = false;
             for (int pass = 0; pass < 2 && !found; pass++) // 7 to 15 tiles from human 0 first, then anywhere
             for (int rad = 0; rad < WORLD.TWIDTH() && !found; rad++) {
@@ -140,9 +147,13 @@ final class RigHumans {
                 if (d < 6 || d > 15) {
                     continue;
                 }
-                boolean ok = WORLD.PATH().path(xs[i], ys[i], xs[j], ys[j]) != null;
-                b.append(first ? "" : ",").append(String.format(Locale.ROOT, "{\"a\":%d,\"b\":%d,\"tiles\":%.1f,\"ok\":%b}",
-                        i, j, d, ok));
+                snake2d.PathTile route = WORLD.PATH().path(xs[i], ys[i], xs[j], ys[j]);
+                double walked = 0;
+                for (snake2d.PathTile p = route; p != null && p.getParent() != null; p = p.getParent()) {
+                    walked += Math.hypot(p.x() - p.getParent().x(), p.y() - p.getParent().y());
+                }
+                b.append(first ? "" : ",").append(String.format(Locale.ROOT,
+                        "{\"a\":%d,\"b\":%d,\"tiles\":%.1f,\"ok\":%b,\"walked\":%.1f}", i, j, d, route != null, walked));
                 first = false;
             }
         }
