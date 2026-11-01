@@ -2,6 +2,7 @@ package sosdet;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -395,6 +396,25 @@ class EngineTest {
         assertEquals(2, Engine.stats().reportsReceived);
         assertTrue(Engine.reportsOut().length > 0, "the follower's own reports still go out");
         assertThrows(IllegalArgumentException.class, () -> Engine.reportsIn(2, load), "the world reads PC 0's city");
+    }
+
+    @Test
+    void anUnsavedBoostComesFromTheLoadSeedNotTheDraw() {
+        assertEquals(0.7, Hooks.unsavedBoost(3, 0.7), "no session: vanilla's draw");
+        Engine.begin();
+        assertEquals(0.7, Hooks.unsavedBoost(3, 0.7), "no load seed: vanilla's draw");
+        Engine.armLoadSeed(559403157);
+        double boost = Hooks.unsavedBoost(3, 0.7);
+        assertEquals(boost, Hooks.unsavedBoost(3, 0.9), "whatever this PC drew");
+        assertNotEquals(boost, Hooks.unsavedBoost(4, 0.7), "each recipe its own");
+        for (int recipe = 0; recipe < 200; recipe++) {
+            double b = Hooks.unsavedBoost(recipe, 0.7);
+            assertTrue(b >= 0.65 && b < 1.0, "FBoost.randomize's range: " + b);
+        }
+        Engine.end();
+        Engine.begin();
+        Engine.armLoadSeed(559403157);
+        assertEquals(boost, Hooks.unsavedBoost(3, 0.8), "the same at a later session's load");
     }
 
     @AfterEach

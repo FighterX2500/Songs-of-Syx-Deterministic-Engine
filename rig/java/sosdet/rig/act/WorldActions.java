@@ -664,6 +664,26 @@ public final class WorldActions {
             });
             return true;
         }
+        case "wcourt": { // wcourt <row> <amount>: a row of the court window the game built (flatter, sabotage, assassinate)
+            int row = Integer.parseInt(a[1]);
+            int v = Integer.parseInt(a[2]);
+            Rig.later(() -> {
+                view.main.VIEW.world().UI.factions.open(npc());
+                courtRows().get(row).set(v);
+            });
+            return true;
+        }
+        case "wcourtshow": { // wcourtshow: what the court window's rows show this PC's player
+            Rig.later(() -> {
+                view.main.VIEW.world().UI.factions.open(npc());
+                StringBuilder shown = new StringBuilder("wcourtshow step ").append(Engine.step()).append(':');
+                for (util.data.INT.INTE row : courtRows()) {
+                    shown.append(' ').append(row.get());
+                }
+                Rig.note(shown.toString());
+            });
+            return true;
+        }
         case "weventchoice": { // weventchoice <choice>: the current event's message, one choice
             int choice = Integer.parseInt(a[1]);
             Rig.later(() -> {
@@ -1417,6 +1437,39 @@ public final class WorldActions {
             }
         }
         throw new IllegalStateException("no active NPC faction");
+    }
+
+    /** The court window's emissary rows, in the window the game built, so they act as a player's clicks do. */
+    private static java.util.List<util.data.INT.INTE> courtRows() {
+        Object detail = field(view.world.ui.faction.UIFactions.class, "detail", view.main.VIEW.world().UI.factions);
+        Object sw = field(detail.getClass(), "sw", detail);
+        java.util.List<util.data.INT.INTE> rows = new java.util.ArrayList<>();
+        courtRows(((snake2d.util.gui.clickable.CLICKABLE.ClickSwitch) sw).current(), rows);
+        if (rows.size() != 3) {
+            throw new IllegalStateException("SOSDET rig: the court has " + rows.size() + " emissary rows, not 3");
+        }
+        return rows;
+    }
+
+    private static void courtRows(Object o, java.util.List<util.data.INT.INTE> found) {
+        if (o instanceof util.gui.misc.GInputInt) {
+            found.add((util.data.INT.INTE) field(util.gui.misc.GInputInt.class, "in", o));
+        } else if (o instanceof snake2d.util.gui.GuiSection) {
+            Object list = field(snake2d.util.gui.GuiSection.class, "renderables", o);
+            for (Object r : (snake2d.util.sets.LIST<?>) list) {
+                courtRows(r, found);
+            }
+        }
+    }
+
+    private static Object field(Class<?> owner, String name, Object o) {
+        try {
+            java.lang.reflect.Field f = owner.getDeclaredField(name);
+            f.setAccessible(true);
+            return f.get(o);
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException("SOSDET rig: no field " + owner.getName() + "." + name, e);
+        }
     }
 
     /** {@code wprod} (SOS-102): per goods with any producer, its net rate and the sources counted, read-only. */

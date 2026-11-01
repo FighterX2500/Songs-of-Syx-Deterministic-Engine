@@ -1,0 +1,15 @@
+# The court window's emissary rows, used by the second human (--humans 2). The window is built once, before the humans
+# are set: its rows held the first human's emissaries, so the second human's click found no emissary kind of theirs and
+# crashed in Diplomacy.emissaries. Each human must see only their own emissaries.
+2: wcourt 0 3
+wait 3
+2: wcourt 1 2
+wait 3
+2: wcourt 2 1
+wait 3
+2: wcourtshow
+wcourtshow
+wcourt 0 7
+wait 3
+wcourtshow
+2: wcourtshow

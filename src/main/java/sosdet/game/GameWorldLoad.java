@@ -118,7 +118,7 @@ public final class GameWorldLoad {
     private static final Field RAID_DIRTY = field(RaidingMap.class, "dirty");
     /**
      * A recipe's NPC production boost, which a new game draws: the slave recipes' aren't in {@code Recipes.fboosts}, so
-     * no save holds them, and a whole game's load draws them anew (V82AA).
+     * no save holds them, and without a load seed a whole game's load draws them anew (V82AA; {@code Hooks.unsavedBoost}).
      */
     private static final Field FBOOST_MUL = field(fboostClass(), "mul");
 

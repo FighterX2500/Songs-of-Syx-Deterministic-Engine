@@ -1491,6 +1491,14 @@ public final class Engine {
     }
 
     /**
+     * Host: a step for something every PC must do at one step, such as a campaign save: no PC can have passed it when
+     * word of it arrives, at any speed (SOS-90: the lockstep window grows with the speed). About a second away.
+     */
+    public static long stepPastPeers() {
+        return required().ai().pastPeers();
+    }
+
+    /**
      * Host: run at most {@code lead} steps past the slowest of these PCs, learnt from their hashes, on top of
      * {@link #runUntil} (mod spec §4: the slowest PC caps the speed; SOS-42). The lead is at least one hash interval; 0
      * turns pacing off.

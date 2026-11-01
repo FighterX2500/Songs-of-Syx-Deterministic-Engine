@@ -148,6 +148,26 @@ class AiLogTest {
         assertThrows(IllegalArgumentException.class, () -> host.delay(AiLog.MAX_DELAY_STEPS + 1));
     }
 
+    /** A campaign save's step at speed 25: a fixed 60 steps left peers 200 past the host already past it. */
+    @Test
+    void aStepPastThePeersStaysAheadOfThemAtAnySpeed() throws InterruptedException {
+        Recorder hr = new Recorder();
+        AiLog host = AiLog.host(START, hr);
+        AiLog peer = AiLog.peer(START, new Recorder());
+        runStep(host, hr, 1);
+        assertEquals(61, host.pastPeers(), "60 steps ahead at 1x");
+        host.delay(200);
+        runStep(host, hr, 2);
+        peer.logIn(host.logOut());
+        long at = host.pastPeers();
+        assertEquals(402, at, "speed 25: a window for the peer's lead, and one for the word's way");
+        assertFalse(peer.mayRun(at), "a peer at its limit is short of the step");
+        host.delay(AiLog.DELAY_STEPS);
+        runStep(host, hr, 3);
+        peer.logIn(host.logOut());
+        assertTrue(host.pastPeers() > peer.horizon(), "the speed dropped, but the peer may still be at the old horizon");
+    }
+
     /** SOS-90: a confirmation of format 7 or older is the step alone: the horizon is the least delay past it. */
     @Test
     void anOlderConfirmationMeansTheLeastDelay() {

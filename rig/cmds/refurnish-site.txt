@@ -1,0 +1,18 @@
+# A refurnish plan over a construction site, its jobs on screen: the renderer found the plan under the site's jobs and
+# crashed (ClassCastException in JobRoom.getState), and a tile dropped from the plan would give a null. A new farm built,
+# then, while it is a site, refurnished, the plan shrunk by a row and the plan left open while time runs and the jobs draw.
+plan FARM_GRAIN 12 12
+build
+wait 4
+look-site
+wait 2
+refurnish site
+wait 3
+plan-shrink 2
+wait 3
+plan-cancel
+wait 2
+refurnish site
+plan-grow 1
+build
+wait 4

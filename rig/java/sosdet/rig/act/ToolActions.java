@@ -153,6 +153,14 @@ public final class ToolActions {
         case "plan-cancel": // plan-cancel: the room tool closing without a build
             Rig.later(ToolActions::cancel);
             return true;
+        case "look-site": // look-site: the city's camera on the construction site nearest the throne, so its jobs draw
+            Rig.later(() -> {
+                COORDINATE c = site();
+                VIEW.s().activate();
+                VIEW.s().getWindow().centererTile.set(c.x(), c.y());
+                Rig.note("look-site: the camera at " + c.x() + "," + c.y());
+            });
+            return true;
         case "refurnish": // refurnish <key prefix> [n] | refurnish site: the room panel's refurnish button on the n-th
             // area room whose blueprint key starts with the prefix, or a click on the construction site nearest the
             // throne
@@ -182,6 +190,14 @@ public final class ToolActions {
             // right or left of it
             int rows = Integer.parseInt(a[1]);
             Rig.later(() -> grow(rows));
+            return true;
+        case "plan-shrink": // plan-shrink <n>: the area tool's undo dragged over the plan's last n rows
+            int shrink = Integer.parseInt(a[1]);
+            Rig.later(() -> {
+                RECTANGLE b = new Rec(instance().body());
+                drag((PlacableMulti) SETT.ROOMS().placement.placer.area().getUndo(),
+                        new Box(new Rec(b.x1(), b.x2(), b.y2() - shrink, b.y2())));
+            });
             return true;
         case "plan-trash": // plan-trash: the room tool's trash button (SFrame): no build, then the tool closing
             Rig.later(ToolActions::trash);
