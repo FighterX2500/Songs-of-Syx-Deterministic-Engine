@@ -2161,6 +2161,21 @@ public final class Hooks {
     }
 
     /**
+     * A slave recipe's NPC production boost ({@code Creator.all}), which vanilla draws as the game is built and no save
+     * holds. A process's first game makes draws a later one doesn't, so a PC just started and one that had played held
+     * different boosts from one save, and couldn't resume it together (playtest of 2026-11-01). With a load seed it
+     * comes from that seed, the same on every PC at every load, in {@code FBoost.randomize}'s range.
+     */
+    public static double unsavedBoost(int recipe, double drawn) {
+        Session s = Engine.session();
+        if (s == null || s.loadSeed == 0) {
+            return drawn;
+        }
+        long h = HashLog.mix(HashLog.mix(HashLog.start(), s.loadSeed), recipe);
+        return 0.65 + 0.35 * ((h >>> 11) * 0x1.0p-53);
+    }
+
+    /**
      * True with a session: a number box ({@code GInputInt}) keeps what was typed while it has the keyboard. The value
      * applies 30 steps later, so showing the current value turned a typed "12" into "02".
      */
