@@ -3,6 +3,7 @@ package sosdet.game.cmd;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 
+import settlement.job.ROOM_JOBBER;
 import settlement.main.SETT;
 import settlement.room.main.Room;
 import settlement.room.main.RoomBlueprintImp;
@@ -90,6 +91,21 @@ public final class Refurnish {
         if (Hooks.outsideStep()) {
             Hooks.planStash().placerInit();
         }
+    }
+
+    /**
+     * Hook in {@code JobRoom}: the room a construction job at a tile belongs to. A plan over a construction site lies on
+     * the site's tiles between steps while the site's jobs stay on the map, so the renderer and the UI find the plan
+     * there, or nothing on a tile the plan dropped: they get the site. The step reads the map as vanilla: the plan is
+     * lifted then, and it is this PC's alone.
+     */
+    public static Room jobRoom(int tx, int ty) {
+        Room room = SETT.ROOMS().map.get(tx, ty);
+        if (room instanceof ROOM_JOBBER || !Hooks.outsideStep()) {
+            return room;
+        }
+        Room site = Hooks.planStash().siteAt(tx, ty);
+        return site != null ? site : room;
     }
 
     /** From {@link Tools#roomBuild}: Build on a refurnish plan, the room and the whole plan as one command. */

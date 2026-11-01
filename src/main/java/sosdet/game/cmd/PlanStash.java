@@ -1,5 +1,6 @@
 package sosdet.game.cmd;
 
+import settlement.job.ROOM_JOBBER;
 import settlement.room.main.Room;
 import sosdet.ai.CmdWriter;
 
@@ -198,6 +199,11 @@ public final class PlanStash {
 
     Room.RoomInstanceImp refurnished() {
         return refurnished;
+    }
+
+    /** The construction site this PC's plan lies over at a tile, whose jobs stay while it is planned; null if none. */
+    public Room.RoomInstanceImp siteAt(int tx, int ty) {
+        return refurnished instanceof ROOM_JOBBER && refurnished.body().holdsPoint(tx, ty) ? refurnished : null;
     }
 
     /** This PC's player refurnishes {@code room} (between frames): its tile values are kept, then the plan is made. */
