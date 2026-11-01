@@ -2,6 +2,7 @@ package sosdet;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -54,5 +55,15 @@ class HumanStartTest {
         assertEquals("Grak", new HumanStart("HUMAN", "A", "Grak", null, 1, 1).ruler);
         assertNull(new HumanStart("HUMAN", "A", "", null, 1, 1).ruler);
         assertNull(new HumanStart("HUMAN", "A", null, 1, 1).ruler);
+    }
+
+    @Test
+    void theGuaranteedConnectionReaches6To15Tiles() {
+        assertTrue(HumanStart.inRouteRange(10, 10, 16, 10), "6 tiles");
+        assertTrue(HumanStart.inRouteRange(10, 10, 25, 10), "15 tiles");
+        assertTrue(HumanStart.inRouteRange(10, 10, 19, 22), "15 tiles on a slant");
+        assertFalse(HumanStart.inRouteRange(10, 10, 15, 10), "5 tiles");
+        assertFalse(HumanStart.inRouteRange(10, 10, 26, 10), "16 tiles");
+        assertFalse(HumanStart.inRouteRange(10, 10, 21, 21), "15.6 tiles on a slant");
     }
 }
