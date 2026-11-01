@@ -70,6 +70,26 @@ public final class WorldActions {
     /** Queues the action named by {@code a[0]} to run outside the step; false if this area has no such action. */
     public static boolean run(String[] a) {
         switch (a[0]) {
+        case "wlook": { // wlook X Y: the world view, zoomed out once, on that tile, for a screenshot (with --window)
+            int x = Integer.parseInt(a[1]);
+            int y = Integer.parseInt(a[2]);
+            Rig.later(() -> {
+                view.main.VIEW.world().activate();
+                view.main.VIEW.world().window.setZoomout(1);
+                view.main.VIEW.world().window.centererTile.set(x, y);
+            });
+            return true;
+        }
+        case "wshot": // wshot: a screenshot into the copy's data folder
+            Rig.later(() -> snake2d.CORE.getGraphics().makeScreenShot());
+            return true;
+        case "wnewarmy": // wnewarmy: a new army at the capital, as the autopilot's army (SOS-122)
+            Rig.later(() -> {
+                if (!World.armyCreate(-1, -1)) {
+                    throw new IllegalStateException("no session");
+                }
+            });
+            return true;
         case "wmove": { // wmove <army> <dx> <dy>: the army tool's move order, to a tile this far from the army
             int army = Integer.parseInt(a[1]);
             int dx = Integer.parseInt(a[2]);

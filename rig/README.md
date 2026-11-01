@@ -116,6 +116,7 @@ Probes for a player. Each notes what it reads between steps and changes nothing:
 - `wstock N`: NPC N's goods, rates and total rates, and every recipe's boost for it.
 - `wmap X1 Y1 X2 Y2`: a map of those tiles: land, roads, the path network.
 - `wfired`: how often each scripted event has fired in this city.
+- `wnewarmy`: a new army at the capital. `wlook X Y`: the world view on that tile, zoomed out once; `wshot`: a screenshot (with `--window`). The world view's move order needs a tile on the path network; `wroutes` lists some as a route's `way`.
 - `wglobal KEY`: this city rolls scripted event KEY as its roller would (SOS-125); `wfired` then shows which cities ran it.
 - `wconv`: the first NPC's king's religion weights, read live and as the world part reads them: only the first may differ per PC (SOS-121).
 - `wsprite <army>`: the call the army's sprite makes each frame it is drawn (`WPath.moving`), on this copy only. Rig copies don't draw the world map, so a UI call that writes world state shows only with this probe (PT3).
