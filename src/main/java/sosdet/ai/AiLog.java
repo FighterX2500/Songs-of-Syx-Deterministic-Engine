@@ -317,6 +317,14 @@ public final class AiLog {
     }
 
     /**
+     * Host: a step no peer can have passed when word of it arrives: the horizon, which a peer may have run to, and one
+     * delay for the word's way there.
+     */
+    public long pastPeers() {
+        return horizon + delay;
+    }
+
+    /**
      * Whether a player's command due at {@code step} passes {@code test}, before the step applies it. A PC may run a
      * step only once it has the host's entries for it ({@link #mayRun}), so every PC gives the same answer (SOS-70).
      * It looks only when an entry is due at the step.
