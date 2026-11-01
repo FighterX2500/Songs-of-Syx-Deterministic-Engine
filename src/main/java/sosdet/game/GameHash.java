@@ -226,7 +226,8 @@ public final class GameHash implements StateSource {
         h = part(w, 9, npcStocks(h));
         h = part(w, 10, regionPopulations(h));
         h = part(w, 11, npcCourts(h));
-        return part(w, 12, HashLog.mix(h, Double.doubleToLongBits(TIME.currentSecond())));
+        h = part(w, 12, Hooks.globalEventList().hash(h));
+        return part(w, 13, HashLog.mix(h, Double.doubleToLongBits(TIME.currentSecond())));
     }
 
     /**
@@ -382,7 +383,7 @@ public final class GameHash implements StateSource {
         static final int ARMY_FIELDS = 6;
         static final String[] PARTS = {"armies", "entities", "region owners", "factions and stances",
             "NPC relations per human", "raiders", "events per human", "deals and tariffs between humans",
-            "NPC production boosts", "NPC stocks", "region populations", "NPC courts", "calendar"};
+            "NPC production boosts", "NPC stocks", "region populations", "NPC courts", "global events", "calendar"};
         final long[] parts = new long[PARTS.length];
         final int[] army;
         final long[] armyHash;

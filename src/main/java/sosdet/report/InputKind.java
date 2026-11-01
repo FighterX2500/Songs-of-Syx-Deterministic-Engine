@@ -20,5 +20,7 @@ public enum InputKind {
     /** B6: a scripted event set a world mark; the number is the target and mark kind, the bytes the index and value. */
     EVENT_MARK,
     /** B6: a scripted event's world action; the bytes name the event and the action, and hold its context. */
-    EVENT_ACTION
+    EVENT_ACTION,
+    /** SOS-125: a city rolled a global event; the number is the city, the bytes name the event. */
+    GLOBAL_EVENT
 }

@@ -170,6 +170,11 @@ public final class WorldActions {
         case "wfired": // wfired: notes how often each scripted event has fired in this city (the 2026-11-01 desync)
             Rig.later(() -> Rig.note(firedEvents()));
             return true;
+        case "wglobal": { // wglobal KEY: this city rolls scripted event KEY, as its roller would (SOS-125)
+            String key = a[1];
+            Rig.later(() -> Rig.note(rollEvent(key)));
+            return true;
+        }
         case "wconv": // wconv: notes an NPC king's religion weights read live and as the world part reads them (SOS-121)
             Rig.later(() -> Rig.note(conversionWeights()));
             return true;
@@ -1412,22 +1417,28 @@ public final class WorldActions {
         return "wconv live" + live + " world" + world;
     }
 
-    private static String firedEvents() {
-        StringBuilder s = new StringBuilder("wevents step ").append(Engine.step());
-        try {
-            java.lang.reflect.Field f = game.event.engine.Event.class.getDeclaredField("all");
-            f.setAccessible(true);
-            for (Object o : (snake2d.util.sets.LIST<?>) f.get(null)) {
-                game.event.engine.Event e = (game.event.engine.Event) o;
-                int n = game.GAME.EVENT().occ(e);
-                if (n > 0) {
-                    s.append(' ').append(e.key).append(':').append(n);
-                }
-            }
-        } catch (ReflectiveOperationException e) {
-            throw new IllegalStateException("SOSDET rig: wevents", e);
+    private static String rollEvent(String key) {
+        game.event.engine.Event e = sosdet.game.cmd.Events.byKey(key);
+        if (e == null) {
+            return "wglobal: no event " + key;
         }
-        return s.toString();
+        boolean can = GAME.EVENT().can(e);
+        boolean rolled = GAME.EVENT().trySet(e);
+        boolean forced = !rolled && Hooks.globalEventRolled(e, key); // a new city may not meet its conditions
+        return "wglobal " + key + " can " + can + " rolled " + rolled + " forced " + forced + " at step " + Engine.step();
+    }
+
+    private static String firedEvents() {
+        StringBuilder s = new StringBuilder("wfired step ").append(Engine.step());
+        snake2d.util.sets.LIST<game.event.engine.Event> all = sosdet.game.cmd.Events.all();
+        for (int i = 0; i < all.size(); i++) {
+            int n = GAME.EVENT().occ(all.get(i));
+            if (n > 0) {
+                s.append(' ').append(all.get(i).key).append(':').append(n);
+            }
+        }
+        game.event.engine.Event now = GAME.EVENT().current();
+        return s.append(" current ").append(now == null ? "none" : now.key).toString();
     }
 
     /** {@code wstock}. */

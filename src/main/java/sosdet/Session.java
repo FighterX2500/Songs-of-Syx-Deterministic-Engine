@@ -231,6 +231,8 @@ final class Session {
     long inputsSent;
     /** World marks the city's scripted events set that its reports have yet to apply (B6). */
     final sosdet.report.EventMarks eventMarks = new sosdet.report.EventMarks();
+    /** The global events under way (SOS-125): world state, written in the world part, read by the cities. */
+    final sosdet.report.GlobalEvents globalEvents = new sosdet.report.GlobalEvents();
     /** The world part's changes to the city, applied in the step's city tail (ADR 0005 §3). */
     final TxnQueue txns = new TxnQueue();
     /** Every money and goods transaction, for the logs only (SOS-81): not saved, not hashed, never read by the step. */
@@ -2614,7 +2616,7 @@ final class Session {
     /** Makes the city's inputs and applies them in the world part: the game, made at first use. */
     GameInputs inputs() {
         if (inputs == null) {
-            inputs = new GameInputs(sentSupplies, eventMarks, () -> reportsFrom < 0 && currentHuman == cityHuman());
+            inputs = new GameInputs(sentSupplies, eventMarks, globalEvents, () -> reportsFrom < 0 && currentHuman == cityHuman());
         }
         return inputs;
     }
