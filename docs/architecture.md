@@ -6,15 +6,15 @@ A short map for an AI agent (or a person) about to change SOSDET. Read it first,
 
 - **A mod jar for Songs of Syx V71, build 71.44 only.** It holds the engine (package `sosdet`) and game classes compiled from [patches/](../patches/README.md). The game's launcher puts an enabled mod's jar ahead of `SongsOfSyx.jar`, so the patched classes replace the game's own ([ADR 0001](decisions/0001-build-and-packaging.md)). The game folder and `SongsOfSyx.jar` are never changed, and no game file is committed.
 - **Lockstep:** the same save, seed and inputs at the same steps give a bit-identical state on every PC. Inputs travel between PCs, state never does.
-- **No network inside.** The engine hands out and takes in bytes; the multiplayer mod ([SOSGSGMP](https://github.com/FighterX2500/SOSGSGMP)) carries them. The pairs are `aiLogOut`/`aiLogIn`, `ordersOut`/`ordersIn` and `hashOut`/`hashIn` in [`Engine`](../src/main/java/sosdet/Engine.java).
-- **No session, no change:** until something calls `Engine.begin()`, every hook gives the game's own behaviour. The only exception is the fixed tables of patch `50`.
+- **No network inside.** The engine hands out and takes in bytes; the multiplayer mod ([SOSGSGMP](https://github.com/FighterX2500/SOSGSGMP)) carries them. The main pairs are `aiLogOut`/`aiLogIn`, `ordersOut`/`ordersIn`, `hashOut`/`hashIn`, `reportsOut`/`reportsIn`, `battleOut`/`battleIn` and `viewOut`/`viewIn` in [`Engine`](../src/main/java/sosdet/Engine.java). [docs/api.md](api.md) says how a mod calls them.
+- **No session, almost no change:** until something calls `Engine.begin()`, a hook gives the game's own behaviour. The known exceptions are listed at the top of [docs/hooks.md](hooks.md).
 
 ## A session, step by step
 
-1. **The mod starts a session:** `Engine.begin()`, then `seed`, `aiHost` or `aiPeer`, `localPc`, `runFreely` or `runUntil`, and `speed`.
+1. **The mod starts a session:** `Engine.begin()`, then `aiHost` or `aiPeer`, `localPc`, `ownCity` for own cities, `seed`, `speed`, and `runFreely` or `runUntil`. [docs/api.md](api.md) gives the order around the load.
 2. **Every frame,** `GAME.update` (patch `10`) asks `Hooks.stepsFor(frame time × this PC's speed)` how many whole fixed steps to run; the rest carries over.
    - A step is 1/60 s at an agreed speed of 1x or slower, 1/30 s below 2x, and 1/16 s from 2x (vanilla's longest sub-step; the middle band since SOS-42). See [`StepClock`](../src/main/java/sosdet/StepClock.java).
-   - A peer never runs past the host's last confirmed step + 30.
+   - A peer never runs past the host's horizon: its last confirmed step plus the log's delay, 30 steps at 1x and up to 400 at high speeds.
    - The host runs at most a lead of steps (the mod's choice) past the slowest PC, learnt from that PC's hashes (`Engine.peerStep`), so the slowest PC sets the pace.
    - Speed only sets how fast a PC runs. A paused PC runs no steps.
 3. **`Hooks.stepBegin`:**
@@ -29,10 +29,17 @@ A short map for an AI agent (or a person) about to change SOSDET. Read it first,
    - Battle jobs run inside the step, not on their threads (patch `30`).
    - Path jobs queued in the step run at its end, before the hash: share 0 on the simulation thread, shares 1 and 2 on path threads, job i always on share i % 3 (patch `35`, `PathWorkers`).
    - The host's AI general keeps its own thread, but writes only to the log (patch `90`).
-5. **`Hooks.stepEnd`:** every 30 steps the state hash ([`GameHash`](../src/main/java/sosdet/game/GameHash.java), [`HashLog`](../src/main/java/sosdet/hash/HashLog.java)). It has seven sections: clock, soldiers, divisions, projectiles, entities, world and report (the city report the world part reads, ADR 0005). Rooms, stock and stats are not hashed, so a split there shows up in the entities a few steps later.
+5. **`Hooks.stepEnd`:** every 30 steps the state hash ([`GameHash`](../src/main/java/sosdet/game/GameHash.java), [`HashLog`](../src/main/java/sosdet/hash/HashLog.java)). It has seven sections: clock, soldiers, divisions, projectiles, entities, world and report (the city report the world part reads, [ADR 0005](https://github.com/FighterX2500/SOSGSGMP/blob/main/docs/decisions/0005-world-lockstep-and-city-world-link.md) in SOSGSGMP). Rooms, stock and stats are not hashed, so a split there shows up in the entities a few steps later.
    - The clock section also holds the human slots and each PC's human, when there are several humans in own-city mode (SOS-46), and marks each retired human (SOS-66).
-   - The world section holds the armies, every world entity, region owners, each faction's credits, overlord and stance with every other faction (not only wars), every NPC king's opinion of each human after slot 0, the raiders, each human's war and rebellion timers and current raider, the recipes' NPC production boosts, every NPC's goods and production rates (SOS-93), and the calendar. Hash format 8 (SOS-46 made it 7; SOS-94 added each PC's capacity to every record). When it differs, the desync report lists it part by part.
+   - The world section holds the armies, every world entity, region owners, each faction's credits (in own-city mode not a human's), each human's name, ruler name and banner, each faction's overlord and stance with every other faction (not only wars), every NPC king's opinion of each human after slot 0, the raiders, each human's war and rebellion timers and current raider, the deals, tariffs and sieges between humans, the recipes' NPC production boosts, every NPC's goods and production rates (SOS-93), region populations, NPC courts, the global events under way, and the calendar. Hash format 8 (SOS-46 made it 7; SOS-94 added each PC's capacity to every record). When it differs, the desync report lists it part by part.
 6. **Between steps** come the UI and rendering. They draw from the cosmetic stream and must never write simulation state (patches `65`, `67`, `98`).
+
+## Battles, views and assaults
+
+- **A battle with own cities** (`OwnBattle`): the asked human's PC generates the battle and sends its save (`battleOut`). Every PC loads it at the Engage step (`battleIn`), and each returns to its own city after it. Between humans and allies, each division has an owner (`BattleRoster`, the commanders table).
+- **A local battle** (`LocalBattle`, `Engine.localBattles`): a human's battle against an NPC army runs on that human's PC only. Every PC's world keeps stepping, at 1x while one runs, with that human frozen from the freeze step. The result is a command (7964). Another human can watch the battle.
+- **A city view** (`View`, `ViewCity`): the viewer's PC freezes at the next report step, takes the owner's city through `viewOut` and `viewIn`, and runs it in lockstep with the owner's. View hashes compare the two.
+- **An assault** (`Assault`): the besieger's Storm starts it. Every other human views the defender's city, so every PC runs that city, and the world is held from the views' freeze to their thaw. It ends held, taken or in retreat. After a taken throne the attacker sets the terms (7973).
 
 ## Player input: commands
 
@@ -40,7 +47,7 @@ A player's action never changes state on the PC where it was clicked. It becomes
 
 1. **A hook captures the click,** in the method that commits the action: `if (sosdet.game.cmd.Laws.curfew(...)) return;`. It goes at the UI call site instead when the declaring class is menu-unsafe or on a hot path. `Commands.capturing()` is true only in a session and outside the step, so the game's own calls inside the step run as before.
 2. **The command is written with `CmdWriter`:** an id, then ints, booleans, doubles and strings (a long goes as two ints). [`Args`](../src/main/java/sosdet/game/cmd/Args.java) has codecs for rooms, entities, races, divisions, armies and regions.
-3. **The host stamps it** for step = last confirmed + 30. Every PC, the host included, applies it at that step, in sequence order.
+3. **The host stamps it** for step = last confirmed + the delay (30 steps at 1x, up to 400 at high speeds). Every PC, the host included, applies it at that step, in sequence order.
 4. **The applier** (`new Command(id, name, r -> ...)`) decodes the command, re-checks what the UI checked, and calls the game. If its target is gone, it returns false and the command is skipped on every PC alike.
 5. **Rules for a command:**
    - Everything the action reads from the clicking PC (rotation, a draft, the typed value, the profile's blueprints) travels inside the command.
@@ -56,10 +63,10 @@ A player's action never changes state on the PC where it was clicked. It becomes
 | 5000s | `Names` | names, banners, nobles, map marks |
 | 6000s | `Tools` | placing tools; area-room Build and refurnish, whose plans the `Plan*` classes hold ([ADR 0003](decisions/0003-room-planning.md)); 6100s: copier and blueprints |
 | 7000s | `World` | armies, recruiting, regions |
-| 7900s | `WorldBattles` | world-battle prompt decisions |
+| 7900s | `WorldBattles` | world-battle prompt decisions; 7903: an ally's answer |
 | 7950, 7951 | `StepPrompts` | yes/no questions the step asks: 7950 a city's, 7951 a world one, answered by the human asked (SOS-46) |
-| 7960s | `MapBattles` | a battle fought on the battle map: Start, Retreat, the victory or defeat panel's Close, Restart (SOS-41). A world command whose step falls in the battle is skipped, with a notice to its PC: the battle's end loads the game saved before it, which would undo it |
-| 7970s | `Sieges` | a human's sally from its besieged capital, 7970 (SOS-92) |
+| 7960s | `MapBattles` | a battle fought on the battle map: Start, Retreat, the victory or defeat panel's Close, Restart (SOS-41); 7964 a local battle's result, 7965 a battle's speed vote, 7966 and 7967 an ally's order and vote in a local battle. A world command whose step falls in the battle is skipped, with a notice to its PC: the battle's end loads the game saved before it, which would undo it |
+| 7970s | `Sieges` | a human's sally from its besieged capital, 7970; the attacker's terms, 7973 (SOS-92); 7971, 7972 and 7974 to 7977 are test tooling |
 | 8000s | `Diplomacy` | deals, emissaries, an overlord's tribute (8005) |
 | 8100s | `HumanDeals` | deals between humans: propose 8100, answer 8101, cancel 8102, tariff 8103, war 8104 (SOS-72 to SOS-74, SOS-77) |
 | 9000s | `Events` | event choices, raiders |
@@ -72,12 +79,16 @@ A player's action never changes state on the PC where it was clicked. It becomes
 
 | Path | What |
 | --- | --- |
-| `sosdet/Engine.java` | The API the mod calls |
-| `sosdet/Hooks.java` | Every call the patches make into the engine |
+| `sosdet/Engine.java` | The API the mod calls ([docs/api.md](api.md)) |
+| `sosdet/Hooks.java` | Every call the patches make into the engine; not for mods |
 | `sosdet/Session.java`, `StepClock`, `Streams` | One session's state, the fixed step, the simulation and cosmetic random streams |
+| `sosdet/OwnBattle`, `LocalBattle`, `BattleRoster`, `View`, `ViewCity`, `Assault` | Battles, views and assaults: what the mod reads, and the engine's state for each |
+| `sosdet/Pacer`, `Resync`, `WorldResync`, `DesyncHold` | The speed governor, and the resync and desync hold states |
 | `sosdet/ai/` | The log: `AiLog` (host and peer, stamping, confirmations, the delay: 30 steps at 1x, half a second of real time at higher speeds, SOS-90), `AiEntry`, `CmdWriter`/`CmdReader` |
 | `sosdet/game/` | Everything that touches game classes: `GameAi` (applies log entries), `GameHash`, `GameResync`, `AiHooks`, world fixes; the city↔world link: `StepParts`, `GameReport`, `GameTxns`, `GameSoldiers`, `GameWorldLoad` (the world resync); several humans: `GameHumans` (the human slots, spares, `SOSDET_HUMANS`), `GameCityDivs`, `GameRelations` (NPC relations per human), `GameEvents` (event timers and raids per human) |
 | `sosdet/txn/` | Transactions: the world's changes to a city, each applied exactly once |
+| `sosdet/report/` | The city report the world part reads (`CityReport`, its fields and layout) |
+| `sosdet/game/deal/`, `sosdet/game/siege/` | Deals and tariffs between humans; sieges and the assault's terms |
 | `sosdet/game/cmd/` | Commands per area, room-plan records (`Plan*`) |
 | `sosdet/hash/` | The hash log and the desync report |
 | `patches/` | The game files the engine changes, one patch per topic; [docs/hooks.md](hooks.md) has one row per hook with the reason |
@@ -108,7 +119,7 @@ Each line is a class of cause found in practice. The patch named holds the fix; 
 | | Getters the UI calls that write world state: an army's move remainder (`WPath.moving`), an interceptor's lost target, a region's previous owner, `FACTIONS.active()`'s fresh mark (SOS-46 PT3) | `98`, `99`, `16`, `12` |
 | | Lazy world caches rebuilt or stamped outside the world part, and a rebuild inside a loop over the same list resetting its one iterator (SOS-46 PT1) | `15`, `14` |
 | | A formation's unused tail carrying this PC's move preview | `66` |
-| **The world reading a live city** | Trade stock, credits, population, the garrison, army power, opinion and trust read from this PC's city in the world step; own cities differ per PC | `12`, `13`, `14`, `98`: the city report and transactions (ADR 0005) |
+| **The world reading a live city** | Trade stock, credits, population, the garrison, army power, opinion and trust read from this PC's city in the world step; own cities differ per PC | `12`, `13`, `14`, `98`: the city report and transactions (ADR 0005 in SOSGSGMP) |
 | **Loading part of a save** | The world resync loaded only the world's sections of a whole save; the game writes one object stream for the whole file, so the skipped city sections broke its back-references, the raiders misread and were regenerated per PC | `GameWorldLoad.save` writes a world-only save (no patch) |
 | **Tick order** | Commands applied before the tick counted up, so they read a tick-keyed cache only this PC's UI had filled | `10` |
 | **Static state surviving a load** | Garrison supply sums, a static world generator, static tick keys (race target, employee list) | `98` (`WorldStatics`) |
@@ -125,7 +136,7 @@ Each line is a class of cause found in practice. The patch named holds the fix; 
 
 - **The engine compiles against the shipped jar.** It can't use members a patch adds. Patches call into the engine, never the other way round.
 - **One patch per game file.** Add to the patch that already owns the file (`grep -l "^+++ b/<path>" patches/*.patch`). Make patches with `python tools/mkpatch.py <patch> <edits.py>`.
-- **Menu safety:** the main menu loads every class in the mod jar. A patched class whose static initializer touches `GAME`, `SETT`, `TIME`, `STATS` and the like crashes the menu; hook at the UI call site instead.
+- **Menu safety:** the main menu loads every class in the mod jar. A patched class whose static initializer touches `GAME`, `SETT`, `TIME`, `STATS` and the like crashes the menu, and `menuSafetyCheck` fails the build; hook at the UI call site instead.
 - **Hook the commit, never a draft:** a deal window that rewrote its draft every frame produced 185,792 commands.
 - **Anything that stops this PC's steps deadlocks a command-answered prompt:** a pause (`tmpPause`), or an interrupter whose `update` returns false (VIEW then gives the game no time).
 - **Inputs redraw every frame:** with the 30-step delay a typed "12" came out as "02" (`GInputInt`).

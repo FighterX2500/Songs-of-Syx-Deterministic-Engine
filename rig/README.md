@@ -1,6 +1,6 @@
 # Test rig
 
-Runs the same simulation in several game copies at different game speeds and compares them step by step. It is how SOSDET proves determinism on one PC (requirements §4, §5) until the scenario suite (SOS-31) takes over.
+Runs the same simulation in several game copies at different game speeds and compares them step by step. It is how SOSDET proves determinism on one PC (requirements §4, §5).
 
 Nothing here ships to players. The rig is a second mod, `SOSDET-rig`, built next to the engine:
 
@@ -9,6 +9,8 @@ Nothing here ships to players. The rig is a second mod, `SOSDET-rig`, built next
 | `java/sosdet/rig/Rig.java` | A script mod that drives one game copy from a command file and logs one state hash per step |
 | `patches/90-autoload.patch` | Rig-only change to the game: load a save at start-up, so runs need no clicks |
 | `rig.py` | The runner: prepares the copies, starts them, sends the commands, compares the logs |
+| `play.py` | A player's hands on one copy of a running session: what the player sees, and the player's actions (the LLM playtests) |
+| `relay/Relay.java` | With `--remote`: mirrors the files the copies exchange to the other PC over one TCP connection |
 
 ## Running
 
@@ -43,7 +45,7 @@ The exit code is 0 when every copy is identical to copy 1. Only one rig run at a
 
 `--ai host` runs the multiplayer setup:
 - **Copy 1 is the host.** Its AI general plans on its own thread, and every change it makes goes into the AI log. Copy 1 appends that log to a file every frame.
-- **The other copies are peers.** Their general is off. Every frame they read what is new in the host's file and feed it to the engine, which never lets a peer run more than 30 steps past the host's last confirmed step.
+- **The other copies are peers.** Their general is off. Every frame they read what is new in the host's file and feed it to the engine, which never lets a peer run past the host's horizon: its last confirmed step plus the log's delay, 30 steps at 1x and up to 400 at high speeds.
 - **The host is the reference.** When it stops, each peer is held once it has passed the host's last step.
 
 This is the flow the multiplayer mod will use, with a file in place of the network, and the default since the owner made host mode the engine's default (2026-10-22): inside the step, the general's planning stalls the simulation. `--ai instep` runs the general inside the step in every copy instead.
@@ -91,10 +93,9 @@ With `--humans N` (SOS-52), `--world-resync STEP` works the same way: copy 1 sav
 python rig\rig.py city --tag H1 --save Mogus-72-19f86f1e048-47002c-0-121c.save --no-invade --copies 3 --humans 3 --remote 3 --cmds @<file>
 ```
 
-`--humans N` (a city run with N copies and the AI on the host; not with `--follow`, `--replay`, `--resync` or `--world-resync`): before the run, copy 1 loads the save, makes N - 1 NPCs humans (`makehuman auto N-1`: the first active NPCs) and saves `humans.save` in the run folder. Every copy then starts from that save. Copy k is human k: it runs only that human's city, in own-city mode, writes its city's reports to a file and reads every other copy's (`pchuman`, `reportsout`, `reportsin`), as the mod will over the network. The copies are compared on the world only. `--remote K` works with it, so one human can run on the laptop.
+`--humans N` (a city run with N copies and the AI on the host; not with `--follow`, `--replay` or `--resync`): before the run, copy 1 loads the save, makes N - 1 NPCs humans (`makehuman auto N-1`: the first active NPCs) and saves `humans.save` in the run folder. Every copy then starts from that save. Copy k is human k: it runs only that human's city, in own-city mode, writes its city's reports to a file and reads every other copy's (`pchuman`, `reportsout`, `reportsin`), as the mod will over the network. The copies are compared on the world only. `--remote K` works with it, so one human can run on the laptop.
 
-`--new-world SEED` (with `--humans N`, SOS-55): instead of `makehuman`, copy 1 generates a fresh terrain from the seed on the save's map and builds a world around N humans (`newworld SEED auto N`, `Engine.buildWorld`). Human 0 is at the first free location from the map's centre outwards, and the others 7 to 15 tiles from it where the terrain allows. The runner logs the locations and checks a route between every two humans 6 to 15 tiles apart (mod spec §5). It then checks that a save → load round trip (`roundtrip`) keeps every human's slot and capital, and fails otherwise. The rig builds inside the game it loaded, so it first removes that game's NPCs and the player's armies; the mod builds in a fresh game. Example: `python rig
-ig.py city --tag NW --copies 3 --humans 3 --new-world 4242 --steps 6000 --save Mogus-72-19f86f1e048-47002c-0-121c.save --no-invade`.
+`--new-world SEED` (with `--humans N`, SOS-55): instead of `makehuman`, copy 1 generates a fresh terrain from the seed on the save's map and builds a world around N humans (`newworld SEED auto N`, `Engine.buildWorld`). Human 0 is at the first free location from the map's centre outwards, and the others 7 to 15 tiles from it where the terrain allows. The runner logs the locations and checks a route between every two humans 6 to 15 tiles apart (mod spec §5). It then checks that a save → load round trip (`roundtrip`) keeps every human's slot and capital, and fails otherwise. The rig builds inside the game it loaded, so it first removes that game's NPCs and the player's armies; the mod builds in a fresh game. Example: `python rig\rig.py city --tag NW --copies 3 --humans 3 --new-world 4242 --steps 6000 --save Mogus-72-19f86f1e048-47002c-0-121c.save --no-invade`.
 
 `--make-humans A,B` (with `--humans N`, SOS-77): the N - 1 NPC slots that become humans, instead of the first ones. A human trades only with capitals it reaches (never across unclaimed land, except a human 6 to 15 tiles away, SOS-120) and has a trade stance with, so pick NPCs that border the player for a market run: the probe `wtradeinfo` lists a city's trade partners with distance and toll. The market run: `--copies 3 --humans 3 --make-humans 2,24 --steps 45000 --save Mogus-72-19f86f1e048-47002c-0-121c.save --no-invade`, with `dealpropose`, `export-resource RES_FURNITURE`, `export-price RES_FURNITURE 30`, `tariff 2 50` and the `deals` probe (plan 0010). Resource arguments take a key (`RES_FURNITURE` or `FURNITURE`) or an index.
 
@@ -138,7 +139,7 @@ When the world section differs, the desync report lists the world at that step p
 python rig\rig.py field --tag P1 --play --copies 3
 ```
 
-`--play`: copy 1 opens in a normal window with your own settings, as the host, at 1x. Give orders and change the speed as you like; every order and speed change goes into the host's log and the other copies (small, at 25x so they never lag) replay it at the same steps. The step length follows the agreed speed (1/60 s at 1x, 1/16 s above). At the first difference every copy is held, your window included, and each copy writes the engine's desync report. Close your window to end the run: the others are held and compared up to the last step yours reached. Don't retreat or leave the battle (that loads another save). In a city run the city and the world map are commands (SOS-34, SOS-35); `rig\play-v01.bat` starts the V0.1 session ([docs/release/V0.1.md](../docs/release/V0.1.md)). Without `--play`, copy 1's player answers world-battle prompts and the simulation's yes/no questions by itself (`answerprompts`).
+`--play`: copy 1 opens in a normal window with your own settings, as the host, at 1x. Give orders and change the speed as you like; every order and speed change goes into the host's log and the other copies (small, at 25x so they never lag) replay it at the same steps. The step length follows the agreed speed (1/60 s at 1x or slower, 1/30 s below 2x, 1/16 s from 2x). At the first difference every copy is held, your window included, and each copy writes the engine's desync report. Close your window to end the run: the others are held and compared up to the last step yours reached. Don't retreat or leave the battle (that loads another save). In a city run the city and the world map are commands (SOS-34, SOS-35); `rig\play-v01.bat` starts such a session (see "A co-op play session"). Without `--play`, copy 1's player answers world-battle prompts and the simulation's yes/no questions by itself (`answerprompts`).
 
 `wassaultend held|taken|retreat` (test tooling): the running assault's invasion ends so at the next city tail on every copy. `wterms sack|vassalage <percent> [moved:killed:freed]`: the attacker chooses what it takes after a taken throne, the people being of the defender's largest race; `wassault` notes a throne awaiting terms and the terms applied (SOS-92 D).
 
@@ -163,6 +164,19 @@ python rig\rig.py field --tag V4 --play --copies 2 --remote 2 --govern --command
 
 `--trace-draws N` adds the call site of every simulation draw for the last N steps, dumped around a desync; it slows the copies by roughly half.
 
+## A co-op play session
+
+```
+rig\play-v01.bat
+```
+
+The script builds the engine and the rig, then starts three copies on `Mogus-72-19f86f1e048-47002c-0-121c.save` with no invasion, and opens copy 1 in a normal window at 1x. That copy is the host, and you play it. The other two run small and off-screen and replay everything you do at the same steps. Every copy plays the same save and the same player faction, and it needs Python 3 and that save in your saves folder; the save isn't in this repository.
+
+- **Arguments:** `rig\play-v01.bat V01B` names the run (default `V01A`). Arguments after the name go to `rig\rig.py`, for example `rig\play-v01.bat V01B --save Other.save`.
+- **Ending:** close your window. The other copies are held and compared up to the last step yours reached.
+- **When the copies split:** at the first difference every copy is held, your window included.
+- **The result:** in `build\rig\runs\<name>\`. `summary.txt` says whether the copies stayed identical; `desync-c<k>.txt` is each copy's desync report if they split.
+
 ## Map battles (SOS-32)
 
 ```
@@ -171,8 +185,7 @@ python rig\rig.py city --tag MB10 --save Mogus-72-19f86f1e048-47002c-0-121c.save
 
 `--engage N` (default -1: off): copy 1 answers a field battle's prompt with Engage instead of auto-resolve, so the battle is fought on the battle map on every copy. It clicks Start as soon as the battle deploys, Retreat N steps later (0: fights on to the end), and Close on the victory or defeat panel; every copy then loads the game saved before the battle and goes on at the same step. A siege waits instead of being resolved, so the region's defenders come out and fight in the field.
 
-**Own cities (plan 0006, SOS-61):** `--engage` works with `--humans N`. The battle PC, the asked human's copy, generates the battle and writes it to its rig folder (`battle.save`, then `battle.done` with the Engage step). Every copy, that one too, loads it at the Engage step, and each copy loads its own city back after the battle. Example: `python rig
-ig.py city --tag OB2 --save Mogus-72-19f86f1e048-47002c-0-121c.save --no-invade --engage 900 --humans 2 --copies 2 --speeds 5,7 --steps 18000 --cmds "wbesiegenear 0 stronger"` engages at about step 11,830.
+**Own cities (plan 0006, SOS-61):** `--engage` works with `--humans N`. The battle PC, the asked human's copy, generates the battle and writes it to its rig folder (`battle.save`, then `battle.done` with the Engage step). Every copy, that one too, loads it at the Engage step, and each copy loads its own city back after the battle. Example: `python rig\rig.py city --tag OB2 --save Mogus-72-19f86f1e048-47002c-0-121c.save --no-invade --engage 900 --humans 2 --copies 2 --speeds 5,7 --steps 18000 --cmds "wbesiegenear 0 stronger"` engages at about step 11,830.
 
 **The hold before a battle (SOS-70):** `--battle-hold` (with `--humans`) turns on `Engine.battleHold`: every copy holds before the step whose commands engage the battle, saves its game there as `beforebattle.save` in its rig folder (event `battleahead`), as the mod's campaign save does, and lets the step run. `--humans-saves A,B,...` (with `--humans N`, one save per copy from your saves folder) has copy k resume save k as human k-1, as the mod's campaign resume does, instead of making the humans: copy each copy's `beforebattle.save` there to check that the prompt opens again. Runs H70A (`OB2` above with `--battle-hold --steps 13500`: held at 11,864, the battle and Retreat, identical) and H70B (`--humans-saves` of H70A's two saves, `--engage 300 --steps 1500`: the prompt opened at step 1, the battle again, identical).
 
@@ -192,13 +205,22 @@ ig.py city --tag OB2 --save Mogus-72-19f86f1e048-47002c-0-121c.save --no-invade 
 
 A field battle needs an enemy that stands: a weaker NPC army withdraws without a prompt, and a chase after a marching army stalls (the game's intercept re-paths only once the target has moved a tenth of the path away). `wbesiegenear 0 stronger` besieges the nearest settlement of a faction with at least twice the army's power, whose defenders then attack it. `wwarnear`, `winterceptnear` (with `stronger` and `still`) and the `warmystate` probe are there for other setups.
 
+## Other options
+
+- `--agreed-speed S`: the speed every copy agrees on at the start, which sets the step length; by default copy 1's speed.
+- `--artillery N` (field): artillery pieces per side in the generated battle.
+- `--hold-world` (city): holds the world map still, as before SOS-35.
+- `--trace-from STEP` (with `--trace-draws`): starts the trace at that step.
+- `--remote-root DIR` (with `--remote`): the folder on the other PC for the game, the relay and the copies; by default `C:\SOSTest`.
+- `--world-at STEP`, `--world-load`, `--world-keys` (a SOS-38 spike): copy 1 saves at STEP and runs on, and the `--world-load` copies load only the `--world-keys` sections from that save into their running game.
+
 ## The scenario suite (SOS-31)
 
-`rig\suite.py` runs every scenario in one command and prints pass or fail per scenario, with the first step that differs:
+`rig\suite.py` runs its four scenarios in one command and prints pass or fail per scenario, with the first step that differs:
 
 ```
-python rig\suite.py --short     before each pull request, about 6 minutes
-python rig\suite.py             the full suite, about 49 minutes
+python rig\suite.py --short     the short suite, about 6 minutes once recorded
+python rig\suite.py             the full suite, about 49 minutes once recorded
 python rig\suite.py --record    record the expected hashes again (a change meant to alter the simulation)
 python rig\suite.py --dry-run   what would run, and the state of each recording; starts no game
 ```
@@ -210,13 +232,13 @@ python rig\suite.py --dry-run   what would run, and the state of each recording;
 | `ownworld` | Mogus-72 own cities (M4): followers, world resync at 3,000, `m3.txt` actions, 108,000 steps | 6,000 steps, resync at 1,500, no actions | copies only |
 | `mapbattle` | Mogus-72 besieged, Engage, the battle on the battle map (MB12), 2 copies, 36,000 steps | not in it | copies, expected hashes |
 
-Every scenario passes only when its copies are identical at every step and no engine reports a desync. A recorded one must also match its expected hashes. `--record` runs it with copy 1 as the host and keeps two things in `rig\golden\<scenario>.txt` and `<scenario>.log.gz`: copy 1's hash every 300 steps and at the end, and the host's AI log, which holds the general's changes and the player's actions at their steps. A field recording also keeps its generated battle in your saves folder as `SOSDET-suite-<scenario>.save`, since a generated battle's bytes differ between runs. A later run replays that log on every copy (`--replay`, with `--battle-save` for the field battle), so its steps must give the same hashes. A recording names the scenario's arguments, its save's checksum, the start hash and the engine's AI log and hash formats; when one differs, the scenario says `RECORD` and to record again, rather than failing. The own-city world can't be replayed, since a `--follow` run needs a host, so only its copies are compared.
+Every scenario passes only when its copies are identical at every step and no engine reports a desync. A recorded one must also match its expected hashes. `--record` runs it with copy 1 as the host and keeps two things in `rig\golden\<scenario>.txt` and `<scenario>.log.gz`: copy 1's hash every 300 steps and at the end, and the host's AI log, which holds the general's changes and the player's actions at their steps. A field recording also keeps its generated battle in your saves folder as `SOSDET-suite-<scenario>.save`, since a generated battle's bytes differ between runs. A later run replays that log on every copy (`--replay`, with `--battle-save` for the field battle), so its steps must give the same hashes. A recording names the scenario's arguments, its save's checksum, the start hash and the engine's AI log and hash formats; when one differs, the scenario says `RECORD` and to record again, and starts no game. Any `RECORD` makes the suite's overall result FAIL. The own-city world can't be replayed, since a `--follow` run needs a host, so only its copies are compared.
 
 `--only NAME,NAME` runs only those scenarios.
 
 `--battle-save NAME` (field) starts from that battle save instead of generating one; in a `--replay` run, `--cmds` is ignored, since the log already holds the actions.
 
-The recordings in `rig\golden` were made on the main dev PC (2026-10-25; the short ones again for SOS-56 and SOS-83). None is in the current formats (the AI log's format 8 since SOS-90, the hash format 8 since SOS-94), so every scenario says `RECORD` until it is recorded again. A field recording needs its battle save, which stays in that PC's saves folder; on another PC the field scenario says `RECORD` until it is recorded there. Checked on 2026-10-25: the short suite passes in about 6 minutes (field and assault match their recordings, the own-city world stays identical through a world resync at step 1,500), and a probe that changed every step's seed made the field scenario fail at step 300, naming the expected and the actual hash. The full suite passes in 49 minutes: field, assault and map battle each match 121 expected hashes, and the own-city world stays identical for 108,000 steps through a world resync at step 3,000.
+The recordings in `rig\golden` were made on the main dev PC (2026-10-25; the short ones again for SOS-56 and SOS-83). None is in the current formats (the AI log's format 8 since SOS-90, the hash format 8 since SOS-94), so today every recorded scenario says `RECORD`, only `ownworld` runs, and the result is FAIL until they are recorded again. The suite's saves (`Mogus-72-19f86f1e048-47002c-0-121c.save`, and `sosmp-det-base` for the field battle) aren't in this repository, so it runs only on a PC that has them. It has no scenario with several humans, an assault or a local battle. A field recording needs its battle save, which stays in that PC's saves folder; on another PC the field scenario says `RECORD` until it is recorded there. Checked on 2026-10-25: the short suite passes in about 6 minutes (field and assault match their recordings, the own-city world stays identical through a world resync at step 1,500), and a probe that changed every step's seed made the field scenario fail at step 300, naming the expected and the actual hash. The full suite passes in 49 minutes: field, assault and map battle each match 121 expected hashes, and the own-city world stays identical for 108,000 steps through a world resync at step 3,000.
 
 ## The timing rule
 
@@ -247,4 +269,4 @@ In the field battle the first frame after the battle save loads is left out (own
 - **Battle:** every soldier in a division (index, id, position, speed, injuries, division).
 - **City:** every person and animal (index, type, id, position, speed; people also injuries).
 
-Rooms, stock and stats are not hashed; a difference there shows up in the entities a few steps later. The engine's own state hash and desync report come in SOS-29.
+Rooms, stock and stats are not hashed; a difference there shows up in the entities a few steps later. The engine's own state hash is another thing: see "State hashes and desyncs".
