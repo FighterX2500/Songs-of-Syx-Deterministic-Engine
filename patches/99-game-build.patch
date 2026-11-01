@@ -1,11 +1,12 @@
 diff -ru -U2 a/init/MainProcess.java b/init/MainProcess.java
 --- a/init/MainProcess.java	2026-06-17 10:34:54.000000000 +0500
-+++ b/init/MainProcess.java	2026-11-01 15:49:43.028248800 +0500
-@@ -16,6 +16,7 @@
++++ b/init/MainProcess.java	2026-11-01 16:20:05.990342000 +0500
+@@ -16,6 +16,8 @@
  
  	public static void main(String[] args) {
  		
-+		sosdet.GameBuild.check(); // SOSDET: first, before any patched class runs on a game they weren't made for (SOS-126)
++		if (!sosdet.GameBuild.check()) // SOSDET: first, before any patched class runs on a game they weren't made for (SOS-126)
++			return;
  		PreLoader.load(VERSION.VERSION_STRING, PATHS_BASE.PRELOADER, PATHS_BASE.ICON_FOLDER + "Icon64.png");
  		CORE.init(new ErrorHandler());
  		

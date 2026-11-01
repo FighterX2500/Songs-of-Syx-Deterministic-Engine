@@ -1,8 +1,7 @@
 package sosdet;
 
-import javax.swing.JOptionPane;
-
 import game.VERSION;
+import util.error.ErrorMessage;
 
 /**
  * Stops the game at start-up on any build but the one SOSDET's patches were made from (SOS-126). The launcher compares
@@ -16,14 +15,17 @@ public final class GameBuild {
     private GameBuild() {
     }
 
-    /** First thing in {@code MainProcess.main}: nothing of the game's has started, so the dialog is Swing's own. */
-    public static void check() {
+    /**
+     * First thing in {@code MainProcess.main}, before anything of the game's has started: false stops the game there,
+     * showing the game's own notice window, and closing that window ends the process.
+     */
+    public static boolean check() {
         String problem = problem(VERSION.VERSION_STRING);
         if (problem == null) {
-            return;
+            return true;
         }
-        JOptionPane.showMessageDialog(null, problem, "SOSDET", JOptionPane.ERROR_MESSAGE);
-        System.exit(1);
+        ErrorMessage.main(new String[] {"Songs of syx", "", "1", problem, "none", "none", ""});
+        return false;
     }
 
     /** What to tell the player, or null on the supported build. */
