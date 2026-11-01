@@ -83,6 +83,31 @@ public final class WorldActions {
         case "wshot": // wshot: a screenshot into the copy's data folder
             Rig.later(() -> snake2d.CORE.getGraphics().makeScreenShot());
             return true;
+        case "wwalkto": { // wwalkto <army> <slot>: the army walks the route to that human's capital, stopping 2 tiles short
+            int army = Integer.parseInt(a[1]);
+            int slot = Integer.parseInt(a[2]);
+            Rig.later(() -> {
+                WArmy w = army(army);
+                world.map.regions.Region to = world.WORLD.REGIONS().getByIndex(slot);
+                int x = -1;
+                int y = -1;
+                double best = Double.MAX_VALUE;
+                for (snake2d.PathTile p = world.WORLD.PATH().path(w.ctx(), w.cty(), to.cx(), to.cy()); p != null; p = p.getParent()) {
+                    double d = Math.hypot(p.x() - to.cx(), p.y() - to.cy());
+                    if (d >= 2 && d < best) {
+                        best = d;
+                        x = p.x();
+                        y = p.y();
+                    }
+                }
+                if (x < 0) {
+                    throw new IllegalStateException("no route to slot " + slot);
+                }
+                w.setDestination(x, y);
+                Rig.note("wwalkto " + slot + " toward " + x + "," + y);
+            });
+            return true;
+        }
         case "wnewarmy": // wnewarmy: a new army at the capital, as the autopilot's army (SOS-122)
             Rig.later(() -> {
                 if (!World.armyCreate(-1, -1)) {
