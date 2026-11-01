@@ -1468,17 +1468,20 @@ public final class WorldActions {
 
     /** Whether a cached distance follows a moved capital, and whether the battle table reaches a battle's draw. */
     private static String staleProbe() {
-        FactionNPC f = null;
-        for (int i = 0; i < FACTIONS.NPCs().size() && f == null; i++) {
-            FactionNPC n = FACTIONS.NPCs().get(i);
-            if (n.isActive() && n.realm().regions() >= 2) {
-                f = n;
-            }
-        }
-        if (f == null) {
-            return "wstale: no NPC with two regions";
-        }
         try {
+            java.lang.reflect.Field cache = RD.DIST().getClass().getDeclaredField("dists");
+            cache.setAccessible(true);
+            int[] cached = ((int[][]) cache.get(RD.DIST()))[Hooks.humanIndex()];
+            FactionNPC f = null;
+            for (int i = 0; i < FACTIONS.NPCs().size() && f == null; i++) {
+                FactionNPC n = FACTIONS.NPCs().get(i);
+                if (n.isActive() && n.realm().regions() >= 2 && cached[n.index()] != -1) {
+                    f = n;
+                }
+            }
+            if (f == null) {
+                return "wstale: no NPC with two regions and a cached distance yet";
+            }
             java.lang.reflect.Field capitol = world.region.Realm.class.getDeclaredField("capitolI");
             capitol.setAccessible(true);
             short real = capitol.getShort(f.realm());
