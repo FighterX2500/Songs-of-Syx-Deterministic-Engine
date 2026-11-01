@@ -98,6 +98,8 @@ ig.py city --tag NW --copies 3 --humans 3 --new-world 4242 --steps 6000 --save M
 
 `--make-humans A,B` (with `--humans N`, SOS-77): the N - 1 NPC slots that become humans, instead of the first ones. A human trades only with capitals it reaches (never across unclaimed land, except a human 6 to 15 tiles away, SOS-120) and has a trade stance with, so pick NPCs that border the player for a market run: the probe `wtradeinfo` lists a city's trade partners with distance and toll. The market run: `--copies 3 --humans 3 --make-humans 2,24 --steps 45000 --save Mogus-72-19f86f1e048-47002c-0-121c.save --no-invade`, with `dealpropose`, `export-resource RES_FURNITURE`, `export-price RES_FURNITURE 30`, `tariff 2 50` and the `deals` probe (plan 0010). Resource arguments take a key (`RES_FURNITURE` or `FURNITURE`) or an index.
 
+`--new-world-at 'x,y;x,y;...'` (with `--new-world`, SOS-122): the humans' tiles, such as a playtest's, instead of the rig's own choice. The log gives each pair's tiles apart and tiles walked.
+
 `--difficulty MODE` (with `--new-world`, SOS-69): after the build, every human gets that difficulty mode (`newworld SEED auto N MODE`, a file in the game's `player/mode` folder such as `00_FIRST_NAME`), as the mod's world build gives the lobby's. Without it the humans have none, and the difficulty's boosters never enter the run. Example, the SOS-69 check: `--copies 2 --humans 2 --new-world 4242 --difficulty 00_FIRST_NAME --world-resync 600 --steps 2400`.
 
 In `--cmds`, `k: <action>` is copy k's player's action, so each human acts for itself; the other copies get it through the host's log at the same step.

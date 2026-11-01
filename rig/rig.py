@@ -577,7 +577,7 @@ def scenario_saves(args):
     return saves, autoload
 
 
-def make_humans(game, saves, n, run_dir, new_world=None, difficulty=None, which=None):
+def make_humans(game, saves, n, run_dir, new_world=None, difficulty=None, which=None, at=None):
     """--humans: copy 1 makes n - 1 NPCs humans in the save and saves it, before the run; every copy then starts from
     that save (SOS-46). With --new-world SEED it builds a fresh world around n humans instead (SOS-55). Returns the saves
     and the human slots, slot 0 first."""
@@ -592,11 +592,12 @@ def make_humans(game, saves, n, run_dir, new_world=None, difficulty=None, which=
     if new_world is None:
         made = c.send("makehuman %s" % (which or "auto %d" % (n - 1)), "makehuman", 600)
     else:
-        made = c.send("newworld %d auto %d%s" % (new_world, n, " " + difficulty if difficulty else ""), "newworld", 900)
+        made = c.send("newworld %d %s%s" % (new_world, "at " + at if at else "auto %d" % n,
+                                            " " + difficulty if difficulty else ""), "newworld", 900)
         log("new world from seed %d: humans at %s" % (new_world, made["locations"]))
         for r in made["routes"]:
-            log("route between humans %d and %d, %.1f tiles apart: %s" % (r["a"], r["b"], r["tiles"],
-                                                                        "found" if r["ok"] else "NONE"))
+            log("route between humans %d and %d, %.1f tiles apart: %s, %.1f tiles walked" % (
+                r["a"], r["b"], r["tiles"], "found" if r["ok"] else "NONE", r["walked"]))
         if not all(r["ok"] for r in made["routes"]):
             fail("--new-world: two humans 6-15 tiles apart have no route (mod spec 5)")
     c.send("savegame humans.save", "savegame", 600)
@@ -822,6 +823,8 @@ def main():
     ap.add_argument("--new-world", type=int, default=None,
                     help="with --humans N: copy 1 builds a fresh world from this terrain seed around N humans (SOS-55,"
                          " Engine.buildWorld) instead of turning NPCs into humans; every copy then loads it")
+    ap.add_argument("--new-world-at", default=None,
+                    help="with --new-world: 'x,y;x,y;...', the humans' tiles, such as a playtest's (SOS-122)")
     ap.add_argument("--humans-saves", default="",
                     help="with --humans N: 'A,B,...', one save per copy from your saves folder, each already holding the"
                          " humans in slots 0 to N-1 (for example each copy's beforebattle.save): copy k resumes save k"
@@ -1007,7 +1010,8 @@ def main():
     if humans_saves:
         human_slots = list(range(args.humans))  # each copy resumes its own game, as the mod's campaign resume does
     elif args.humans:
-        saves, human_slots = make_humans(game, saves, args.humans, run_dir, args.new_world, args.difficulty, args.make_humans)
+        saves, human_slots = make_humans(game, saves, args.humans, run_dir, args.new_world, args.difficulty, args.make_humans,
+                                         args.new_world_at)
 
     if args.remote and (not REMOTE or not 1 < args.remote <= args.copies):
         fail("--remote needs SOSDET_RIG_REMOTE=user@host and a copy other than copy 1 (the host)")
