@@ -110,6 +110,11 @@ Probes for a player. Each notes what it reads between steps and changes nothing:
 - `wrelations [npc slot]`: the NPC's king, and its stance, stored opinion entries, dealings, opinion and trust toward each human.
 - `wwar`: each human's potential enemies as the next war timer reads them, with their trust, and the war timer.
 - `wevents`: each human's war timer and warner, rebellion timer and realm cursor, raid and raid timer.
+- `wroutes`: the capitals, and between every two humans the tiles apart, the path armies walk, and whether the market's walk reaches.
+- `wstock N`: NPC N's goods, rates and total rates, and every recipe's boost for it.
+- `wmap X1 Y1 X2 Y2`: a map of those tiles: land, roads, the path network.
+- `wfired`: how often each scripted event has fired in this city.
+- `wconv`: the first NPC's king's religion weights, read live and as the world part reads them: only the first may differ per PC (SOS-121).
 - `wsprite <army>`: the call the army's sprite makes each frame it is drawn (`WPath.moving`), on this copy only. Rig copies don't draw the world map, so a UI call that writes world state shows only with this probe (PT3).
 
 World actions for several humans: `wpeace` makes the peace deal with the strongest NPC at war with this human, at the denari it asks. `wraiderpay` and `wallyhelp` answer this human's own raider. `wbesiegenear` skips settlements of other humans. `wsiege` notes each human capital's siege (its start, the days to the assault, Storm's refusal, and whether a goods deal could go) and this human's sally refusal; `sally` sallies this human out of its besieged capital, and `sallyother` does so as soon as a world prompt asking another human is open, such as the besieger's siege window (SOS-92). `siegewait <slot>` makes the siege of that human's capital old enough that its wait has passed, at its step on every copy (test tooling), and `wassault` notes the assault running and the last one over (SOS-92 B).

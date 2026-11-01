@@ -2,16 +2,20 @@ package sosdet.game;
 
 import java.nio.BufferOverflowException;
 import java.util.Locale;
+import java.util.Map;
+import java.util.TreeMap;
 
 import game.GAME;
 import game.battle.div.Div;
 import game.battle.setting.DivSettings;
+import game.boosting.Booster;
 import game.faction.FACTIONS;
 import game.faction.Faction;
 import game.faction.diplomacy.DIP;
 import game.faction.npc.FactionNPC;
 import game.faction.npc.stockpile.NPCRes;
 import game.faction.player.Player;
+import game.faction.royalty.Royalty;
 import game.raiding.Raider;
 import game.time.TIME;
 import init.trade.TR;
@@ -19,6 +23,8 @@ import init.trade.TRADABLE;
 import settlement.entity.ENTITY;
 import settlement.entity.humanoid.Humanoid;
 import settlement.main.SETT;
+import settlement.recipe.Recipe;
+import settlement.stats.Induvidual;
 import settlement.stats.STATS;
 import snake2d.util.sets.LIST;
 import sosdet.Engine;
@@ -31,6 +37,8 @@ import world.entity.WEntity;
 import world.army.AD;
 import world.entity.army.WArmy;
 import world.map.regions.Region;
+import world.region.RD;
+import world.region.pop.RDRace;
 
 /**
  * The battle state for the state hash (hook B13), read through the game's public members. Soldiers and other
@@ -127,7 +135,7 @@ public final class GameHash implements StateSource {
      * faction's credits, overlord and stance with every other (war, peace, pact, ...), and each human's name, ruler name
      * and banner (SOS-78); every NPC king's opinion of
      * every human but slot 0's (SOS-46 M3); every raider's power, defeat and
-     * raids, and the raider now raiding (and each other human's, with its war and rebellion timers: SOS-46 M4); the recipes' NPC production boosts and every NPC's goods and production rates (SOS-93); the calendar. In own-city mode the humans' credits are their cities' and are
+     * raids, and the raider now raiding (and each other human's, with its war and rebellion timers: SOS-46 M4); the recipes' NPC production boosts and every NPC's goods and production rates (SOS-93); every region's people by race and every NPC court's people (SOS-121); the calendar. In own-city mode the humans' credits are their cities' and are
      * left out (ADR 0005, ADR 0004).
      * Public for the rig's per-step log of a follower run.
      */
@@ -216,7 +224,90 @@ public final class GameHash implements StateSource {
         h = part(w, 7, GameSieges.hash(GameTariffs.hash(GameDeals.hash(h)))); // the tariffs and sieges with the deals: between humans
         h = part(w, 8, Engine.active() ? GameWorldLoad.hashFboosts(h) : h); // a world before its session: a load's draws, each copy's
         h = part(w, 9, npcStocks(h));
-        return part(w, 10, HashLog.mix(h, Double.doubleToLongBits(TIME.currentSecond())));
+        h = part(w, 10, regionPopulations(h));
+        h = part(w, 11, npcCourts(h));
+        return part(w, 12, HashLog.mix(h, Double.doubleToLongBits(TIME.currentSecond())));
+    }
+
+    /**
+     * Every region's people by race. An NPC's rates and workforce are made from its capital's (SOS-121): the playtest of
+     * 2026-11-01 saw only the rates, on one PC.
+     */
+    private static long regionPopulations(long h) {
+        LIST<Region> regions = WORLD.REGIONS().all();
+        for (int i = 0; i < regions.size(); i++) {
+            h = regionPopulation(h, regions.get(i));
+        }
+        return h;
+    }
+
+    private static long regionPopulation(long h, Region reg) {
+        LIST<RDRace> races = RD.RACES().all;
+        for (int k = 0; k < races.size(); k++) {
+            h = HashLog.mix(h, races.get(k).pop.get(reg));
+        }
+        return h;
+    }
+
+    /** Every NPC's king and heirs. A king's religion feeds the NPC's rates (SOS-121): a new heir's showed only as they took the throne. */
+    private static long npcCourts(long h) {
+        LIST<FactionNPC> npcs = FACTIONS.NPCs();
+        for (int i = 0; i < npcs.size(); i++) {
+            h = npcCourt(h, npcs.get(i));
+        }
+        return h;
+    }
+
+    private static long npcCourt(long h, FactionNPC f) {
+        LIST<Royalty> all = f.court().all();
+        h = HashLog.mix(h, all.size());
+        for (int k = 0; k < all.size(); k++) {
+            Induvidual person = all.get(k).induvidual;
+            h = HashLog.mix(h, person.race().index());
+            h = HashLog.mix(h, STATS.RELIGION().getter.get(person).religion.index());
+            h = HashLog.mix(h, STATS.POP().age.DAYS.get(person));
+        }
+        return h;
+    }
+
+    /** What each NPC's rates are made of, and every active region's people: two PCs' reports then name the input (SOS-121). */
+    private static String describeNpcInputs() {
+        StringBuilder b = new StringBuilder();
+        LIST<FactionNPC> npcs = FACTIONS.NPCs();
+        LIST<Recipe> recipes = SETT.RECIPES().all();
+        for (int i = 0; i < npcs.size(); i++) {
+            FactionNPC f = npcs.get(i);
+            Map<String, Long> boosts = new TreeMap<>();
+            for (int k = 0; k < recipes.size(); k++) {
+                LIST<Booster> all = recipes.get(k).bo.all();
+                for (int n = 0; n < all.size(); n++) {
+                    Booster o = all.get(n);
+                    long old = boosts.getOrDefault(o.getClass().getName(), HashLog.start());
+                    boosts.put(o.getClass().getName(), HashLog.mix(old, Double.doubleToLongBits(o.get(f))));
+                }
+            }
+            Region capital = f.capitolRegion();
+            b.append(String.format(Locale.ROOT, "  npc inputs %d: workforce %s, capital %s, people %016x, court %016x, boosts", f.index(),
+                    f.stockpile.workforce(), capital == null ? "none" : capital.index(),
+                    capital == null ? 0 : regionPopulation(HashLog.start(), capital), npcCourt(HashLog.start(), f)));
+            for (Map.Entry<String, Long> e : boosts.entrySet()) {
+                b.append(String.format(Locale.ROOT, " %s %016x", e.getKey().substring(e.getKey().lastIndexOf('.') + 1), e.getValue()));
+            }
+            b.append(System.lineSeparator());
+        }
+        LIST<Region> regions = WORLD.REGIONS().all();
+        int shown = 0;
+        for (int i = 0; i < regions.size(); i++) {
+            Region reg = regions.get(i);
+            if (!reg.active()) {
+                continue;
+            }
+            if (shown++ % 12 == 0) {
+                b.append(shown == 1 ? "  region people:" : String.format(Locale.ROOT, "%n  region people:"));
+            }
+            b.append(String.format(Locale.ROOT, " %d=%04x", reg.index(), regionPopulation(HashLog.start(), reg) & 0xffff));
+        }
+        return b.append(System.lineSeparator()).toString();
     }
 
     /** Each NPC's goods, rates and total rates hashed apart: two PCs' reports then name the NPC and the value. */
@@ -291,7 +382,7 @@ public final class GameHash implements StateSource {
         static final int ARMY_FIELDS = 6;
         static final String[] PARTS = {"armies", "entities", "region owners", "factions and stances",
             "NPC relations per human", "raiders", "events per human", "deals and tariffs between humans",
-            "NPC production boosts", "NPC stocks", "calendar"};
+            "NPC production boosts", "NPC stocks", "region populations", "NPC courts", "calendar"};
         final long[] parts = new long[PARTS.length];
         final int[] army;
         final long[] armyHash;
@@ -416,7 +507,7 @@ public final class GameHash implements StateSource {
     public String describeWorld(long step) {
         for (int slot = 0; kept != null && slot < KEPT; slot++) {
             if (keptCount > slot && keptStep[slot] == step && world[slot] != null) {
-                return world[slot].describe() + GameRelations.describe() + describeNpcStocks(); // the opinions and stocks now, not at the step
+                return world[slot].describe() + GameRelations.describe() + describeNpcStocks() + describeNpcInputs(); // the opinions and stocks now, not at the step
             }
         }
         return "  (not kept)" + System.lineSeparator();
