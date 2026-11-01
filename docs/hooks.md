@@ -257,6 +257,7 @@ With no engine session a hook gives the game's own behaviour. The known exceptio
 | `99-game-build` | SOS-126 | `init/MainProcess.java` | `GameBuild.check` | The launcher compares the major version only, and any patched class can misbehave on another build, so the check runs before the game starts. A script runs too late: the patched `snake2d/CORE` is already in use by then. | SOS-126 |
 | `98-world-fixes` | SOS-129 | `world/region/RDDistance.java` | `Hooks.fixedSteps` | `capitolDist` caches a path and never drops it, so a PC that loads the whole game and one that keeps its world read different values after a capital moves. In a session each value holds for the two capitals it was measured between. No save holds it, and no reflection can key a cache. | SOS-129 |
 | `98-world-fixes` | SOS-130 | `world/battle/Rnd.java` | `Hooks.fixedSteps` | The table conquests draw from is never saved, so it differs between PCs after a load. In a session `inc` draws straight from `RND`: the same number of draws, with no table. | SOS-130 |
+| `96-cmd-world` | batch 4 | `view/world/ui/faction/Court.java` | none | The window is built once, before the humans are set, and its emissary rows kept that Player's `EmiTypeRoy`. On any other human's PC a click found no such kind in `Diplomacy.emissaries` and crashed, and the rows showed the wrong human's numbers. The rows now look their kind up in the human playing now. | batch 4 |
 
 ## Hook points without a patch
 
