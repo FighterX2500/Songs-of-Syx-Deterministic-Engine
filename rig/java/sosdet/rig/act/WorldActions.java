@@ -220,6 +220,10 @@ public final class WorldActions {
             Rig.later(() -> Rig.note(rollEvent(key)));
             return true;
         }
+        case "wstale": // wstale: moves an NPC's capital and fills the battle table for a moment, and notes what reads
+            // them (SOS-129, SOS-130); everything goes back, so copies stay the same
+            Rig.later(() -> Rig.note(staleProbe()));
+            return true;
         case "wconv": // wconv: notes an NPC king's religion weights read live and as the world part reads them (SOS-121)
             Rig.later(() -> Rig.note(conversionWeights()));
             return true;
@@ -1460,6 +1464,52 @@ public final class WorldActions {
             throw new IllegalStateException("SOSDET rig: wconv needs Engine.session, Session.part", e);
         }
         return "wconv live" + live + " world" + world;
+    }
+
+    /** Whether a cached distance follows a moved capital, and whether the battle table reaches a battle's draw. */
+    private static String staleProbe() {
+        FactionNPC f = null;
+        for (int i = 0; i < FACTIONS.NPCs().size() && f == null; i++) {
+            FactionNPC n = FACTIONS.NPCs().get(i);
+            if (n.isActive() && n.realm().regions() >= 2) {
+                f = n;
+            }
+        }
+        if (f == null) {
+            return "wstale: no NPC with two regions";
+        }
+        try {
+            java.lang.reflect.Field capitol = world.region.Realm.class.getDeclaredField("capitolI");
+            capitol.setAccessible(true);
+            short real = capitol.getShort(f.realm());
+            Region other = f.realm().region(0) == f.capitolRegion() ? f.realm().region(1) : f.realm().region(0);
+            int before = RD.DIST().capitolDist(f);
+            capitol.setShort(f.realm(), (short) other.index());
+            int moved = RD.DIST().capitolDist(f);
+            snake2d.PathTile path = WORLD.PATH().path(FACTIONS.player().cx(), FACTIONS.player().cy(), f.cx(), f.cy(),
+                    world.map.pathing.WRegFinder.Treaty.DUMMY);
+            int truth = path == null ? 0 : (int) path.getValue();
+            capitol.setShort(f.realm(), real);
+            Class<?> rnd = Class.forName("world.battle.Rnd");
+            java.lang.reflect.Field table = rnd.getDeclaredField("rnds");
+            java.lang.reflect.Field at = rnd.getDeclaredField("ri");
+            table.setAccessible(true);
+            at.setAccessible(true);
+            int[] rnds = (int[]) table.get(null);
+            int[] kept = rnds.clone();
+            int keptAt = at.getInt(null);
+            java.util.Arrays.fill(rnds, 7654321);
+            at.setInt(null, 0);
+            java.lang.reflect.Method draw = rnd.getDeclaredMethod("i");
+            draw.setAccessible(true);
+            int drawn = (Integer) draw.invoke(null);
+            System.arraycopy(kept, 0, rnds, 0, rnds.length);
+            at.setInt(null, keptAt);
+            return "wstale " + f.name + " dist " + before + " after the move " + moved + " truth " + truth
+                    + "; battle draw " + (drawn == 7654321 ? "came from the table" : "did not use the table");
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException("SOSDET rig: wstale needs Realm.capitolI, Rnd.rnds, ri and i", e);
+        }
     }
 
     private static String rollEvent(String key) {
