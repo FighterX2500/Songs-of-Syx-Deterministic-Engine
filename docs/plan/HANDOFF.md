@@ -53,7 +53,6 @@ The project's handoff, for both repositories, is `C:\ClaudeFolder\SOS\docs\plan\
 
 **Still open in the engine:**
 - Changing host during a session: requirements §3 asks for it, and `Engine.aiHost` and `aiPeer` refuse it after step 0.
-- No game build check at runtime: only the build pins the game jar. A different engine build isn't detected at the lobby.
 - SOS-32's leftover owner checks (the card is Done), from the owner's 30-minute session: camera and clicks (render and UI state; the C1 split when the owner moved the camera is the biggest risk), own-city followers from older saves (Mogus-40 and Mogus-20) under the host's Mogus-72 world, and draw tracing on (mean step 3.9 to 6.5 ms). Read-only audits first, then a fix plan for the owner's approval, then the session.
 - The V01B rig split at step 154,365.
 - The resync-with-open-prompt gap (plan 0002, stage D).

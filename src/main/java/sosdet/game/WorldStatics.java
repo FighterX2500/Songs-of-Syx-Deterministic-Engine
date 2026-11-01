@@ -1,7 +1,6 @@
 package sosdet.game;
 
 import java.lang.reflect.Field;
-import java.util.Arrays;
 
 /**
  * The world's and the city's static state that vanilla never clears between games in one process, reset at every load in a session
@@ -9,8 +8,6 @@ import java.util.Arrays;
  * reflected member each (AGENTS.md "Adapter Boundary"); resolved when a load in a session first needs them.
  *
  * <ul>
- * <li>{@code world.battle.Rnd}: the random table the world's battle results draw from (conquests). Its {@code clear}
- * never runs, so a fresh process starts from zeros and a warm one from its last game's draws. Back to zeros.</li>
  * <li>{@code RDMilitaryGar.WDivsCapitol.supplies} and {@code upI}: the capital garrison's supply sums, which vanilla
  * adds to at every count and never clears, and the step they were last counted at. Dropped (the next count starts
  * from zeros) and back to -1.</li>
@@ -26,9 +23,6 @@ import java.util.Arrays;
 public final class WorldStatics {
 
     private static final String VERSION = " (SOSDET supports Songs of Syx V71, build 71.44)";
-    private static final Class<?> RND = className("world.battle.Rnd");
-    private static final Field RNDS = field(RND, "rnds");
-    private static final Field RI = field(RND, "ri");
     private static final Class<?> CAPITOL = className("world.region.RDMilitaryGar$WDivsCapitol");
     private static final Field SUPPLIES = field(CAPITOL, "supplies");
     private static final Field SUPPLIES_UP = field(CAPITOL, "upI");
@@ -48,8 +42,6 @@ public final class WorldStatics {
             if (CLOCK.get(null) == null) {
                 return; // no game was built in this process: everything holds its start value
             }
-            Arrays.fill((int[]) RNDS.get(null), 0);
-            RI.setInt(null, 0);
             SUPPLIES.set(null, null);
             SUPPLIES_UP.setInt(null, -1);
             RACE_TARGET_UP.setInt(null, -1);

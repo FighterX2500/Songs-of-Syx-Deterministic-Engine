@@ -7,6 +7,7 @@ Most hooks call `sosdet.Hooks`, `sosdet.Cosmetic`, `sosdet.game.AiHooks` or a cl
 With no engine session a hook gives the game's own behaviour. The known exceptions, which apply in plain single-player too:
 - the fixed tables in `50-fixed-tables`, filled at class load (see that row);
 - the path heap in `36-path-heap`: the same paths, faster;
+- `MainProcess.main` calls `GameBuild.check` (`99-game-build`), which stops the game on any build but 71.44;
 - two game fixes: `WDivStored`'s load clears its stats totals (`14-report-reads`), and a held `GSliderInt` button calls `inc` only for a non-zero amount (`96-cmd-employment`);
 - `ResolverPlayer.Manual.afterBattle` counts each side through `sosdetCount` (`15-humans`), so single-player captive counts differ slightly from vanilla;
 - every game holds 15 spare Players, and every save seven extra sections: `SOSDET_HUMANS`, `SOSDET_CITY_DIVS`, `SOSDET_RELATIONS`, `SOSDET_EVENTS`, `SOSDET_DEALS`, `SOSDET_TARIFFS` and `SOSDET_SIEGES` (`GameHumans`, from the `FACTIONS` constructor).
@@ -251,6 +252,10 @@ With no engine session a hook gives the game's own behaviour. The known exceptio
 | `98-world-fixes` | SOS-119 | `game/faction/diplomacy/DipWarPlayer.java` | none | `init` loops over `FACTIONS.NPCs()` by index. The list has one shared iterator, and a cold cache inside `validEnemy`, cold only on a PC that just loaded, cut the for-each short, so that PC's war timers ran at half the rate. The private `init` can't be reached from outside | SOS-119 |
 | `98-world-fixes` | SOS-120 | `world/region/RDDistance.java` | `HumanStart.inRouteRange` | `tradePartners` adds each human 6 to 15 tiles from the trader that it has a trade stance with and didn't reach, walked with `Treaty.DUMMY` as caravans walk. Mod spec §5 guarantees those two a connection they can trade along, and the human walk stops at unclaimed land and at NPC land without passage. No API or adapter reaches the method the market reads. |
 | `99-allies` | SOS-118 | `game/boosting/tmp/TBooster.java`, `game/battle/state/BattleStateGenArmy.java` | `reportOwner`, `boostFaction`, `battleGroups`, `battleGroup`, `battleGroupOffset` | A temporary booster reads the player's values for every soldier, and the deployment puts one line per side: allied armies stand apart, 20 tiles between them | SOS-118 |
+| `98-world-fixes` | SOS-122 | `world/overlay/ERegion.java` | `HumanStart.inRouteRange`, `Hooks.humanSlots` | Hovering a capital draws arrows to its neighbour regions only, and never across a third region, so a human's direct link that crosses NPC land stayed invisible. `renderPath` now also draws the path to each human in range. Nothing but the render reads it | SOS-122 |
+| `99-game-build` | SOS-126 | `init/MainProcess.java` | `GameBuild.check` | The launcher compares the major version only, and any patched class can misbehave on another build, so the check runs before the game starts. A script runs too late: the patched `snake2d/CORE` is already in use by then. | SOS-126 |
+| `98-world-fixes` | SOS-129 | `world/region/RDDistance.java` | `Hooks.fixedSteps` | `capitolDist` caches a path and never drops it, so a PC that loads the whole game and one that keeps its world read different values after a capital moves. In a session each value holds for the two capitals it was measured between. No save holds it, and no reflection can key a cache. | SOS-129 |
+| `98-world-fixes` | SOS-130 | `world/battle/Rnd.java` | `Hooks.fixedSteps` | The table conquests draw from is never saved, so it differs between PCs after a load. In a session `inc` draws straight from `RND`: the same number of draws, with no table. | SOS-130 |
 
 ## Hook points without a patch
 

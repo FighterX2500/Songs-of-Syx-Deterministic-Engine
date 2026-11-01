@@ -8,6 +8,8 @@ An audit of SOSDET at a1786ab and SOSGSGMP at eddbc59, before the Steam Workshop
 
 ## Before a public release
 
+All five are fixed: SOS-126 to SOS-130, PR batch-3-release-fixes in both repositories. Two went further than the table says: `capitolDist` keys each value by the two capitals, so no load can leave it stale, and `Rnd` keeps no table in a session, so there is nothing to reset.
+
 | # | Finding | Where | What goes wrong | Fix |
 | --- | --- | --- | --- | --- |
 | 1 | No game build check at run time | `build.gradle.kts:46-58` checks at build time only; `ModInfo.bestVersion` compares the major version only | A 71.x game update mixes patched 71.44 classes into the new game, in single player too | Compare `VERSION` to 71.44 at the earliest entry point, and stop with a message |

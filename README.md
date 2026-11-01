@@ -19,7 +19,7 @@ What it does today:
 
 What it doesn't do yet:
 
-- It runs only on V71, build 71.44. The build checks that; the mod doesn't check at start-up, so a game update can break it.
+- It runs only on V71, build 71.44. On any other build it stops the game at start-up and says so.
 - The API may still change, and nothing about it is promised.
 - The host can't change during a session.
 - The scenario suite's recordings need making again. Until then `python rig\suite.py` checks only the own-city world and reports FAIL.
@@ -52,7 +52,7 @@ You need:
 - Windows;
 - a JDK 21 or newer (`JAVA_HOME` set), for example Eclipse Temurin;
 - `git` on the `PATH` (the build applies patches with `git apply`);
-- Songs of Syx V71, build 71.44. The build refuses other builds; the mod itself doesn't check them.
+- Songs of Syx V71, build 71.44. The build refuses other builds, and the mod refuses them at start-up.
 
 Set `SOS_GAME_DIR` to the game folder, the one that holds `SongsOfSyx.jar`, then build:
 
