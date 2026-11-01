@@ -6,13 +6,13 @@ SOSGSGMP is the one full user. Its calls are in `sosgsgmp.game.EnginePlay` and `
 
 ## No stability promise
 
-SOSDET 0.1 promises no API stability. Methods, formats and behaviour can change in any release, and there is no API version.
+SOSDET V1 Beta promises no API stability. Methods, formats and behaviour can change in any release, and there is no API version.
 
-The formats that cross the API carry version numbers, and most refuse another version. Nothing else checks that two PCs match:
-- **Game build:** the engine has no check at runtime. Only SOSDET's own build pins the game jar. Nothing in the engine stops it running on another build.
-- **Engine build:** nothing compares it between PCs, and SOSGSGMP's lobby doesn't detect a different one. `Sosdet.version()` gives the release number, which doesn't change with each build.
+The formats that cross the API carry version numbers, and most refuse another version. Beyond that:
+- **Game build:** SOSDET stops the game at start-up on any build but 71.44 (`sosdet.GameBuild`).
+- **Engine build:** nothing in the engine compares it between PCs. `Sosdet.version()` gives the release number, which doesn't change with each build. SOSGSGMP hashes the jar and compares the hash in its lobby (`menu.MpBuilds`).
 
-If your mod needs these checks, it has to make them itself.
+If your mod needs to compare builds between PCs, it has to do that itself.
 
 ## Compiling against the jar
 
