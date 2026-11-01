@@ -2,29 +2,33 @@
 
 Deterministic simulation engine for Songs of Syx V71 (build 71.44). The same save, seed, orders, players' commands and AI log give a bit-identical simulation on every PC. The SoS GSG MP multiplayer mod ([SOSGSGMP](https://github.com/FighterX2500/SOSGSGMP)) uses it to run battles, cities and the world map in lockstep. The mod's name in the game's launcher stays SOSDET.
 
-**Status:**
-- **Engine core:** fixed step, random streams, and battle jobs in the step (SOS-27).
-- **AI general:** runs on the host, with its AI log (SOS-28).
-- **State hash:** taken every 30 steps and compared with the other PCs'; the first difference gives a desync report (SOS-29).
-- **Resync:** a battle can be saved at a step and reloaded there by every PC to recover from a desync (SOS-30).
-- **Players' battle orders and speed changes:** in the host's log, and the step length follows the agreed speed. The owner's 13-minute play session on the Mogus-72 city invasion stayed identical across three copies (SOS-32 M1).
-- **City and world lockstep:** the city's and the world map's player actions are commands, and the world runs in the step (SOS-34, SOS-35, [plan 0002](docs/plan/0002-city-and-world-lockstep.md)).
-- **City↔world link:** the world never reads a live city. It reads city reports, and changes a city only through transactions applied exactly once, so each PC can run its own city under one lockstep world. A PC whose world splits reloads the host's world and keeps its city, and the slowest PC caps the pace (SOS-38, plan 0002 stage E).
-- **Several humans:** up to 16 human factions share one world map, each a player in its own slot. Each PC runs only its own human's city; the world runs each human's part with that human as the player, and keeps NPC relations, event timers and raids per human. Three LLM players stayed identical for an hour on two PCs (SOS-46, [ADR 0004](docs/decisions/0004-several-humans.md), [plan 0004](docs/plan/0004-several-humans.md)). A world resync recovers a desync with several humans (SOS-52).
-- **World setup for several humans:** `Engine.buildWorld` builds a new world around every human's picked location; one PC builds it and every PC loads its save (SOS-55, [plan 0005](docs/plan/0005-add-human.md)).
-- **Desync hold:** at a desync every PC holds at the same step, and the host chooses a world resync or saving and leaving (SOS-53).
-- **Own-city battles:** with own cities, the battle PC generates a world battle and sends its battle save; every PC loads it at the same step and returns to its own city after it (SOS-61, [plan 0006](docs/plan/0006-own-city-battles.md) M1).
-- **Removing a human:** a human whose PC is gone is removed at the same step on every PC: its regions go free, its armies disband, and its slot retires (SOS-66, [plan 0007](docs/plan/0007-remove-human.md)).
-- **Between humans:** deals (treaties, money, goods, regions), vassalage with a tribute rate, trade at peace, the market with each human's tariffs, and war, all as commands applied at one step (SOS-72 to SOS-74, SOS-77; plans [0009](docs/plan/0009-human-deals.md) to [0012](docs/plan/0012-war-between-humans.md)).
-- **Battles between two humans:** both humans are asked, each commands their own army through the commanders table, and the battle runs on every PC (SOS-83, [plan 0012](docs/plan/0012-war-between-humans.md)).
-- **City viewing:** a PC runs another human's city in lockstep with its owner's, its own city frozen until the view ends (SOS-82, [plan 0013](docs/plan/0013-city-viewing.md)).
-- **Sieges of a human's capital:** the siege, its wait before an assault and the sally at any time (SOS-92 step A, [plan 0014](docs/plan/0014-sieges.md)); the assault itself is in progress.
-- **Pace at every speed:** the lockstep windows stay half a second of real time at every speed (SOS-90), and the governor tells a slow PC from a slow link (SOS-94).
-- **Scenario suite:** `python rig\suite.py` runs every rig scenario in one command, before each pull request (SOS-31, [rig/README.md](rig/README.md)).
-- **V0.1:** [docs/release/V0.1.md](docs/release/V0.1.md): what works, what is blocked, and how to start the owner's session. `gradlew.bat releaseZip` packs it into `build\release\SOSDET-0.1.0.zip`.
+## Status
 
-Until something starts an engine session, the game plays as vanilla.
+SOSDET runs one Songs of Syx game in lockstep on several PCs. It has no network code: it hands out bytes and takes them in, and a mod carries them. [SOSGSGMP](https://github.com/FighterX2500/SOSGSGMP) is its first user.
 
+What it does today:
+
+- **Lockstep:** fixed steps, seeded random streams, and path finding on worker threads inside the step. 179 player actions are commands that every PC applies at the same step. The AI general runs on the host and logs what it does.
+- **Several humans:** up to 16 share one world, tested with 3. Each PC runs its own human's city. The world reads city reports and changes a city only through transactions applied exactly once.
+- **Between humans:** deals, tariffs, vassalage and war.
+- **Battles:** humans fight on the battle map, several on one side if they are allies. A battle against NPCs can run on its human's PC alone while the world goes on, and others can watch it.
+- **Sieges:** a human's capital can be besieged, sallied from and stormed after a wait. The attacker then chooses sack, vassalage or elimination.
+- **Viewing:** a PC can run another human's city in lockstep with its owner's.
+- **Desyncs:** a state hash every 30 steps finds the first difference. The host can hold every PC and resync the world or a battle. The engine never resyncs on its own.
+- **Pace:** the slowest PC caps the speed. A human who leaves is removed at the same step on every PC.
+
+What it doesn't do yet:
+
+- It runs only on V71, build 71.44. The build checks that; the mod doesn't check at start-up, so a game update can break it.
+- The API may still change, and nothing about it is promised.
+- The host can't change during a session.
+- The scenario suite's recordings need making again. Until then `python rig\suite.py` checks only the own-city world and reports FAIL.
+
+Until something starts an engine session the game simulates as vanilla, with a few exceptions listed in [docs/hooks.md](docs/hooks.md): every game holds 15 spare Players and every save seven extra sections, and captive counts in manual battles differ slightly.
+
+## Documentation
+
+- **Building on the engine:** [docs/api.md](docs/api.md)
 - **Start here, especially as an AI agent:** [docs/architecture.md](docs/architecture.md): how a session runs, the code map, every known desync cause and where it is fixed, and the pitfalls
 - What it must do: [docs/requirements.md](docs/requirements.md)
 - Coding rules: [AGENTS.md](AGENTS.md); determinism rules: [.claude/rules/determinism.md](.claude/rules/determinism.md)
@@ -48,7 +52,7 @@ You need:
 - Windows;
 - a JDK 21 or newer (`JAVA_HOME` set), for example Eclipse Temurin;
 - `git` on the `PATH` (the build applies patches with `git apply`);
-- Songs of Syx V71, build 71.44. Other builds are refused.
+- Songs of Syx V71, build 71.44. The build refuses other builds; the mod itself doesn't check them.
 
 Set `SOS_GAME_DIR` to the game folder, the one that holds `SongsOfSyx.jar`, then build:
 
@@ -83,5 +87,6 @@ The first build downloads Gradle, ECJ 3.40.0 and JUnit. The result is the mod fo
 | `patches/` | The patch set: changes to the game's own source |
 | `src/test/fixtures/patches/` | Patch sets for testing the build (`-Psosdet.patches=<dir>`) |
 | `docs/` | Requirements, decisions, hooks, spike reports |
+| `tools/` | The patch tools |
 | `rig/` | The test rig: a second mod (SOSDET-rig) and its runner, for determinism runs ([rig/README.md](rig/README.md)); never in a release |
 | `spikes/` | Throwaway experiments; never part of the build |

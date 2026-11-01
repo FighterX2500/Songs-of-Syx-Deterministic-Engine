@@ -1,4 +1,4 @@
-# Engine notes (updated 2026-10-30, after batch 1 of the playtest fixes)
+# Engine notes (updated 2026-11-01, main at PR #73)
 
 The project's handoff, for both repositories, is `C:\ClaudeFolder\SOS\docs\plan\HANDOFF.md`. Read that first. This file keeps the engine's own notes: its reading list, where it stands, how to work here and the owner's decisions about it.
 
@@ -11,7 +11,7 @@ The project's handoff, for both repositories, is `C:\ClaudeFolder\SOS\docs\plan\
 5. ADRs `docs/decisions/0002-player-commands.md` (accepted) and `docs/decisions/0003-room-planning.md` (accepted).
 6. ADR `docs/decisions/0004-several-humans.md` (accepted) and `docs/plan/0004-several-humans.md`: several humans on one world, its milestones, playtests and known gaps.
 7. `docs/plan/0005-add-human.md` (the world built around several humans at setup) and `docs/plan/0006-own-city-battles.md` (battles with own cities, its milestones).
-8. The plans of the mod's features, each recording the engine's half: `0007-remove-human.md` (SOS-66), `0008-siege-by-other-humans.md` (SOS-71), `0009-human-deals.md` (SOS-72), `0010-human-market.md` (SOS-77), `0011-regions-vassals.md` (SOS-73), `0012-war-between-humans.md` (SOS-74, SOS-83), `0013-city-viewing.md` (SOS-82) and `0014-sieges.md` (SOS-92).
+8. The plans of the mod's features, each recording the engine's half: `0007-remove-human.md` (SOS-66), `0008-siege-by-other-humans.md` (SOS-71), `0009-human-deals.md` (SOS-72), `0010-human-market.md` (SOS-77), `0011-regions-vassals.md` (SOS-73), `0012-war-between-humans.md` (SOS-74, SOS-83), `0013-city-viewing.md` (SOS-82), `0014-sieges.md` (SOS-92), `0016-local-battles.md` (SOS-93), `0017-watching-local-battles.md` (SOS-109) and `0018-several-humans-in-a-battle.md` (SOS-118).
 
 ## 2. Where things stand
 
@@ -27,7 +27,7 @@ The project's handoff, for both repositories, is `C:\ClaudeFolder\SOS\docs\plan\
 - SOS-38 (PR #19, 2026-10-24): stage E, the city↔world link, in full: the step parts, the city report, the transactions, own-city mode, the world resync from a world-only save, raiders in the world hash, and pacing by the slowest PC. Results: `docs/plan/notes/stage-e-smoke-tests.md`.
 - SOS-45 (PR #29): world-battle prompts hold only the battle's armies and answer themselves after 30 s.
 - SOS-31 (PR #30, 2026-10-25): the scenario suite as one local command, `rig\suite.py` (short about 6 minutes, full about 49). See `rig/README.md`.
-- SOS-46 (PR #31, 2026-10-25): several human factions on one world map ([ADR 0004](../decisions/0004-several-humans.md), [plan 0004](0004-several-humans.md)): up to 16 humans, each a `Player` in its own slot; the world part runs each human's world half as the current human; NPC relations, event timers and raids are kept per human. PT6 ran an hour (270,000 steps) identical on every copy. Gaps still in plan 0004's milestone notes: no message routing per human yet, `DIP.playerWarSecond` still one value.
+- SOS-46 (PR #31, 2026-10-25): several human factions on one world map ([ADR 0004](../decisions/0004-several-humans.md), [plan 0004](0004-several-humans.md)): up to 16 humans, each a `Player` in its own slot; the world part runs each human's world half as the current human; NPC relations, event timers and raids are kept per human. PT6 ran an hour (270,000 steps) identical on every copy. Gap still in plan 0004's milestone notes: `DIP.playerWarSecond` is still one value. Messages reach their own human's PC since SOS-89.
 - SOS-52 (PR #33): the world resync with several humans; every PC resets its armies' move remainders at the load.
 - SOS-53 (PR #34): the desync hold: every PC holds at the host's step, and the host chooses a resync or saving and leaving.
 - SOS-55 (PR #35): `addHuman`, built as `Engine.buildWorld`: the world built around several humans at setup (plan 0005).
@@ -44,12 +44,16 @@ The project's handoff, for both repositories, is `C:\ClaudeFolder\SOS\docs\plan\
 - SOS-87 to SOS-90 (PRs #55 to #59): the profile's banner, slider buttons, messages on their own player's PC, lockstep windows of half a second at every speed.
 - SOS-92 step A (PR #60, plan 0014): the siege of a human's capital, its wait and the sally. SOS-94 (PR #61): the governor tells a slow PC from a slow link (hash format 8).
 - Batch 1 of the 2026-10-29 playtest fixes (PR #62): SOS-97 (a view's held transactions), SOS-98 (the ruler name and the top bar's banner), SOS-99 (world news on every player), SOS-102 (Production Rate).
+- SOS-92 steps B to D (PRs #63, #69, #70): the assault on a human's capital, its outcomes, allied attackers and the attacker's terms. SOS-102 (PR #64): the unit tests run again.
+- SOS-106 (PR #66, plan 0015): the step profile and the path heap. SOS-93 (PR #67, plan 0016): battles against NPC armies on their human's PC. SOS-110 (PR #68): notices.
+- SOS-109 (PR #70, plan 0017): watching a local battle, with SOS-111 to SOS-114. Plan 0006 M3 (PR #70): a battle's resync, `Engine.battleResyncSave` and `battleResyncLoad`.
+- SOS-116 to SOS-119 (PR #71, plan 0018): several humans in one battle. SOS-120 (PR #72): setup, and market trade at 6 to 15 tiles. SOS-121 to SOS-125 (PR #73): batch 2 of the playtest fixes.
 
-**Open PRs:** #63, SOS-92 steps B and C in part (the assault on a human's capital); #64, SOS-102 (the unit tests run again).
+**Open PRs:** none on 2026-11-01.
 
 **Still open in the engine:**
-- Plan 0006 M3 (resync in a battle).
-- The rest of SOS-92 (sieges): the assault's end and outcomes, allied attackers.
+- Changing host during a session: requirements §3 asks for it, and `Engine.aiHost` and `aiPeer` refuse it after step 0.
+- No game build check at runtime: only the build pins the game jar. A different engine build isn't detected at the lobby.
 - SOS-32's leftover owner checks (the card is Done), from the owner's 30-minute session: camera and clicks (render and UI state; the C1 split when the owner moved the camera is the biggest risk), own-city followers from older saves (Mogus-40 and Mogus-20) under the host's Mogus-72 world, and draw tracing on (mean step 3.9 to 6.5 ms). Read-only audits first, then a fix plan for the owner's approval, then the session.
 - The V01B rig split at step 154,365.
 - The resync-with-open-prompt gap (plan 0002, stage D).

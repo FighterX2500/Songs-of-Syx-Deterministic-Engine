@@ -19,11 +19,11 @@ One other agent does the other part at the same time, in its own git worktree, s
   - `docs/hooks.md`;
   - `docs/commands.md`.
 - **Game source (read only):** `C:\ClaudeFolder\Songs of Syx\info\SongsOfSyx-sources`. `SOS_GAME_DIR` is set.
-- **Inventories** (in `C:\Users\FIGHTE~1\AppData\Local\Temp\claude\C--ClaudeFolder-SOS\e62a2a72-6f3e-4557-b653-9fdfcc04501d\scratchpad\`):
+- **Inventories** (in `<scratchpad>\`):
   - `competitor-determinism.md`, section "# World" (W1 to W4), especially the W3 table;
   - `competitor-commands.md` (the competing mod's survey of every entry point);
   - the competitor's source under `competitor\` (MIT; rewrite it to our design).
-- **Edits files for mkpatch:** keep them outside the worktree, in `C:\Users\FIGHTE~1\AppData\Local\Temp\claude\C--ClaudeFolder-SOS\cf30f6fd-466a-48ac-a39e-a16e2b6fa6f9\scratchpad\wave35\<part>\`.
+- **Edits files for mkpatch:** keep them outside the worktree, in `<scratchpad>\wave35\<part>\`.
 
 ## Context you need
 

@@ -21,6 +21,8 @@ Every PC that starts from the same save and seed (a battle, a city or the campai
 
 ## 3. What the mod can do through the API
 
+[docs/api.md](api.md) says how a mod calls it.
+
 - Read the current step, and set the last step the engine may run. The engine never runs past it, and runs nothing while paused.
 - Read how far another PC has got (`Engine.peerStep`: the last step its state hashes reached). The host caps its own last step at the slowest PC's step plus a lead the mod chooses (`Engine.pace`), so the slowest PC caps the speed (mod spec §4). With `Engine.followAgreedSpeed`, every PC's game speed follows the agreed speed, and the host's governor lowers that to what the slowest PC holds and raises it back toward the host player's speed, with a line on every PC's top bar (SOS-42). The rig's lead is `--pace-lead`, its governor `--govern`. Each PC measures its capacity, the steps a second it could run from its frames that didn't wait for another PC (`Engine.capacity`), and sends it with its hashes; the governor lowers the speed for a PC whose capacity is under it, and for the link only when waits take over a third of the time for 5 seconds, one step at a time (SOS-94).
 - Let a PC's player only watch (`Engine.watchOnly`): orders and commands clicked there are dropped before any log, so they change nothing on any PC (spec 0.12 watch-only viewing; SOS-15).
@@ -38,9 +40,12 @@ Every PC that starts from the same save and seed (a battle, a city or the campai
 - Hold every PC before a battle's Engage (`Engine.battleHold`, `battleGo`), so the mod can save the campaign before the battle (SOS-70; mod spec §11).
 - Deals between humans (SOS-72 to SOS-74, SOS-77): propose, answer and cancel a deal, set a tariff and declare war (`Engine.dealPropose`, `dealAnswer`, `dealCancel`, `setTariff`, `declareWar`), each with a refusal check the mod's window shows first; every one is a command applied at one step on every PC.
 - View another human's city (SOS-82, mod spec §10): the host's `Engine.viewBegin(viewer, owner)` and `viewEnd`; the owner's city goes out through `viewOut` and comes in through `viewIn`, and view hashes compare the two (`viewHashOut`, `viewHashIn`).
-- Sieges of a human's capital (SOS-92 step A, mod spec §9): when the siege began, the days to the assault (`Engine.besiegedSince`, `assaultInDays`) and the defender's sally (`Engine.sallyOut`, `sallyRefusal`).
+- Sieges of a human's capital (SOS-92, mod spec §9): when the siege began, the days to the assault (`Engine.besiegedSince`, `assaultInDays`), the defender's sally (`Engine.sallyOut`, `sallyRefusal`), the assault and its outcome (`Engine.assault`, `assaultOutcomeTake`), and the attacker's terms (`Engine.assaultTerms`, `assaultTermsRefusal`, `assaultPeopleInCity`).
+- Run a human's battle against NPC armies on that human's PC only (`Engine.localBattles`, `localBattle`; SOS-93, plan 0016), every PC's world running on. Another human can watch it (SOS-109, plan 0017).
+- Fight several humans in one battle, each commanding their own divisions (SOS-118, plan 0018).
+- Resync a battle on the battle map (`Engine.battleResyncSave`, `battleResyncLoad`; plan 0006 M3).
 - Read every human's money and goods transfers between steps, the same on every PC (`Engine.transfers`; SOS-81, the mod's playtest log).
-- Switch a PC from peer to host mid-battle: after a host change, the new host starts its own general (ADR 0003).
+- Switch a PC from peer to host mid-battle: after a host change, the new host starts its own general (ADR 0003). Not built: `Engine.aiHost` and `aiPeer` refuse a change after step 0.
 - With several humans (SOS-46): say which human slot is this PC's (`Engine.localHuman`) and which is each PC's (`Engine.pcHuman`), so each PC's commands act for its own human and its city's reports feed that human. `Engine.asHuman` reads the game as another human between steps only (for the rig's probes). Making a human is still setup through the adapter (`GameHumans.add`, the rig's `makehuman`); the `addHuman` call of [ADR 0004](decisions/0004-several-humans.md) is built as `Engine.buildWorld` (SOS-55, above).
 - Every data format crossing the API (orders, AI log entries, engine save data) carries a format version.
 
@@ -63,7 +68,7 @@ On the reference PC (Intel Core i5-11600K, 16 GB RAM; mod spec §13) unless a li
 
 ## 5. Verification
 
-- A scenario suite (save, seed, order log, AI log, expected hashes every N steps) replayed in several copies at different speeds; it runs as one local command, `python rig\suite.py` (SOS-31, [rig/README.md](../rig/README.md)). It has no scenario with several humans yet.
+- A scenario suite (save, seed, order log, AI log, expected hashes every N steps) replayed in several copies at different speeds; it runs as one local command, `python rig\suite.py` (SOS-31, [rig/README.md](../rig/README.md)). It has no scenario with several humans yet. Its recordings are older than the current formats: until they are made again only the own-city world is checked, and the suite's result is FAIL.
 
 ## 6. Open questions
 

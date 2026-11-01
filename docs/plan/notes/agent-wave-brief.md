@@ -11,7 +11,7 @@ You port one area of Songs of Syx V71.44's player actions to commands in SOSDET,
   - docs/decisions/0002-player-commands.md (the mechanism; it is the design you implement);
   - docs/commands.md (the coverage list, with your area's rows).
 - **Game source (read only):** C:\ClaudeFolder\Songs of Syx\info\SongsOfSyx-sources. `SOS_GAME_DIR` is set. Most files are CRLF, a few LF.
-- **The competing mod's survey:** C:\Users\FIGHTE~1\AppData\Local\Temp\claude\C--ClaudeFolder-SOS\e62a2a72-6f3e-4557-b653-9fdfcc04501d\scratchpad\competitor-commands.md. Its source is in the same folder under competitor\_cmd\ (for example syx-multiplayer/src/syxmp/agent/AutoSyncTable.java and sync/*.java). The survey has, for every entry point:
+- **The competing mod's survey:** `<scratchpad>\competitor-commands.md`, a session's scratch folder, not in this repository. Its source is in the same folder under competitor\_cmd\ (for example syx-multiplayer/src/syxmp/agent/AutoSyncTable.java and sync/*.java). The survey has, for every entry point:
   - the declaring class and method descriptor;
   - the UI classes that call it;
   - the menu-unsafe classes (§3.2);
@@ -51,7 +51,7 @@ For each player action:
    - **Feedback:** sounds, camera moves and opening windows happen only when `sosdet.Hooks.issuedHere()` is true while applying, or simply stay on the UI side if they happen before the call.
    - **No mutable static state** in your classes; constants only.
 4. **Write the hook** in a patch with the helper: `python tools/mkpatch.py 96-cmd-<area> <edits.py>`. Run `python tools/mkpatch.py` with no arguments, or read its docstring, for the format.
-   - Keep your edits files OUTSIDE the worktree, in C:\Users\FIGHTE~1\AppData\Local\Temp\claude\C--ClaudeFolder-SOS\e62a2a72-6f3e-4557-b653-9fdfcc04501d\scratchpad\wave\<area>\.
+   - Keep your edits files OUTSIDE the worktree, in `<scratchpad>\wave\<area>\`.
    - `FILES` lists every game file your patch covers (old and new); `EDITS` holds only the new edits.
    - Every hook line gets a comment `// SOSDET: ... (ADR 0002)`, as in the pilots.
    - **Files another patch owns:** each game file belongs to exactly one patch, and the build fails otherwise. Find a file's owner with `grep -l "^+++ b/<path>" patches/*.patch`. If another patch already changes a file you must hook, put your edit into THAT patch (mkpatch with that patch's name, its full FILES list and only your new edit), and say so in your report.
