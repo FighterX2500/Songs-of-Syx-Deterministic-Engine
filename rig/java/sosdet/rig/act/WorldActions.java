@@ -890,6 +890,33 @@ public final class WorldActions {
             });
             return true;
         }
+        case "wraidcapital": { // wraidcapital [men]: the raider whose army is nearest that size (600) invades this human's
+                               // capital at once, as vanilla's debug "RAIDER appear cap", on every copy (test tooling, SOS-143)
+            int men = a.length > 1 ? Integer.parseInt(a[1]) : 600;
+            Rig.later(() -> {
+                int i = sosdet.game.cmd.Events.raiderNearForTest(men);
+                Rig.note("raid of the capital asked: raider " + i + ", " + GAME.raiders().ALL().get(i).army.men + " men");
+                sosdet.game.cmd.Events.raidCapitalForTest(i);
+            });
+            return true;
+        }
+        case "wtech": // wtech: notes this human's tech points per currency (total, frozen, allocated, available) and each
+                      // source of the total with a value, read between steps (SOS-142)
+            Rig.later(() -> {
+                StringBuilder b = new StringBuilder("tech of slot ").append(FACTIONS.player().index());
+                for (game.faction.player.PTech.TechCurr c : FACTIONS.player().tech().currs()) {
+                    b.append("; ").append(c.cu.bo.key).append(" total ").append(c.total()).append(" frozen ").append(c.frozen())
+                            .append(" allocated ").append(c.allocated()).append(" available ").append(c.available()).append(" from");
+                    for (game.boosting.Booster s : c.cu.bo.all()) {
+                        double v = s.get(init.type.HCLASS_RACE.clP());
+                        if (v != (s.isMul ? 1 : 0)) {
+                            b.append(" [").append(s.info.name).append(s.isMul ? " x" : " +").append(v).append(']');
+                        }
+                    }
+                }
+                Rig.note(b.toString());
+            });
+            return true;
         case "wassaultend": { // wassaultend <held|taken|retreat>: the running assault's invasion ends so, on every copy (test tooling, SOS-92 D)
             int outcome = java.util.List.of("held", "taken", "retreat").indexOf(a[1]);
             if (outcome < 0) {

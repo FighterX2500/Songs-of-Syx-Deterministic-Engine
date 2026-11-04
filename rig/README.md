@@ -107,9 +107,12 @@ In `--cmds`, `k: <action>` is copy k's player's action, so each human acts for i
 
 `play <action>`, sent to a running copy (the LLM playtests send it): like `cmd`, but an action that fails gives a `refused` event instead of a failed run. Any scripted action that throws in its call between steps, such as a bad index past the end of a game list, gives a `cmdskipped` event with the exception's name; nothing was captured, so the copies stay comparable (PT4, PT5).
 
+Test tooling (rig only): `wraidcapital [men]` (default 600): the raider whose army is nearest that size invades this human's capital at once, as vanilla's debug "RAIDER appear cap", through a command on every copy (SOS-143); follow it with `wevents`, whose `raid` shows whether the raid still runs.
+
 Probes for a player. Each notes what it reads between steps and changes nothing:
 - `wstatus`: this human's slot, treasury, capital, regions, armies and wars, wars with other humans included.
 - `wcredits`: this human's credits in and out by kind, today and yesterday, to explain a treasury drop.
+- `wtech`: this human's tech points per currency (total, frozen, allocated, available) and each source of the total that adds something (SOS-142).
 - `wrelations [npc slot]`: the NPC's king, and its stance, stored opinion entries, dealings, opinion and trust toward each human.
 - `wwar`: each human's potential enemies as the next war timer reads them, with their trust, and the war timer.
 - `wevents`: each human's war timer and warner, rebellion timer and realm cursor, raid and raid timer.
