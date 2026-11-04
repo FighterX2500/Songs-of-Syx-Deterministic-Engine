@@ -982,6 +982,11 @@ public final class WorldActions {
             Rig.later(() -> sosdet.game.cmd.Sieges.npcWarForTest(FACTIONS.player().index(), npc));
             return true;
         }
+        case "wnpcvassal": { // wnpcvassal <faction>: the NPC in that slot becomes this player's vassal (test tooling, SOS-146)
+            int npc = Integer.parseInt(a[1]);
+            Rig.later(() -> sosdet.game.cmd.Sieges.npcVassalForTest(FACTIONS.player().index(), npc));
+            return true;
+        }
         case "wtonpc": { // wtonpc <army> <slot> <dx> <dy>: the army stands that far from the first army of the NPC in <slot> (SOS-119)
             int army = Integer.parseInt(a[1]);
             int slot = Integer.parseInt(a[2]);

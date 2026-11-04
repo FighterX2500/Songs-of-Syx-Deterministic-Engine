@@ -45,6 +45,14 @@ public final class StanceBook {
     }
 
     /**
+     * True when an NPC vassal must not be hostile to a human whose stance with the vassal's human overlord is
+     * {@code overlordStance}: a trade partner, a colleague or anything above (SOS-146, owner 2026-11-05).
+     */
+    public static boolean friendOfOverlord(int overlordStance) {
+        return overlordStance >= TRADE;
+    }
+
+    /**
      * In the world part: the stance to set between {@code human} and {@code vassal}, or {@link #KEEP}. {@code want} is
      * what passes to them now ({@link #NEUTRAL} when nothing does: the vassal has no human overlord, or its stance with
      * {@code human} passes nothing), {@code now} their stance now.

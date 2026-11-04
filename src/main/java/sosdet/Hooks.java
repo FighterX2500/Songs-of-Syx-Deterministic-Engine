@@ -1443,6 +1443,15 @@ public final class Hooks {
     }
 
     /**
+     * {@code DipWarPlayer.validEnemy} and {@code validProxy}, in the slice of {@code human}: true when {@code f} is the
+     * vassal of another human who is {@code human}'s trade partner, colleague or ally. It then demands nothing, starts
+     * no war and works no harm against {@code human} (owner, 2026-11-05; SOS-146).
+     */
+    public static boolean friendOfOverlord(Faction f, Faction human) {
+        return Engine.session() != null && HumanDeals.friendOfOverlord(f, human);
+    }
+
+    /**
      * {@code TradeSorter.buy}: what reaches {@code seller} of a sale for which {@code buyer} paid {@code paid}, the
      * seller's own price being {@code asked} and the buyer's tariff {@code cut}. Between humans the toll is lost: it pays
      * the caravan, so the seller gets its price less the tariff (owner, 2026-11-04; SOS-138). From an NPC, as vanilla,
