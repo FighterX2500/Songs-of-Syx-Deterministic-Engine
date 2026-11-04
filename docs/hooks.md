@@ -10,7 +10,7 @@ With no engine session a hook gives the game's own behaviour. The known exceptio
 - `MainProcess.main` calls `GameBuild.check` (`99-game-build`), which stops the game on any build but 71.44;
 - two game fixes: `WDivStored`'s load clears its stats totals (`14-report-reads`), and a held `GSliderInt` button calls `inc` only for a non-zero amount (`96-cmd-employment`);
 - `ResolverPlayer.Manual.afterBattle` counts each side through `sosdetCount` (`15-humans`), so single-player captive counts differ slightly from vanilla;
-- every game holds 15 spare Players, and every save seven extra sections: `SOSDET_HUMANS`, `SOSDET_CITY_DIVS`, `SOSDET_RELATIONS`, `SOSDET_EVENTS`, `SOSDET_DEALS`, `SOSDET_TARIFFS` and `SOSDET_SIEGES` (`GameHumans`, from the `FACTIONS` constructor).
+- every game holds 15 spare Players, and every save eight extra sections: `SOSDET_HUMANS`, `SOSDET_CITY_DIVS`, `SOSDET_RELATIONS`, `SOSDET_EVENTS`, `SOSDET_DEALS`, `SOSDET_TARIFFS`, `SOSDET_SIEGES` and `SOSDET_TRADED` (`GameHumans`, from the `FACTIONS` constructor). Every one but `SOSDET_HUMANS` is in the world save too (`GameWorldLoad.KEYS`); `GameHumans` refuses to start with one that isn't (SOS-137).
 
 | Hook | Point | Game file | Calls into the engine | Why no API or reflection route was enough | Card |
 | --- | --- | --- | --- | --- | --- |

@@ -85,13 +85,24 @@ public final class GameHumans extends Savable {
             spares[i] = spare();
         }
         GAME.saver().addSpecialSaver(this);
-        GAME.saver().add(new GameCityDivs(this)); // after AD's and FACTIONS's sections: the world is built first (SOS-46)
-        GAME.saver().add(new GameRelations(this)); // the other humans' relations, after FACTIONS's and the world's (SOS-46 M3)
-        GAME.saver().add(new GameEvents(this)); // the other humans' event timers and raids, after EVENTS's and RAIDING's (SOS-46 M4)
-        GAME.saver().add(deals); // the deals between humans (SOS-72)
-        GAME.saver().add(tariffs); // the tariffs between humans (SOS-77)
-        GAME.saver().add(sieges); // the sieges of the humans' capitals (SOS-92)
-        GAME.saver().add(traded); // the market trade between humans (SOS-135)
+        world(new GameCityDivs(this)); // after AD's and FACTIONS's sections: the world is built first (SOS-46)
+        world(new GameRelations(this)); // the other humans' relations, after FACTIONS's and the world's (SOS-46 M3)
+        world(new GameEvents(this)); // the other humans' event timers and raids, after EVENTS's and RAIDING's (SOS-46 M4)
+        world(deals); // the deals between humans (SOS-72)
+        world(tariffs); // the tariffs between humans (SOS-77)
+        world(sieges); // the sieges of the humans' capitals (SOS-92)
+        world(traded); // the market trade between humans (SOS-135)
+    }
+
+    /**
+     * Adds an engine section that the world save carries too: views, resyncs and the load back after a battle keep it
+     * (SOS-137). A section missing from {@link GameWorldLoad#KEYS} would fall back on one PC there and desync.
+     */
+    private static void world(Savable s) {
+        if (!GameWorldLoad.KEYS.contains(s.key)) {
+            throw new IllegalStateException("SOSDET: save section " + s.key + " isn't in the world save (GameWorldLoad.KEYS)");
+        }
+        GAME.saver().add(s);
     }
 
     /** This game's humans: the {@code GameHumans} its {@code FACTIONS} holds. */
