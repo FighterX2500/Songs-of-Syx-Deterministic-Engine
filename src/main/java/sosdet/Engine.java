@@ -1403,6 +1403,39 @@ public final class Engine {
         return r == null ? 0 : (int) r.get(Field.HELD, tradable);
     }
 
+    /**
+     * Outside the step: the depot of the tradable with index {@code tradable} that the human in {@code slot} last
+     * reported (SOS-139). Their Export depot ({@code export}): its capacity for it, or ({@code amount}) the goods in it;
+     * their Import depot: its capacity, or the room left in it. The market buys for an Import depot only while its
+     * capacity is above 0. 0 before that human's first report.
+     */
+    public static int reportedDepot(int slot, int tradable, boolean export, boolean amount) {
+        Session s = required();
+        if (!s.isHuman(slot)) {
+            throw new IllegalArgumentException("SOSDET: slot " + slot + " is not a human in this game");
+        }
+        CityReport r = s.reports(slot).current();
+        if (r == null) {
+            return 0;
+        }
+        Field f = export ? (amount ? Field.EXPORT_AMOUNT : Field.EXPORT_CAP) : (amount ? Field.IMPORT_FREE : Field.IMPORT_CAP);
+        return (int) r.get(f, tradable);
+    }
+
+    /**
+     * Outside the step: what the human in {@code slot} last reported for the roads' cut of the toll, the divisor the
+     * market's toll uses when that human buys (SOS-138); 1 before their first report.
+     */
+    public static double reportedTollDivisor(int slot) {
+        Session s = required();
+        if (!s.isHuman(slot)) {
+            throw new IllegalArgumentException("SOSDET: slot " + slot + " is not a human in this game");
+        }
+        CityReport r = s.reports(slot).current();
+        double d = r == null ? 0 : r.get(Field.PROXIMITY_TOLL, 0);
+        return d > 0 ? d : 1;
+    }
+
     /** Every open proposal between humans, oldest first: a live view, read on the game thread. */
     public static List<DealBook.Proposal> deals() {
         required();
