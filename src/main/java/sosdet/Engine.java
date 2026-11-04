@@ -1189,12 +1189,15 @@ public final class Engine {
 
     /**
      * Between steps: the next NPC invasion of a human's capital the world started, the same on every PC, as {step,
-     * human, invading faction's index or -1 for rebels and raiders}; null when there is none (SOS-92 step F). Each is
-     * handed out once.
+     * human, invading faction's index, -1 for rebels or {@link #RAIDERS} for a raider}; null when there is none (SOS-92
+     * step F, SOS-143). Each is handed out once.
      */
     public static long[] invasionNoticeTake() {
         return required().invasionNotices.poll();
     }
+
+    /** An invasion notice's invader when a raider invades a human's capital (SOS-143); rebels are -1. */
+    public static final int RAIDERS = -2;
 
     /** Between steps: the next event the step told, the same on every PC in the same order; null when there is none. */
     public static Notice noticeTake() {
@@ -1434,6 +1437,18 @@ public final class Engine {
         CityReport r = s.reports(slot).current();
         double d = r == null ? 0 : r.get(Field.PROXIMITY_TOLL, 0);
         return d > 0 ? d : 1;
+    }
+
+    /**
+     * Outside the step: true while the capital of the human in {@code slot} is invaded, as the world reads it (its last
+     * report and the invasions queued since: SOS-143). For the playtest log.
+     */
+    public static boolean reportedInvading(int slot) {
+        Session s = required();
+        if (!s.isHuman(slot)) {
+            throw new IllegalArgumentException("SOSDET: slot " + slot + " is not a human in this game");
+        }
+        return s.reports(slot).current() != null && s.reports(slot).value(Field.INVADING, 0) != 0;
     }
 
     /** Every open proposal between humans, oldest first: a live view, read on the game thread. */
