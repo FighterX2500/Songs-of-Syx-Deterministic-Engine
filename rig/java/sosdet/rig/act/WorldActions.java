@@ -1148,6 +1148,7 @@ public final class WorldActions {
                         b.append("; with ").append(h).append(' ').append(DIP.get(me, FACTIONS.getByIndex(h)).key());
                         b.append(" tariff ").append(Engine.tariff(me.index(), h)).append('/').append(Engine.tariff(h, me.index()))
                                 .append(" revenue ").append(Engine.tariffRevenue(me.index(), h, false));
+                        b.append(" reaches ").append(Engine.tradeReaches(h)); // SOS-134
                     }
                 }
                 Rig.note(b.toString());

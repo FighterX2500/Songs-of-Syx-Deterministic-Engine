@@ -1,5 +1,7 @@
 package sosdet.game.cmd;
 
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.List;
 
@@ -35,6 +37,7 @@ import world.map.pathing.WRegFinder.Treaty;
 import world.map.pathing.WRegSel;
 import world.map.regions.Region;
 import world.region.RD;
+import world.region.RDDistance;
 
 /**
  * Deals between humans (ids 8100-8199, SOS-72, plan 0009): a proposal and its answer, world commands applied in the
@@ -48,6 +51,9 @@ import world.region.RD;
  * peace.
  */
 public final class HumanDeals {
+
+    /** Patch 98's per-human trade reach, for the UI (SOS-134): the engine is compiled against the unpatched game. */
+    private static final Method TRADE_REACHES = tradeReachesMethod();
 
     static final int PROPOSE = 8100;
     static final int ANSWER = 8101;
@@ -781,5 +787,24 @@ public final class HumanDeals {
     /** This game's tariffs between humans. */
     public static TariffBook tariffs() {
         return GameHumans.get().tariffs().book();
+    }
+
+    /** Outside the step: true when this PC's human's trade reaches the human in {@code slot}, by the world's last walk. */
+    public static boolean tradeReaches(int slot) {
+        try {
+            return (Boolean) TRADE_REACHES.invoke(RD.DIST(), human(slot));
+        } catch (IllegalAccessException e) {
+            throw new IllegalStateException("SOSDET: cannot call RDDistance.sosdetTradeReaches (V71, build 71.44)", e);
+        } catch (InvocationTargetException e) {
+            throw new IllegalStateException("SOSDET: RDDistance.sosdetTradeReaches failed", e.getCause());
+        }
+    }
+
+    private static Method tradeReachesMethod() {
+        try {
+            return RDDistance.class.getMethod("sosdetTradeReaches", Faction.class);
+        } catch (NoSuchMethodException e) {
+            throw new IllegalStateException("SOSDET: no method RDDistance.sosdetTradeReaches in this game build (patch 98; V71, build 71.44)", e);
+        }
     }
 }

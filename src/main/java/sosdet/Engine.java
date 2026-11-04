@@ -1358,6 +1358,16 @@ public final class Engine {
     }
 
     /**
+     * Outside the step: true when this PC's human's trade reaches the human in {@code slot}, with or without a trade
+     * agreement: the walk caravans take, across the land of a human at peace too, or the guaranteed route to a human 6
+     * to 15 tiles away (SOS-134). For the UI; the world part refreshes it as the map and the stances change.
+     */
+    public static boolean tradeReaches(int slot) {
+        required();
+        return HumanDeals.tradeReaches(slot);
+    }
+
+    /**
      * Outside the step: the price per item the human in {@code slot} last reported for the tradable with index
      * {@code tradable}: their lowest export price ({@code sell}), or their highest import price (SOS-77, the Goods tab).
      */

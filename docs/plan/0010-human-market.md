@@ -21,6 +21,7 @@ Card: [SOS-77](https://fighterx2500.atlassian.net/browse/SOS-77). The mod's plan
   - At a sale between two humans, `Hooks.tariffCut(buyer, seller, price)` takes the buyer's rate of the price. The seller is paid the price less the cut, and the cut goes into the buyer's treasury as `CTYPE.TRADE`. The buyer pays the full price, toll included, and the seller is paid it, as vanilla pays a seller; with the cut going back to the buyer, the trade makes or loses no money.
   - The world command 8103 `humanTariff` applies at once with no answer. It is refused outside 0–80% or off the 5% steps, against oneself or a retired human, and without a trade stance. A human's removal drops their tariffs both ways.
 - **Engine API:** `tariffRefusal(slot, percent)`, `setTariff(slot, percent)`, `tariff(setter, other)`, `tariffRevenue(buyer, seller, lastYear)` (seller -1 for the total), and `reportedPrice(slot, tradable, sell)` for the mod's Price column.
+- **Reach for the UI (SOS-134):** each human's world half also marks which humans its trade reaches, agreement or not (patch 98, `RDDistance.sosdetTradeReaches`, read by reflection): the human walk across a human's land at peace and the guaranteed route of SOS-120. The mod darkens another player in its faction lists by it. API: `tradeReaches(slot)`.
 - **Rig:** the action `tariff <slot> <percent>`; the probe `wtradeinfo` (goods for sale, goods wanted, goods owned); `deals` shows each pair's tariffs and revenue.
 
 ## 3. Checks
