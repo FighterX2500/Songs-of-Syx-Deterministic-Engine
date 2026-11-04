@@ -1149,6 +1149,15 @@ public final class WorldActions {
                         b.append(" tariff ").append(Engine.tariff(me.index(), h)).append('/').append(Engine.tariff(h, me.index()))
                                 .append(" revenue ").append(Engine.tariffRevenue(me.index(), h, false));
                         b.append(" reaches ").append(Engine.tradeReaches(h)); // SOS-134
+                        long[] sold = new long[2], bought = new long[2]; // SOS-135: all time, every tradable: items, denari
+                        for (int t = 0; t < init.trade.TR.ALL().size(); t++) {
+                            for (int w = 0; w < 2; w++) {
+                                sold[w] += Engine.traded(me.index(), h, t, sosdet.game.deal.TradeTally.ALL_TIME, w == 1);
+                                bought[w] += Engine.traded(h, me.index(), t, sosdet.game.deal.TradeTally.ALL_TIME, w == 1);
+                            }
+                        }
+                        b.append(" sold ").append(sold[0]).append(" for ").append(sold[1]).append(" bought ")
+                                .append(bought[0]).append(" for ").append(bought[1]);
                     }
                 }
                 Rig.note(b.toString());

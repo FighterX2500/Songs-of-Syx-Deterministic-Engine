@@ -26,6 +26,7 @@ import sosdet.game.deal.DealBook.Outcome;
 import sosdet.game.deal.DealBook.Proposal;
 import sosdet.game.deal.DealBook.Terms;
 import sosdet.game.deal.TariffBook;
+import sosdet.game.deal.TradeTally;
 import sosdet.game.siege.AssaultTerms;
 import sosdet.report.Field;
 import snake2d.util.sets.LIST;
@@ -787,6 +788,23 @@ public final class HumanDeals {
     /** This game's tariffs between humans. */
     public static TariffBook tariffs() {
         return GameHumans.get().tariffs().book();
+    }
+
+    /** In the step, a market sale between humans: {@code items} of {@code tradable} that reached {@code buyer} for {@code denari}. */
+    public static void traded(int seller, int buyer, int tradable, int items, int denari) {
+        tally().add(seller, buyer, tradable, items, denari, TIME.years().bitsSinceStart());
+    }
+
+    /** What {@code seller} sold {@code buyer} of {@code tradable} on the market in {@code period}: items or denari. */
+    public static long traded(int seller, int buyer, int tradable, int period, boolean denari) {
+        int now = TIME.years().bitsSinceStart();
+        TradeTally t = tally();
+        return denari ? t.denari(seller, buyer, tradable, period, now) : t.items(seller, buyer, tradable, period, now);
+    }
+
+    /** This game's market trade between humans (SOS-135). */
+    public static TradeTally tally() {
+        return GameHumans.get().traded().tally();
     }
 
     /** Outside the step: true when this PC's human's trade reaches the human in {@code slot}, by the world's last walk. */

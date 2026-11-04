@@ -1358,6 +1358,16 @@ public final class Engine {
     }
 
     /**
+     * What the human in {@code seller} sold the human in {@code buyer} of the tradable with index {@code tradable} on the
+     * market (SOS-135): the items ({@code denari} false) or the denari that reached the seller, in {@code period}, one of
+     * {@code TradeTally.THIS_YEAR}, {@code LAST_YEAR} and {@code ALL_TIME}. Deals don't count.
+     */
+    public static long traded(int seller, int buyer, int tradable, int period, boolean denari) {
+        required();
+        return HumanDeals.traded(seller, buyer, tradable, period, denari);
+    }
+
+    /**
      * Outside the step: true when this PC's human's trade reaches the human in {@code slot}, with or without a trade
      * agreement: the walk caravans take, across the land of a human at peace too, or the guaranteed route to a human 6
      * to 15 tiles away (SOS-134). For the UI; the world part refreshes it as the map and the stances change.

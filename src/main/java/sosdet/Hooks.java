@@ -1427,6 +1427,9 @@ public final class Hooks {
         r.change(step, Field.PROMISED, p.type.index(), type.index + 1, amount);
         s.transfers.record(step, t.id(), t.human, TransferLog.Kind.SOLD, p.type.index(), amount, price, type.index,
                 buyer == null ? -1 : buyer.index());
+        if (type == TRADE_TYPE.trade && buyer instanceof Player) {
+            HumanDeals.traded(t.human, buyer.index(), p.type.index(), amount, price); // market trade between humans (SOS-135)
+        }
         return true;
     }
 
