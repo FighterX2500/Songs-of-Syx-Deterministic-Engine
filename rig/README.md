@@ -112,7 +112,7 @@ Test tooling (rig only): `wraidcapital [men]` (default 600): the raider whose ar
 Probes for a player. Each notes what it reads between steps and changes nothing:
 - `wstatus`: this human's slot, treasury, capital, regions, armies and wars, wars with other humans included.
 - `wcredits`: this human's credits in and out by kind, today and yesterday, to explain a treasury drop.
-- `wtech`: this human's tech points per currency (total, frozen, allocated, available) and each source of the total that adds something (SOS-142).
+- `wtech`: this human's tech points per currency (total, frozen, allocated, available) and each source of the total that adds something (SOS-142). On a human other than slot 0 it also notes slot 0's points objects in this game: what the Technology header showed before SOS-142.
 - `wrelations [npc slot]`: the NPC's king, and its stance, stored opinion entries, dealings, opinion and trust toward each human.
 - `wwar`: each human's potential enemies as the next war timer reads them, with their trust, and the war timer.
 - `wevents`: each human's war timer and warner, rebellion timer and realm cursor, raid and raid timer.

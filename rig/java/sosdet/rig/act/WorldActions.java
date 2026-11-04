@@ -914,6 +914,13 @@ public final class WorldActions {
                         }
                     }
                 }
+                if (FACTIONS.player().index() != 0) { // what the header showed before SOS-142: slot 0's points objects
+                    b.append("; slot 0's objects here:");
+                    for (game.faction.player.PTech.TechCurr c : ((game.faction.player.Player) FACTIONS.getByIndex(0)).tech().currs()) {
+                        b.append(' ').append(c.cu.bo.key).append(" available ").append(c.available()).append(" (allocated ")
+                                .append(c.allocated()).append(" frozen ").append(c.frozen()).append(')');
+                    }
+                }
                 Rig.note(b.toString());
             });
             return true;
