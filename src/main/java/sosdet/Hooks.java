@@ -1443,6 +1443,16 @@ public final class Hooks {
     }
 
     /**
+     * {@code TradeSorter.buy}: what reaches {@code seller} of a sale for which {@code buyer} paid {@code paid}, the
+     * seller's own price being {@code asked} and the buyer's tariff {@code cut}. Between humans the toll is lost: it pays
+     * the caravan, so the seller gets its price less the tariff (owner, 2026-11-04; SOS-138). From an NPC, as vanilla,
+     * the seller gets what was paid.
+     */
+    public static int sellerGets(Faction buyer, Faction seller, int paid, int asked, int cut) {
+        return buyer instanceof Player && seller instanceof Player ? asked - cut : paid - cut;
+    }
+
+    /**
      * {@code TradeSorter.buy}, a purchase by {@code buyer} from {@code seller} at {@code price}: the buyer's tariff of it
      * when both are humans, which the seller doesn't get and the buyer's treasury does; otherwise 0 (SOS-77).
      */

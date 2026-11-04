@@ -40,6 +40,7 @@ public final class Events {
     static final int RAIDER_PAY = 9001;
     static final int RAIDER_ALLY_HELP = 9002;
     static final int KILLER_SUSPECT = 9003;
+    static final int RAID_CAPITAL_TEST = 9004;
 
     private static final Field ALL_EVENTS = field(Event.class, "all");
     private static final Field HANDLER_MESSAGE = field(EVENT_HANDLER.class, "mess");
@@ -90,6 +91,14 @@ public final class Events {
                 }
                 k.setSuspect(suspect);
                 return true;
+            }),
+            new Command(RAID_CAPITAL_TEST, "raidCapitalTest", r -> {
+                int index = r.i();
+                if (index < 0 || index >= GAME.raiders().ALL().size()) {
+                    return false;
+                }
+                Raider raider = GAME.raiders().ALL().get(index); // vanilla's debug "RAIDER appear cap", for this human
+                return current().appear(raider, FACTIONS.player().cx(), FACTIONS.player().cy());
             }));
 
     private Events() {
@@ -198,6 +207,29 @@ public final class Events {
         current.clear();
         ((MessageSection) construct(RAIDER_THANKS, raider)).send();
         return true;
+    }
+
+    /**
+     * Test tooling, for the rig only (never the mod): the raider at {@code index} in the pool invades this PC's human's
+     * capital at once, as vanilla's debug "RAIDER appear cap" does, at the command's step on every PC alike (SOS-143).
+     */
+    public static void raidCapitalForTest(int index) {
+        if (!Commands.capturing()) {
+            throw new IllegalStateException("SOSDET: a raid outside a session's play");
+        }
+        Commands.capture(new CmdWriter(RAID_CAPITAL_TEST).i(index));
+    }
+
+    /** Test tooling: the pool's raider whose army has the number of men nearest {@code men}, as its index. */
+    public static int raiderNearForTest(int men) {
+        int best = -1;
+        for (int i = 0; i < GAME.raiders().ALL().size(); i++) {
+            int d = Math.abs(GAME.raiders().ALL().get(i).army.men - men);
+            if (best < 0 || d < Math.abs(GAME.raiders().ALL().get(best).army.men - men)) {
+                best = i;
+            }
+        }
+        return best;
     }
 
     // ---------------------------------------------------------------- arguments
