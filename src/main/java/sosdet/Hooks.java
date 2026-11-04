@@ -1434,6 +1434,25 @@ public final class Hooks {
     }
 
     /**
+     * {@code WArmy.update} and {@code OpsStance.tresPass}: true when an army in the land of a faction with {@code stance}
+     * to its owner costs no trespassing opinion. Vanilla spares allies only; every stance with transit is spared, so
+     * colleagues and vassals too (owner, 2026-11-04; SOS-141). A stance's own flag: the same on every PC.
+     */
+    public static boolean noTrespass(game.faction.diplomacy.DipStance stance) {
+        return stance.transit;
+    }
+
+    /**
+     * {@code TradeSorter.buy}: what reaches {@code seller} of a sale for which {@code buyer} paid {@code paid}, the
+     * seller's own price being {@code asked} and the buyer's tariff {@code cut}. Between humans the toll is lost: it pays
+     * the caravan, so the seller gets its price less the tariff (owner, 2026-11-04; SOS-138). From an NPC, as vanilla,
+     * the seller gets what was paid.
+     */
+    public static int sellerGets(Faction buyer, Faction seller, int paid, int asked, int cut) {
+        return buyer instanceof Player && seller instanceof Player ? asked - cut : paid - cut;
+    }
+
+    /**
      * {@code TradeSorter.buy}, a purchase by {@code buyer} from {@code seller} at {@code price}: the buyer's tariff of it
      * when both are humans, which the seller doesn't get and the buyer's treasury does; otherwise 0 (SOS-77).
      */
@@ -1644,20 +1663,28 @@ public final class Hooks {
         return h * INVASION_REF_SPAN + cityRef;
     }
 
-    /** {@code Invador.invade} (C6): true when queued for the city tail. */
-    public static boolean invade(Object spec) {
+    /**
+     * {@code Invador.invade} (C6): true when queued for the city tail. The world part reads the city invaded from here on
+     * (SOS-143): a raid checks it at its next update, before the city's next report, and left at once when it read the
+     * last report's "not invading". {@code army} is the world army that invades, null for a raider's.
+     */
+    public static boolean invade(Object spec, Object army) {
         Txn x = toCity(TxnKind.INVADE);
         if (x == null) {
             return false;
         }
         x.a = spec;
         Session s = Engine.session();
-        s.reports(x.human).change(s.clock.step(), Field.INVASION_REF, 0, 1);
+        Reports r = s.reports(x.human);
+        r.change(s.clock.step(), Field.INVASION_REF, 0, 1);
+        r.change(s.clock.step(), Field.INVADING, 0, 1);
+        int fi = ((settlement.battle.invasion.InvasionSpec) spec).fi;
         if (s.invasionNotices.size() < Session.NOTICES_MAX) { // every PC learns it at this step: the mod tells every player (SOS-92 F)
-            s.invasionNotices.add(new long[] {s.clock.step(), x.human, ((settlement.battle.invasion.InvasionSpec) spec).fi});
+            s.invasionNotices.add(new long[] {s.clock.step(), x.human, fi >= 0 ? fi : army == null ? Engine.RAIDERS : -1});
         }
         return true;
     }
+
 
     /** {@code Invador.invade} in the city tail: true while it starts the invasion the world part made. */
     public static boolean invasionArrives(Object spec) {

@@ -10,6 +10,7 @@ import game.faction.FCredits.CTYPE;
 import game.faction.Faction;
 import game.faction.diplomacy.DIP;
 import game.faction.diplomacy.DipStance;
+import game.faction.npc.FactionNPC;
 import game.faction.player.Player;
 import game.time.TIME;
 import init.trade.TR;
@@ -25,6 +26,7 @@ import sosdet.game.deal.DealBook;
 import sosdet.game.deal.DealBook.Outcome;
 import sosdet.game.deal.DealBook.Proposal;
 import sosdet.game.deal.DealBook.Terms;
+import sosdet.game.deal.StanceBook;
 import sosdet.game.deal.TariffBook;
 import sosdet.game.deal.TradeTally;
 import sosdet.game.siege.AssaultTerms;
@@ -355,6 +357,71 @@ public final class HumanDeals {
                 book().endTribute(t.vassal());
             }
         }
+    }
+
+    /**
+     * Start of each world part, after {@link #expire}: the stances that pass to the humans' NPC vassals (SOS-140). While
+     * humans A and B are trade partners or colleagues, B has at least that stance with each NPC vassal of A, both ways;
+     * {@link StanceBook} decides each pair. First the pairs the book holds (a source may have ended), then each NPC
+     * vassal of a human with every other human. Every PC alike: faction order, world state only. Allocates nothing.
+     */
+    public static void passStances() {
+        StanceBook b = GameHumans.get().passed().book();
+        for (int i = b.size() - 1; i >= 0; i--) { // decide removes only pair i
+            Faction human = FACTIONS.getByIndex(b.human(i));
+            Faction vassal = FACTIONS.getByIndex(b.vassal(i));
+            if (!vassal.isActive() || !(human instanceof Player)) {
+                b.drop(vassal.isActive() ? human.index() : vassal.index()); // gone: nothing to set back
+                i = Math.min(i, b.size()); // a pair seen twice in a step decides nothing new
+                continue;
+            }
+            pass(b, human, vassal);
+        }
+        LIST<FactionNPC> npcs = FACTIONS.NPCs();
+        LIST<Faction> all = FACTIONS.active();
+        for (int i = 0; i < npcs.size(); i++) {
+            FactionNPC vassal = npcs.get(i);
+            Faction overlord = DIP.overlord(vassal);
+            if (!(overlord instanceof Player) || Hooks.retired(overlord.index())) {
+                continue;
+            }
+            for (int k = 0; k < all.size(); k++) {
+                Faction human = all.get(k);
+                if (human instanceof Player && human != overlord && !b.has(human.index(), vassal.index())) {
+                    pass(b, human, vassal);
+                }
+            }
+        }
+    }
+
+    /** One pair: what passes to {@code human} and {@code vassal} now, through the vassal's human overlord. */
+    private static void pass(StanceBook b, Faction human, Faction vassal) {
+        Faction overlord = DIP.overlord(vassal);
+        boolean live = overlord instanceof Player && overlord != human && !Hooks.retired(overlord.index())
+                && !Hooks.retired(human.index());
+        int want = live ? StanceBook.passes(code(DIP.get(overlord, human))) : StanceBook.NEUTRAL;
+        int to = b.decide(human.index(), vassal.index(), want, code(DIP.get(human, vassal)));
+        if (to == StanceBook.KEEP) {
+            return;
+        }
+        int was = Hooks.currentHumanSwap(human); // vanilla's set reads the player: the human it concerns (ADR 0004)
+        try {
+            (to == StanceBook.PACT ? DIP.PACT() : to == StanceBook.TRADE ? DIP.TRADE() : DIP.NEUTRAL()).set(human, vassal);
+        } finally {
+            Hooks.currentHumanSwap(was);
+        }
+        Hooks.notice(Notice.STANCE_PASSED, human.index(), vassal.index(), to);
+    }
+
+    /** A stance as {@link StanceBook}'s code. */
+    private static int code(DipStance s) {
+        if (s == DIP.WAR()) {
+            return StanceBook.WAR;
+        }
+        if (s == DIP.NEUTRAL()) {
+            return StanceBook.NEUTRAL;
+        }
+        return s == DIP.TRADE() ? StanceBook.TRADE : s == DIP.PACT() ? StanceBook.PACT : StanceBook.ABOVE;
     }
 
     /**
