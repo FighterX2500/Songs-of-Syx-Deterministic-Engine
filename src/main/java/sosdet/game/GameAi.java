@@ -78,6 +78,7 @@ public final class GameAi implements AiApplier {
     @Override
     public void worldPart() {
         HumanDeals.expire(); // before the commands: an answer at the step a proposal expires is too late (SOS-72)
+        HumanDeals.passStances(); // the stances that pass to the humans' vassals, as the last step left them (SOS-140)
         WorldCommand c;
         while ((c = worldCommands.poll()) != null) {
             int human = Hooks.humanOf(c.pc);

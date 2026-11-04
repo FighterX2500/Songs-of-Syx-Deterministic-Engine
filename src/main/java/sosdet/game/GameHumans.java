@@ -75,6 +75,7 @@ public final class GameHumans extends Savable {
     private final GameTariffs tariffs = new GameTariffs();
     private final GameSieges sieges = new GameSieges();
     private final GameTraded traded = new GameTraded();
+    private final GamePassed passed = new GamePassed();
 
     /** {@code FACTIONS}'s constructor, at its end: {@code all} and {@code npcs} are its own lists. */
     public GameHumans(ArrayList<Faction> all, ArrayList<FactionNPC> npcs) throws IOException {
@@ -92,6 +93,7 @@ public final class GameHumans extends Savable {
         world(tariffs); // the tariffs between humans (SOS-77)
         world(sieges); // the sieges of the humans' capitals (SOS-92)
         world(traded); // the market trade between humans (SOS-135)
+        world(passed); // the stances passed to the humans' vassals (SOS-140)
     }
 
     /**
@@ -127,6 +129,11 @@ public final class GameHumans extends Savable {
     /** The market trade between this game's humans (SOS-135). */
     public GameTraded traded() {
         return traded;
+    }
+
+    /** The stances passed to this game's humans' NPC vassals (SOS-140). */
+    public GamePassed passed() {
+        return passed;
     }
 
     /** The sieges of this game's humans' capitals (SOS-92). */
@@ -203,6 +210,7 @@ public final class GameHumans extends Savable {
         tariffs.book().dropHuman(slot); // and their tariffs go, both ways (SOS-77)
         sieges.book().dropHuman(slot); // and the siege of their capital (SOS-92)
         traded.tally().dropHuman(slot); // and their trade figures, both ways (SOS-135)
+        passed.book().drop(slot); // and the stances passed to them; what they hold stays as it is (SOS-140)
         Faction f = all.get(slot);
         try {
             RAID_RETIRE.invoke(GAME.raiders(), sosdet.Hooks.humanIndex(f)); // its raider leaves; its other slices stand still

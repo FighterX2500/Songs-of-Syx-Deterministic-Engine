@@ -34,4 +34,9 @@ public record Notice(long step, int kind, int first, int second, int value) {
     public static final int ALLY_OUT = 9;
     /** {@code first} retreated its army, its ally fighting on. */
     public static final int ARMY_LEFT = 10;
+    /**
+     * The human {@code first} and the NPC vassal {@code second} of another human now have the stance {@code value}
+     * through the vassal's overlord: 1 trade partners, 2 colleagues, 0 the stance before, as the source ended (SOS-140).
+     */
+    public static final int STANCE_PASSED = 11;
 }
