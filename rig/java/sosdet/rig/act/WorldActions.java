@@ -982,6 +982,17 @@ public final class WorldActions {
             Rig.later(() -> sosdet.game.cmd.Sieges.npcWarForTest(FACTIONS.player().index(), npc));
             return true;
         }
+        case "wsally": // wsally: the invasion message's Attack on this human's oldest running invasion, as the player's click (SOS-145)
+            Rig.later(() -> {
+                for (int ref = 1; ref < 10_000; ref++) {
+                    if (settlement.main.SETT.INVADOR().spec(ref) != null) {
+                        Rig.note("sally asked against invasion " + ref + ": " + Hooks.invasionSally(ref));
+                        return;
+                    }
+                }
+                Rig.note("sally: no invasion runs in this city");
+            });
+            return true;
         case "wnpcvassal": { // wnpcvassal <faction>: the NPC in that slot becomes this player's vassal (test tooling, SOS-146)
             int npc = Integer.parseInt(a[1]);
             Rig.later(() -> sosdet.game.cmd.Sieges.npcVassalForTest(FACTIONS.player().index(), npc));

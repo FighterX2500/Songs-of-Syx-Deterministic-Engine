@@ -34,6 +34,8 @@ public final class MapBattles {
     /** A local battle's result, from its PC to every PC (SOS-93). */
     static final int LOCAL_RESULT = 7964;
     static final int SPEED_VOTE = 7965;
+    /** The defender attacks an invasion of their capital before its assault: vanilla's sally, as a local battle (SOS-145). */
+    static final int INVASION_SALLY = 7966;
     /** An ally's order and a commander's vote in a local battle, through the log to the battle's PCs (SOS-119). */
     static final int LOCAL_ORDER = sosdet.ai.AiLog.LOCAL_ORDER;
     static final int LOCAL_VOTE = sosdet.ai.AiLog.LOCAL_VOTE;
@@ -42,6 +44,9 @@ public final class MapBattles {
     private static final String BATTLE_SAVE = "__battle";
 
     static final String RESTART_NOTICE = "SOSDET: a battle can't be restarted in a multiplayer game.";
+
+    static final String SALLY_OFF_NOTICE = "The invaders began their assault before our army could meet them. We fight"
+            + " them in the city.";
 
     static final String WORLD_COMMAND_NOTICE = "SOSDET: a world map action came in during the battle and was not done."
             + " Do it again after the battle.";
@@ -89,6 +94,7 @@ public final class MapBattles {
                 return true;
             }),
             new Command(LOCAL_RESULT, "battleLocalResult", MapBattles::applyLocalResult),
+            new Command(INVASION_SALLY, "invasionSally", r -> Hooks.invasionSallyEngage(r.i())),
             new Command(SPEED_VOTE, "battleSpeedVote", r -> Hooks.battleSpeedVote(r.d())),
             new Command(LOCAL_ORDER, "battleLocalOrder", r -> {
                 int kind = r.i();
@@ -141,6 +147,16 @@ public final class MapBattles {
             w.i(h);
         }
         return w.bytes();
+    }
+
+    /**
+     * The battle PC, at a sally's freeze step, when the invasion can't be attacked any more (SOS-145): a result with no
+     * battle (ordinal -1, nothing else), so every PC ends the local battle at the step the host stamps, and the defender
+     * is told why.
+     */
+    public static byte[] localCalledOffCommand(int human) {
+        VIEW.inters().fullScreen.activate(SALLY_OFF_NOTICE, COLOR.WHITE100, null); // only the battle PC calls it off
+        return new CmdWriter(LOCAL_RESULT).i(human).i(-1).i(0).i(0).i(0).i(0).i(0).i(0).bytes();
     }
 
     /**
@@ -220,6 +236,16 @@ public final class MapBattles {
         }
         Commands.capture(new CmdWriter(DEPLOY));
         return true;
+    }
+
+    /**
+     * Hook in the invasion message's Attack (patch 99), on the defender's PC: the sally as a world command, which every
+     * PC applies in the world part as the defender (SOS-145).
+     */
+    public static void invasionSally(int ref) {
+        if (Commands.capturing()) {
+            Commands.capture(new CmdWriter(INVASION_SALLY).i(ref));
+        }
     }
 
     /** An ally's order in a local battle, for the log. */

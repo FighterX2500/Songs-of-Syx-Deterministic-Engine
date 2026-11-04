@@ -342,9 +342,22 @@ final class Session {
     LocalBattle localEngage(long step, int human) {
         // one ally: the battle runs on two PCs only (spec §8), and a battle takes one watcher's load (plan 0017)
         int[] allies = alliesJoined(human, 1);
-        LocalBattle b = new LocalBattle(step, human, pcOf(human), nextReportStep(step), closedPromptArmies, null, allies);
-        locals[human] = b;
+        LocalBattle b = localStart(step, human, closedPromptArmies, allies);
         closedPromptArmies = NO_ARMIES;
+        return b;
+    }
+
+    /**
+     * Every PC, at the step a sally against an invasion of {@code human}'s capital applies (SOS-145): a local battle with
+     * {@code armies} waiting, no prompt and no ally, as vanilla's sally asks none.
+     */
+    LocalBattle localSally(long step, int human, int[] armies) {
+        return localStart(step, human, armies, NO_ARMIES);
+    }
+
+    private LocalBattle localStart(long step, int human, int[] armies, int[] allies) {
+        LocalBattle b = new LocalBattle(step, human, pcOf(human), nextReportStep(step), armies, null, allies);
+        locals[human] = b;
         for (View v : views) {
             if (v != null && (b.roster.commander(v.viewer) >= 0 || b.roster.commander(v.owner) >= 0)) {
                 endView(v.viewer, step, View.GAME, "A battle started."); // the city goes under the battle map

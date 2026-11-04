@@ -449,6 +449,74 @@ public final class Hooks {
         Engine.session().engaging.generate = generate;
     }
 
+    // ------------------------------------------------------------ the sally against an invasion (SOS-145)
+
+    /**
+     * Patch 99, the invasion message's Attack, on the defender's PC outside the step: in a session the sally is a world
+     * command and runs as a local battle, as a world battle's Engage does (spec §9). True when it was taken over.
+     */
+    public static boolean invasionSally(int ref) {
+        if (Engine.session() == null) {
+            return false;
+        }
+        sosdet.game.cmd.MapBattles.invasionSally(ref);
+        return true;
+    }
+
+    /**
+     * The sally command, in the world part on every PC, as the defender: a local battle whose armies are those vanilla's
+     * Attack takes, generated on the defender's PC at the freeze step. Skipped (false) on every PC alike when the
+     * defender already fights, views or is viewed in a battle, or a battle between humans runs.
+     */
+    public static boolean invasionSallyEngage(int ref) {
+        Session s = Engine.session();
+        int human = s.currentHuman;
+        if (!s.localBattles || s.locals[human] != null || s.battle != null || s.frozen(human)) {
+            return false;
+        }
+        LocalBattle b = s.localSally(s.clock.step(), human, sosdet.game.GameSally.armies());
+        for (int c = 0; c < b.roster.commanders.length; c++) {
+            b.roster.reports[c] = s.reports(b.roster.commanders[c]).current();
+        }
+        if (human == s.localHuman) {
+            b.generate = () -> sallyGenerate(b, ref);
+        }
+        b.after = r -> sallyResult(human, ref, (Object[]) r);
+        return true;
+    }
+
+    /**
+     * The battle PC, at the freeze step ({@link #localGenerate}): vanilla's Attack, as the defender. When the invaders
+     * began their assault since the click, there is no battle: the local battle ends with no result on every PC.
+     */
+    private static void sallyGenerate(LocalBattle b, int ref) {
+        int was = currentHumanSwap(b.human);
+        boolean made;
+        try {
+            made = sosdet.game.GameSally.generate(ref);
+        } finally {
+            currentHumanSwap(was);
+        }
+        if (!made) {
+            b.resultSent = true;
+            orderCapture(sosdet.ai.AiEntry.COMMAND, -1, sosdet.game.cmd.MapBattles.localCalledOffCommand(b.human));
+        }
+    }
+
+    /**
+     * Every PC, the sally's after-battle in the world part ({@code Session.localAfter}): the result goes to the defender's
+     * city, where vanilla's after-battle runs; its world effects come back through that city's report (B4).
+     */
+    private static void sallyResult(int human, int ref, Object[] result) {
+        if ((Integer) result[0] < 0) {
+            return; // called off: no battle was fought
+        }
+        Txn x = toCity(TxnKind.SALLY_RESULT);
+        x.human = human;
+        x.i = ref;
+        x.b = result;
+    }
+
     /**
      * Patch 99, the battle's exit on a local battle's PC (Retreat, or Close on the victory or defeat panel): its result
      * goes to every PC as a command, applied at the step the host stamps; nothing loads now. True when it is a local
@@ -1837,6 +1905,16 @@ public final class Hooks {
             return false;
         }
         s.cityInputs.add(s.inputs().divResolve(div, survivors));
+        return true;
+    }
+
+    /** {@code Attack.afterExit} after a sally (SOS-145): as above, for a local battle's survivor count and their mean experience. */
+    public static boolean divResolve(Object div, int survivors, double experience) {
+        Session s = inCityPart();
+        if (s == null) {
+            return false;
+        }
+        s.cityInputs.add(s.inputs().divResolve(div, survivors, experience));
         return true;
     }
 

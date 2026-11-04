@@ -10,7 +10,7 @@ public final class CommandParts {
 
     /**
      * True for a command that acts on the world: the army, region and diplomacy commands, the world-battle prompt's
-     * decisions, the sieges of humans' capitals (SOS-92), a local battle's result (SOS-93), paying raiders and calling an ally. They apply at the start of the world part, so they read the city
+     * decisions, the sieges of humans' capitals (SOS-92), a local battle's result (SOS-93), a sally against an invasion (SOS-145), paying raiders and calling an ally. They apply at the start of the world part, so they read the city
      * through the report and change it through transactions; a decision there closes the prompt before the world's
      * resources update, so the battle's armies wait the same steps as before (SOS-45). The yes/no questions (a world one and a city one
      * share the command), the choices on event messages and the killer's suspect stay at the step's start.
@@ -35,7 +35,7 @@ public final class CommandParts {
         return (id >= 7000 && id < StepPrompts.ANSWER) || id == StepPrompts.WORLD_ANSWER || (id >= Sieges.SALLY && id < 8000)
                 || (id >= 8000 && id < 9000)
                 || id == Events.RAIDER_PAY || id == Events.RAIDER_ALLY_HELP || id == Events.RAID_CAPITAL_TEST
-                || id == MapBattles.LOCAL_RESULT
+                || id == MapBattles.LOCAL_RESULT || id == MapBattles.INVASION_SALLY
                 || id == MapBattles.LOCAL_ORDER || id == MapBattles.LOCAL_VOTE || playerIdentity(id);
     }
 

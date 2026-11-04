@@ -40,7 +40,9 @@ public enum TxnKind {
     /** A2 (SOS-46): a haven's race wants more immigrants in the city ({@code Immigration.setHigher}, from the world's havens). */
     IMMIGRANTS_HIGHER,
     /** After a taken throne (SOS-92): people leave the city, moved, killed or freed; the city picks which of them. */
-    REMOVE_PEOPLE;
+    REMOVE_PEOPLE,
+    /** After a sally against an invasion (SOS-145): the battle PC's result reaches the defender's city, for vanilla's after-battle. */
+    SALLY_RESULT;
 
     /**
      * Whether a follower's city applies it (SOS-38: its world reads another PC's city). Not the ones that carry the
@@ -60,6 +62,7 @@ public enum TxnKind {
         case GARRISON_RESOLVE:
         case GARRISON_RESOLVE_PEOPLE:
         case REMOVE_PEOPLE:
+        case SALLY_RESULT:
             return false;
         default:
             return true;
