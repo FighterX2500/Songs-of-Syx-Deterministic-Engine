@@ -1434,6 +1434,15 @@ public final class Hooks {
     }
 
     /**
+     * {@code WArmy.update} and {@code OpsStance.tresPass}: true when an army in the land of a faction with {@code stance}
+     * to its owner costs no trespassing opinion. Vanilla spares allies only; every stance with transit is spared, so
+     * colleagues and vassals too (owner, 2026-11-04; SOS-141). A stance's own flag: the same on every PC.
+     */
+    public static boolean noTrespass(game.faction.diplomacy.DipStance stance) {
+        return stance.transit;
+    }
+
+    /**
      * {@code TradeSorter.buy}, a purchase by {@code buyer} from {@code seller} at {@code price}: the buyer's tariff of it
      * when both are humans, which the seller doesn't get and the buyer's treasury does; otherwise 0 (SOS-77).
      */
