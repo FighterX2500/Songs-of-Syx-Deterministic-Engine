@@ -1,6 +1,6 @@
 diff -ru -U2 a/game/GAME.java b/game/GAME.java
 --- a/game/GAME.java	2026-06-17 19:41:18.000000000 +0500
-+++ b/game/GAME.java	2026-10-31 20:45:42.807182700 +0500
++++ b/game/GAME.java	2026-11-05 05:21:06.219795000 +0500
 @@ -108,7 +108,7 @@
  				
  				SPEED.load(file);
@@ -143,18 +143,9 @@ diff -ru -U2 a/game/GAME.java b/game/GAME.java
  	    if (S.get().developer || S.get().debug) {
  	    	SPEED.speedSet(0);
  	    	LOG.err("SYX WARNING: " + s);
-@@ -504,7 +566,7 @@
- 		}
- 		
- 		public boolean shouldAndReset() {
--			if (Math.abs(GAME.updateI()-upI) > ticks) {
-+			if (!sosdet.Hooks.outsideStep() && Math.abs(GAME.updateI()-upI) > ticks) { // SOSDET: the UI never refreshes it (SOS-32)
- 				upI = GAME.updateI();
- 				return true;
- 			}
 diff -ru -U2 a/view/battle/BattleView.java b/view/battle/BattleView.java
 --- a/view/battle/BattleView.java	2025-11-19 14:24:46.000000000 +0500
-+++ b/view/battle/BattleView.java	2026-10-31 20:45:42.805187700 +0500
++++ b/view/battle/BattleView.java	2026-11-05 05:21:06.217803700 +0500
 @@ -109,7 +109,7 @@
  	@Override
  	protected boolean update(float ds, boolean should){

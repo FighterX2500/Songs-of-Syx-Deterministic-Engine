@@ -206,6 +206,10 @@ public final class WorldActions {
             // every other human, read as that human between steps (SOS-101)
             Rig.later(() -> Rig.note(tradeRoutes()));
             return true;
+        case "wcaravans": // wcaravans: notes this PC's human, the caravans to each human's capital, and what vanilla's
+            // inbound list (the world map's top-left caravan button) counts on this PC, between steps (SOS-147)
+            Rig.later(() -> Rig.note(caravans()));
+            return true;
         case "wroutes": // wroutes: notes the capitals, and between every two humans the tiles apart, the path armies and
             // caravans walk, the land it crosses, and whether the market's own walk reaches (SOS-120)
             Rig.later(() -> Rig.note(humanRoutes()));
@@ -1805,6 +1809,36 @@ public final class WorldActions {
                 Engine.asHuman(before);
             }
         }
+        return s.toString();
+    }
+
+    private static String caravans() {
+        StringBuilder s = new StringBuilder("wcaravans step ").append(Engine.step()).append(" updateI ")
+                .append(GAME.updateI()).append(" player slot ").append(FACTIONS.player().index()).append(" capital ")
+                .append(FACTIONS.player().capitolRegion() == null ? -1 : FACTIONS.player().capitolRegion().index());
+        int all = 0;
+        int[] to = new int[FACTIONS.MAX()];
+        StringBuilder regions = new StringBuilder();
+        for (world.entity.WEntity e : WORLD.ENTITIES().allFast()) {
+            if (e != null && e.added() && e instanceof world.entity.caravan.Shipment) {
+                all++;
+                Region d = ((world.entity.caravan.Shipment) e).destination();
+                if (d != null && d.faction() != null) {
+                    to[d.faction().index()]++;
+                    if (d.faction() instanceof game.faction.player.Player) {
+                        regions.append(' ').append(d.index()).append('>').append(e.faction() == null ? -1 : e.faction().index());
+                    }
+                }
+            }
+        }
+        s.append(" | caravans ").append(all);
+        for (int h : Hooks.humanSlots()) {
+            Region c = FACTIONS.getByIndex(h).capitolRegion();
+            s.append(" | to slot ").append(h).append(' ').append(to[h]).append(" (capital ").append(c == null ? -1 : c.index())
+                    .append(')');
+        }
+        s.append(" | to humans' regions (region>faction):").append(regions);
+        s.append(" | vanilla's list here ").append(new view.world.ui.panels.UICaravanList().all().size());
         return s.toString();
     }
 }
