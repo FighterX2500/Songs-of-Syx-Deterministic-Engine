@@ -2086,9 +2086,17 @@ public final class Hooks {
     public static void runBattleJobs(Runnable orders, Runnable centres, Runnable trajectories, Runnable general,
             Runnable status) {
         Session s = Engine.session();
+        boolean local = s.localRuns();
+        if (local && !s.jobs.local && s.ai().mode() == AiMode.HOST) {
+            // the host's general thread can still run its city's own battle, an assault there: it stops before the
+            // local battle's general runs in the step, and doesn't start again while that battle runs (SOS-145)
+            GAME.BATTLE_THREADS().pause();
+            GAME.BATTLE_THREADS().unpause(false);
+        }
+        s.jobs.local = local;
         // a local battle's general runs in the step on its own PC: only that PC runs the battle (SOS-93)
         s.jobs.run(s.clock.step(), orders, centres, trajectories, general, status,
-                s.ai().mode() == AiMode.IN_STEP || s.localRuns());
+                s.ai().mode() == AiMode.IN_STEP || local);
     }
 
     /**

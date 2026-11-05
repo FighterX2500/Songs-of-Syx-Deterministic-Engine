@@ -15,6 +15,8 @@ final class BattleJobs {
     static final int STATUS_EVERY_STEPS = 30;
 
     private boolean running;
+    /** Whether the last run was a local battle's, whose general runs in the step (SOS-93, SOS-145). */
+    boolean local;
     /** Time in each job since the stats were reset: orders, centres, trajectories, general, status. */
     final long[] nanos = new long[5];
 
