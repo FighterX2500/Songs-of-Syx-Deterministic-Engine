@@ -275,7 +275,9 @@ final class Session {
      * While this PC views another human's city, its own human's wait until its city is back (SOS-82).
      */
     final java.util.function.Consumer<Txn> ownTxns = t -> {
-        if (t.human == localHuman && frozen(localHuman)) { // first: a local battle's PC runs no other city (SOS-112)
+        if (t.human == localHuman && localCityBack()) { // its after-battle's, as its own city runs again (SOS-149)
+            txnApplier().accept(t);
+        } else if (t.human == localHuman && frozen(localHuman)) { // first: a local battle's PC runs no other city (SOS-112)
             this.heldTxns.add(sosdet.game.HeldTxn.of(t)); // the queue clears and reuses t after the step (SOS-97)
         } else if (t.human == cityHuman() && !frozen(t.human)) { // a fighter's waits on its own PC, a watcher's game too
             txnApplier().accept(t);
@@ -389,6 +391,9 @@ final class Session {
             } else if (b != null && b.thaw == step) {
                 locals[slot] = null;
                 thawReports(slot, step);
+                if (slot == localHuman && !heldTxns.isEmpty()) {
+                    applyHeldTxns(); // none should be left: none waits for a return that has happened (SOS-149)
+                }
                 if (b.away) {
                     pacer.away(b.pc, false);
                 }
@@ -589,6 +594,28 @@ final class Session {
         }
     }
 
+    /**
+     * This PC's local battle is over and its own city is loaded back: the city runs again and takes its transactions,
+     * while the world reads its human frozen until the thaw (SOS-149).
+     */
+    boolean localCityBack() {
+        LocalBattle b = locals[localHuman];
+        return b != null && b.back && !localBackLoading;
+    }
+
+    /** Between steps, this PC's own city is back: the transactions it missed apply, as its city's tail would have. */
+    private void applyHeldTxns() {
+        part = StepParts.CITY;
+        for (int i = 0; i < heldTxns.size(); i++) {
+            Txn t = heldTxns.get(i).resolve(); // the loaded game's objects (SOS-97)
+            if (t != null) {
+                txnApplier().accept(t);
+            }
+        }
+        part = -1;
+        heldTxns.clear();
+    }
+
     /** Between steps, the same on every PC: this battle's result has applied, it hasn't gone back, and no prompt is open. */
     boolean localBackDue(LocalBattle b) {
         return b != null && !b.back && b.resultStep >= 0 && worldPromptOrQuestion() == null;
@@ -601,15 +628,7 @@ final class Session {
         restoreRetired();
         localWorld = null;
         localMoves = null;
-        part = StepParts.CITY;
-        for (int i = 0; i < heldTxns.size(); i++) {
-            Txn t = heldTxns.get(i).resolve(); // the loaded game's objects (SOS-97)
-            if (t != null) {
-                txnApplier().accept(t);
-            }
-        }
-        part = -1;
-        heldTxns.clear();
+        applyHeldTxns();
         localMessagesBack = localMessages.size();
         for (int i = 0; i < localMessages.size(); i++) {
             localMessages.get(i).run();
@@ -908,15 +927,7 @@ final class Session {
         restoreRetired();
         viewWorld = null;
         viewMoves = null;
-        part = StepParts.CITY; // the city tail's work, before the thaw step's report is taken
-        for (int i = 0; i < heldTxns.size(); i++) {
-            Txn t = heldTxns.get(i).resolve(); // the loaded game's objects (SOS-97)
-            if (t != null) {
-                txnApplier().accept(t);
-            }
-        }
-        part = -1;
-        heldTxns.clear();
+        applyHeldTxns(); // the city tail's work, before the thaw step's report is taken
         ai().watchOnly(spectating());
         viewLimit.stop();
         viewLimit.battle(-1);
