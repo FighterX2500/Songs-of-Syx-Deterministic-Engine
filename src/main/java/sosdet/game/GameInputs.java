@@ -133,8 +133,8 @@ public final class GameInputs implements Consumer<CityReport> {
     /** SOS-145: as {@link #divResolve(Object, Induvidual[])}, for a local battle's survivors: a count and their mean experience. */
     public Input divResolve(Object division, int survivors, double experience) {
         FilePutter p = divisionNamed((ADDiv) division);
+        p.d(experience); // before the count: the game's reader refuses a double in a record's last 8 bytes
         p.i(survivors);
-        p.d(experience);
         return new Input(InputKind.DIV_RESOLVE_COUNT, 0, codec.written());
     }
 
@@ -406,8 +406,8 @@ public final class GameInputs implements Consumer<CityReport> {
             WArmy a = Args.army(g.i(), g.i());
             int place = g.i();
             int index = g.i();
-            int survivors = g.i();
             double experience = g.d();
+            int survivors = g.i();
             if (a == null || place < 0 || place >= a.divs().size() || a.divs().get(place).index != index) {
                 return; // gone or moved, as above
             }
