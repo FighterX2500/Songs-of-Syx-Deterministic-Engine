@@ -54,6 +54,13 @@ public final class View {
     /** The last freeze or thaw step this PC, neither the owner nor the viewer, reloaded its own world at. */
     long reloaded = -1;
     /**
+     * The last step another view of the same owner froze at while this one ran, the same on every PC; -1 for none. The
+     * owner reloads its game there for the new viewer, so this viewer's PC loads the same save again (SOS-151).
+     */
+    volatile long rejoinAt = -1;
+    /** The viewer's PC: the last {@link #rejoinAt} whose save it has loaded. */
+    long rejoinLoaded = -1;
+    /**
      * A battle began at the freeze step, before any PC loaded for the view: nobody loads for it, the viewer's PC runs
      * its own city on, and the view thaws after the battle as any other (SOS-82).
      */
@@ -127,6 +134,14 @@ public final class View {
     /** The step the viewer thaws at, the same on every PC; -1 while no end is in the log. */
     public long thaw() {
         return thaw;
+    }
+
+    /**
+     * The last step another viewer joined this view's city or battle at, the same on every PC; -1 for none. The owner's
+     * save from that step goes to this viewer too, which loads it there ({@link Engine#viewRejoin}).
+     */
+    public long rejoinAt() {
+        return rejoinAt;
     }
 
     /** True from the freeze step while the view runs or loads: the viewer's human is frozen. */
