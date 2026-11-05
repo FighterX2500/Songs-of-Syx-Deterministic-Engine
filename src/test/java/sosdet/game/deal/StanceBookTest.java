@@ -29,6 +29,15 @@ class StanceBookTest {
     }
 
     @Test
+    void aVassalSparesItsOverlordsTradePartnersColleaguesAndAllies() {
+        assertTrue(StanceBook.friendOfOverlord(TRADE));
+        assertTrue(StanceBook.friendOfOverlord(PACT));
+        assertTrue(StanceBook.friendOfOverlord(StanceBook.ABOVE), "an ally, and an overlord or vassal");
+        assertFalse(StanceBook.friendOfOverlord(NEUTRAL));
+        assertFalse(StanceBook.friendOfOverlord(WAR));
+    }
+
+    @Test
     void aStancePassesOnceAndGoesBackWhenItsSourceEnds() {
         StanceBook b = new StanceBook();
         assertEquals(TRADE, b.decide(2, 40, TRADE, NEUTRAL));

@@ -31,6 +31,18 @@ class CommandPartsTest {
         assertFalse(CommandParts.world(1000));
     }
 
+    /** SOS-145: the sally is a world command, and its id is none of its neighbours' (two ids alike stop the game at the menu). */
+    @Test
+    void theSallyIsAWorldCommandWithAnIdOfItsOwn() {
+        assertTrue(CommandParts.world(MapBattles.INVASION_SALLY));
+        int[] taken = {MapBattles.DEPLOY, MapBattles.RETREAT, MapBattles.CONCLUDE, MapBattles.RESTART,
+                MapBattles.LOCAL_RESULT, MapBattles.SPEED_VOTE, MapBattles.LOCAL_ORDER, MapBattles.LOCAL_VOTE,
+                Sieges.SALLY, Sieges.NPC_VASSAL, StepPrompts.ANSWER, StepPrompts.WORLD_ANSWER};
+        for (int id : taken) {
+            assertTrue(id != MapBattles.INVASION_SALLY, "id " + id + " is taken");
+        }
+    }
+
     /**
      * Own-city mode (SOS-38): a city command acts on its issuer's city only, a city question's answer too (SOS-46);
      * world ones and world questions' answers on every PC.

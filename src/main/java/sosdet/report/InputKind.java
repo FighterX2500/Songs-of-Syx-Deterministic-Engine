@@ -22,5 +22,10 @@ public enum InputKind {
     /** B6: a scripted event's world action; the bytes name the event and the action, and hold its context. */
     EVENT_ACTION,
     /** SOS-125: a city rolled a global event; the number is the city, the bytes name the event. */
-    GLOBAL_EVENT
+    GLOBAL_EVENT,
+    /**
+     * SOS-145: as {@link #DIV_RESOLVE}, for a local battle's survivors: the bytes name the division and hold the count
+     * and their mean experience.
+     */
+    DIV_RESOLVE_COUNT
 }

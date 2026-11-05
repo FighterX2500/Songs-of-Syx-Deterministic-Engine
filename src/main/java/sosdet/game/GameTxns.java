@@ -130,6 +130,9 @@ public final class GameTxns implements Consumer<Txn> {
         case REMOVE_PEOPLE:
             removePeople((int[]) t.a);
             break;
+        case SALLY_RESULT:
+            GameSally.after(t.i, (Object[]) t.b);
+            break;
         default:
             throw new IllegalStateException("SOSDET: no applier for transaction kind " + t.kind);
         }

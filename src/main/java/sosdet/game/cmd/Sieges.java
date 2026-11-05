@@ -47,6 +47,7 @@ public final class Sieges {
     static final int NPC_BESIEGE = 7975;
     static final int ARMY_FILL = 7976;
     static final int NPC_WAR = 7977;
+    static final int NPC_VASSAL = 7978;
 
     static final List<Command> ALL = List.of(new Command(SALLY, "siegeSally", r -> applySally()),
             new Command(WAIT_PASSED, "siegeWaitPassed", r -> applyWaitPassed(r.i())),
@@ -71,7 +72,8 @@ public final class Sieges {
                 return true;
             }),
             new Command(NPC_BESIEGE, "npcBesiegeForTest", r -> applyNpcBesiege(r.i())),
-            new Command(NPC_WAR, "npcWarForTest", r -> applyNpcWar(r.i(), r.i())));
+            new Command(NPC_WAR, "npcWarForTest", r -> applyNpcWar(r.i(), r.i())),
+            new Command(NPC_VASSAL, "npcVassalForTest", r -> applyNpcVassal(r.i(), r.i())));
 
     /** Patch 15's {@code WBattles.sosdetSally}: the engine compiles against the shipped game, without it. */
     private static final Method SALLY_OUT = sallyOutMethod();
@@ -302,6 +304,29 @@ public final class Sieges {
 
     private static boolean applyNpcWar(int slot, int npc) {
         atWar(FACTIONS.getByIndex(npc), FACTIONS.getByIndex(slot));
+        return true;
+    }
+
+    /** Test tooling, never a player's: the NPC faction in {@code npc} becomes the vassal of the human in {@code slot} (SOS-146). */
+    public static void npcVassalForTest(int slot, int npc) {
+        if (!Commands.capturing()) {
+            throw new IllegalStateException("SOSDET: an NPC's vassalage outside a session's play");
+        }
+        Commands.capture(new CmdWriter(NPC_VASSAL).i(slot).i(npc));
+    }
+
+    private static boolean applyNpcVassal(int slot, int npc) {
+        Faction human = FACTIONS.getByIndex(slot);
+        Faction f = FACTIONS.getByIndex(npc);
+        if (!(f instanceof FactionNPC) || !f.isActive() || DIP.overlord(f) == human) {
+            return false;
+        }
+        int before = Hooks.currentHumanSwap(human); // DIP.set reads the player
+        try {
+            DIP.VASSAL().set(f, human);
+        } finally {
+            Hooks.currentHumanSwap(before);
+        }
         return true;
     }
 

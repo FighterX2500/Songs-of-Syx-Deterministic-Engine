@@ -449,6 +449,74 @@ public final class Hooks {
         Engine.session().engaging.generate = generate;
     }
 
+    // ------------------------------------------------------------ the sally against an invasion (SOS-145)
+
+    /**
+     * Patch 99, the invasion message's Attack, on the defender's PC outside the step: in a session the sally is a world
+     * command and runs as a local battle, as a world battle's Engage does (spec §9). True when it was taken over.
+     */
+    public static boolean invasionSally(int ref) {
+        if (Engine.session() == null) {
+            return false;
+        }
+        sosdet.game.cmd.MapBattles.invasionSally(ref);
+        return true;
+    }
+
+    /**
+     * The sally command, in the world part on every PC, as the defender: a local battle whose armies are those vanilla's
+     * Attack takes, generated on the defender's PC at the freeze step. Skipped (false) on every PC alike when the
+     * defender already fights, views or is viewed in a battle, or a battle between humans runs.
+     */
+    public static boolean invasionSallyEngage(int ref) {
+        Session s = Engine.session();
+        int human = s.currentHuman;
+        if (!s.localBattles || s.locals[human] != null || s.battle != null || s.frozen(human)) {
+            return false;
+        }
+        LocalBattle b = s.localSally(s.clock.step(), human, sosdet.game.GameSally.armies());
+        for (int c = 0; c < b.roster.commanders.length; c++) {
+            b.roster.reports[c] = s.reports(b.roster.commanders[c]).current();
+        }
+        if (human == s.localHuman) {
+            b.generate = () -> sallyGenerate(b, ref);
+        }
+        b.after = r -> sallyResult(human, ref, (Object[]) r);
+        return true;
+    }
+
+    /**
+     * The battle PC, at the freeze step ({@link #localGenerate}): vanilla's Attack, as the defender. When the invaders
+     * began their assault since the click, there is no battle: the local battle ends with no result on every PC.
+     */
+    private static void sallyGenerate(LocalBattle b, int ref) {
+        int was = currentHumanSwap(b.human);
+        boolean made;
+        try {
+            made = sosdet.game.GameSally.generate(ref);
+        } finally {
+            currentHumanSwap(was);
+        }
+        if (!made) {
+            b.resultSent = true;
+            orderCapture(sosdet.ai.AiEntry.COMMAND, -1, sosdet.game.cmd.MapBattles.localCalledOffCommand(b.human));
+        }
+    }
+
+    /**
+     * Every PC, the sally's after-battle in the world part ({@code Session.localAfter}): the result goes to the defender's
+     * city, where vanilla's after-battle runs; its world effects come back through that city's report (B4).
+     */
+    private static void sallyResult(int human, int ref, Object[] result) {
+        if ((Integer) result[0] < 0) {
+            return; // called off: no battle was fought
+        }
+        Txn x = toCity(TxnKind.SALLY_RESULT);
+        x.human = human;
+        x.i = ref;
+        x.b = result;
+    }
+
     /**
      * Patch 99, the battle's exit on a local battle's PC (Retreat, or Close on the victory or defeat panel): its result
      * goes to every PC as a command, applied at the step the host stamps; nothing loads now. True when it is a local
@@ -1443,6 +1511,15 @@ public final class Hooks {
     }
 
     /**
+     * {@code DipWarPlayer.validEnemy} and {@code validProxy}, in the slice of {@code human}: true when {@code f} is the
+     * vassal of another human who is {@code human}'s trade partner, colleague or ally. It then demands nothing, starts
+     * no war and works no harm against {@code human} (owner, 2026-11-05; SOS-146).
+     */
+    public static boolean friendOfOverlord(Faction f, Faction human) {
+        return Engine.session() != null && HumanDeals.friendOfOverlord(f, human);
+    }
+
+    /**
      * {@code TradeSorter.buy}: what reaches {@code seller} of a sale for which {@code buyer} paid {@code paid}, the
      * seller's own price being {@code asked} and the buyer's tariff {@code cut}. Between humans the toll is lost: it pays
      * the caravan, so the seller gets its price less the tariff (owner, 2026-11-04; SOS-138). From an NPC, as vanilla,
@@ -1831,6 +1908,16 @@ public final class Hooks {
         return true;
     }
 
+    /** {@code Attack.afterExit} after a sally (SOS-145): as above, for a local battle's survivor count and their mean experience. */
+    public static boolean divResolve(Object div, int survivors, double experience) {
+        Session s = inCityPart();
+        if (s == null) {
+            return false;
+        }
+        s.cityInputs.add(s.inputs().divResolve(div, survivors, experience));
+        return true;
+    }
+
     /** The targets and kinds of world mark a scripted event sets ({@code EContext}'s selections, B6). */
     public static final int EVENT_REGION = 0;
     public static final int EVENT_FACTION = 1;
@@ -1999,9 +2086,17 @@ public final class Hooks {
     public static void runBattleJobs(Runnable orders, Runnable centres, Runnable trajectories, Runnable general,
             Runnable status) {
         Session s = Engine.session();
+        boolean local = s.localRuns();
+        if (local && !s.jobs.local && s.ai().mode() == AiMode.HOST) {
+            // the host's general thread can still run its city's own battle, an assault there: it stops before the
+            // local battle's general runs in the step, and doesn't start again while that battle runs (SOS-145)
+            GAME.BATTLE_THREADS().pause();
+            GAME.BATTLE_THREADS().unpause(false);
+        }
+        s.jobs.local = local;
         // a local battle's general runs in the step on its own PC: only that PC runs the battle (SOS-93)
         s.jobs.run(s.clock.step(), orders, centres, trajectories, general, status,
-                s.ai().mode() == AiMode.IN_STEP || s.localRuns());
+                s.ai().mode() == AiMode.IN_STEP || local);
     }
 
     /**

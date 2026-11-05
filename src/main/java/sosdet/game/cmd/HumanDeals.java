@@ -413,6 +413,17 @@ public final class HumanDeals {
         Hooks.notice(Notice.STANCE_PASSED, human.index(), vassal.index(), to);
     }
 
+    /**
+     * In the world part, {@code DipWarPlayer}'s enemies of {@code human}: true when {@code npc} is the vassal of another
+     * human who is {@code human}'s trade partner, colleague or ally, so it is no enemy of {@code human} (SOS-146). World
+     * state only: the same on every PC.
+     */
+    public static boolean friendOfOverlord(Faction npc, Faction human) {
+        Faction overlord = DIP.overlord(npc);
+        return human != null && overlord instanceof Player && overlord != human && !Hooks.retired(overlord.index())
+                && StanceBook.friendOfOverlord(code(DIP.get(overlord, human)));
+    }
+
     /** A stance as {@link StanceBook}'s code. */
     private static int code(DipStance s) {
         if (s == DIP.WAR()) {

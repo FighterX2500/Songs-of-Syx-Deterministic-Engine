@@ -122,7 +122,24 @@ public final class GameInputs implements Consumer<CityReport> {
      * mistaken for another.
      */
     public Input divResolve(Object division, Induvidual[] survivors) {
-        ADDiv div = (ADDiv) division;
+        FilePutter p = divisionNamed((ADDiv) division);
+        p.i(survivors.length);
+        for (Induvidual i : survivors) {
+            soldiers().write(i, p);
+        }
+        return new Input(InputKind.DIV_RESOLVE, 0, codec.written());
+    }
+
+    /** SOS-145: as {@link #divResolve(Object, Induvidual[])}, for a local battle's survivors: a count and their mean experience. */
+    public Input divResolve(Object division, int survivors, double experience) {
+        FilePutter p = divisionNamed((ADDiv) division);
+        p.i(survivors);
+        p.d(experience);
+        return new Input(InputKind.DIV_RESOLVE_COUNT, 0, codec.written());
+    }
+
+    /** A new input's bytes, begun with the division's name: its army, the army's iteration, its place, its index. */
+    private FilePutter divisionNamed(ADDiv div) {
         WArmy a = div.army();
         if (a == null) {
             throw new IllegalArgumentException("SOSDET: a division with no army fought in the city: " + div.index);
@@ -139,11 +156,7 @@ public final class GameInputs implements Consumer<CityReport> {
         p.i(a.iteration());
         p.i(place);
         p.i(div.index);
-        p.i(survivors.length);
-        for (Induvidual i : survivors) {
-            soldiers().write(i, p);
-        }
-        return new Input(InputKind.DIV_RESOLVE, 0, codec.written());
+        return p;
     }
 
     /** B6: a scripted event sets a world mark ({@code Hooks.EVENT_*}), which the city reads as sent until it applies. */
@@ -269,6 +282,9 @@ public final class GameInputs implements Consumer<CityReport> {
             case DIV_RESOLVE:
                 divResolve(in.data());
                 break;
+            case DIV_RESOLVE_COUNT:
+                divResolveCount(in.data());
+                break;
             case EVENT_MARK:
                 ByteBuffer m = ByteBuffer.wrap(in.data());
                 applyEventMark(in.arg / EventMarks.KINDS, in.arg % EventMarks.KINDS, m.getInt(), m.getInt());
@@ -379,6 +395,23 @@ public final class GameInputs implements Consumer<CityReport> {
                 return; // the army or the division is gone, or the division moved: the survivors are lost with it
             }
             a.divs().get(place).resolve(survivors);
+        } catch (IOException e) {
+            throw new IllegalStateException("SOSDET: cannot read a division's survivors", e);
+        }
+    }
+
+    private void divResolveCount(byte[] data) {
+        FileGetter g = codec.reader(data);
+        try {
+            WArmy a = Args.army(g.i(), g.i());
+            int place = g.i();
+            int index = g.i();
+            int survivors = g.i();
+            double experience = g.d();
+            if (a == null || place < 0 || place >= a.divs().size() || a.divs().get(place).index != index) {
+                return; // gone or moved, as above
+            }
+            a.divs().get(place).resolve(survivors, experience);
         } catch (IOException e) {
             throw new IllegalStateException("SOSDET: cannot read a division's survivors", e);
         }
