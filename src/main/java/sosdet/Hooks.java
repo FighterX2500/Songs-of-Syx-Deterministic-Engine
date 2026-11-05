@@ -2087,16 +2087,19 @@ public final class Hooks {
             Runnable status) {
         Session s = Engine.session();
         boolean local = s.localRuns();
-        if (local && !s.jobs.local && s.ai().mode() == AiMode.HOST) {
-            // the host's general thread can still run its city's own battle, an assault there: it stops before the
-            // local battle's general runs in the step, and doesn't start again while that battle runs (SOS-145)
+        if (local != s.jobs.local && s.ai().mode() != AiMode.IN_STEP) {
+            // the general's thread starts again as the battle's: on its fighter's PC it runs the local battle's
+            // general, its changes on the tape; a watcher's runs none (SOS-150). On the host it stops its city's own
+            // general first, an assault's, as both used one flooder (SOS-145). At the end it stops the battle's general
+            // before its captures can reach the city, then starts as before.
             GAME.BATTLE_THREADS().pause();
+            if (!local) {
+                s.localGeneral.end();
+            }
             GAME.BATTLE_THREADS().unpause(false);
         }
         s.jobs.local = local;
-        // a local battle's general runs in the step on its own PC: only that PC runs the battle (SOS-93)
-        s.jobs.run(s.clock.step(), orders, centres, trajectories, general, status,
-                s.ai().mode() == AiMode.IN_STEP || local);
+        s.jobs.run(s.clock.step(), orders, centres, trajectories, general, status, s.ai().mode() == AiMode.IN_STEP);
     }
 
     /**
@@ -2105,14 +2108,19 @@ public final class Hooks {
      */
     public static boolean threadRunsInStep(boolean general) {
         Session s = Engine.session();
-        return s != null && !(general && s.ai().mode() == AiMode.HOST && !s.localRuns());
+        return s != null && !(general && (s.ai().mode() == AiMode.HOST && !s.localRuns() || localGeneralHere(s)));
+    }
+
+    /** True on a local battle's fighter's PC: the battle's general runs on its own thread (SOS-150). */
+    private static boolean localGeneralHere(Session s) {
+        return s.localHere() != null && s.ai().mode() != AiMode.IN_STEP;
     }
 
     /** What a battle thread's {@code working()} answers; {@code vanilla} is its own answer. */
     public static boolean slaveWorking(boolean vanilla) {
         Session s = Engine.session();
-        if (s == null || s.ai().capturing()) {
-            return vanilla; // the host's general runs its own thread, as in vanilla
+        if (s == null || s.ai().capturing() || s.localGeneral.is(Thread.currentThread())) {
+            return vanilla; // the host's general runs its own thread, as in vanilla, and a local battle's (SOS-150)
         }
         return s.jobs.running();
     }
@@ -2122,7 +2130,9 @@ public final class Hooks {
     /** The general's job starts; on the host this is its own thread, whose changes are captured from now on. */
     public static void aiGeneralJob() {
         Session s = Engine.session();
-        if (s != null && !s.localRuns()) { // a local battle's general captures nothing (SOS-93)
+        if (s != null && localGeneralHere(s)) {
+            s.localGeneral.threadIs(Thread.currentThread()); // its changes go on the battle's tape (SOS-150)
+        } else if (s != null && !s.localRuns()) {
             s.ai().generalThreadIs(Thread.currentThread());
         }
     }
@@ -2130,12 +2140,19 @@ public final class Hooks {
     /** True on the host's general thread: a change goes into the AI log instead of the live state. */
     public static boolean aiCapturing() {
         Session s = Engine.session();
-        return s != null && s.ai().capturing();
+        return s != null && (s.ai().capturing() || s.localGeneral.is(Thread.currentThread()));
     }
 
     /** A change from the host's general thread, applied by every PC at step N + 30. */
     public static void aiCapture(int kind, int div, byte[] payload) {
-        Engine.session().ai().capture(kind, div, payload);
+        Session s = Engine.session();
+        if (s.localGeneral.is(Thread.currentThread())) {
+            if (s.localHere() != null) { // past the battle's end its general's last changes are dropped (SOS-150)
+                s.localGeneral.capture(kind, div, payload);
+            }
+            return;
+        }
+        s.ai().capture(kind, div, payload);
     }
 
     /**

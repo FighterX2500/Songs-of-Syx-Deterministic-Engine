@@ -711,6 +711,7 @@ final class Session {
     void localOrders(long step) {
         LocalBattle b = localHere();
         if (b != null) {
+            localGeneral.drainInto(tape); // the general's changes since the last step, as the player's orders (SOS-150)
             tape.record(step, localPaused ? 0 : localRounds);
             java.util.ArrayList<sosdet.ai.AiEntry> orders = tape.queued();
             for (int i = 0; i < orders.size(); i++) {
@@ -781,6 +782,9 @@ final class Session {
     }
     /** This PC as a viewer: the transactions for its own city since the freeze, applied when the city is back. */
     final java.util.ArrayList<sosdet.game.HeldTxn> heldTxns = new java.util.ArrayList<>();
+
+    /** The fighter's PC: its local battle's general, on its own thread (SOS-150). */
+    final LocalGeneral localGeneral = new LocalGeneral();
     /** This PC as a viewer: its own city's engine state at the freeze ({@link ViewCity#cityState}), or null. */
     byte[] ownCityState;
     /** The owner's city's engine state, put in by the view load on the owner's and the viewer's PC, then cleared. */

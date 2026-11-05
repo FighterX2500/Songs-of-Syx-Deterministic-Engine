@@ -525,6 +525,24 @@ class LocalBattleTest {
         assertEquals(0, s.heldTxns.size());
     }
 
+    /** Hooks route the general's thread's changes: to the batch while its fighter's battle runs, dropped after. */
+    @Test
+    void theFightersGeneralCapturesOnlyWhileItsBattleRuns() {
+        Session s = session(3);
+        s.localHuman = 3;
+        LocalBattle b = s.localEngage(1234, 3);
+        s.localsAt(b.freeze);
+        s.localGeneral.threadIs(Thread.currentThread());
+        assertTrue(Hooks.aiCapturing());
+        Hooks.aiCapture(sosdet.ai.AiEntry.PATH, 2, new byte[] {7});
+        assertEquals(1, s.localGeneral.pending());
+        s.localResult(1400, 3, new Object[0]);
+        b.back = true;
+        Hooks.aiCapture(sosdet.ai.AiEntry.PATH, 3, new byte[] {8});
+        assertEquals(1, s.localGeneral.pending(), "past the battle's end: dropped, never applied to the city");
+        assertTrue(Hooks.aiCapturing(), "and still not applied at once");
+    }
+
     private static sosdet.txn.Txn sally(int human) {
         sosdet.txn.Txn t = new sosdet.txn.Txn();
         t.kind = sosdet.txn.TxnKind.SALLY_RESULT;

@@ -19,7 +19,7 @@ import sosdet.ai.AiEntry;
 final class LocalTape {
 
     static final int MAGIC = 0x53445454; // "SDTT"
-    static final int VERSION = 2;
+    static final int VERSION = 3; // 3: the fighter's general's changes are on it too (SOS-150)
 
     /** One step of the tape: {@code rounds} is 0 for a paused battle. */
     static final class Step {
