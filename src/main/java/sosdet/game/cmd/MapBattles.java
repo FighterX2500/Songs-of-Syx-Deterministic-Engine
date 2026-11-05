@@ -35,7 +35,7 @@ public final class MapBattles {
     static final int LOCAL_RESULT = 7964;
     static final int SPEED_VOTE = 7965;
     /** The defender attacks an invasion of their capital before its assault: vanilla's sally, as a local battle (SOS-145). */
-    static final int INVASION_SALLY = 7966;
+    static final int INVASION_SALLY = 7968; // 7966 and 7967 are the log's LOCAL_ORDER and LOCAL_VOTE
     /** An ally's order and a commander's vote in a local battle, through the log to the battle's PCs (SOS-119). */
     static final int LOCAL_ORDER = sosdet.ai.AiLog.LOCAL_ORDER;
     static final int LOCAL_VOTE = sosdet.ai.AiLog.LOCAL_VOTE;
