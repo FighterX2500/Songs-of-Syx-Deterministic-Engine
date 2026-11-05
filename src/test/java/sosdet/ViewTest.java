@@ -295,14 +295,46 @@ class ViewTest {
         }
     }
 
-    /** A spectator who closed an assault's view doesn't come back into it: a reload would lose the commands. */
+    /**
+     * A running assault takes new viewers, as any city (owner, 2026-11-06): a spectator who closed theirs, a player
+     * whose view a limit ended. Before it starts and once it is over it takes none: such a view would hold the world.
+     */
     @Test
-    void nobodyJoinsARunningAssault() {
+    void aRunningAssaultTakesNewViewersButNotBeforeItStartsOrAfterItEnds() {
         Session s = session(0);
         frozenView(s);
-        s.assault = new Assault(10, 3, 5, 30, null, new int[0], 0, new int[0], new int[] {3}, new int[] {1});
-        assertEquals("An assault is running.", s.viewRefusal(0, 5, null));
+        Assault a = new Assault(10, 3, 5, 30, null, new int[0], 0, new int[0], new int[] {3}, new int[] {1});
+        s.assault = a;
+        String why = "The assault is starting or ending.";
+        assertEquals(why, s.viewRefusal(0, 5, null), "before it starts");
         assertNull(s.viewRefusal(3, 5, s.views[3]), "the assault's own view");
+        a.started = true;
+        assertNull(s.viewRefusal(0, 5, null), "while it runs");
+        a.endStep = 200;
+        assertEquals(why, s.viewRefusal(0, 5, null), "once it is over");
+    }
+
+    /**
+     * A view that joins a running assault is the assault's (SOS-151): the views already there load again with it, the
+     * assault's end ends it and waits for it to thaw, and an attacker back in it commands their soldiers again.
+     */
+    @Test
+    void aViewThatJoinsARunningAssaultIsTheAssaults() {
+        Session s = session(5);
+        View first = frozenView(s);
+        Assault a = new Assault(10, 0, 5, 30, null, new int[0], 0, new int[0], new int[] {0}, new int[] {1});
+        a.started = true;
+        s.assault = a;
+        s.viewEntry(40, 0, 5, 2);
+        View joined = s.views[0];
+        s.viewsAt(60);
+        assertTrue(joined.frozen());
+        assertEquals(60, first.rejoinAt(), "the assault's first view loads again with it");
+        assertTrue(a.recommand, "the attacker commands their soldiers again");
+        s.viewEntry(70, 0, -1, View.CLOSED);
+        assertEquals(-1, joined.thaw, "nobody walks out of an assault");
+        a.endStep = 100;
+        assertTrue(s.assaultHolds(101), "the world waits for every view of it");
     }
 
     /** The viewer's PC: frozen at 30, its city of human 5 loaded and running; a second viewer, human 0, freezes at 60. */

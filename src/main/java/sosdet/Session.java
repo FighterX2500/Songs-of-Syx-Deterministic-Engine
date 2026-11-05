@@ -1304,8 +1304,9 @@ final class Session {
         ai().assaultCommanders(byDivision, artillery, a.attacks(localHuman) && commands(localHuman, a));
     }
 
+    /** A view of the assault: those that opened with it, and any that joined while it ran (SOS-151). */
     private static boolean assaultView(View v, Assault a) {
-        return v != null && v.owner == a.defender && v.freeze == a.freeze;
+        return v != null && v.owner == a.defender && v.freeze >= a.freeze;
     }
 
     private void assaultOver(long step, String cancelled) {
@@ -1568,6 +1569,10 @@ final class Session {
             v.battle = locals[v.owner] != null;
             pacer.away(v.viewerPc, true); // the host's pace waits for no viewer
             rejoinViews(v, step);
+            Assault a = assault;
+            if (a != null && a.started && a.endStep < 0 && assaultView(v, a) && a.attacks(v.viewer)) {
+                a.recommand = true; // an attacker back in the assault commands their soldiers again (SOS-151)
+            }
         }
     }
 
@@ -1636,8 +1641,9 @@ final class Session {
             return "Its player is viewing another city.";
         }
         Assault a = assault;
-        if (a != null && a.defender == owner && (self == null || !assaultView(self, a))) {
-            return "An assault is running."; // its views open together; a reload for another would lose their commands
+        if (a != null && a.defender == owner && (!a.started || a.endStep >= 0) && (self == null || self.freeze != a.freeze)) {
+            // its views open together; one that joins later is the assault's too, which then waits for it to end
+            return "The assault is starting or ending.";
         }
         for (View o : views) {
             if (o != null && o != self && o.frozen() && o.owner == viewer) {
