@@ -48,7 +48,7 @@ REMOTE_WINDOW = (1600, 900)  # a watched remote copy's window (the laptop: 1920x
 RELAY, RELAY_SRC, RELAY_PORT = BUILD / "rig" / "relay", ROOT / "rig" / "relay" / "Relay.java", 47710
 # what a remote copy reads from the copies on this PC; everything else stays here
 SHARED = ("hashes.bin,ai-host.log,reports.bin,resync.save,resync.state,wresync.save,wresync.state,wresync.state.done,"
-          "battle.save,battle.done,view.save,view.done,view.hash,view.hash2,view.close,view.tape")
+          "battle.save,battle.done,view.save,view.done,view.hash,view.hash2,view.close,view.tape,view.tape2")
 
 
 def log(msg):
@@ -847,6 +847,9 @@ def main():
                     help="with --view (STEP unused, give 999999999): 'AFTER:END': the view is a watch of the owner's local"
                          " battle, starting AFTER steps after it froze and ending END steps after (-1: with the"
                          " battle) (SOS-109)")
+    ap.add_argument("--view-join", default="",
+                    help="with --view: 'AFTER:J': copy J's human views the same city or battle too, from AFTER steps"
+                         " after the view began; the first viewer loads the owner's save again there (SOS-151)")
     ap.add_argument("--view-limits", default="",
                     help="with --view: 'CATCHUP:KEEPUP:STEPS': the viewer's limits in seconds and steps instead of the"
                          " spec's 60:60:60, so a short run hits one; the viewer's copy asks copy 1 to end the view"
@@ -966,6 +969,14 @@ def main():
                 or not all(1 <= int(p) <= args.copies for p in parts[1:3]) or parts[1] == parts[2]:
             fail("--view STEP:V:O[:END] is for --humans runs, V and O two copies from 1 to %d" % args.copies)
         view = [int(p) for p in parts] + ([] if len(parts) == 4 else [-1])
+    view_join = None
+    if args.view_join:
+        parts = args.view_join.split(":")
+        if not view or len(parts) != 2 or not all(p.isdigit() for p in parts) \
+                or not 1 <= int(parts[1]) <= args.copies or int(parts[1]) in view[1:3]:
+            fail("--view-join AFTER:J is for --view runs, J a copy from 1 to %d other than the viewer and the owner"
+                 % args.copies)
+        view_join = [int(p) for p in parts]
     if args.view_limits and (not view or len(args.view_limits.split(":")) != 3):
         fail("--view-limits CATCHUP:KEEPUP:STEPS is for --view runs")
     if args.view_stall and (not view or len(args.view_stall.split(":")) != 2
@@ -1128,6 +1139,8 @@ def main():
                                                   owner.rig), "viewat")
                 if args.view_battle:
                     c.send("viewbattle %s" % " ".join(args.view_battle.split(":")), "viewbattle")
+                if view_join:
+                    c.send("viewjoin %d %d" % (view_join[0], human_slots[view_join[1] - 1]), "viewjoin")
                 if c.k == view[1] and args.view_limits:
                     c.send("viewlimits %s" % " ".join(args.view_limits.split(":")), "viewlimits")
                 if c.k == view[1] and args.view_stall:

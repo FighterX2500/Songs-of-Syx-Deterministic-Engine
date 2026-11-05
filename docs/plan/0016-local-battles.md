@@ -34,7 +34,7 @@ Every other PC runs its own city and the world as usual.
   - O1, patch 10: the world part runs whatever the battle view;
   - O2, `Hooks.battleView` false in the world part.
 - O4: the battle's Start keeps `GAME.updateI` on the battle PC.
-- O15: the general runs in the step on the battle PC, uncaptured.
+- O15: the general runs in the step on the battle PC, uncaptured. Changed by SOS-150 (2026-11-06): its whole pass every 4 game seconds stalled the step for 0.1 to 1.5 s, and every PC waited. The general now runs on its own thread on the battle PC, as the host's does in a field battle; its changes go on the battle's tape and apply at the next step on the battle PC and every watcher, which runs no general.
 - **Pass:**
   - the two copies' world hashes stay identical from Engage through 3,000 steps of battle;
   - the other copy's city runs on;

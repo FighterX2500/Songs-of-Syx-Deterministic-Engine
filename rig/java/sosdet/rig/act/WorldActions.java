@@ -997,6 +997,10 @@ public final class WorldActions {
                 Rig.note("sally: no invasion runs in this city");
             });
             return true;
+        case "wraidend": // wraidend: notes this PC's city's invasions, this human's raid and its state, the raiders
+            // left and defeated, the treasury and the last messages: what a sally's end changes (SOS-149)
+            Rig.later(() -> Rig.note(raidEnd()));
+            return true;
         case "wnpcvassal": { // wnpcvassal <faction>: the NPC in that slot becomes this player's vassal (test tooling, SOS-146)
             int npc = Integer.parseInt(a[1]);
             Rig.later(() -> sosdet.game.cmd.Sieges.npcVassalForTest(FACTIONS.player().index(), npc));
@@ -1402,6 +1406,44 @@ public final class WorldActions {
      * while the human is at peace), the warner (an NPC slot, or -1), the rebellion timer and realm cursor (below the
      * human's region count), the raider raiding it (or none) and its raid timer. All are world state, the same on every PC.
      */
+    private static String raidEnd() {
+        StringBuilder b = new StringBuilder("raidend invading ").append(settlement.main.SETT.INVADOR().invading());
+        for (int ref = 1; ref < 10_000; ref++) {
+            settlement.battle.invasion.InvasionSpec spec = settlement.main.SETT.INVADOR().spec(ref);
+            if (spec != null) {
+                b.append(" | invasion ").append(ref).append(" canBeAttacked ").append(field(spec, "canBeAttacked"));
+            }
+        }
+        RaidingCurrent raid = (RaidingCurrent) patched(GAME.raiders(), "current");
+        Raider raider = raid.current();
+        b.append(" | raid ").append(raider == null ? "none" : raider.name).append(" state ").append(field(raid, "state"));
+        int defeated = 0;
+        for (int i = 0; i < GAME.raiders().ALL().size(); i++) {
+            if (GAME.raiders().ALL().get(i).defeated) {
+                defeated++;
+            }
+        }
+        b.append(" | raiders active ").append(GAME.raiders().active().size()).append(" defeated ").append(defeated);
+        b.append(" | treasury ").append((long) FACTIONS.player().credits().getD());
+        b.append(" | messages");
+        snake2d.util.sets.LIST<?> all = (snake2d.util.sets.LIST<?>) field(view.main.VIEW.messages(), "all");
+        for (int i = Math.max(0, all.size() - 4); i < all.size(); i++) {
+            b.append(' ').append(all.get(i).getClass().getSimpleName());
+        }
+        return b.toString();
+    }
+
+    /** A private field's value, for a probe's note: test tooling only. */
+    private static Object field(Object target, String name) {
+        try {
+            java.lang.reflect.Field f = target.getClass().getDeclaredField(name);
+            f.setAccessible(true);
+            return f.get(target);
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException("SOSDET rig: no " + target.getClass().getSimpleName() + "." + name, e);
+        }
+    }
+
     private static String events() {
         StringBuilder b = new StringBuilder("events");
         Object dip = GAME.events().world.dip;

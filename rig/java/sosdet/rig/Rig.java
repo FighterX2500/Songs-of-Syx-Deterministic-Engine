@@ -304,6 +304,10 @@ public final class Rig implements SCRIPT {
         private long viewTapeOffset;
         private int viewViewer = -1;
         private int viewOwner = -1;
+        /** A second viewer of the same owner (SOS-151): its slot, and its join, in steps after the view began; -1: none. */
+        private int viewJoiner = -1;
+        private long viewJoinAfter = -1;
+        private long viewJoinStep = -1;
         private Path viewDir;
         private int viewSeen = -1;
         private long viewHashOffset;
@@ -630,10 +634,22 @@ public final class Rig implements SCRIPT {
                     event("viewbegin", String.format(Locale.ROOT, "\"step\":%d,\"viewer\":%d,\"owner\":%d",
                             Engine.step(), viewViewer, viewOwner));
                     viewStep = -1;
+                    viewJoinStep = viewJoinAfter < 0 ? -1 : Engine.step() + viewJoinAfter;
+                }
+                if (viewJoinStep >= 0 && aiHost && Engine.step() >= viewJoinStep) {
+                    Engine.viewBegin(viewJoiner, viewOwner); // the first viewer loads the owner's save again (SOS-151)
+                    event("viewbegin", String.format(Locale.ROOT, "\"step\":%d,\"viewer\":%d,\"owner\":%d",
+                            Engine.step(), viewJoiner, viewOwner));
+                    viewJoinStep = -1;
                 }
                 if (viewEndStep >= 0 && aiHost && Engine.step() >= viewEndStep) {
                     Engine.viewEnd(viewViewer);
                     event("viewend", String.format(Locale.ROOT, "\"step\":%d,\"viewer\":%d", Engine.step(), viewViewer));
+                    if (viewJoiner >= 0) {
+                        Engine.viewEnd(viewJoiner);
+                        event("viewend", String.format(Locale.ROOT, "\"step\":%d,\"viewer\":%d", Engine.step(), viewJoiner));
+                        viewJoinStep = -1;
+                    }
                     viewEndStep = -1;
                 }
                 Path close = viewDir.resolve("view.close");
@@ -651,7 +667,7 @@ public final class Rig implements SCRIPT {
                 }
                 int me = sosdet.Hooks.localHuman();
                 // in an assault every human but the owner views, each from its own hashes (SOS-92 E)
-                int viewer = Engine.assault() != null && me != viewOwner ? me : viewViewer;
+                int viewer = me == viewJoiner || Engine.assault() != null && me != viewOwner ? me : viewViewer;
                 sosdet.View v = Engine.view(viewer);
                 if (v == null) {
                     return;
@@ -679,17 +695,20 @@ public final class Rig implements SCRIPT {
                     byte[] out = Engine.viewOut();
                     if (out != null) {
                         Files.write(viewDir.resolve("view.save"), out);
-                        Files.write(viewDir.resolve("view.done"), Long.toString(v.freeze).getBytes(StandardCharsets.UTF_8));
-                        Files.deleteIfExists(viewDir.resolve("view.hash"));
-                        Files.deleteIfExists(viewDir.resolve("view.hash2"));
-                        Files.deleteIfExists(viewDir.resolve("view.tape"));
+                        Files.write(viewDir.resolve("view.done"), Long.toString(Engine.step()).getBytes(StandardCharsets.UTF_8));
+                        for (int h = 0; h < 64; h++) { // a new viewer's streams start again; one already here goes on (SOS-151)
+                            sosdet.View n = Engine.view(h);
+                            if (n != null && n.owner == viewOwner && n.freeze == Engine.step()) {
+                                Files.deleteIfExists(viewDir.resolve(viewHashFile(h)));
+                                Files.deleteIfExists(viewDir.resolve(viewTapeFile(h)));
+                            }
+                        }
                         event("viewout", String.format(Locale.ROOT, "\"step\":%d,\"bytes\":%d,\"ms\":%.1f",
                                 Engine.step(), out.length, (System.nanoTime() - t0) / 1e6));
                     }
-                    byte[] tape = Engine.viewTapeOut(viewViewer);
-                    if (tape.length > 0) { // each piece with its length: the watcher takes whole pieces
-                        Files.write(viewDir.resolve("view.tape"), java.nio.ByteBuffer.allocate(4 + tape.length)
-                                .putInt(tape.length).put(tape).array(), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+                    writeTape(viewViewer);
+                    if (viewJoiner >= 0) {
+                        writeTape(viewJoiner);
                     }
                     for (int h = 0; h < 64; h++) {
                         byte[] hashes = Engine.view(h) != null ? Engine.viewHashOut(h) : new byte[0];
@@ -717,6 +736,16 @@ public final class Rig implements SCRIPT {
                     }
                     return;
                 }
+                if (Engine.viewRejoinDue()) { // another viewer joined: the owner's save from there, again (SOS-151)
+                    Path done = viewDir.resolve("view.done");
+                    if (Files.exists(done) && new String(Files.readAllBytes(done), StandardCharsets.UTF_8).trim()
+                            .equals(Long.toString(v.rejoinAt()))) {
+                        byte[] city = Files.readAllBytes(viewDir.resolve("view.save"));
+                        Engine.viewRejoin(city);
+                        event("viewrejoin", String.format(Locale.ROOT, "\"step\":%d,\"bytes\":%d", Engine.step(), city.length));
+                    }
+                    return;
+                }
                 if (v.state() != sosdet.View.RUNNING) {
                     return;
                 }
@@ -736,8 +765,8 @@ public final class Rig implements SCRIPT {
                     event("viewlimit", String.format(Locale.ROOT, "\"step\":%d,\"why\":%d,\"behind\":%d",
                             Engine.step(), limit, Engine.behindHost()));
                     if (aiHost) {
-                        Engine.viewEnd(viewViewer, limit);
-                    } else {
+                        Engine.viewEnd(viewer == viewJoiner ? viewJoiner : viewViewer, limit);
+                    } else if (viewer != viewJoiner) { // the joiner's copy only reports it (SOS-151)
                         Files.write(viewDir.resolve("view.close"), Integer.toString(limit).getBytes(StandardCharsets.UTF_8));
                     }
                 }
@@ -746,7 +775,7 @@ public final class Rig implements SCRIPT {
                     event("viewcaughtup", String.format(Locale.ROOT, "\"step\":%d,\"s\":%.1f", Engine.step(),
                             viewCaughtUpSeen));
                 }
-                byte[] tape = readNew(viewDir.resolve("view.tape"), viewTapeOffset);
+                byte[] tape = readNew(viewDir.resolve(viewTapeFile(viewer)), viewTapeOffset);
                 for (int at = 0; at + 4 <= tape.length; ) {
                     int length = java.nio.ByteBuffer.wrap(tape, at, 4).getInt();
                     if (at + 4 + length > tape.length) {
@@ -796,6 +825,20 @@ public final class Rig implements SCRIPT {
         /** The owner's hashes for this viewer: the rig's view, or the other viewer of an assault with three humans. */
         private String viewHashFile(int viewer) {
             return viewer == viewViewer ? "view.hash" : "view.hash2";
+        }
+
+        /** The battle's tape for this watcher: the rig's view's, or the second viewer's (SOS-151). */
+        private String viewTapeFile(int viewer) {
+            return viewer == viewJoiner ? "view.tape2" : "view.tape";
+        }
+
+        /** The owner's copy: its tape for the watcher in {@code viewer} since the last call, each piece with its length. */
+        private void writeTape(int viewer) throws IOException {
+            byte[] tape = Engine.viewTapeOut(viewer);
+            if (tape.length > 0) { // the watcher takes whole pieces
+                Files.write(viewDir.resolve(viewTapeFile(viewer)), java.nio.ByteBuffer.allocate(4 + tape.length)
+                        .putInt(tape.length).put(tape).array(), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+            }
         }
 
         /** The per-step log's hash: the city, or in own-city mode the world only (each copy's city is its own). */
@@ -1494,6 +1537,11 @@ public final class Rig implements SCRIPT {
                 viewBattleAfter = Long.parseLong(c[1]);
                 viewBattleEnd = Long.parseLong(c[2]);
                 event("viewbattle", "\"after\":" + viewBattleAfter + ",\"end\":" + viewBattleEnd);
+                return;
+            case "viewjoin": // viewjoin <steps> <viewer slot>: a second viewer joins the view <steps> after it began (SOS-151)
+                viewJoinAfter = Long.parseLong(c[1]);
+                viewJoiner = Integer.parseInt(c[2]);
+                event("viewjoin", "\"after\":" + viewJoinAfter + ",\"viewer\":" + viewJoiner);
                 return;
             case "viewlimits": // viewlimits <catch-up s> <keep-up s> <steps>: shorter view limits (SOS-82, M2)
                 Engine.viewLimits(Double.parseDouble(c[1]), Double.parseDouble(c[2]), Integer.parseInt(c[3]));

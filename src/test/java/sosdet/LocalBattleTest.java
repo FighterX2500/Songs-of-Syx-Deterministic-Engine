@@ -477,6 +477,79 @@ class LocalBattleTest {
         assertEquals(1, s.heldTxns.size());
     }
 
+    /**
+     * The sally's result (SOS-149): vanilla's after-battle runs the step after the fighter's city is back and sends that
+     * city its result, while the battle stays on until its thaw. It applies there at once, not held for a return that
+     * has already happened.
+     */
+    @Test
+    void theFightersTransactionsApplyOnceItsCityIsBack() {
+        Session s = session(3);
+        s.localHuman = 3;
+        int[] applied = {0};
+        s.txnApplier = t -> applied[0]++;
+        LocalBattle b = s.localEngage(1234, 3);
+        b.after = r -> s.ownTxns.accept(sally(3)); // as the sally's after-battle sends SALLY_RESULT to the city
+        s.localsAt(b.freeze);
+        s.localResult(1400, 3, new Object[0]);
+        b.back = true;
+        s.localBackLoading = true;
+        s.ownTxns.accept(sally(3));
+        assertEquals(0, applied[0], "while the city loads back it isn't there yet");
+        assertEquals(1, s.heldTxns.size());
+        s.heldTxns.clear(); // localBackWorld applies them as the load ends
+        s.localBackLoading = false;
+        s.localAfter(1401);
+        assertEquals(1, applied[0], "the after-battle's transaction reaches the city");
+        assertEquals(0, s.heldTxns.size());
+        assertTrue(s.frozen(3), "the world still reads the human frozen until the thaw");
+        s.ownTxns.accept(sally(0));
+        assertEquals(1, applied[0], "another human's city isn't this PC's");
+    }
+
+    /** The thaw applies what a fighter's city still holds: nothing waits for a return that has happened (SOS-149). */
+    @Test
+    void theThawAppliesWhatTheFightersCityStillHolds() {
+        Session s = session(3);
+        s.localHuman = 3;
+        int[] applied = {0};
+        s.txnApplier = t -> applied[0]++;
+        LocalBattle b = s.localEngage(1234, 3);
+        s.localsAt(b.freeze);
+        s.ownTxns.accept(sally(3));
+        assertEquals(1, s.heldTxns.size());
+        s.localResult(1400, 3, new Object[0]);
+        s.localsAt(b.thaw);
+        assertNull(s.locals[3]);
+        assertEquals(1, applied[0]);
+        assertEquals(0, s.heldTxns.size());
+    }
+
+    /** Hooks route the general's thread's changes: to the batch while its fighter's battle runs, dropped after. */
+    @Test
+    void theFightersGeneralCapturesOnlyWhileItsBattleRuns() {
+        Session s = session(3);
+        s.localHuman = 3;
+        LocalBattle b = s.localEngage(1234, 3);
+        s.localsAt(b.freeze);
+        s.localGeneral.threadIs(Thread.currentThread());
+        assertTrue(Hooks.aiCapturing());
+        Hooks.aiCapture(sosdet.ai.AiEntry.PATH, 2, new byte[] {7});
+        assertEquals(1, s.localGeneral.pending());
+        s.localResult(1400, 3, new Object[0]);
+        b.back = true;
+        Hooks.aiCapture(sosdet.ai.AiEntry.PATH, 3, new byte[] {8});
+        assertEquals(1, s.localGeneral.pending(), "past the battle's end: dropped, never applied to the city");
+        assertTrue(Hooks.aiCapturing(), "and still not applied at once");
+    }
+
+    private static sosdet.txn.Txn sally(int human) {
+        sosdet.txn.Txn t = new sosdet.txn.Txn();
+        t.kind = sosdet.txn.TxnKind.SALLY_RESULT;
+        t.human = human;
+        return t;
+    }
+
     private static sosdet.txn.Txn credits(int human) {
         sosdet.txn.Txn t = new sosdet.txn.Txn();
         t.kind = sosdet.txn.TxnKind.CREDITS;

@@ -583,9 +583,10 @@ public final class Engine {
 
     /**
      * The owner's PC, between steps at a view's freeze step: saves its game and returns it with its city's engine state,
-     * for the mod to send to the {@link #viewIn} of every viewer who freezes at this step, as all of an assault's do; then
-     * this PC runs on. One save and one load for them all: a second reload here would lose the first viewer's city. Null
-     * when no view waits for its save.
+     * for the mod to send to the {@link #viewIn} of every viewer who freezes at this step, as all of an assault's do, and
+     * to the {@link #viewRejoin} of every viewer of this city whose {@link View#rejoinAt} is this step; then this PC runs
+     * on. One save and one load for them all: a viewer that didn't load it would run another city (SOS-151). Null when
+     * no view waits for its save.
      */
     public static byte[] viewOut() {
         Session s = required();
@@ -648,6 +649,35 @@ public final class Engine {
         if (v.battle) {
             s.tape.clear();
             s.viewLimit.battle(s.watchBehindSteps());
+            sosdet.game.GameView.loadViewBattle(c.save, c.battle);
+        } else {
+            sosdet.game.GameView.loadView(c.save);
+        }
+    }
+
+    /**
+     * The viewer's PC, between steps: true while its running view holds at its {@link View#rejoinAt} step for the owner's
+     * save from there, which goes to {@link #viewRejoin} (SOS-151).
+     */
+    public static boolean viewRejoinDue() {
+        Session s = Engine.session();
+        return s != null && s.viewRejoinDue();
+    }
+
+    /**
+     * The viewer's PC, between steps at its view's {@link View#rejoinAt} step: another player's view of the same city or
+     * battle froze there and the owner reloaded its game, so this PC loads the same {@link #viewOut} bytes as that
+     * viewer does. Unlike {@link #viewIn}, this PC's own city stays as saved at its own freeze, with its engine state and
+     * the transactions it waits for; the view's hashes go on, and so does a battle's tape.
+     */
+    public static void viewRejoin(byte[] bytes) {
+        Session s = required();
+        if (s.streams.inStep()) {
+            throw new IllegalStateException("SOSDET: a view's city is loaded again between steps, not inside one");
+        }
+        ViewCity c = ViewCity.fromBytes(bytes);
+        s.viewRejoinStart(c);
+        if (s.views[s.localHuman].battle) {
             sosdet.game.GameView.loadViewBattle(c.save, c.battle);
         } else {
             sosdet.game.GameView.loadView(c.save);

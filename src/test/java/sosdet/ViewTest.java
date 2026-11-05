@@ -2,6 +2,8 @@ package sosdet;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -11,6 +13,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import sosdet.game.cmd.PlanStash;
+import sosdet.hash.HashLog;
 import sosdet.report.CitySource;
 import sosdet.report.Field;
 import sosdet.report.ReportLayout;
@@ -252,24 +255,236 @@ class ViewTest {
         assertEquals("You are viewing a city already.", Engine.viewRefusal(3, 0));
         assertEquals("Its player is viewing another city.", Engine.viewRefusal(0, 3));
         assertEquals("Your own city is being viewed.", Engine.viewRefusal(5, 0));
-        assertEquals("Another player is viewing that city.", Engine.viewRefusal(0, 5));
+        assertNull(Engine.viewRefusal(0, 5), "a second viewer joins the first (SOS-151)");
         assertEquals("That city can't be viewed.", Engine.viewRefusal(0, 0));
         assertEquals("That city can't be viewed.", Engine.viewRefusal(0, 7), "not a human");
         s.battle = new OwnBattle(40, 0, 0, -1, 0);
         assertEquals("A battle is running.", Engine.viewRefusal(0, 5));
     }
 
-    /** A second reload of the owner would lose the first view, so viewers share one freeze or wait (SOS-92 E). */
+    /** Viewers of one city share one freeze and one save (SOS-92 E), or a later one joins them (SOS-151). */
     @Test
-    void viewersOfOneCityShareAFreezeOrAreRefused() {
+    void viewersOfOneCityShareAFreezeOrJoinLater() {
         Session s = session(5); // the owner's PC
         s.viewEntry(10, 3, 5, 2);
         s.viewEntry(10, 0, 5, 2);
         s.viewsAt(30);
         assertEquals(View.RUNNING, s.views[3].state());
         assertEquals(View.RUNNING, s.views[0].state(), "both freeze at the same step");
+        assertEquals(-1, s.views[3].rejoinAt(), "one save for both: nobody loads again");
+        assertEquals(-1, s.views[0].rejoinAt());
         s.views[0] = null;
-        assertEquals("Another player is viewing that city.", s.viewRefusal(0, 5, null));
+        assertNull(s.viewRefusal(0, 5, null));
+    }
+
+    // ------------------------------------------------------------ several viewers (SOS-151)
+
+    /** Mod spec §10: any number of viewers; each join reloads the owner and every viewer already there. */
+    @Test
+    void aSecondViewerMakesTheFirstLoadTheCityAgainAtItsFreezeOnEveryPc() {
+        for (int local : new int[] {0, 3, 5}) {
+            Session s = session(local);
+            View first = frozenView(s);
+            s.viewEntry(40, 0, 5, 2);
+            View second = s.views[0];
+            s.viewsAt(60);
+            assertTrue(second.frozen(), "PC of human " + local + ": the second view opens");
+            assertEquals(60, first.rejoinAt(), "PC of human " + local);
+            assertEquals(-1, second.rejoinAt(), "PC of human " + local);
+            Engine.end();
+        }
+    }
+
+    /**
+     * A running assault takes new viewers, as any city (owner, 2026-11-06): a spectator who closed theirs, a player
+     * whose view a limit ended. Before it starts and once it is over it takes none: such a view would hold the world.
+     */
+    @Test
+    void aRunningAssaultTakesNewViewersButNotBeforeItStartsOrAfterItEnds() {
+        Session s = session(0);
+        frozenView(s);
+        Assault a = new Assault(10, 3, 5, 30, null, new int[0], 0, new int[0], new int[] {3}, new int[] {1});
+        s.assault = a;
+        String why = "The assault is starting or ending.";
+        assertEquals(why, s.viewRefusal(0, 5, null), "before it starts");
+        assertNull(s.viewRefusal(3, 5, s.views[3]), "the assault's own view");
+        a.started = true;
+        assertNull(s.viewRefusal(0, 5, null), "while it runs");
+        a.endStep = 200;
+        assertEquals(why, s.viewRefusal(0, 5, null), "once it is over");
+    }
+
+    /**
+     * A view that joins a running assault is the assault's (SOS-151): the views already there load again with it, the
+     * assault's end ends it and waits for it to thaw, and an attacker back in it commands their soldiers again.
+     */
+    @Test
+    void aViewThatJoinsARunningAssaultIsTheAssaults() {
+        Session s = session(5);
+        View first = frozenView(s);
+        Assault a = new Assault(10, 0, 5, 30, null, new int[0], 0, new int[0], new int[] {0}, new int[] {1});
+        a.started = true;
+        s.assault = a;
+        s.viewEntry(40, 0, 5, 2);
+        View joined = s.views[0];
+        s.viewsAt(60);
+        assertTrue(joined.frozen());
+        assertEquals(60, first.rejoinAt(), "the assault's first view loads again with it");
+        assertTrue(a.recommand, "the attacker commands their soldiers again");
+        s.viewEntry(70, 0, -1, View.CLOSED);
+        assertEquals(-1, joined.thaw, "nobody walks out of an assault");
+        a.endStep = 100;
+        assertTrue(s.assaultHolds(101), "the world waits for every view of it");
+    }
+
+    /** The viewer's PC: frozen at 30, its city of human 5 loaded and running; a second viewer, human 0, freezes at 60. */
+    private static View joinedAt60(Session s) {
+        View v = frozenView(s);
+        v.state = View.RUNNING; // as its own load sets
+        s.clock.resetTo(60);
+        s.viewEntry(40, 0, 5, 2);
+        s.viewsAt(60);
+        return v;
+    }
+
+    private static ViewCity city(long step, Session s, double acc, byte[] battle) {
+        double kept = s.playerUpdateAcc;
+        s.playerUpdateAcc = acc;
+        byte[] state = ViewCity.cityState(s);
+        s.playerUpdateAcc = kept;
+        return ViewCity.fromBytes(ViewCity.toBytes(step, state, new double[0], battle, new byte[0]));
+    }
+
+    @Test
+    void aViewerHoldsAtItsRejoinUntilItHasLoadedTheCityAgainKeepingItsOwn() {
+        Session s = session(3);
+        View v = frozenView(s);
+        v.state = View.RUNNING;
+        s.ownCityState = ViewCity.cityState(s);
+        byte[] own = s.ownCityState;
+        s.viewHashesFrom(3);
+        HashLog h = s.viewHashes[3];
+        s.viewDrawsBase[3] = -5;
+        s.clock.resetTo(60);
+        s.viewEntry(40, 0, 5, 2);
+        s.viewsAt(60);
+
+        assertTrue(s.viewHolds(61), "until it has the owner's save from step 60");
+        assertTrue(Engine.viewRejoinDue());
+        assertThrows(IllegalStateException.class, () -> s.viewRejoinStart(city(90, s, 7, new byte[0])), "another step's");
+        s.viewRejoinStart(city(60, s, 7, new byte[0]));
+        assertTrue(s.viewLoading);
+        assertTrue(s.viewHolds(61), "while it loads");
+        assertFalse(Engine.viewRejoinDue());
+        s.afterLoad();
+        s.viewLoadSet();
+
+        assertEquals(7, s.playerUpdateAcc, 0, "the owner's city's state, as saved at 60");
+        assertSame(own, s.ownCityState, "its own city stays as saved at its freeze");
+        assertSame(h, s.viewHashes[3], "the hashes go on");
+        assertEquals(s.cityDraws(), s.viewDrawsBase[3], "counted from the load, as on the owner's PC");
+        assertEquals(View.RUNNING, v.state());
+        assertSame(v, s.viewing());
+        assertFalse(s.viewHolds(61));
+        assertFalse(Engine.viewRejoinDue());
+    }
+
+    @Test
+    void aLaggingViewerLoadsEachJoinInOrder() {
+        Session s = session(3);
+        View v = joinedAt60(s);
+        assertThrows(IllegalStateException.class, () -> s.viewRejoinStart(city(120, s, 0, new byte[0])),
+                "the later join's save waits for its step");
+        s.viewRejoinStart(city(60, s, 0, new byte[0]));
+        s.afterLoad();
+        s.viewLoadSet();
+        s.viewEntry(70, 0, -1, View.CLOSED);
+        s.viewsAt(90);
+        assertEquals(View.ENDED, s.views[0].state());
+        s.viewEntry(95, 0, 5, 2); // human 0 comes back
+        s.clock.resetTo(120);
+        s.viewsAt(120);
+        assertEquals(120, v.rejoinAt());
+        assertTrue(s.viewHolds(121));
+        assertTrue(Engine.viewRejoinDue());
+        s.viewRejoinStart(city(120, s, 0, new byte[0]));
+        s.afterLoad();
+        s.viewLoadSet();
+        assertFalse(s.viewHolds(121));
+    }
+
+    @Test
+    void aJoinEndedInItsFreezeStepLeavesTheViewsThereAsTheyAre() {
+        Session s = session(3);
+        View v = joinedAt60(s);
+        s.endView(0, 60, View.GAME, "A battle prompt asks for you.");
+        assertEquals(-1, v.rejoinAt(), "the owner doesn't reload");
+        assertFalse(s.viewHolds(61));
+        assertFalse(Engine.viewRejoinDue());
+    }
+
+    @Test
+    void theRejoiningPcLoadsTheWholeSaveAndNoWorldOfItsOwn() {
+        Session s = session(3);
+        joinedAt60(s);
+        s.viewWorldReloads(); // a world reload here would need the game
+        assertEquals(-1, s.views[0].reloaded);
+    }
+
+    @Test
+    void theOwnerStartsTheNewViewersHashesAndKeepsTheOthers() {
+        Session s = session(5);
+        View first = frozenView(s);
+        first.sent = true;
+        s.viewHashesFrom(3);
+        HashLog h = s.viewHashes[3];
+        s.clock.resetTo(60);
+        s.viewEntry(40, 0, 5, 2);
+        s.viewsAt(60);
+        assertTrue(s.viewHolds(61), "until the mod has taken its save");
+        s.views[0].sent = true; // Engine.viewOut, which loads it here too
+        s.viewLoadStart(ViewCity.cityState(s), null, 0);
+        s.viewLoadSet();
+        assertSame(h, s.viewHashes[3]);
+        assertNotNull(s.viewHashes[0]);
+        assertNotSame(h, s.viewHashes[0]);
+        assertFalse(s.viewHolds(61));
+    }
+
+    /** Plan 0017: a battle's tape goes on across a rejoin; the watcher runs the steps it has from there. */
+    @Test
+    void aWatchersTapeGoesOnAcrossARejoin() {
+        Session s = session(3);
+        LocalBattle b = s.localEngage(1234, 5);
+        s.localsAt(b.freeze);
+        s.viewEntry(1270, 3, 5, 2);
+        View v = s.views[3];
+        s.viewsAt(1290);
+        assertTrue(v.battle());
+        v.state = View.RUNNING;
+        LocalTape fighter = new LocalTape(Session.SLOTS);
+        fighter.watch(3);
+        for (long step = 1291; step <= 1325; step++) {
+            fighter.record(step, 2);
+        }
+        s.tape.in(fighter.out(3));
+        s.viewEntry(1300, 0, 5, 2);
+        for (long step = 1291; step <= 1320; step++) {
+            if (step == 1320) {
+                s.clock.resetTo(1320);
+                s.viewsAt(1320);
+            }
+            s.localOrders(step);
+        }
+        assertEquals(1320, v.rejoinAt(), "another watcher joined");
+        assertTrue(s.viewHolds(1321));
+        s.viewRejoinStart(city(1320, s, 0, new byte[] {1}));
+        s.afterLoad();
+        s.viewLoadSet();
+        assertTrue(s.watchMayRun(1321));
+        s.localOrders(1321);
+        assertEquals(1, s.localExtraRounds(), "step 1321 of the same tape");
+        assertEquals(1325, s.tape.reached());
     }
 
     @Test

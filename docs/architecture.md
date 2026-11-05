@@ -38,7 +38,7 @@ A short map for an AI agent (or a person) about to change SOSDET. Read it first,
 
 - **A battle with own cities** (`OwnBattle`): the asked human's PC generates the battle and sends its save (`battleOut`). Every PC loads it at the Engage step (`battleIn`), and each returns to its own city after it. Between humans and allies, each division has an owner (`BattleRoster`, the commanders table).
 - **A local battle** (`LocalBattle`, `Engine.localBattles`): a human's battle against an NPC army runs on that human's PC only. Every PC's world keeps stepping, at 1x while one runs, with that human frozen from the freeze step. The result is a command (7964). Another human can watch the battle.
-- **A city view** (`View`, `ViewCity`): the viewer's PC freezes at the next report step, takes the owner's city through `viewOut` and `viewIn`, and runs it in lockstep with the owner's. View hashes compare the two.
+- **A city view** (`View`, `ViewCity`): the viewer's PC freezes at the next report step, takes the owner's city through `viewOut` and `viewIn`, and runs it in lockstep with the owner's. View hashes compare the two. When another viewer joins, every viewer already there loads the owner's new save at that step (`View.rejoinAt`, `viewRejoin`, SOS-151).
 - **An assault** (`Assault`): the besieger's Storm starts it. Every other human views the defender's city, so every PC runs that city, and the world is held from the views' freeze to their thaw. It ends held, taken or in retreat. After a taken throne the attacker sets the terms (7973).
 
 ## Player input: commands

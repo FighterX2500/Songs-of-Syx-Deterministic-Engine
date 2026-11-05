@@ -33,7 +33,7 @@ The first idea was to let k vary on the watcher, with the battle counted in roun
 
 ## The life of a watch
 
-1. **The ask.** `viewBegin` as for a city. `viewRefusal` allows a fighter as owner while its battle runs and has no result. A fighter can't be a viewer, and a second watcher of the same battle is refused (see Gaps).
+1. **The ask.** `viewBegin` as for a city. `viewRefusal` allows a fighter as owner while its battle runs and has no result. A fighter can't be a viewer. A second watcher joins the first, who loads the battle again (below, SOS-151).
 2. **The freeze step F.** `viewsAt` sets `View.battle` on every PC.
 3. **The fighter at F.** `viewOut` saves the game, takes `GameResync.captureLocal()`, and loads its own save with `GameResync.loadLocal`: a new `BattleState` around the old exiter, with the state a save leaves out (throne timer, deployment, the general's timers). Two PCs that load one save run alike; a loaded and an unloaded game don't (plan 0013). A battle already won or lost counts as still running, so the next step opens its panel again on both PCs, as no load keeps it.
 4. **The watcher at F.** `viewIn` saves its own game and loads the same bytes, with a stand-in exiter that never runs.
@@ -71,7 +71,16 @@ All on Mogus-72, two humans, world speed 5×, the battle at 1×. A retreat ends 
 
 Not tested: a watcher that reaches the 3-minute limit, a host far behind when it leaves, and a late-game battle's join.
 
+## Several watchers (SOS-151, mod spec 0.49)
+
+Until SOS-151 a second watcher of a battle, or a second viewer of a city, was refused: the owner reloads its game for each new view, and a viewer already there would keep a copy that wasn't reloaded (plan 0013, rig run V82D). Now each join loads every copy again, from one save:
+
+- **Every PC alike:** when a view freezes at F2, every running view of the same owner that froze earlier gets `View.rejoinAt` = F2 (`Session.rejoinViews`). A join ended in its own freeze step loads nothing, and the rejoin goes with it (`skipLoad`). A city under an assault takes no new viewer: a reload would lose the commands (`An assault is running.`).
+- **The owner** saves and loads once at F2, as before; the mod sends the bytes to the new viewer's `viewIn` and to each rejoining viewer's `viewRejoin`.
+- **A viewer already there** runs on to F2 at its own pace (a watcher from its tape), holds there until it has the bytes (`viewHolds`, `Engine.viewRejoinDue`), and loads them with `Engine.viewRejoin`: the same load as `viewIn`, but its own save and city state from its first freeze stay, a battle's tape goes on, and its world isn't reloaded on its own at F2 (`viewWorldReloads`). A viewer that runs behind can have two joins ahead of it; it loads each at its step, so the mod keeps incoming cities by step.
+- **Hashes:** each viewer's hash log goes on across the load; on the owner's PC and the viewer's, only its draws count again from the load (`Session.viewLoadSet`). The limits' clock starts again after the load, so the pause doesn't count.
+- Cost: every viewer and the owner pause for a load on each join; the owner uploads its save once per viewer.
+
 ## Gaps
 
-- **One watcher per battle.** A second watcher would reload the fighter's game while the first doesn't, and a loaded and a reloaded game don't run alike. The mod spec says any other player can join; the second one is refused with a reason for now.
 - **The fighter's camera** goes back to the throne on each join, as the load opens a new battle view. Open panels and the selection go too.

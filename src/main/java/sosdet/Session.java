@@ -275,7 +275,9 @@ final class Session {
      * While this PC views another human's city, its own human's wait until its city is back (SOS-82).
      */
     final java.util.function.Consumer<Txn> ownTxns = t -> {
-        if (t.human == localHuman && frozen(localHuman)) { // first: a local battle's PC runs no other city (SOS-112)
+        if (t.human == localHuman && localCityBack()) { // its after-battle's, as its own city runs again (SOS-149)
+            txnApplier().accept(t);
+        } else if (t.human == localHuman && frozen(localHuman)) { // first: a local battle's PC runs no other city (SOS-112)
             this.heldTxns.add(sosdet.game.HeldTxn.of(t)); // the queue clears and reuses t after the step (SOS-97)
         } else if (t.human == cityHuman() && !frozen(t.human)) { // a fighter's waits on its own PC, a watcher's game too
             txnApplier().accept(t);
@@ -340,7 +342,7 @@ final class Session {
 
     /** Every PC, at the Engage step: the battle of {@code human} runs on its PC only, from the next report step. */
     LocalBattle localEngage(long step, int human) {
-        // one ally: the battle runs on two PCs only (spec §8), and a battle takes one watcher's load (plan 0017)
+        // one ally: the battle runs on two PCs only (spec §8)
         int[] allies = alliesJoined(human, 1);
         LocalBattle b = localStart(step, human, closedPromptArmies, allies);
         closedPromptArmies = NO_ARMIES;
@@ -389,6 +391,9 @@ final class Session {
             } else if (b != null && b.thaw == step) {
                 locals[slot] = null;
                 thawReports(slot, step);
+                if (slot == localHuman && !heldTxns.isEmpty()) {
+                    applyHeldTxns(); // none should be left: none waits for a return that has happened (SOS-149)
+                }
                 if (b.away) {
                     pacer.away(b.pc, false);
                 }
@@ -589,6 +594,28 @@ final class Session {
         }
     }
 
+    /**
+     * This PC's local battle is over and its own city is loaded back: the city runs again and takes its transactions,
+     * while the world reads its human frozen until the thaw (SOS-149).
+     */
+    boolean localCityBack() {
+        LocalBattle b = locals[localHuman];
+        return b != null && b.back && !localBackLoading;
+    }
+
+    /** Between steps, this PC's own city is back: the transactions it missed apply, as its city's tail would have. */
+    private void applyHeldTxns() {
+        part = StepParts.CITY;
+        for (int i = 0; i < heldTxns.size(); i++) {
+            Txn t = heldTxns.get(i).resolve(); // the loaded game's objects (SOS-97)
+            if (t != null) {
+                txnApplier().accept(t);
+            }
+        }
+        part = -1;
+        heldTxns.clear();
+    }
+
     /** Between steps, the same on every PC: this battle's result has applied, it hasn't gone back, and no prompt is open. */
     boolean localBackDue(LocalBattle b) {
         return b != null && !b.back && b.resultStep >= 0 && worldPromptOrQuestion() == null;
@@ -601,15 +628,7 @@ final class Session {
         restoreRetired();
         localWorld = null;
         localMoves = null;
-        part = StepParts.CITY;
-        for (int i = 0; i < heldTxns.size(); i++) {
-            Txn t = heldTxns.get(i).resolve(); // the loaded game's objects (SOS-97)
-            if (t != null) {
-                txnApplier().accept(t);
-            }
-        }
-        part = -1;
-        heldTxns.clear();
+        applyHeldTxns();
         localMessagesBack = localMessages.size();
         for (int i = 0; i < localMessages.size(); i++) {
             localMessages.get(i).run();
@@ -692,6 +711,7 @@ final class Session {
     void localOrders(long step) {
         LocalBattle b = localHere();
         if (b != null) {
+            localGeneral.drainInto(tape); // the general's changes since the last step, as the player's orders (SOS-150)
             tape.record(step, localPaused ? 0 : localRounds);
             java.util.ArrayList<sosdet.ai.AiEntry> orders = tape.queued();
             for (int i = 0; i < orders.size(); i++) {
@@ -762,6 +782,9 @@ final class Session {
     }
     /** This PC as a viewer: the transactions for its own city since the freeze, applied when the city is back. */
     final java.util.ArrayList<sosdet.game.HeldTxn> heldTxns = new java.util.ArrayList<>();
+
+    /** The fighter's PC: its local battle's general, on its own thread (SOS-150). */
+    final LocalGeneral localGeneral = new LocalGeneral();
     /** This PC as a viewer: its own city's engine state at the freeze ({@link ViewCity#cityState}), or null. */
     byte[] ownCityState;
     /** The owner's city's engine state, put in by the view load on the owner's and the viewer's PC, then cleared. */
@@ -848,18 +871,65 @@ final class Session {
         viewLoading = true;
     }
 
+    /** This PC as a viewer: the running view load is a rejoin's ({@link #viewRejoinStart}). */
+    boolean viewRejoining;
+
+    /** This PC as a viewer, between steps: its view holds at its rejoin step for the owner's save from there (SOS-151). */
+    boolean viewRejoinDue() {
+        View v = viewing();
+        return v != null && v.rejoinAt >= 0 && v.rejoinLoaded != v.rejoinAt && clock.step() == v.rejoinAt && !viewLoading;
+    }
+
+    /**
+     * The viewer's PC, between steps at its view's rejoin step, before the game loads {@code c}: the same load as the
+     * view's own ({@link Engine#viewIn}), but this PC's own city stays as saved at the freeze, with its engine state and
+     * the transactions it waits for; the view's hashes and a battle's tape go on.
+     */
+    void viewRejoinStart(ViewCity c) {
+        View v = viewing();
+        if (v == null || !viewRejoinDue()) {
+            throw new IllegalStateException("SOSDET: a view's city to load again, with no view holding for it on this PC ("
+                    + views[localHuman] + ")");
+        }
+        if (c.step != v.rejoinAt) {
+            throw new IllegalStateException("SOSDET: the city of step " + c.step + " for the view rejoined at step "
+                    + v.rejoinAt);
+        }
+        v.rejoinLoaded = v.rejoinAt;
+        viewLoadStart(c.state, c.moves, localHuman);
+        viewRejoining = true;
+    }
+
     /** The view load is set: the world's move remainders go back, and the view's hashes count from here. */
     void viewLoadEnd() {
         sosdet.game.GameWorldLoad.unsaved(viewMoves);
+        viewLoadSet();
+    }
+
+    /**
+     * {@link #viewLoadEnd} past the game's part. A new view's hashes start here; a view rejoined at this load keeps its
+     * hash log, and only its draws count from here, on the owner's PC and the viewer's alike (SOS-151).
+     */
+    void viewLoadSet() {
         viewMoves = null;
         if (viewHashFor >= 0) {
-            viewHashesFrom(viewHashFor);
+            if (viewRejoining) {
+                viewDrawsBase[viewHashFor] = cityDraws();
+            } else {
+                viewHashesFrom(viewHashFor);
+            }
             for (View o : views) { // every viewer of this city, from the one load
-                if (o != null && o.viewer != viewHashFor && o.owner == localHuman && o.sent && o.frozen()) {
+                if (o == null || o.viewer == viewHashFor || o.owner != localHuman || !o.sent || !o.frozen()) {
+                    continue;
+                }
+                if (o.freeze == clock.step()) {
                     viewHashesFrom(o.viewer);
+                } else if (o.rejoinAt == clock.step()) {
+                    viewDrawsBase[o.viewer] = cityDraws();
                 }
             }
         }
+        viewRejoining = false;
         lastViewLoadMs = (System.nanoTime() - viewLoadStarted) / 1e6;
         if (viewing() != null) {
             viewLimit.start(System.nanoTime()); // catching up starts: the save, the download and the load don't count
@@ -908,15 +978,7 @@ final class Session {
         restoreRetired();
         viewWorld = null;
         viewMoves = null;
-        part = StepParts.CITY; // the city tail's work, before the thaw step's report is taken
-        for (int i = 0; i < heldTxns.size(); i++) {
-            Txn t = heldTxns.get(i).resolve(); // the loaded game's objects (SOS-97)
-            if (t != null) {
-                txnApplier().accept(t);
-            }
-        }
-        part = -1;
-        heldTxns.clear();
+        applyHeldTxns(); // the city tail's work, before the thaw step's report is taken
         ai().watchOnly(spectating());
         viewLimit.stop();
         viewLimit.battle(-1);
@@ -930,11 +992,14 @@ final class Session {
      * rig runs V82N to V82X) is carried or reset alike, so these PCs load only their world (owner, 2026-10-28).
      */
     void viewWorldReloads() {
+        View mine = views[localHuman];
         for (View v : views) {
             if (v == null || !v.frozen() || v.viewer == localHuman || v.loadSkipped) {
                 continue; // a view a battle ended before its load: nobody loaded, so nobody reloads
             }
-            boolean atFreeze = v.owner != localHuman && clock.step() == v.freeze;
+            boolean rejoins = mine != null && mine != v && mine.owner == v.owner && mine.rejoinAt == v.freeze;
+            // this PC's own view of that city loads the owner's whole save there instead (SOS-151)
+            boolean atFreeze = v.owner != localHuman && clock.step() == v.freeze && !rejoins;
             boolean atThaw = v.thaw >= 0 && clock.step() == v.thaw - 1;
             long at = atFreeze ? v.freeze : atThaw ? v.thaw : -1;
             if (at < 0 || v.reloaded == at) {
@@ -1239,8 +1304,9 @@ final class Session {
         ai().assaultCommanders(byDivision, artillery, a.attacks(localHuman) && commands(localHuman, a));
     }
 
+    /** A view of the assault: those that opened with it, and any that joined while it ran (SOS-151). */
     private static boolean assaultView(View v, Assault a) {
-        return v != null && v.owner == a.defender && v.freeze == a.freeze;
+        return v != null && v.owner == a.defender && v.freeze >= a.freeze;
     }
 
     private void assaultOver(long step, String cancelled) {
@@ -1437,6 +1503,16 @@ final class Session {
             v.state = View.RUNNING;
             v.back = true; // its own city never left
         }
+        for (View o : views) {
+            if (o != null && o.owner == v.owner && o.freeze == v.freeze && o.frozen() && !o.loadSkipped) {
+                return; // another view freezing here still loads: the owner reloads, and the views rejoin
+            }
+        }
+        for (View o : views) {
+            if (o != null && o.owner == v.owner && o.rejoinAt == v.freeze) {
+                o.rejoinAt = -1; // the owner doesn't reload for it: nothing to load again (SOS-151)
+            }
+        }
     }
 
     /**
@@ -1492,6 +1568,24 @@ final class Session {
             v.state = v.viewer == localHuman ? View.LOADING : View.RUNNING;
             v.battle = locals[v.owner] != null;
             pacer.away(v.viewerPc, true); // the host's pace waits for no viewer
+            rejoinViews(v, step);
+            Assault a = assault;
+            if (a != null && a.started && a.endStep < 0 && assaultView(v, a) && a.attacks(v.viewer)) {
+                a.recommand = true; // an attacker back in the assault commands their soldiers again (SOS-151)
+            }
+        }
+    }
+
+    /**
+     * Every PC, as {@code v} freezes at {@code step}: the owner reloads its game for it, so every view of that owner
+     * already running loads the same save there too (SOS-151): a reloaded and an unreloaded game don't run alike (plan
+     * 0013, rig run V82D).
+     */
+    private void rejoinViews(View v, long step) {
+        for (View o : views) {
+            if (o != null && o != v && o.owner == v.owner && o.frozen() && o.freeze != step && !o.loadSkipped) {
+                o.rejoinAt = step;
+            }
         }
     }
 
@@ -1546,10 +1640,10 @@ final class Session {
         if (fight == null && frozen(owner)) {
             return "Its player is viewing another city.";
         }
-        for (View o : views) {
-            if (fight != null && o != null && o != self && o.owner == owner && o.frozen()) {
-                return "Another player is watching that battle."; // one load of a battle per watcher: plan 0017
-            }
+        Assault a = assault;
+        if (a != null && a.defender == owner && (!a.started || a.endStep >= 0) && (self == null || self.freeze != a.freeze)) {
+            // its views open together; one that joins later is the assault's too, which then waits for it to end
+            return "The assault is starting or ending.";
         }
         for (View o : views) {
             if (o != null && o != self && o.frozen() && o.owner == viewer) {
@@ -1559,13 +1653,7 @@ final class Session {
         if (battle != null) {
             return "A battle is running.";
         }
-        for (View o : views) {
-            if (fight == null && o != null && o != self && o.owner == owner && (o.frozen() || o.state == View.SCHEDULED)
-                    && (self == null || o.freeze != self.freeze)) {
-                return "Another player is viewing that city."; // its owner's reload would lose that view
-            }
-        }
-        return worldPromptOrQuestion();
+        return worldPromptOrQuestion(); // other viewers of that city load it again with this one (SOS-151)
     }
 
     /**
@@ -1595,6 +1683,9 @@ final class Session {
             }
             if (v.state == View.LOADING && v.viewer == localHuman) {
                 return true; // until the owner's city is loaded
+            }
+            if (v.viewer == localHuman && v.rejoinAt >= 0 && step > v.rejoinAt && v.rejoinLoaded != v.rejoinAt && !v.back) {
+                return true; // until the owner's city is loaded again, as another viewer joined (SOS-151)
             }
             if (v.viewer == localHuman && v.thaw >= 0 && step >= v.thaw && !v.back) {
                 return true; // until its own city is loaded back
