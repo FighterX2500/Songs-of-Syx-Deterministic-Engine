@@ -3127,6 +3127,19 @@ public final class Hooks {
         return Engine.session() == null && localPreview;
     }
 
+    /**
+     * The city part's tile sweep, which does in a session what drawing did in vanilla (SOS-154, {@link CitySweep}): the
+     * first tile of this step's slice. Without a session or outside the step {@link #citySweepTo} is 0: no sweep.
+     */
+    public static int citySweepFrom(int area) {
+        return Engine.session() == null || outsideStep() ? 0 : CitySweep.from(step(), area);
+    }
+
+    /** One past the last tile of this step's sweep slice (see {@link #citySweepFrom}). */
+    public static int citySweepTo(int area) {
+        return Engine.session() == null || outsideStep() ? 0 : CitySweep.to(step(), area);
+    }
+
     // ------------------------------------------------------------ world state between steps (SOS-35)
 
     /**

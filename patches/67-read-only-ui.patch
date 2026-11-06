@@ -1,6 +1,6 @@
 diff -ru -U2 a/game/battle/util/Boosts.java b/game/battle/util/Boosts.java
 --- a/game/battle/util/Boosts.java	2025-11-06 12:41:16.000000000 +0500
-+++ b/game/battle/util/Boosts.java	2026-10-25 03:56:26.191596800 +0500
++++ b/game/battle/util/Boosts.java	2026-11-06 20:34:49.011204300 +0500
 @@ -53,7 +53,7 @@
  		
  		double get(DIV_SPEC div) {
@@ -12,7 +12,7 @@ diff -ru -U2 a/game/battle/util/Boosts.java b/game/battle/util/Boosts.java
  				bmul.set(bo, true);
 diff -ru -U2 a/game/faction/trade/ResourcePrices.java b/game/faction/trade/ResourcePrices.java
 --- a/game/faction/trade/ResourcePrices.java	2026-06-17 10:48:04.000000000 +0500
-+++ b/game/faction/trade/ResourcePrices.java	2026-10-25 03:56:26.201130800 +0500
++++ b/game/faction/trade/ResourcePrices.java	2026-11-06 20:34:49.012199500 +0500
 @@ -36,7 +36,7 @@
  			return NPCStockpile.AVERAGE_PRICE;
  		}
@@ -33,7 +33,16 @@ diff -ru -U2 a/game/faction/trade/ResourcePrices.java b/game/faction/trade/Resou
  			edibleLow = Integer.MAX_VALUE;
 diff -ru -U2 a/init/sprite/imps/SpriteHead.java b/init/sprite/imps/SpriteHead.java
 --- a/init/sprite/imps/SpriteHead.java	2026-03-02 09:06:46.000000000 +0500
-+++ b/init/sprite/imps/SpriteHead.java	2026-10-25 03:56:26.192147700 +0500
++++ b/init/sprite/imps/SpriteHead.java	2026-11-06 20:34:49.020144900 +0500
+@@ -24,7 +24,7 @@
+ import util.rendering.RenderData.RenderIterator;
+ import util.rendering.ShadowBatch;
+ 
+-class SpriteHead extends Sheet{
++public class SpriteHead extends Sheet{ // SOSDET: public for the step's tile sweep (SOS-154)
+ 
+ 	private final TILE_SHEET spikes;
+ 	
 @@ -49,7 +49,7 @@
  		
  		Race r = RACES.all().getC(random&0x0FF);
@@ -43,12 +52,53 @@ diff -ru -U2 a/init/sprite/imps/SpriteHead.java b/init/sprite/imps/SpriteHead.ja
  			SETT.THINGS().gore.bleed(it.tx()*C.TILE_SIZE+C.TILE_SIZEH, it.ty()*C.TILE_SIZE+C.TILE_SIZEH, 0, 0, r.appearance().colors.blood);
  		}
  		
-diff -ru -U2 a/settlement/room/home/house/HomeInstance.java b/settlement/room/home/house/HomeInstance.java
---- a/settlement/room/home/house/HomeInstance.java	2026-06-17 18:46:32.000000000 +0500
-+++ b/settlement/room/home/house/HomeInstance.java	2026-10-25 03:56:26.193127500 +0500
-@@ -464,6 +464,8 @@
+@@ -84,9 +84,24 @@
+ 		HSprite.renderHead(shadow, r, gender,  tile&3, random, x, y);
  	}
  	
++	/**
++	 * SOSDET: drawing a head bled it about once every 4 seconds in vanilla; in a session the step's tile sweep bleeds
++	 * it each time it passes, about as often (SOS-154). random is what render gets.
++	 */
++	public void stepBleed(int tx, int ty, int tile, int random) {
++		if (!is(tile))
++			return;
++		Race r = RACES.all().getC(random&0x0FF);
++		SETT.THINGS().gore.bleed(tx*C.TILE_SIZE+C.TILE_SIZEH, ty*C.TILE_SIZE+C.TILE_SIZEH, 0, 0, r.appearance().colors.blood);
++	}
++	
+ 	private boolean is(RenderIterator it) {
++		return is(it.tile());
++	}
++	
++	private boolean is(int tile) {
+ 		int count = GAME.count().EXECUTIONS.current() + 16;
+-		int r2 = (int) (GUTIL.ran2().get(it.tile()) + TIME.days().bitsSinceStart());
++		int r2 = (int) (GUTIL.ran2().get(tile) + TIME.days().bitsSinceStart());
+ 		
+ 		if (count < (r2 & 0x0FF))
+ 			return false;
+diff -ru -U2 a/settlement/room/home/house/HomeInstance.java b/settlement/room/home/house/HomeInstance.java
+--- a/settlement/room/home/house/HomeInstance.java	2026-06-17 18:46:32.000000000 +0500
++++ b/settlement/room/home/house/HomeInstance.java	2026-11-06 20:34:49.019147600 +0500
+@@ -463,7 +463,23 @@
+ 		
+ 	}
+ 	
++	/**
++	 * SOSDET: what drawing this tile of the house did in vanilla (Sprites.theDummy), done by the step's tile sweep in a
++	 * session (SOS-154): the furniture count and the candles (through the floor's choice) and the floor.
++	 */
++	public void stepTile(int tx, int ty) {
++		settlement.tilemap.floor.Floors.Floor f = occupants() > 0 ? race().home().clas(occupant(0)).floor(this) : blueprintI().constructor.flooring;
++		if (f == SETT.FLOOR().getter.get(tx, ty))
++			return;
++		if (f == null)
++			SETT.FLOOR().clearer.clear(tx, ty);
++		else
++			f.placeFixed(tx, ty);
++	}
++	
  	private void resCount() {
 +		if (sosdet.Hooks.outsideStep())
 +			return; // SOSDET: a house panel reads, only the simulation refreshes (and turns lights off) (SOS-32)
@@ -57,7 +107,7 @@ diff -ru -U2 a/settlement/room/home/house/HomeInstance.java b/settlement/room/ho
  			return;
 diff -ru -U2 a/settlement/room/home/house/Sprites.java b/settlement/room/home/house/Sprites.java
 --- a/settlement/room/home/house/Sprites.java	2026-05-21 05:35:58.000000000 +0500
-+++ b/settlement/room/home/house/Sprites.java	2026-10-25 03:56:26.193127500 +0500
++++ b/settlement/room/home/house/Sprites.java	2026-11-06 20:34:49.013194600 +0500
 @@ -358,7 +358,7 @@
  					
  					RaceHomeClass stage = h.race().home().clas(h.occupant(0));
@@ -78,7 +128,7 @@ diff -ru -U2 a/settlement/room/home/house/Sprites.java b/settlement/room/home/ho
  			}
 diff -ru -U2 a/settlement/room/industry/module/RoomProduction.java b/settlement/room/industry/module/RoomProduction.java
 --- a/settlement/room/industry/module/RoomProduction.java	2026-06-07 08:03:56.000000000 +0500
-+++ b/settlement/room/industry/module/RoomProduction.java	2026-10-25 03:56:26.194159200 +0500
++++ b/settlement/room/industry/module/RoomProduction.java	2026-11-06 20:34:49.013194600 +0500
 @@ -447,14 +447,14 @@
  	int upI = 0;
  	
@@ -107,7 +157,7 @@ diff -ru -U2 a/settlement/room/industry/module/RoomProduction.java b/settlement/
  			}
 diff -ru -U2 a/settlement/room/law/guard/GuardPower.java b/settlement/room/law/guard/GuardPower.java
 --- a/settlement/room/law/guard/GuardPower.java	2026-02-25 17:00:10.000000000 +0500
-+++ b/settlement/room/law/guard/GuardPower.java	2026-10-25 03:56:26.194159200 +0500
++++ b/settlement/room/law/guard/GuardPower.java	2026-11-06 20:34:49.013194600 +0500
 @@ -73,6 +73,8 @@
  	private int DI = 0;
  	
@@ -119,7 +169,7 @@ diff -ru -U2 a/settlement/room/law/guard/GuardPower.java b/settlement/room/law/g
  		upI = GAME.updateI();
 diff -ru -U2 a/settlement/room/main/RoomUpgrades.java b/settlement/room/main/RoomUpgrades.java
 --- a/settlement/room/main/RoomUpgrades.java	2026-03-20 08:28:00.000000000 +0500
-+++ b/settlement/room/main/RoomUpgrades.java	2026-10-25 03:56:26.194159200 +0500
++++ b/settlement/room/main/RoomUpgrades.java	2026-11-06 20:34:49.014192200 +0500
 @@ -190,7 +190,7 @@
  			
  			@Override
@@ -131,7 +181,7 @@ diff -ru -U2 a/settlement/room/main/RoomUpgrades.java b/settlement/room/main/Roo
  					int am = 0;
 diff -ru -U2 a/settlement/room/military/supply/ROOM_SUPPLY.java b/settlement/room/military/supply/ROOM_SUPPLY.java
 --- a/settlement/room/military/supply/ROOM_SUPPLY.java	2026-05-16 17:54:08.000000000 +0500
-+++ b/settlement/room/military/supply/ROOM_SUPPLY.java	2026-10-25 03:56:26.195123400 +0500
++++ b/settlement/room/military/supply/ROOM_SUPPLY.java	2026-11-06 20:34:49.014192200 +0500
 @@ -148,7 +148,7 @@
  	private RBITImp hh = new RBITImp();
  	
@@ -141,9 +191,36 @@ diff -ru -U2 a/settlement/room/military/supply/ROOM_SUPPLY.java b/settlement/roo
  			return hh.has(res);
  		}
  		upI = GAME.updateI();
+diff -ru -U2 a/settlement/room/sprite/RoomSprite1x1.java b/settlement/room/sprite/RoomSprite1x1.java
+--- a/settlement/room/sprite/RoomSprite1x1.java	2026-06-17 10:48:04.000000000 +0500
++++ b/settlement/room/sprite/RoomSprite1x1.java	2026-11-06 20:34:49.019147600 +0500
+@@ -45,6 +45,23 @@
+ 		
+ 	}
+ 
++	/**
++	 * SOSDET: what drawing this tile did to the simulation in vanilla, done by the step's tile sweep in a session
++	 * (SOS-154): a severed head bleeds. The sheet as render picks it, from the tile's random (it.ran()).
++	 */
++	public void stepTile(int tx, int ty, int tile) {
++		int ran = GUTIL.ran1().get(tile);
++		init.sprite.game.Sheets a = sheets[0];
++		if (sheets.length > 1) {
++			settlement.room.main.Room room = settlement.main.SETT.ROOMS().map.get(tx, ty);
++			if (room != null)
++				a = sheets[snake2d.util.misc.CLAMP.i(room.upgrade(tx, ty), 0, sheets.length-1)];
++		}
++		SheetPair sheet = a.get(ran);
++		if (sheet != null && sheet.s instanceof init.sprite.imps.SpriteHead)
++			((init.sprite.imps.SpriteHead) sheet.s).stepBleed(tx, ty, tile, ran>>4);
++	}
++	
+ 	public void renderRandom(SPRITE_RENDERER r, ShadowBatch s, RenderIterator it, int ran, double degrade) {
+ 		
+ 		
 diff -ru -U2 a/settlement/room/water/ROOM_WATER.java b/settlement/room/water/ROOM_WATER.java
 --- a/settlement/room/water/ROOM_WATER.java	2026-03-20 08:27:26.000000000 +0500
-+++ b/settlement/room/water/ROOM_WATER.java	2026-10-25 03:56:26.195123400 +0500
++++ b/settlement/room/water/ROOM_WATER.java	2026-11-06 20:34:49.014192200 +0500
 @@ -94,7 +94,7 @@
  			public double vGet(HCLASS_RACE popTime) {
  				if (blue instanceof RoomBlueprintIns<?>) {
@@ -155,7 +232,7 @@ diff -ru -U2 a/settlement/room/water/ROOM_WATER.java b/settlement/room/water/ROO
  						int am = 0;
 diff -ru -U2 a/settlement/room/water/RoomIrrigated.java b/settlement/room/water/RoomIrrigated.java
 --- a/settlement/room/water/RoomIrrigated.java	2026-03-20 08:27:56.000000000 +0500
-+++ b/settlement/room/water/RoomIrrigated.java	2026-10-25 03:56:26.196139800 +0500
++++ b/settlement/room/water/RoomIrrigated.java	2026-11-06 20:34:49.015190100 +0500
 @@ -60,7 +60,7 @@
  			public double vGet(HCLASS_RACE popTime) {
  				if (blue instanceof RoomBlueprintIns<?>) {
@@ -167,7 +244,7 @@ diff -ru -U2 a/settlement/room/water/RoomIrrigated.java b/settlement/room/water/
  						int am = 0;
 diff -ru -U2 a/settlement/stats/equip/EquipRange.java b/settlement/stats/equip/EquipRange.java
 --- a/settlement/stats/equip/EquipRange.java	2026-06-17 10:48:04.000000000 +0500
-+++ b/settlement/stats/equip/EquipRange.java	2026-10-25 03:56:26.196139800 +0500
++++ b/settlement/stats/equip/EquipRange.java	2026-11-06 20:34:49.015190100 +0500
 @@ -188,6 +188,10 @@
  	}
  
@@ -181,7 +258,7 @@ diff -ru -U2 a/settlement/stats/equip/EquipRange.java b/settlement/stats/equip/E
  			double t = TIME.currentSecond();
 diff -ru -U2 a/settlement/stats/muls/StatsMultipliers.java b/settlement/stats/muls/StatsMultipliers.java
 --- a/settlement/stats/muls/StatsMultipliers.java	2026-06-29 09:53:20.000000000 +0500
-+++ b/settlement/stats/muls/StatsMultipliers.java	2026-10-25 03:56:26.197121400 +0500
++++ b/settlement/stats/muls/StatsMultipliers.java	2026-11-06 20:34:49.015190100 +0500
 @@ -456,6 +456,8 @@
  
  		@Override
@@ -229,8 +306,31 @@ diff -ru -U2 a/settlement/stats/muls/StatsMultipliers.java b/settlement/stats/mu
  			if (set) {
 diff -ru -U2 a/settlement/tilemap/floor/Floors.java b/settlement/tilemap/floor/Floors.java
 --- a/settlement/tilemap/floor/Floors.java	2026-06-17 18:46:32.000000000 +0500
-+++ b/settlement/tilemap/floor/Floors.java	2026-10-25 03:56:26.197121400 +0500
-@@ -367,7 +367,7 @@
++++ b/settlement/tilemap/floor/Floors.java	2026-11-06 20:34:49.018150300 +0500
+@@ -226,6 +226,22 @@
+ 
+ 	}
+ 	
++	@Override
++	protected void update(double ds, game.debug.Profiler profiler) {
++		// SOSDET: in a session the step does on a slice of the map what drawing did on the tiles this PC showed (SOS-154)
++		int to = sosdet.Hooks.citySweepTo(TAREA);
++		for (int tile = sosdet.Hooks.citySweepFrom(TAREA); tile < to; tile++) {
++			int tx = tile % TWIDTH;
++			int ty = tile / TWIDTH;
++			setFloorMatch(tx, ty);
++			settlement.room.home.house.HomeInstance h = SETT.ROOMS().HOME.getter.get(tile);
++			if (h != null)
++				h.stepTile(tx, ty);
++			if (SETT.ROOMS().fData.sprite.get(tile) instanceof settlement.room.sprite.RoomSprite1x1)
++				((settlement.room.sprite.RoomSprite1x1) SETT.ROOMS().fData.sprite.get(tile)).stepTile(tx, ty, tile);
++		}
++	}
++	
+ 	private void setFloorMatch(int tx, int ty) {
+ 		Room r = SETT.ROOMS().map.get(tx, ty); 
+ 		
+@@ -367,7 +383,7 @@
  			} 
  			ROOMS().renderAfterGround(r, shadowBatch, i);
  			
