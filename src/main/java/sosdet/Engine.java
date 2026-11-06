@@ -408,6 +408,24 @@ public final class Engine {
      * Between steps, on the battle PC (its human's): the battle it generated at Engage, as save bytes for every PC's
      * {@link #battleIn}, once; null on every other PC, before Engage, and after the first call.
      */
+    /**
+     * The folder for this session's working saves: the battles' ({@code __battle}, {@code __beforeBattle}) and the
+     * views' ({@code __view}, {@code __beforeView}, {@code __viewReload}). Created if missing. Without this call they
+     * stay in the game's saves folder, where vanilla keeps its battle saves (SOS-155).
+     */
+    public static void workFolder(Path dir) {
+        Session s = required();
+        if (dir == null) {
+            throw new IllegalArgumentException("SOSDET: no folder for the working saves");
+        }
+        try {
+            java.nio.file.Files.createDirectories(dir);
+        } catch (java.io.IOException e) {
+            throw new java.io.UncheckedIOException("SOSDET: can't make the working saves' folder " + dir, e);
+        }
+        s.workFolder = dir;
+    }
+
     /** Own-city mode: battles against NPC armies run on their human's PC only, the world running on (SOS-93). */
     public static void localBattles(boolean on) {
         required().localBattles = on;

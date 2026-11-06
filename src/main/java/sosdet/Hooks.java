@@ -1,5 +1,6 @@
 package sosdet;
 
+import java.nio.file.Path;
 import java.util.Random;
 
 import game.GAME;
@@ -10,6 +11,7 @@ import game.faction.FCredits.CTYPE;
 import game.faction.Faction;
 import game.faction.player.PCredits;
 import game.faction.player.Player;
+import init.paths.PATHS;
 import init.type.CAUSE_LEAVE;
 import init.type.HCLASS_RACE;
 import init.trade.TRADABLE;
@@ -3109,6 +3111,24 @@ public final class Hooks {
         return s != null && s.ai().issuedHere();
     }
 
+    /** The folder the mod set for this session's working saves (SOS-155); null: the game's saves folder. */
+    public static Path workFolder() {
+        Session s = Engine.session();
+        return s == null ? null : s.workFolder;
+    }
+
+    /**
+     * A working save by name ({@code __battle}, {@code __beforeBattle}...): in the mod's folder when it set one
+     * (SOS-155), otherwise the game's own lookup in its saves folder, which wants the file to exist.
+     */
+    public static Path workSave(String name) {
+        Path dir = workFolder();
+        if (dir == null) {
+            return PATHS.local().save().get(name);
+        }
+        return dir.resolve(name + PATHS.local().save().fileEnding());
+    }
+
     /**
      * True with a session when the caller is not the simulation inside its step: the UI and rendering between steps,
      * or another thread (the host's AI general). Such a caller may read the simulation's caches but never refresh
@@ -3125,6 +3145,19 @@ public final class Hooks {
      */
     public static boolean placementPreview(boolean localPreview) {
         return Engine.session() == null && localPreview;
+    }
+
+    /**
+     * The city part's tile sweep, which does in a session what drawing did in vanilla (SOS-154, {@link CitySweep}): the
+     * first tile of this step's slice. Without a session or outside the step {@link #citySweepTo} is 0: no sweep.
+     */
+    public static int citySweepFrom(int area) {
+        return Engine.session() == null || outsideStep() ? 0 : CitySweep.from(step(), area);
+    }
+
+    /** One past the last tile of this step's sweep slice (see {@link #citySweepFrom}). */
+    public static int citySweepTo(int area) {
+        return Engine.session() == null || outsideStep() ? 0 : CitySweep.to(step(), area);
     }
 
     // ------------------------------------------------------------ world state between steps (SOS-35)

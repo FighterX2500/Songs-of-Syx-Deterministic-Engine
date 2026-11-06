@@ -289,6 +289,11 @@ final class Session {
     /** The city views in the log, by the viewer's slot: the same on every PC; null where there is none. */
     final View[] views = new View[SLOTS];
 
+    // ------------------------------------------------------------ working saves (SOS-155)
+
+    /** Where the engine's working saves go ({@code __battle}, {@code __view} and the like); null: the game's saves folder. */
+    java.nio.file.Path workFolder;
+
     // ------------------------------------------------------------ local battles (plan 0016, SOS-93)
 
     /** Battles against NPC armies run on their human's PC only (SOS-93); off, every PC runs them (plan 0006). */

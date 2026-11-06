@@ -7,7 +7,6 @@ import java.util.List;
 
 import game.battle.state.BattleState;
 import game.battle.state.BattleStateResult;
-import init.paths.PATHS;
 import settlement.stats.Induvidual;
 import settlement.stats.STATS;
 import snake2d.util.color.COLOR;
@@ -312,7 +311,7 @@ public final class MapBattles {
 
     /** The battle PC's battle as generated at Engage: its {@code __battle} save's bytes (plan 0006). */
     public static byte[] battleSave() {
-        Path file = PATHS.local().save().get(BATTLE_SAVE);
+        Path file = Hooks.workSave(BATTLE_SAVE);
         try {
             return Files.readAllBytes(file);
         } catch (IOException e) {
@@ -326,7 +325,7 @@ public final class MapBattles {
         if (b == null) {
             throw new IllegalStateException("SOSDET: no battle open to load the battle PC's battle into");
         }
-        Path file = PATHS.local().save().get(BATTLE_SAVE);
+        Path file = Hooks.workSave(BATTLE_SAVE);
         try {
             Files.write(file, bytes);
         } catch (IOException e) {
