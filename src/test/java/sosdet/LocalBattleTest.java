@@ -125,6 +125,9 @@ class LocalBattleTest {
         Session s = session(0);
         LocalBattle b = s.localEngage(1234, 3);
         assertFalse(s.localResult(1250, 3, "early"), "no result before the battle runs");
+        assertFalse(b.resultSent(), "only the battle PC's exit sends it");
+        assertEquals(-1, b.resultStep());
+        assertEquals(-1, b.thaw());
         s.localsAt(1260);
         Object result = new Object[0];
         assertTrue(s.localResult(1400, 3, result));
@@ -133,6 +136,8 @@ class LocalBattleTest {
         assertEquals(1400, b.resultStep);
         assertSame(result, b.result);
         assertEquals(1410, b.thaw);
+        assertEquals(1400, b.resultStep(), "what the mod reads (SOS-158)");
+        assertEquals(1410, b.thaw());
         s.localsAt(1409);
         assertTrue(s.frozen(3));
         s.localsAt(1410);
