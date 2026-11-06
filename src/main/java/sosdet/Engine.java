@@ -20,6 +20,7 @@ import sosdet.game.cmd.Sieges;
 import sosdet.game.deal.DealBook;
 import sosdet.report.CityReport;
 import sosdet.report.Field;
+import sosdet.report.ReportMismatch;
 import sosdet.hash.Desync;
 import sosdet.hash.HashLog;
 import sosdet.report.Shape;
@@ -318,10 +319,22 @@ public final class Engine {
         readReports(s, pc, bytes, -1);
     }
 
-    /** Another PC's report bytes into its feed; reports taken before {@code from} are dropped. */
+    /**
+     * Another PC's report bytes into its feed; reports taken before {@code from} are dropped. A report built on other
+     * game data is kept for {@link #reportMismatch} and nothing more is read: the world waits until the mod ends it.
+     */
     private static void readReports(Session s, int pc, byte[] bytes, long from) {
+        if (s.reportMismatch != null) {
+            return;
+        }
         for (byte[] r : s.feedIn(pc).read(bytes)) {
-            CityReport c = CityReport.fromBytes(r, s.city().layout());
+            CityReport c;
+            try {
+                c = CityReport.fromBytes(r, s.city().layout());
+            } catch (ReportMismatch m) {
+                s.reportMismatch = m.from(pc);
+                return;
+            }
             if (s.reportsFrom < 0 && c.faction != s.pcHumans[pc]) {
                 throw new IllegalArgumentException("SOSDET: PC " + pc + " sent a city report of faction " + c.faction
                         + ", its human is slot " + s.pcHumans[pc]);
@@ -1722,6 +1735,15 @@ public final class Engine {
      */
     public static DesyncHold desyncHold() {
         return required().desyncHold;
+    }
+
+    /**
+     * The first report from a PC whose game data isn't this one's (other mods or game files), or null (SOS-159): its
+     * {@code what}, {@code theirs}, {@code ours} and {@code pc}. The world waits for that PC's reports from then on, so the
+     * mod ends the session.
+     */
+    public static ReportMismatch reportMismatch() {
+        return required().reportMismatch;
     }
 
     /** The first desync found, or null. */

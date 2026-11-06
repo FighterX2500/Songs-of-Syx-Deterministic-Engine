@@ -149,6 +149,8 @@ final class Session {
     final java.util.List<Runnable> afterLoads = new java.util.ArrayList<>();
     /** Other PCs' report bytes that came in during a battle, by PC, fed after this PC is back in its city. */
     final java.util.List<Object[]> heldReports = new java.util.ArrayList<>();
+    /** The first report built on other game data than this PC's, with its PC (SOS-159); or null. No report is read after it. */
+    sosdet.report.ReportMismatch reportMismatch;
     /** The open battle's victory or defeat panel's close, kept for the conclude command, or null (SOS-32). */
     Runnable battleConclude;
     /** 0 = loads run as in vanilla; otherwise loads run on the simulation stream seeded with this. */

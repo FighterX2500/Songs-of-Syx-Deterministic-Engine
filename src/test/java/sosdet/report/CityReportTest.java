@@ -114,6 +114,18 @@ class CityReportTest {
         assertThrows(IllegalArgumentException.class, () -> new CityReport(V71, 0, 0, 30, new double[3]));
     }
 
+    /** SOS-159: a report from a PC with other game data names the first size that differs, its and this game's. */
+    @Test
+    void otherSizesNameTheSizeThatDiffers() {
+        byte[] bytes = new CityReport(V71, 0, 0, 30, values(V71)).toBytes();
+        ReportMismatch m = assertThrows(ReportMismatch.class,
+                () -> CityReport.fromBytes(bytes, new ReportLayout(50, 4, 8, 4, 120, 8, 6, 398, 200, 300)));
+        assertEquals("BOOSTS", m.what);
+        assertEquals(400, m.theirs);
+        assertEquals(398, m.ours);
+        assertEquals(2, m.from(2).pc);
+    }
+
     @Test
     void theWorldReadsEachReportFromItsStepUntilTheNext() {
         ReportLayout small = new ReportLayout(1, 1, 1, 1, 1, 1, 1, 1, 1, 1);
