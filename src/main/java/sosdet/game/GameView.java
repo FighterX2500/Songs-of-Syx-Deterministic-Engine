@@ -6,10 +6,11 @@ import java.nio.file.Path;
 
 import game.save.GameLoader;
 import init.paths.PATHS;
+import sosdet.Hooks;
 
 /**
  * The game's side of a city view (plan 0013, SOS-82): the owner's save, the viewer's own save while it views, and
- * loading either. The files live in the saves folder, under names no player picks.
+ * loading either. The files live in the mod's working saves' folder or the saves folder, under names no player picks.
  */
 public final class GameView {
 
@@ -88,9 +89,10 @@ public final class GameView {
         load(file("__beforeBattle"));
     }
 
-    /** A file in the saves folder; the game's own lookup wants it to exist already. */
+    /** A file in the mod's working saves' folder (SOS-155), or the saves folder; the game's own lookup wants it to exist already. */
     private static Path file(String name) {
-        return PATHS.local().save().get().resolve(name + ".save");
+        Path dir = Hooks.workFolder();
+        return (dir != null ? dir : PATHS.local().save().get()).resolve(name + ".save");
     }
 
     private static void load(Path file) {

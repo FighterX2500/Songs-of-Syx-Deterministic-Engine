@@ -48,7 +48,7 @@ Most `Engine` methods throw `IllegalStateException` with no session. `active()`,
 
 Every PC does the same, in this order. A session holds at step 0 until it is told to run.
 
-1. **Before the load:** `Engine.begin()`, then `aiHost(startId)` or `aiPeer(startId)`, the same `startId` on every PC. Then `localPc(pc)`: 0 on the host, from 1 on a peer. Then `ownCity()` if each PC runs its own city. Then `armLoadSeed(seed)`, the same on every PC, never 0.
+1. **Before the load:** `Engine.begin()`, then `aiHost(startId)` or `aiPeer(startId)`, the same `startId` on every PC. Then `localPc(pc)`: 0 on the host, from 1 on a peer. Then `ownCity()` if each PC runs its own city. Then `armLoadSeed(seed)`, the same on every PC, never 0. Optionally `workFolder(dir)`: the engine's working saves (`__battle`, `__beforeBattle`, `__view`, `__beforeView`, `__viewReload`) go there instead of the game's saves folder, where they would show in the player's Load list (SOS-155).
 2. **The load:** every PC loads the same save. For a new world, one PC calls `buildWorld`, and every PC loads its save.
 3. **After the load, at step 0:** `pcHuman(pc, slot)` for each PC, `seed(seed)`, and `speed(agreed)` if it isn't 1x. A PC whose human isn't slot 0 calls `ownCityAt(x, y)` on a new world.
 4. **To start:** `followAgreedSpeed()` on every PC, `pace(peerPcs, lead)` on the host, and `runFreely()` or `runUntil(step)`.

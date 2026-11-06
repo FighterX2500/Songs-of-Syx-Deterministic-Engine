@@ -1,7 +1,19 @@
 diff -ru -U2 a/game/battle/state/BattleState.java b/game/battle/state/BattleState.java
 --- a/game/battle/state/BattleState.java	2026-01-31 08:38:56.000000000 +0500
-+++ b/game/battle/state/BattleState.java	2026-10-31 17:59:51.315827900 +0500
-@@ -94,7 +94,8 @@
++++ b/game/battle/state/BattleState.java	2026-11-06 20:34:47.489639300 +0500
+@@ -54,9 +54,9 @@
+ 	public static void setGenerate(BattleStateExiter resolve, BattleStateSpec spec) {
+ 		
+ 		save("__beforeBattle");
+-		if (!PATHS.local().save().exists("__battle"))
++		if (sosdet.Hooks.workFolder() == null && !PATHS.local().save().exists("__battle"))
+ 			PATHS.local().save().create("__battle");
+-		BattleState s = new BattleState(resolve, PATHS.local().save().get("__battle"));		
++		BattleState s = new BattleState(resolve, sosdet.Hooks.workSave("__battle")); // SOSDET: in the mod's folder for working saves, if it set one (SOS-155)		
+ 		
+ 		
+ 
+@@ -94,11 +94,18 @@
  	
  	private void view() {
  		VIEW.messages().hideAll();
@@ -11,7 +23,17 @@ diff -ru -U2 a/game/battle/state/BattleState.java b/game/battle/state/BattleStat
  		VIEW.b().activate(this);
  	}
  	
-@@ -109,6 +110,8 @@
+ 	private static void save(String name) {
++		Path dir = sosdet.Hooks.workFolder();
++		if (dir != null) { // SOSDET: in a session the mod can keep its working saves out of the player's saves (SOS-155)
++			if (GAME.saver().save(dir, name, false) == null)
++				throw new Errors.DataError(name, sosdet.Hooks.workSave(name));
++			return;
++		}
+ 		if (PATHS.local().save().exists(name))
+ 			PATHS.local().save().delete(name);
+ 		if (GAME.saver().save(name) == null)
+@@ -109,6 +116,8 @@
  	
  	
  	public void reloadBattle() {
@@ -20,7 +42,7 @@ diff -ru -U2 a/game/battle/state/BattleState.java b/game/battle/state/BattleStat
  		new GameLoader(saveFile){
  			
  			@Override
-@@ -122,7 +125,8 @@
+@@ -122,7 +131,8 @@
  				VIEW.b().activate(BattleState.this);
  				VIEW.b().getWindow().centererTile.set(THRONE.coo());
  				VIEW.b().getWindow().zoomoutmax();
@@ -30,7 +52,7 @@ diff -ru -U2 a/game/battle/state/BattleState.java b/game/battle/state/BattleStat
  				
  			}
  			
-@@ -163,6 +167,10 @@
+@@ -163,6 +173,10 @@
  	
  	
  	public void liveRetreat() {
@@ -41,7 +63,7 @@ diff -ru -U2 a/game/battle/state/BattleState.java b/game/battle/state/BattleStat
  		liveResolve(true, false);
  	}
  	
-@@ -230,11 +238,18 @@
+@@ -230,11 +244,18 @@
  		ILiveConclude(CharSequence title, boolean retreat, boolean win){
  			pin();
  			persistantSet();
@@ -61,7 +83,7 @@ diff -ru -U2 a/game/battle/state/BattleState.java b/game/battle/state/BattleStat
  					hide();
  					liveResolve(retreat, win);
  				}
-@@ -273,7 +288,8 @@
+@@ -273,7 +294,8 @@
  
  		@Override
  		protected boolean update(float ds) {
@@ -73,15 +95,16 @@ diff -ru -U2 a/game/battle/state/BattleState.java b/game/battle/state/BattleStat
  //			if (timer >= 10) {
 diff -ru -U2 a/game/battle/state/BattleStateExiter.java b/game/battle/state/BattleStateExiter.java
 --- a/game/battle/state/BattleStateExiter.java	2025-08-29 11:08:26.000000000 +0500
-+++ b/game/battle/state/BattleStateExiter.java	2026-10-31 17:59:51.315827900 +0500
++++ b/game/battle/state/BattleStateExiter.java	2026-11-06 20:34:47.489639300 +0500
 @@ -10,12 +10,15 @@
  	
  	public void exit(BATTLE_RESULT res, int plosses, int elosses) {
  		final BattleStateResult r = new BattleStateResult(res, elosses, plosses);
+-		new GameLoader(PATHS.local().save().get("__beforeBattle")){
 +		if (sosdet.Hooks.localExit(r)) // SOSDET: a local battle's result goes to every PC as a command; nothing loads now (SOS-93)
 +			return;
 +		sosdet.Hooks.battleLeaving(); // SOSDET: the steps hold until the load, which goes on at this step (SOS-32)
- 		new GameLoader(PATHS.local().save().get("__beforeBattle")){
++		new GameLoader(sosdet.Hooks.workSave("__beforeBattle")){ // SOSDET: in the mod's folder for working saves, if it set one (SOS-155)
  			
  			@Override
  			public void doAfterSet() {
@@ -93,7 +116,7 @@ diff -ru -U2 a/game/battle/state/BattleStateExiter.java b/game/battle/state/Batt
  			
 diff -ru -U2 a/game/battle/state/BattleStateResult.java b/game/battle/state/BattleStateResult.java
 --- a/game/battle/state/BattleStateResult.java	2026-06-17 10:48:06.000000000 +0500
-+++ b/game/battle/state/BattleStateResult.java	2026-10-31 17:59:51.319848200 +0500
++++ b/game/battle/state/BattleStateResult.java	2026-11-06 20:34:47.486646500 +0500
 @@ -24,6 +24,33 @@
  	public final BATTLE_RESULT result;
  	public final int playerLosses;
@@ -172,7 +195,7 @@ diff -ru -U2 a/game/battle/state/BattleStateResult.java b/game/battle/state/Batt
  	
 diff -ru -U2 a/view/battle/IDeploy.java b/view/battle/IDeploy.java
 --- a/view/battle/IDeploy.java	2025-09-12 16:12:40.000000000 +0500
-+++ b/view/battle/IDeploy.java	2026-10-31 17:59:51.316830100 +0500
++++ b/view/battle/IDeploy.java	2026-11-06 20:34:47.486646500 +0500
 @@ -17,7 +17,8 @@
  	private final GButt.ButtPanel butt = new GButt.ButtPanel(Dic.¤¤Start) {
  		@Override

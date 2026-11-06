@@ -1,5 +1,6 @@
 package sosdet;
 
+import java.nio.file.Path;
 import java.util.Random;
 
 import game.GAME;
@@ -10,6 +11,7 @@ import game.faction.FCredits.CTYPE;
 import game.faction.Faction;
 import game.faction.player.PCredits;
 import game.faction.player.Player;
+import init.paths.PATHS;
 import init.type.CAUSE_LEAVE;
 import init.type.HCLASS_RACE;
 import init.trade.TRADABLE;
@@ -3107,6 +3109,24 @@ public final class Hooks {
     public static boolean issuedHere() {
         Session s = Engine.session();
         return s != null && s.ai().issuedHere();
+    }
+
+    /** The folder the mod set for this session's working saves (SOS-155); null: the game's saves folder. */
+    public static Path workFolder() {
+        Session s = Engine.session();
+        return s == null ? null : s.workFolder;
+    }
+
+    /**
+     * A working save by name ({@code __battle}, {@code __beforeBattle}...): in the mod's folder when it set one
+     * (SOS-155), otherwise the game's own lookup in its saves folder, which wants the file to exist.
+     */
+    public static Path workSave(String name) {
+        Path dir = workFolder();
+        if (dir == null) {
+            return PATHS.local().save().get(name);
+        }
+        return dir.resolve(name + PATHS.local().save().fileEnding());
     }
 
     /**
