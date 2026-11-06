@@ -135,9 +135,7 @@ public final class CityReport {
                 sizes[i] = b.getInt();
             }
             if (fields != Field.values().length || !layout.sameSizes(sizes)) {
-                throw new IllegalArgumentException("SOSDET: a city report of " + fields + " fields and sizes "
-                        + Arrays.toString(sizes) + ", this game has " + Field.values().length + " and "
-                        + Arrays.toString(layout.sizes()));
+                throw mismatch(fields, sizes, layout.sizes());
             }
             double[] values = new double[b.getInt()];
             for (int i = 0; i < values.length; i++) {
@@ -169,6 +167,20 @@ public final class CityReport {
         } catch (BufferUnderflowException | NegativeArraySizeException e) {
             throw new IllegalArgumentException("SOSDET: city report cut short (" + bytes.length + " bytes)", e);
         }
+    }
+
+    /** A report of other sizes than {@code ours}: the first that differs names the mismatch (SOS-159). */
+    private static ReportMismatch mismatch(int fields, int[] theirs, int[] ours) {
+        String message = "SOSDET: a city report of " + fields + " fields and sizes " + Arrays.toString(theirs)
+                + ", this game has " + Field.values().length + " and " + Arrays.toString(ours);
+        if (fields != Field.values().length || theirs.length != ours.length) {
+            return new ReportMismatch("fields", fields, Field.values().length, -1, message);
+        }
+        int i = 0;
+        while (theirs[i] == ours[i]) {
+            i++;
+        }
+        return new ReportMismatch(Count.values()[i].name(), theirs[i], ours[i], -1, message);
     }
 
     private static void varint(ByteArrayOutputStream out, long v) {
