@@ -70,6 +70,27 @@ public final class LocalBattle {
         return state == RUNNING;
     }
 
+    /**
+     * The battle PC: true once the battle's exit (Retreat, or Close on its result) sent the result, which loads this PC's
+     * city at {@link #resultStep()}. Read on the game thread (SOS-158: the mod's loading window opens then).
+     */
+    public boolean resultSent() {
+        return resultSent;
+    }
+
+    /** The step the result applied at, the same on every PC; -1 until then. Read on the game thread. */
+    public long resultStep() {
+        return resultStep;
+    }
+
+    /**
+     * The step the human thaws at, the same on every PC; -1 until the result applies. It can move to a later report step
+     * while the after-battle waits for another human's prompt. Read on the game thread.
+     */
+    public long thaw() {
+        return thaw;
+    }
+
     @Override
     public String toString() {
         return "local battle of human " + human + " (PC " + pc + ") engaged at step " + engage + ", from step " + freeze
