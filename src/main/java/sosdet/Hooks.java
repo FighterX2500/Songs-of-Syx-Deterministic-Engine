@@ -261,8 +261,7 @@ public final class Hooks {
         s.stepStartNanos = System.nanoTime(); // timing only, never fed to the simulation
         s.ai().stepBegin(s.clock.step());
         s.localOrders(s.clock.step()); // a local battle's: the fighter's own, or a watcher's from the tape (SOS-109)
-        s.battleEndAhead = s.battle != null && !s.battle.awaiting
-                ? s.ai().commandStep(sosdet.game.cmd.MapBattles::isConclude) : -1; // its load ends the battle (SOS-169)
+        s.battleEndAhead = battleEndAhead(s); // its load ends the battle (SOS-169)
         if (s.moraleArmy >= 0 && !sosdet.game.cmd.MapBattles.holdMorale(s.moraleArmy)) {
             s.moraleArmy = -1; // test tooling: the battle ended here (SOS-162)
         }
@@ -274,6 +273,21 @@ public final class Hooks {
             sosdet.game.cmd.MapBattles.endForRemoval();
         }
         return true;
+    }
+
+    /**
+     * The step the first Close of the running battle's panel applies at, once it is in the log; -1 before, and after it:
+     * another player's Close, still in the log once the first ended the battle, ends nothing (SOS-169).
+     */
+    private static long battleEndAhead(Session s) {
+        OwnBattle b = s.battle;
+        if (b == null || b.awaiting || b.closeAt >= 0 && b.closeAt < s.clock.step()) {
+            return -1;
+        }
+        if (b.closeAt < 0) {
+            b.closeAt = s.ai().commandStep(sosdet.game.cmd.MapBattles::isConclude);
+        }
+        return b.closeAt;
     }
 
     /**
