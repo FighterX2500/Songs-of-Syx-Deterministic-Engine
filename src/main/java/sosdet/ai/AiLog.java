@@ -696,6 +696,11 @@ public final class AiLog {
         commanding = here;
     }
 
+    /** Between steps, on every PC alike as a battle loads: its table, set at once rather than stamped (SOS-164). */
+    public void battleCommanders(int[] byDivision, int[] artilleryByArmy) {
+        commanders.set(byDivision, artilleryByArmy);
+    }
+
     /**
      * An order from a local battle's tape, inside the step: by the same rules as an entry of this log, so the command
      * knows the PC that gave it and a division obeys only its commander (SOS-119).

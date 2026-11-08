@@ -525,6 +525,37 @@ class AiLogTest {
     }
 
     @Test
+    void aBattleTableHoldsFromTheLoadOnEveryPcWhateverTheWorldDelay() {
+        AiLog host = AiLog.host(START, new ByPc());
+        host.delay(AiLog.MAX_DELAY_STEPS); // the world ran at top speed up to the Engage
+        for (long s = 1; s <= 100; s++) {
+            host.stepBegin(s);
+        }
+        host.delay(AiLog.DELAY_STEPS); // the battle's speed
+        host.captureCommanders(TABLE);
+        host.stepBegin(101);
+        assertFalse(host.commanders().set(), "through the log the table waits past the world's horizon (SOS-164)");
+        for (long s = 102; s <= 100 + AiLog.MAX_DELAY_STEPS; s++) {
+            host.stepBegin(s);
+        }
+        assertFalse(host.commanders().set(), "still unset deep into the deployment");
+
+        AiLog h = AiLog.host(START, new ByPc());
+        AiLog p = AiLog.peer(START, new ByPc());
+        p.localPc(1);
+        int[] byDivision = {0, 0, 1, AiEntry.AI};
+        int[] artillery = {0, 1};
+        h.battleCommanders(byDivision, artillery);
+        p.battleCommanders(byDivision, artillery);
+        assertTrue(h.commanders().set());
+        assertTrue(p.commanders().set());
+        assertEquals(0, h.commanders().ownArmy());
+        assertEquals(1, p.commanders().ownArmy(), "the peer's side is its own from the load");
+        assertEquals(h.commanders().hash(), p.commanders().hash());
+        assertFalse(p.commanders().allows(1, 0), "the host's divisions stay the host's");
+    }
+
+    @Test
     void aResyncCarriesTheTableAndAClearedOneRestrictsNothing() {
         AiLog host = AiLog.host(START, new ByPc());
         host.captureCommanders(TABLE);

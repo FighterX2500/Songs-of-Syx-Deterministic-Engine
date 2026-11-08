@@ -2155,9 +2155,7 @@ final class Session {
         if (battle.awaiting) {
             battle.awaiting = false;
             hashes.worldOnly(false);
-            if (ai().mode() == sosdet.ai.AiMode.HOST) {
-                commandBattle();
-            }
+            commandBattle();
             if (battle.other >= 0) {
                 deployTimer.open();
             }
@@ -2168,9 +2166,10 @@ final class Session {
     }
 
     /**
-     * Host, as the battle loads (plan 0006 M2, SOS-83): who commands it, through the log, so every PC applies it at the
-     * step the host stamps. Army 0, the battle's human's, goes to that human's PC; army 1 to the other human's PC in a
-     * battle between two humans, else to the host's AI general. Divisions come in army order, split evenly.
+     * Every PC alike, as the battle loads (plan 0006 M2, SOS-83): who commands it, from the Engage step on. Not through
+     * the log: its stamp waits past the world's horizon, up to 400 steps of the deployment (SOS-164). Army 0, the
+     * battle's human's, goes to that human's PC; army 1 to the other human's PC in a battle between two humans, else to
+     * the host's AI general. Divisions come in army order, split evenly.
      */
     private void commandBattle() {
         int divisions = sosdet.game.OwnArmy.divisions();
@@ -2188,7 +2187,7 @@ final class Session {
         for (int a = 0; a < armies; a++) {
             artillery[a] = a == 0 ? battle.pc : a == 1 ? army1 : sosdet.ai.AiEntry.AI;
         }
-        ai().captureCommanders(sosdet.ai.Commanders.payload(byDivision, artillery));
+        ai().battleCommanders(byDivision, artillery);
     }
 
     /**
