@@ -286,14 +286,28 @@ class LocalBattleTest {
         assertFalse(s.ai().commanders().set());
     }
 
-    /** Mod spec section 8, ADR 0009: the battle runs on two PCs: the first who joined is the ally. */
+    /** Mod spec section 8 (SOS-160): every ally who joined fights, in answer order; one who stayed out doesn't. */
     @Test
-    void anNpcBattleTakesOneAlly() {
+    void anNpcBattleTakesEveryAllyWhoJoined() {
+        Session s = session(3);
+        s.allies = new int[] {0, 7, 5};
+        s.allyAnswers = new int[] {1, 1, 0};
+        LocalBattle b = s.localEngage(1234, 3);
+        assertArrayEquals(new int[] {3, 0, 7}, b.roster.commanders);
+    }
+
+    /** SOS-160: each ally's PC follows the battle, its view freezing at the battle's next report step. */
+    @Test
+    void everyAllysPcFollowsTheBattle() {
         Session s = session(3);
         s.allies = new int[] {0, 7};
         s.allyAnswers = new int[] {1, 1};
         LocalBattle b = s.localEngage(1234, 3);
-        assertArrayEquals(new int[] {3, 0}, b.roster.commanders);
+        s.localsAt(b.freeze);
+        assertNotNull(s.views[0], "the first ally watches");
+        assertNotNull(s.views[7], "the second ally watches");
+        assertEquals(s.views[0].freeze, s.views[7].freeze, "both views freeze at one step");
+        assertEquals(3, s.views[7].owner);
     }
 
     /** ADR 0009: the ally's order reaches the fighter's PC through the log; its tape carries it from the ally's PC. */

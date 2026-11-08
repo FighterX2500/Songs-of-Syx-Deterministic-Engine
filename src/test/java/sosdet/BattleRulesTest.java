@@ -2,6 +2,7 @@ package sosdet;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 
@@ -63,5 +64,19 @@ class BattleRulesTest {
     void sharesAddUpToTheWhole() {
         int[] p = BattleRules.share(1001, new int[] {37, 61, 13});
         assertEquals(1001, p[0] + p[1] + p[2]);
+    }
+
+    /** SOS-160: three or four groups of up to 30 divisions' width stay within vanilla's line, each with room. */
+    @Test
+    void groupsFitTheLine() {
+        for (int groups = 1; groups <= 4; groups++) {
+            for (int divisions : new int[] {1, 20, 30}) {
+                int half = BattleRules.groupHalf(divisions * 13 / 2, groups, 20);
+                assertTrue(half > 0, groups + " groups of " + divisions);
+                int outer = (groups * 2 * half + 20 * (groups - 1)) / 2; // the side's half-width
+                assertTrue(outer <= BattleRules.HALF_LINE, groups + " groups of " + divisions + ": " + outer);
+            }
+        }
+        assertEquals(97, BattleRules.groupHalf(97, 2, 20), "two groups of 15 divisions keep their width");
     }
 }

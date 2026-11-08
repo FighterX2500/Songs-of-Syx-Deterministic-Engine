@@ -351,8 +351,8 @@ final class Session {
 
     /** Every PC, at the Engage step: the battle of {@code human} runs on its PC only, from the next report step. */
     LocalBattle localEngage(long step, int human) {
-        // one ally: the battle runs on two PCs only (spec §8)
-        int[] allies = alliesJoined(human, 1);
+        // every ally who joined: the battle runs on each of their PCs (spec §8, SOS-160)
+        int[] allies = alliesJoined(human);
         LocalBattle b = localStart(step, human, closedPromptArmies, allies);
         closedPromptArmies = NO_ARMIES;
         return b;
@@ -419,13 +419,18 @@ final class Session {
         if (!b.roster.allies() || b.state != LocalBattle.RUNNING || b.resultStep >= 0) {
             return;
         }
-        int ally = b.roster.commanders[b.roster.leads];
-        View v = views[ally];
-        if (v != null && v.state != View.ENDED && v.state != View.CANCELLED) {
-            return;
-        }
-        if (v == null || v.freeze <= b.freeze || v.why == View.GAME || v.why == View.DESYNC) {
-            views[ally] = new View(ally, pcOf(ally), b.human, b.pc, nextReportStep(step + 1));
+        for (int c = b.roster.leads; c < b.roster.commanders.length; c++) { // every ally's PC (SOS-160)
+            int ally = b.roster.commanders[c];
+            if (removing[ally] || retired(ally)) {
+                continue; // no view for a PC that leaves: it would be cancelled at each freeze
+            }
+            View v = views[ally];
+            if (v != null && v.state != View.ENDED && v.state != View.CANCELLED) {
+                continue;
+            }
+            if (v == null || v.freeze <= b.freeze || v.why == View.GAME || v.why == View.DESYNC) {
+                views[ally] = new View(ally, pcOf(ally), b.human, b.pc, nextReportStep(step + 1));
+            }
         }
     }
 
@@ -721,8 +726,13 @@ final class Session {
         LocalBattle b = localHere();
         if (b != null) {
             localGeneral.drainInto(tape); // the general's changes since the last step, as the player's orders (SOS-150)
-            tape.record(step, localPaused ? 0 : localRounds);
             java.util.ArrayList<sosdet.ai.AiEntry> orders = tape.queued();
+            for (int i = orders.size() - 1; i >= 0; i--) {
+                if (!ai().allowsTaped(orders.get(i))) {
+                    orders.remove(i); // the tape holds what runs here: a watcher has no commanders table (SOS-160)
+                }
+            }
+            tape.record(step, localPaused ? 0 : localRounds);
             for (int i = 0; i < orders.size(); i++) {
                 ai().applyTaped(orders.get(i));
             }
@@ -2258,15 +2268,10 @@ final class Session {
 
     /** The allies who answered Join; the chat hears of each who was asked (SOS-118). */
     int[] alliesJoined(int lead) {
-        return alliesJoined(lead, allies.length);
-    }
-
-    /** As {@link #alliesJoined(int)}, for a battle that takes {@code most} allies: the first who said yes. */
-    int[] alliesJoined(int lead, int most) {
         int[] joined = new int[allies.length];
         int n = 0;
         for (int i = 0; i < allies.length; i++) {
-            boolean in = allyAnswers[i] == 1 && n < most;
+            boolean in = allyAnswers[i] == 1;
             if (in) {
                 joined[n++] = allies[i];
             }

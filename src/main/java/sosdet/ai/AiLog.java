@@ -700,6 +700,15 @@ public final class AiLog {
      * An order from a local battle's tape, inside the step: by the same rules as an entry of this log, so the command
      * knows the PC that gave it and a division obeys only its commander (SOS-119).
      */
+    /** True when this PC's commanders table lets the taped order through; false counts it skipped (SOS-160). */
+    public boolean allowsTaped(AiEntry e) {
+        if (e.div >= 0 && !commanders.allows(e.pc, e.div)) {
+            commanders.skip();
+            return false;
+        }
+        return true;
+    }
+
     public void applyTaped(AiEntry e) {
         if (e.div >= 0 && !commanders.allows(e.pc, e.div)) {
             commanders.skip();
