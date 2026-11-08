@@ -1,6 +1,6 @@
 diff -ru -U2 a/game/events/faction/EventFactionPeace.java b/game/events/faction/EventFactionPeace.java
 --- a/game/events/faction/EventFactionPeace.java	2025-09-22 07:59:34.000000000 +0500
-+++ b/game/events/faction/EventFactionPeace.java	2026-11-08 11:16:53.334247700 +0500
++++ b/game/events/faction/EventFactionPeace.java	2026-11-08 15:22:24.647486600 +0500
 @@ -60,16 +60,25 @@
  
  	}
@@ -40,7 +40,7 @@ diff -ru -U2 a/game/events/faction/EventFactionPeace.java b/game/events/faction/
  			if (DIP.WAR().is((FactionNPC) e) && DIP.ALLY().is(f)) {
 diff -ru -U2 a/game/events/faction/EventFactionWar.java b/game/events/faction/EventFactionWar.java
 --- a/game/events/faction/EventFactionWar.java	2025-09-22 07:59:34.000000000 +0500
-+++ b/game/events/faction/EventFactionWar.java	2026-11-08 11:16:53.334247700 +0500
++++ b/game/events/faction/EventFactionWar.java	2026-11-08 15:22:24.647486600 +0500
 @@ -22,7 +22,7 @@
  public class EventFactionWar extends EventResource{
  
@@ -77,7 +77,7 @@ diff -ru -U2 a/game/events/faction/EventFactionWar.java b/game/events/faction/Ev
  				if (DIP.get(ff).ally)
 diff -ru -U2 a/game/events/faction/player/War.java b/game/events/faction/player/War.java
 --- a/game/events/faction/player/War.java	2026-06-08 07:29:28.000000000 +0500
-+++ b/game/events/faction/player/War.java	2026-11-08 11:16:53.335245400 +0500
++++ b/game/events/faction/player/War.java	2026-11-08 15:22:24.648484800 +0500
 @@ -34,9 +34,11 @@
  class War {
  
@@ -266,7 +266,7 @@ diff -ru -U2 a/game/events/faction/player/War.java b/game/events/faction/player/
  		}
 diff -ru -U2 a/game/faction/diplomacy/DIP.java b/game/faction/diplomacy/DIP.java
 --- a/game/faction/diplomacy/DIP.java	2026-06-25 10:47:44.000000000 +0500
-+++ b/game/faction/diplomacy/DIP.java	2026-11-08 11:16:53.335245400 +0500
++++ b/game/faction/diplomacy/DIP.java	2026-11-08 15:22:24.648484800 +0500
 @@ -39,7 +39,27 @@
  	public final DipStance allied;
  	public final DipStance vassal;
@@ -374,7 +374,7 @@ diff -ru -U2 a/game/faction/diplomacy/DIP.java b/game/faction/diplomacy/DIP.java
  		
 diff -ru -U2 a/game/faction/diplomacy/DipStance.java b/game/faction/diplomacy/DipStance.java
 --- a/game/faction/diplomacy/DipStance.java	2026-06-17 10:48:06.000000000 +0500
-+++ b/game/faction/diplomacy/DipStance.java	2026-11-08 11:16:53.335245400 +0500
++++ b/game/faction/diplomacy/DipStance.java	2026-11-08 15:22:24.649481200 +0500
 @@ -82,12 +82,25 @@
  		private int[] state = Alloc.ii(FACTIONS.MAX());
  		private Faction cf;
@@ -449,7 +449,7 @@ diff -ru -U2 a/game/faction/diplomacy/DipStance.java b/game/faction/diplomacy/Di
  
 diff -ru -U2 a/game/faction/diplomacy/UpVassal.java b/game/faction/diplomacy/UpVassal.java
 --- a/game/faction/diplomacy/UpVassal.java	2026-06-17 10:48:04.000000000 +0500
-+++ b/game/faction/diplomacy/UpVassal.java	2026-11-08 11:16:53.336242300 +0500
++++ b/game/faction/diplomacy/UpVassal.java	2026-11-08 15:22:24.649481200 +0500
 @@ -66,6 +66,10 @@
  			return;
  		year = TIME.years().bitsSinceStart();
@@ -524,7 +524,7 @@ diff -ru -U2 a/game/faction/diplomacy/UpVassal.java b/game/faction/diplomacy/UpV
  			}
 diff -ru -U2 a/game/faction/Faction.java b/game/faction/Faction.java
 --- a/game/faction/Faction.java	2026-03-31 07:18:58.000000000 +0500
-+++ b/game/faction/Faction.java	2026-11-08 11:16:53.336242300 +0500
++++ b/game/faction/Faction.java	2026-11-08 15:22:24.649481200 +0500
 @@ -145,6 +145,7 @@
  		
  		public abstract void remove(FactionNPC f);
@@ -535,7 +535,7 @@ diff -ru -U2 a/game/faction/Faction.java b/game/faction/Faction.java
  	@Override
 diff -ru -U2 a/game/faction/player/BoostCompound.java b/game/faction/player/BoostCompound.java
 --- a/game/faction/player/BoostCompound.java	2026-06-12 10:41:16.000000000 +0500
-+++ b/game/faction/player/BoostCompound.java	2026-11-08 11:16:53.336242300 +0500
++++ b/game/faction/player/BoostCompound.java	2026-11-08 15:22:24.650514800 +0500
 @@ -37,9 +37,27 @@
  		return ((FactionNPC)f).bonus.getD(bo);
  	}
@@ -624,7 +624,7 @@ diff -ru -U2 a/game/faction/player/BoostCompound.java b/game/faction/player/Boos
  	
 diff -ru -U2 a/game/faction/player/PBonusSetting.java b/game/faction/player/PBonusSetting.java
 --- a/game/faction/player/PBonusSetting.java	2026-06-18 20:59:32.000000000 +0500
-+++ b/game/faction/player/PBonusSetting.java	2026-11-08 11:16:53.337239500 +0500
++++ b/game/faction/player/PBonusSetting.java	2026-11-08 15:22:24.650514800 +0500
 @@ -42,6 +42,7 @@
  	private static CharSequence ¤¤name = "¤Setting";
  	private static CharSequence ¤¤mode = "¤Mode:";
@@ -712,7 +712,7 @@ diff -ru -U2 a/game/faction/player/PBonusSetting.java b/game/faction/player/PBon
  		boosts.clear();
 diff -ru -U2 a/game/faction/player/PLevels.java b/game/faction/player/PLevels.java
 --- a/game/faction/player/PLevels.java	2026-06-29 08:30:04.000000000 +0500
-+++ b/game/faction/player/PLevels.java	2026-11-08 11:16:53.337239500 +0500
++++ b/game/faction/player/PLevels.java	2026-11-08 15:22:24.650514800 +0500
 @@ -96,6 +96,11 @@
  		bos = new BoostCompound<PLevels.Level>(boosters, levels) {
  			
@@ -727,7 +727,7 @@ diff -ru -U2 a/game/faction/player/PLevels.java b/game/faction/player/PLevels.ja
  			}
 diff -ru -U2 a/game/faction/trade/TradeSorter.java b/game/faction/trade/TradeSorter.java
 --- a/game/faction/trade/TradeSorter.java	2026-06-25 10:27:14.000000000 +0500
-+++ b/game/faction/trade/TradeSorter.java	2026-11-08 11:16:53.337239500 +0500
++++ b/game/faction/trade/TradeSorter.java	2026-11-08 15:22:24.651508400 +0500
 @@ -194,6 +194,8 @@
  	}
  	
@@ -850,7 +850,7 @@ diff -ru -U2 a/game/faction/trade/TradeSorter.java b/game/faction/trade/TradeSor
  					seller.price = price;
 diff -ru -U2 a/util/colors/COLOR_MAP.java b/util/colors/COLOR_MAP.java
 --- a/util/colors/COLOR_MAP.java	2026-04-06 08:53:34.000000000 +0500
-+++ b/util/colors/COLOR_MAP.java	2026-11-08 11:16:53.338236900 +0500
++++ b/util/colors/COLOR_MAP.java	2026-11-08 15:22:24.651508400 +0500
 @@ -47,7 +47,7 @@
  			return F_REBEL;
  		if (f == FACTIONS.player())
@@ -862,7 +862,7 @@ diff -ru -U2 a/util/colors/COLOR_MAP.java b/util/colors/COLOR_MAP.java
  			return F_NEAUTRAL;
 diff -ru -U2 a/util/text/InsertFaction.java b/util/text/InsertFaction.java
 --- a/util/text/InsertFaction.java	2025-09-12 16:09:04.000000000 +0500
-+++ b/util/text/InsertFaction.java	2026-11-08 11:16:53.338236900 +0500
++++ b/util/text/InsertFaction.java	2026-11-08 15:22:24.651508400 +0500
 @@ -31,8 +31,8 @@
  
  			@Override
@@ -896,7 +896,7 @@ diff -ru -U2 a/util/text/InsertFaction.java b/util/text/InsertFaction.java
  							str.add(',').s();
 diff -ru -U2 a/view/world/ui/region/OtherHov.java b/view/world/ui/region/OtherHov.java
 --- a/view/world/ui/region/OtherHov.java	2026-05-23 10:49:42.000000000 +0500
-+++ b/view/world/ui/region/OtherHov.java	2026-11-08 11:16:53.338236900 +0500
++++ b/view/world/ui/region/OtherHov.java	2026-11-08 15:22:24.652504900 +0500
 @@ -46,7 +46,7 @@
  			
  		}else {
@@ -931,7 +931,7 @@ diff -ru -U2 a/view/world/ui/region/OtherHov.java b/view/world/ui/region/OtherHo
  			box.NL();
 diff -ru -U2 a/view/world/ui/region/PlayDebug.java b/view/world/ui/region/PlayDebug.java
 --- a/view/world/ui/region/PlayDebug.java	2026-02-16 13:37:58.000000000 +0500
-+++ b/view/world/ui/region/PlayDebug.java	2026-11-08 11:16:53.339236000 +0500
++++ b/view/world/ui/region/PlayDebug.java	2026-11-08 15:22:24.652504900 +0500
 @@ -63,7 +63,8 @@
  			@Override
  			protected void clickA() {
@@ -944,7 +944,7 @@ diff -ru -U2 a/view/world/ui/region/PlayDebug.java b/view/world/ui/region/PlayDe
  				RD.setFaction(reg, selectedIs() ? null : FACTIONS.player(), true);
 diff -ru -U2 a/world/army/ADConscripts.java b/world/army/ADConscripts.java
 --- a/world/army/ADConscripts.java	2026-04-15 09:23:32.000000000 +0500
-+++ b/world/army/ADConscripts.java	2026-11-08 11:16:53.339236000 +0500
++++ b/world/army/ADConscripts.java	2026-11-08 15:22:24.652504900 +0500
 @@ -52,13 +52,18 @@
  	public boolean canTrain(Race race, Faction f) {
  		if (f == null)
@@ -977,7 +977,7 @@ diff -ru -U2 a/world/army/ADConscripts.java b/world/army/ADConscripts.java
  					}
 diff -ru -U2 a/world/army/ADUpdaterDiv.java b/world/army/ADUpdaterDiv.java
 --- a/world/army/ADUpdaterDiv.java	2026-01-12 14:13:12.000000000 +0500
-+++ b/world/army/ADUpdaterDiv.java	2026-11-08 11:16:53.339236000 +0500
++++ b/world/army/ADUpdaterDiv.java	2026-11-08 15:22:24.653471800 +0500
 @@ -2,6 +2,7 @@
  
  import game.faction.FACTIONS;
@@ -1009,7 +1009,7 @@ diff -ru -U2 a/world/army/ADUpdaterDiv.java b/world/army/ADUpdaterDiv.java
  	
 diff -ru -U2 a/world/army/ai/Rebel.java b/world/army/ai/Rebel.java
 --- a/world/army/ai/Rebel.java	2025-09-22 07:59:34.000000000 +0500
-+++ b/world/army/ai/Rebel.java	2026-11-08 11:16:53.340233300 +0500
++++ b/world/army/ai/Rebel.java	2026-11-08 15:22:24.653471800 +0500
 @@ -1,6 +1,6 @@
  package world.army.ai;
  
@@ -1045,7 +1045,7 @@ diff -ru -U2 a/world/army/ai/Rebel.java b/world/army/ai/Rebel.java
  			return m + RD.MILITARY().power.getD(reg);
 diff -ru -U2 a/world/army/ai/War.java b/world/army/ai/War.java
 --- a/world/army/ai/War.java	2026-04-09 18:46:34.000000000 +0500
-+++ b/world/army/ai/War.java	2026-11-08 11:16:53.340233300 +0500
++++ b/world/army/ai/War.java	2026-11-08 15:22:24.653471800 +0500
 @@ -47,7 +47,7 @@
  		Faction f = FACTIONS.getByIndex(i);
  		if (!f.isActive())
@@ -1057,7 +1057,7 @@ diff -ru -U2 a/world/army/ai/War.java b/world/army/ai/War.java
  		planForWar(f);
 diff -ru -U2 a/world/army/WDivMercenaries.java b/world/army/WDivMercenaries.java
 --- a/world/army/WDivMercenaries.java	2025-09-22 07:59:34.000000000 +0500
-+++ b/world/army/WDivMercenaries.java	2026-11-08 11:16:53.340233300 +0500
++++ b/world/army/WDivMercenaries.java	2026-11-08 15:22:24.654479400 +0500
 @@ -7,6 +7,7 @@
  import game.faction.FCredits.CTYPE;
  import game.faction.Faction;
@@ -1100,7 +1100,7 @@ diff -ru -U2 a/world/army/WDivMercenaries.java b/world/army/WDivMercenaries.java
  				}
 diff -ru -U2 a/world/battle/PFieldBattle.java b/world/battle/PFieldBattle.java
 --- a/world/battle/PFieldBattle.java	2024-12-06 13:14:48.000000000 +0500
-+++ b/world/battle/PFieldBattle.java	2026-11-08 11:16:53.341231000 +0500
++++ b/world/battle/PFieldBattle.java	2026-11-08 15:22:24.664619900 +0500
 @@ -61,14 +61,19 @@
  		
  		int death = 1000;
@@ -1111,7 +1111,7 @@ diff -ru -U2 a/world/battle/PFieldBattle.java b/world/battle/PFieldBattle.java
 +		while(current.size() > sosdetSkip) {
 +			int ai = current.get(current.size()-1-sosdetSkip);
  			WArmy a = WORLD.ENTITIES().armies.get(ai);
-+			if (valid(a) && sosdet.Hooks.localWaits(a, enemy(a))) {
++			if (valid(a) && (sosdet.Hooks.localWaits(a, enemy(a)) || sosdetFillWaits(a))) {
 +				sosdetSkip++;
 +				continue;
 +			}
@@ -1125,9 +1125,30 @@ diff -ru -U2 a/world/battle/PFieldBattle.java b/world/battle/PFieldBattle.java
  			}
  			if (death -- < 0) {
  				LOG.err("NOHA!");
+@@ -108,6 +113,20 @@
+ 	private boolean valid(WArmy a) {
+ 		return (a != null && AD.men(null).get(a) > 0);
+ 	}
++
++	private boolean sosdetFillWaits(WArmy a) { // SOSDET: an army the battle would bring in waits for its local battle (SOS-174)
++		WArmy e = enemy(a);
++		if (e == null)
++			return false;
++		Pair allies = util.fill(a.faction(), e.faction(), a.ctx(), a.cty());
++		for (WArmy x : allies.a)
++			if (sosdet.Hooks.localWaits(x, null))
++				return true;
++		for (WArmy x : allies.b)
++			if (sosdet.Hooks.localWaits(x, null))
++				return true;
++		return false;
++	}
+ 	
+ 	private WArmy enemy(WArmy a) {
+ 		if (WORLD.PATH().map.is.is(a.ctx(), a.cty())) {
 diff -ru -U2 a/world/battle/PRegAttack.java b/world/battle/PRegAttack.java
 --- a/world/battle/PRegAttack.java	2026-01-06 09:34:38.000000000 +0500
-+++ b/world/battle/PRegAttack.java	2026-11-08 11:16:53.341231000 +0500
++++ b/world/battle/PRegAttack.java	2026-11-08 15:22:24.655468500 +0500
 @@ -2,7 +2,7 @@
  
  import java.io.IOException;
@@ -1223,7 +1244,7 @@ diff -ru -U2 a/world/battle/PRegAttack.java b/world/battle/PRegAttack.java
  		
 diff -ru -U2 a/world/battle/PSiege.java b/world/battle/PSiege.java
 --- a/world/battle/PSiege.java	2025-09-12 16:09:02.000000000 +0500
-+++ b/world/battle/PSiege.java	2026-11-08 11:16:53.341231000 +0500
++++ b/world/battle/PSiege.java	2026-11-08 15:22:24.655468500 +0500
 @@ -3,7 +3,7 @@
  import java.io.IOException;
  import java.util.Arrays;
@@ -1372,7 +1393,7 @@ diff -ru -U2 a/world/battle/PSiege.java b/world/battle/PSiege.java
  
 diff -ru -U2 a/world/battle/Resolver.java b/world/battle/Resolver.java
 --- a/world/battle/Resolver.java	2026-06-18 21:36:34.000000000 +0500
-+++ b/world/battle/Resolver.java	2026-11-08 11:16:53.342226600 +0500
++++ b/world/battle/Resolver.java	2026-11-08 15:22:24.655468500 +0500
 @@ -33,6 +33,26 @@
  			looser = a;
  		}
@@ -1485,7 +1506,7 @@ diff -ru -U2 a/world/battle/Resolver.java b/world/battle/Resolver.java
  		
 diff -ru -U2 a/world/battle/ResolverPlayer.java b/world/battle/ResolverPlayer.java
 --- a/world/battle/ResolverPlayer.java	2026-06-17 10:48:06.000000000 +0500
-+++ b/world/battle/ResolverPlayer.java	2026-11-08 11:16:53.351120600 +0500
++++ b/world/battle/ResolverPlayer.java	2026-11-08 15:22:24.656495900 +0500
 @@ -96,7 +96,9 @@
  			
  			@Override
@@ -1754,7 +1775,7 @@ diff -ru -U2 a/world/battle/ResolverPlayer.java b/world/battle/ResolverPlayer.ja
  				if (u.a() != null && u.a().besieging() == null) {
 diff -ru -U2 a/world/battle/ResolverSide.java b/world/battle/ResolverSide.java
 --- a/world/battle/ResolverSide.java	2026-06-17 10:48:06.000000000 +0500
-+++ b/world/battle/ResolverSide.java	2026-11-08 11:16:53.342226600 +0500
++++ b/world/battle/ResolverSide.java	2026-11-08 15:22:24.656495900 +0500
 @@ -2,7 +2,7 @@
  
  import java.util.Arrays;
@@ -1827,7 +1848,7 @@ diff -ru -U2 a/world/battle/ResolverSide.java b/world/battle/ResolverSide.java
  				extract(unit.a(), looseAmount);
 diff -ru -U2 a/world/battle/Side.java b/world/battle/Side.java
 --- a/world/battle/Side.java	2026-06-17 10:48:04.000000000 +0500
-+++ b/world/battle/Side.java	2026-11-08 11:16:53.343223900 +0500
++++ b/world/battle/Side.java	2026-11-08 15:22:24.656495900 +0500
 @@ -1,6 +1,6 @@
  package world.battle;
  
@@ -1929,7 +1950,7 @@ diff -ru -U2 a/world/battle/Side.java b/world/battle/Side.java
  		}
 diff -ru -U2 a/world/battle/Util.java b/world/battle/Util.java
 --- a/world/battle/Util.java	2026-06-18 21:36:26.000000000 +0500
-+++ b/world/battle/Util.java	2026-11-08 11:16:53.343223900 +0500
++++ b/world/battle/Util.java	2026-11-08 15:22:24.657459400 +0500
 @@ -214,11 +214,13 @@
  
  		Faction fAttacker = side.us.get(0).faction();
@@ -2009,7 +2030,7 @@ diff -ru -U2 a/world/battle/Util.java b/world/battle/Util.java
  					double n = su.needed(a);
 diff -ru -U2 a/world/battle/WBattles.java b/world/battle/WBattles.java
 --- a/world/battle/WBattles.java	2025-10-25 10:19:22.000000000 +0500
-+++ b/world/battle/WBattles.java	2026-11-08 11:16:53.344221200 +0500
++++ b/world/battle/WBattles.java	2026-11-08 15:22:24.657459400 +0500
 @@ -109,6 +109,10 @@
  		return siege.besigedTime(reg);
  	}
@@ -2023,7 +2044,7 @@ diff -ru -U2 a/world/battle/WBattles.java b/world/battle/WBattles.java
  	}
 diff -ru -U2 a/world/entity/caravan/Shipment.java b/world/entity/caravan/Shipment.java
 --- a/world/entity/caravan/Shipment.java	2026-06-17 12:48:28.000000000 +0500
-+++ b/world/entity/caravan/Shipment.java	2026-11-08 11:16:53.344221200 +0500
++++ b/world/entity/caravan/Shipment.java	2026-11-08 15:22:24.657459400 +0500
 @@ -163,7 +163,9 @@
  			int am = payload[tt.index()];
  			if (am != 0) {
@@ -2058,7 +2079,7 @@ diff -ru -U2 a/world/entity/caravan/Shipment.java b/world/entity/caravan/Shipmen
  	}
 diff -ru -U2 a/world/map/fow/FOW.java b/world/map/fow/FOW.java
 --- a/world/map/fow/FOW.java	2025-12-10 17:58:10.000000000 +0500
-+++ b/world/map/fow/FOW.java	2026-11-08 11:16:53.344221200 +0500
++++ b/world/map/fow/FOW.java	2026-11-08 15:22:24.658456600 +0500
 @@ -82,7 +82,7 @@
  					visible.set(t, d, true);
  				if (WORLD.PATH().map.can(t, d)) {
@@ -2070,7 +2091,7 @@ diff -ru -U2 a/world/map/fow/FOW.java b/world/map/fow/FOW.java
  			}
 diff -ru -U2 a/world/map/pathing/WRegFinder.java b/world/map/pathing/WRegFinder.java
 --- a/world/map/pathing/WRegFinder.java	2026-06-04 09:03:20.000000000 +0500
-+++ b/world/map/pathing/WRegFinder.java	2026-11-08 11:16:53.345227300 +0500
++++ b/world/map/pathing/WRegFinder.java	2026-11-08 15:22:24.658456600 +0500
 @@ -1,9 +1,9 @@
  package world.map.pathing;
  
@@ -2116,7 +2137,7 @@ diff -ru -U2 a/world/map/pathing/WRegFinder.java b/world/map/pathing/WRegFinder.
  				
 diff -ru -U2 a/world/overlay/OverlayDiplomacy.java b/world/overlay/OverlayDiplomacy.java
 --- a/world/overlay/OverlayDiplomacy.java	2026-06-17 10:48:04.000000000 +0500
-+++ b/world/overlay/OverlayDiplomacy.java	2026-11-08 11:16:53.345731600 +0500
++++ b/world/overlay/OverlayDiplomacy.java	2026-11-08 15:22:24.658456600 +0500
 @@ -43,7 +43,7 @@
  		}
  			
@@ -2128,7 +2149,7 @@ diff -ru -U2 a/world/overlay/OverlayDiplomacy.java b/world/overlay/OverlayDiplom
  			c = col;
 diff -ru -U2 a/world/region/building/RDBuilding.java b/world/region/building/RDBuilding.java
 --- a/world/region/building/RDBuilding.java	2026-05-27 07:48:26.000000000 +0500
-+++ b/world/region/building/RDBuilding.java	2026-11-08 11:16:53.345731600 +0500
++++ b/world/region/building/RDBuilding.java	2026-11-08 15:22:24.658456600 +0500
 @@ -91,7 +91,7 @@
  			public void set(Region t, int s) {
  				if (get(t) != 0 && t.faction() != null)
@@ -2166,7 +2187,7 @@ diff -ru -U2 a/world/region/building/RDBuilding.java b/world/region/building/RDB
  			if (!global)
 diff -ru -U2 a/world/region/RD.java b/world/region/RD.java
 --- a/world/region/RD.java	2026-06-17 10:48:04.000000000 +0500
-+++ b/world/region/RD.java	2026-11-08 11:16:53.345731600 +0500
++++ b/world/region/RD.java	2026-11-08 15:22:24.659617500 +0500
 @@ -488,7 +488,7 @@
  		Str.TMP.insert(2, FACTIONS.name(f));
  		WORLD.LOG().log(fold, f, UI.icons().s.crown, Str.TMP, region.cx(), region.cy());
@@ -2178,7 +2199,7 @@ diff -ru -U2 a/world/region/RD.java b/world/region/RD.java
  					bu.level.set(region, 0);
 diff -ru -U2 a/world/region/RDHealth.java b/world/region/RDHealth.java
 --- a/world/region/RDHealth.java	2026-06-04 09:43:34.000000000 +0500
-+++ b/world/region/RDHealth.java	2026-11-08 11:16:53.346860900 +0500
++++ b/world/region/RDHealth.java	2026-11-08 15:22:24.659617500 +0500
 @@ -45,7 +45,7 @@
  	public final RDataE outbreak;
  	private boolean btoggle = true;
@@ -2213,7 +2234,7 @@ diff -ru -U2 a/world/region/RDHealth.java b/world/region/RDHealth.java
  		};
 diff -ru -U2 a/world/region/RDMilitary.java b/world/region/RDMilitary.java
 --- a/world/region/RDMilitary.java	2026-05-30 13:40:54.000000000 +0500
-+++ b/world/region/RDMilitary.java	2026-11-08 11:16:53.346860900 +0500
++++ b/world/region/RDMilitary.java	2026-11-08 15:22:24.660602600 +0500
 @@ -52,9 +52,10 @@
  		INT_OE<Region> dd = init.count.new DataShort("GARRISON", null, Config.battle().REGION_MAX_DIVS*Config.battle().MEN_PER_DIVISION) {
  			@Override
@@ -2256,7 +2277,7 @@ diff -ru -U2 a/world/region/RDMilitary.java b/world/region/RDMilitary.java
  			double d = POP.tot(null)/20000.0;
 diff -ru -U2 a/world/region/updating/Builder.java b/world/region/updating/Builder.java
 --- a/world/region/updating/Builder.java	2026-02-16 13:10:48.000000000 +0500
-+++ b/world/region/updating/Builder.java	2026-11-08 11:16:53.347729100 +0500
++++ b/world/region/updating/Builder.java	2026-11-08 15:22:24.660602600 +0500
 @@ -4,7 +4,6 @@
  import java.util.Random;
  
@@ -2276,7 +2297,7 @@ diff -ru -U2 a/world/region/updating/Builder.java b/world/region/updating/Builde
  					bu.level.set(reg, 0);
 diff -ru -U2 a/world/region/updating/RDUpdater.java b/world/region/updating/RDUpdater.java
 --- a/world/region/updating/RDUpdater.java	2026-02-14 16:58:16.000000000 +0500
-+++ b/world/region/updating/RDUpdater.java	2026-11-08 11:16:53.347729100 +0500
++++ b/world/region/updating/RDUpdater.java	2026-11-08 15:22:24.660602600 +0500
 @@ -2,7 +2,6 @@
  
  import java.io.IOException;
@@ -2296,7 +2317,7 @@ diff -ru -U2 a/world/region/updating/RDUpdater.java b/world/region/updating/RDUp
  						shipper.ship(r, ship);
 diff -ru -U2 a/world/region/updating/Shipper.java b/world/region/updating/Shipper.java
 --- a/world/region/updating/Shipper.java	2026-02-16 13:10:08.000000000 +0500
-+++ b/world/region/updating/Shipper.java	2026-11-08 11:16:53.347729100 +0500
++++ b/world/region/updating/Shipper.java	2026-11-08 15:22:24.661638300 +0500
 @@ -1,6 +1,5 @@
  package world.region.updating;
  
