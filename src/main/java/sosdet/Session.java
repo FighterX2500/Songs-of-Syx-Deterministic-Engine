@@ -2273,6 +2273,23 @@ final class Session {
         return true;
     }
 
+    /**
+     * Inside a field battle's auto-resolve, every PC alike: whether the human in {@code slot} on the side of the human
+     * {@code asked} counts in it: that human, or an ally who answered Join. Who stayed out or never answered keeps its
+     * army out of it, as out of a fought battle (spec §8, SOS-168).
+     */
+    boolean autoResolveCounts(int asked, int slot) {
+        if (slot == asked) {
+            return true;
+        }
+        for (int i = 0; i < allies.length; i++) {
+            if (allies[i] == slot && allyAnswers[i] == 1) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** The allies who answered Join; the chat hears of each who was asked (SOS-118). */
     int[] alliesJoined(int lead) {
         int[] joined = new int[allies.length];

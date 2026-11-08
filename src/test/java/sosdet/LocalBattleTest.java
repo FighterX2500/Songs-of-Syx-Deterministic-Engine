@@ -472,6 +472,20 @@ class LocalBattleTest {
         assertTrue(s.worldMayRun(1400), "no report is taken while frozen: none to wait for");
     }
 
+    /** Mod spec section 8: an auto-resolve counts the asked human and the allies who joined, no one else (SOS-168). */
+    @Test
+    void anAutoResolveCountsOnlyTheHumansInTheBattle() {
+        Session s = session(0);
+        assertTrue(s.autoResolveCounts(0, 0), "the asked human");
+        assertFalse(s.autoResolveCounts(0, 3), "a human not asked");
+        s.allies = new int[] {3, 5};
+        s.allyAnswers = new int[] {1, 0};
+        assertTrue(s.autoResolveCounts(0, 3), "an ally who answered Join");
+        assertFalse(s.autoResolveCounts(0, 5), "one who hasn't answered");
+        s.allyAnswers = new int[] {2, 0};
+        assertFalse(s.autoResolveCounts(0, 3), "one who stayed out");
+    }
+
     /** A freeze right after the load: the human took no report this PC waits for (SOS-166). */
     @Test
     void aFrozenHumanWithNoReportTakenSinceTheLoadIsNotWaitedFor() {

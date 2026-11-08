@@ -2510,6 +2510,12 @@ public final class Hooks {
         return s == null ? "" : s.alliesSeen;
     }
 
+    /** Patch 15, a field battle's auto-resolve: see {@link Session#autoResolveCounts}; every human without a session. */
+    public static boolean autoResolveCounts(int asked, int slot) {
+        Session s = Engine.session();
+        return s == null || s.autoResolveCounts(asked, slot);
+    }
+
     /** Inside the ally's answer: true when the prompt asked the current human and this is their first answer (SOS-118). */
     public static boolean worldPromptAllyAnswer(boolean join) {
         Session s = Engine.session();
