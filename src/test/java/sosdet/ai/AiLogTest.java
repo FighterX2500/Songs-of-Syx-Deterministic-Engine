@@ -447,6 +447,21 @@ class AiLogTest {
         assertFalse(log[0].commanders().hashed(), "only the battle's PCs hold the table");
     }
 
+    /** SOS-167: a command from a local battle's tape is the battle's, whichever PC gave it; one from the log is not. */
+    @Test
+    void aTapedEntryIsAppliedAsTaped() {
+        List<Boolean> taped = new ArrayList<>();
+        AiLog[] log = new AiLog[1];
+        log[0] = AiLog.host(START, e -> taped.add(log[0].applyingTaped()));
+        log[0].applyTaped(new AiEntry(1, 1, AiEntry.COMMAND, -1, 0, new byte[4]));
+        log[0].captureOrder(AiEntry.GUARD, 0, AiEntry.ints(1));
+        for (long s = 1; s <= 31; s++) {
+            log[0].stepBegin(s);
+        }
+        assertEquals(List.of(true, false), taped);
+        assertFalse(log[0].applyingTaped(), "only while it applies");
+    }
+
     /** An assault with the peer as attacker: divisions 0 and 1 the host's, 2 and 3 the general's until the peer orders them. */
     private static final int[] ASSAULT = {0, 0, Commanders.claimBy(1), Commanders.claimBy(1)};
     private static final int[] ASSAULT_GUNS = {0, Commanders.claimBy(1)};

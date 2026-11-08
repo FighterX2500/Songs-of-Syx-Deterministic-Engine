@@ -888,8 +888,10 @@ public final class Hooks {
      */
     public static boolean cityCommandHere(int pc) {
         Session s = Engine.session();
-        // in a battle every PC runs the battle PC's game, so its commands apply everywhere (plan 0006)
-        return s == null || !s.ownCity || pc == s.cityPc() || s.battle != null && !s.battle.awaiting;
+        // in a battle every PC runs the battle PC's game, so its commands apply everywhere (plan 0006); a local battle's
+        // tape holds only its commanders' orders, an ally's too, applied alike on its PC and its watchers' (SOS-167)
+        return s == null || !s.ownCity || pc == s.cityPc() || s.battle != null && !s.battle.awaiting
+                || s.ai().applyingTaped();
     }
 
     /** A city view's start or end in the log, at its step (SOS-82). */
