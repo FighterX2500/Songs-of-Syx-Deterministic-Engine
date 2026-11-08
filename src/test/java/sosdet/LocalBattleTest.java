@@ -453,6 +453,34 @@ class LocalBattleTest {
         assertEquals(1, s.heldTxns.size(), "the watcher's own city waits for it");
     }
 
+    /** A frozen human's last report before its freeze can still be on its way: the world waits for it (SOS-166). */
+    @Test
+    void theWorldWaitsForAFrozenHumansLastReportBeforeTheFreeze() {
+        Session s = session(0);
+        s.reportReceived(new sosdet.report.CityReport(SMALL, 3, 1200, 1230, 1260, new double[SMALL.size()],
+                new ArrayList<>()));
+        s.reportStepSeen(1230, false); // human 3's PC takes a report at 1230, applying at 1260
+        LocalBattle b = s.localEngage(1234, 3);
+        s.localsAt(b.freeze);
+        s.reportStepSeen(b.freeze, false); // frozen: no report
+        assertTrue(s.frozen(3));
+        assertTrue(s.worldMayRun(1259), "nothing more of human 3's applies before 1260");
+        assertFalse(s.worldMayRun(1260), "the report taken at 1230 applies now, wherever it is");
+        s.reportReceived(new sosdet.report.CityReport(SMALL, 3, 1230, 1260, 1290, new double[SMALL.size()],
+                new ArrayList<>()));
+        assertTrue(s.worldMayRun(1260));
+        assertTrue(s.worldMayRun(1400), "no report is taken while frozen: none to wait for");
+    }
+
+    /** A freeze right after the load: the human took no report this PC waits for (SOS-166). */
+    @Test
+    void aFrozenHumanWithNoReportTakenSinceTheLoadIsNotWaitedFor() {
+        Session s = session(0);
+        LocalBattle b = s.localEngage(1234, 3);
+        s.localsAt(b.freeze);
+        assertTrue(s.worldMayRun(b.freeze + 100));
+    }
+
     /** A PC ahead of this one has thawed already: its first report mustn't be lost (W3, and SOS-95's symptom). */
     @Test
     void aThawReportFromAPcAheadIsKeptWhileThisPcStillSeesItsHumanFrozen() {

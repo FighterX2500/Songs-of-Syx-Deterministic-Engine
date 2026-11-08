@@ -266,6 +266,11 @@ final class Session {
      * (SOS-90); the world part runs to the step before without waiting (-1: none since the load).
      */
     final long[] receivedNextAt = none();
+    /**
+     * By human slot: the last step its own PC took a report at, by the world part's rule, the same on every PC (-1: none
+     * since the load). A frozen human's world waits for that one only (SOS-166).
+     */
+    final long[] reportTakenAt = none();
     /** The step this PC's last report promised its next would apply at, at the earliest (SOS-90). */
     private long reportPromise;
     /** This frame's steps stopped to wait for another PC's report or the host's log (SOS-90). */
@@ -2049,6 +2054,7 @@ final class Session {
         }
         java.util.Arrays.fill(receivedTakenAt, -1);
         java.util.Arrays.fill(receivedNextAt, -1);
+        java.util.Arrays.fill(reportTakenAt, -1);
         reportPromise = 0;
         for (int slot = 0; slot < SLOTS; slot++) {
             if (removing[slot]) {
@@ -2292,7 +2298,8 @@ final class Session {
             return true; // co-op: every PC takes the same reports itself; in a battle the world stands still
         }
         for (int h : humans()) {
-            if (!remote(h) || retired(h) || frozen(h) // a viewer's world reads its last report (SOS-82)
+            // a viewer's world reads its last report (SOS-82), once the last it took before the freeze is in (SOS-166)
+            if (!remote(h) || retired(h) || frozen(h) && receivedTakenAt[h] >= reportTakenAt[h]
                     || receivedTakenAt[h] >= 0 && step < receivedNextAt[h]) {
                 continue;
             }
@@ -2302,6 +2309,21 @@ final class Session {
             }
         }
         return true;
+    }
+
+    /**
+     * Every PC, in the world part of each step: the other humans whose PCs take a report now, by the same rule as this
+     * PC's own (Hooks.stepPart), so a frozen human's last report is known on every PC (SOS-166).
+     */
+    void reportStepSeen(long step, boolean battleRuns) {
+        if (battleRuns || !Reports.takenAt(step)) {
+            return;
+        }
+        for (int h : humans()) {
+            if (remote(h) && !frozen(h) && !spectators[h]) {
+                reportTakenAt[h] = step;
+            }
+        }
     }
 
     /** A report from another PC, of a human it runs: it applies at its step as this PC's own would have. */

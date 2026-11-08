@@ -830,6 +830,7 @@ public final class Hooks {
             if (!battleRuns && Reports.takenAt(step) && !s.frozen(s.localHuman) && !s.spectating()) {
                 s.takeReport(step, s.reportAppliesAt(step)); // a viewer takes none: its city is unloaded (SOS-82)
             }
+            s.reportStepSeen(step, battleRuns); // the other humans' PCs, by the same rule (SOS-166)
             s.part = part;
             s.streams.reseed(s.worldSeed(step));
             s.streams.worldPart(true);
