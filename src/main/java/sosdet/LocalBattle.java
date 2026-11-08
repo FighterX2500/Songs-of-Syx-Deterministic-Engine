@@ -65,6 +65,11 @@ public final class LocalBattle {
         return state;
     }
 
+    /** True when {@code h} joined the battle as an ally with their army. Read on the game thread (SOS-165). */
+    public boolean ally(int h) {
+        return roster.ally(h);
+    }
+
     /** True from the freeze step: the human is frozen in every world. */
     public boolean frozen() {
         return state == RUNNING;
