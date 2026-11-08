@@ -462,6 +462,27 @@ class AiLogTest {
         assertFalse(log[0].applyingTaped(), "only while it applies");
     }
 
+    /** Mod spec section 12: the step a pending command applies at is known before it applies; -1 with none (SOS-169). */
+    @Test
+    void aPendingCommandsStepIsKnownBeforeItApplies() {
+        java.util.function.Predicate<byte[]> close = p -> CmdReader.idOf(p) == 7962;
+        Recorder r = new Recorder();
+        AiLog host = AiLog.host(START, r);
+        host.captureOrder(AiEntry.COMMAND, -1, new CmdWriter(4000).i(0).bytes());
+        host.stepBegin(1);
+        assertEquals(-1, host.commandStep(close), "another command");
+        host.captureOrder(AiEntry.COMMAND, -1, new CmdWriter(7962).i(0).bytes());
+        host.stepBegin(2);
+        long at = host.commandStep(close);
+        assertTrue(at > 2, "stamped ahead: " + at);
+        for (long s = 3; s < at; s++) {
+            host.stepBegin(s);
+        }
+        assertEquals(at, host.commandStep(close), "still pending the step before");
+        host.stepBegin(at);
+        assertEquals(-1, host.commandStep(close), "applied");
+    }
+
     /** An assault with the peer as attacker: divisions 0 and 1 the host's, 2 and 3 the general's until the peer orders them. */
     private static final int[] ASSAULT = {0, 0, Commanders.claimBy(1), Commanders.claimBy(1)};
     private static final int[] ASSAULT_GUNS = {0, Commanders.claimBy(1)};

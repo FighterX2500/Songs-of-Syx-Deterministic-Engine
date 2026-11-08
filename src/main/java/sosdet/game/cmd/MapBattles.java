@@ -343,6 +343,11 @@ public final class MapBattles {
         return true;
     }
 
+    /** Whether a command's payload is the victory or defeat panel's Close, read without applying it (SOS-169). */
+    public static boolean isConclude(byte[] payload) {
+        return sosdet.ai.CmdReader.idOf(payload) == CONCLUDE;
+    }
+
     /** Hook in the victory or defeat panel's Close: in a session (true) a command; the panel stays until it applies. */
     public static boolean conclude() {
         if (!Commands.capturing()) {

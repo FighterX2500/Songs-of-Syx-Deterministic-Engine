@@ -390,6 +390,15 @@ public final class Engine {
         return s.battleAhead > s.clock.step() && s.battleAhead != s.battleGo ? s.battleAhead : -1;
     }
 
+    /**
+     * In a battle every PC runs (own-city mode), the step its victory or defeat panel's Close applies at, once the Close
+     * is in this PC's log: every PC loads its world back there, ending the battle. -1 otherwise (SOS-169).
+     */
+    public static long battleEndAhead() {
+        Session s = required();
+        return s.battleEndAhead > s.clock.step() ? s.battleEndAhead : -1;
+    }
+
     /** Every PC, between steps while it holds before an Engage: the step runs, and the battle begins as before. */
     public static void battleGo() {
         Session s = required();

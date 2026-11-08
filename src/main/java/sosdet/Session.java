@@ -147,6 +147,8 @@ final class Session {
     boolean battleHold;
     /** The step an Engage applies at while every PC holds before it, and the last one let through; -1 for none. */
     long battleAhead = -1, battleGo = -1;
+    /** In a battle every PC runs, the step the panel's Close in the log applies at, as of this step's start; -1 for none (SOS-169). */
+    long battleEndAhead = -1;
     /** The engine itself loads a battle save ({@link Engine#battleIn}): the restart hook lets it through. */
     boolean battleLoading;
     /** The mod's actions after each load of a whole game: the new game has none of the old one's (plan 0006). */

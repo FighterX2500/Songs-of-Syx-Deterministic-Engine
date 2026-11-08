@@ -261,6 +261,8 @@ public final class Hooks {
         s.stepStartNanos = System.nanoTime(); // timing only, never fed to the simulation
         s.ai().stepBegin(s.clock.step());
         s.localOrders(s.clock.step()); // a local battle's: the fighter's own, or a watcher's from the tape (SOS-109)
+        s.battleEndAhead = s.battle != null && !s.battle.awaiting
+                ? s.ai().commandStep(sosdet.game.cmd.MapBattles::isConclude) : -1; // its load ends the battle (SOS-169)
         if (s.moraleArmy >= 0 && !sosdet.game.cmd.MapBattles.holdMorale(s.moraleArmy)) {
             s.moraleArmy = -1; // test tooling: the battle ended here (SOS-162)
         }

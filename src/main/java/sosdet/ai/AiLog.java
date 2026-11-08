@@ -345,6 +345,16 @@ public final class AiLog {
         return false;
     }
 
+    /** The step of the first command in the log not yet applied that {@code test} matches, read as is; -1 for none. */
+    public long commandStep(java.util.function.Predicate<byte[]> test) {
+        for (AiEntry e : pending) {
+            if (e.kind == AiEntry.COMMAND && test.test(e.payload())) {
+                return e.step;
+            }
+        }
+        return -1;
+    }
+
     /**
      * Peer: the next removal entry that came in with the host's log since the last call, or null. Its payload is the
      * slot, then the step of the last report every PC reads. The engine takes each one as soon as it arrives, before
