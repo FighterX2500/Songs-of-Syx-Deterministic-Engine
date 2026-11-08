@@ -149,6 +149,8 @@ final class Session {
     long battleAhead = -1, battleGo = -1;
     /** In a battle every PC runs, the step the panel's Close in the log applies at, as of this step's start; -1 for none (SOS-169). */
     long battleEndAhead = -1;
+    /** Inside the siege poll's sally (patch 15), and whether it found no men on the defender's side (SOS-170). */
+    boolean sallyPolling, sallyEmpty;
     /** The engine itself loads a battle save ({@link Engine#battleIn}): the restart hook lets it through. */
     boolean battleLoading;
     /** The mod's actions after each load of a whole game: the new game has none of the old one's (plan 0006). */

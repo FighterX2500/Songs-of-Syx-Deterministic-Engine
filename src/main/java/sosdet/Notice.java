@@ -39,4 +39,6 @@ public record Notice(long step, int kind, int first, int second, int value) {
      * through the vassal's overlord: 1 trade partners, 2 colleagues, 0 the stance before, as the source ended (SOS-140).
      */
     public static final int STANCE_PASSED = 11;
+    /** The human {@code first} sallied out with no men in or beside their capital: nobody sallies (SOS-170). */
+    public static final int SALLY_EMPTY = 12;
 }

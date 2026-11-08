@@ -2526,6 +2526,42 @@ public final class Hooks {
         return s == null ? "" : s.alliesSeen;
     }
 
+    /** Patch 15, the siege poll: a sally's siege is built from here to {@link #sallyPollEnd} (SOS-170). */
+    public static void sallyPollStart() {
+        Session s = Engine.session();
+        if (s != null) {
+            s.sallyPolling = true;
+            s.sallyEmpty = false;
+        }
+    }
+
+    /** Patch 15, the resolver: true while a sally's siege is built. */
+    public static boolean sallyPolling() {
+        Session s = Engine.session();
+        return s != null && s.sallyPolling;
+    }
+
+    /** Patch 15, the resolver: the sally found no men on the defender's side, so nobody is asked. */
+    public static void sallyEmpty() {
+        Session s = Engine.session();
+        if (s != null) {
+            s.sallyEmpty = true;
+        }
+    }
+
+    /** Patch 15, the siege poll: the sally's siege is built; the human in {@code slot} hears of one with nobody (SOS-170). */
+    public static void sallyPollEnd(int slot) {
+        Session s = Engine.session();
+        if (s == null) {
+            return;
+        }
+        if (s.sallyEmpty && slot >= 0) {
+            s.notice(Notice.SALLY_EMPTY, slot, slot, 0);
+        }
+        s.sallyPolling = false;
+        s.sallyEmpty = false;
+    }
+
     /** Patch 15, a field battle's auto-resolve: see {@link Session#autoResolveCounts}; every human without a session. */
     public static boolean autoResolveCounts(int asked, int slot) {
         Session s = Engine.session();

@@ -1,7 +1,9 @@
 package sosdet;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -36,6 +38,24 @@ class NoticeTest {
         assertEquals(Notice.TARIFF, second.kind());
         assertEquals(15, second.value());
         assertNull(Engine.noticeTake());
+    }
+
+    /** Mod spec section 9: a sally with nobody on the defender's side tells that human, once; one with men says nothing (SOS-170). */
+    @Test
+    void aSallyWithNobodyTellsItsHuman() {
+        Hooks.sallyPollStart();
+        assertTrue(Hooks.sallyPolling());
+        Hooks.sallyEmpty();
+        Hooks.sallyPollEnd(2);
+        assertFalse(Hooks.sallyPolling(), "only while the sally's siege is built");
+        Notice n = Engine.noticeTake();
+        assertEquals(Notice.SALLY_EMPTY, n.kind());
+        assertEquals(2, n.first());
+        assertNull(Engine.noticeTake());
+
+        Hooks.sallyPollStart();
+        Hooks.sallyPollEnd(2);
+        assertNull(Engine.noticeTake(), "a sally with men");
     }
 
     @Test
