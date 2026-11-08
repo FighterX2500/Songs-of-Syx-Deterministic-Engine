@@ -142,6 +142,10 @@ public final class Hooks {
     static int stepsFor(double gameSeconds, double setSpeed, long now) {
         Session s = Engine.session();
         s.speedSeen(setSpeed);
+        double shown = s.takeSpeedShown();
+        if (shown > 0) {
+            GAME.SPEED.speedSet(shown); // a local battle's buttons show its voted speed (SOS-160)
+        }
         s.pace(now);
         s.watchLead(now, setSpeed);
         double speed = frameSpeed(setSpeed); // a local battle's PC keeps the world's pace, whatever the battle's own speed
@@ -181,7 +185,7 @@ public final class Hooks {
         s.speedNotice(speed, wanted, slowPc, System.nanoTime());
         if (s.followSpeed) {
             GAME.SPEED.speedSet(speed);
-            s.seenSpeed = speed; // not the host player's own change
+            s.speedFollowed(speed); // not the host player's own change
         }
     }
 
@@ -261,6 +265,10 @@ public final class Hooks {
         s.stepStartNanos = System.nanoTime(); // timing only, never fed to the simulation
         s.ai().stepBegin(s.clock.step());
         s.localOrders(s.clock.step()); // a local battle's: the fighter's own, or a watcher's from the tape (SOS-109)
+        s.battleEndAhead = battleEndAhead(s); // its load ends the battle (SOS-169)
+        if (s.moraleArmy >= 0 && !sosdet.game.cmd.MapBattles.holdMorale(s.moraleArmy)) {
+            s.moraleArmy = -1; // test tooling: the battle ended here (SOS-162)
+        }
         if (s.battle != null && !s.battle.awaiting && s.deployTimer.step(s.clock.stepSeconds(), s.clock.agreedSpeed())) {
             sosdet.game.cmd.MapBattles.deployForAll(); // a human between two didn't press Start in time (SOS-83)
         }
@@ -269,6 +277,21 @@ public final class Hooks {
             sosdet.game.cmd.MapBattles.endForRemoval();
         }
         return true;
+    }
+
+    /**
+     * The step the first Close of the running battle's panel applies at, once it is in the log; -1 before, and after it:
+     * another player's Close, still in the log once the first ended the battle, ends nothing (SOS-169).
+     */
+    private static long battleEndAhead(Session s) {
+        OwnBattle b = s.battle;
+        if (b == null || b.awaiting || b.closeAt >= 0 && b.closeAt < s.clock.step()) {
+            return -1;
+        }
+        if (b.closeAt < 0) {
+            b.closeAt = s.ai().commandStep(sosdet.game.cmd.MapBattles::isConclude);
+        }
+        return b.closeAt;
     }
 
     /**
@@ -827,6 +850,7 @@ public final class Hooks {
             if (!battleRuns && Reports.takenAt(step) && !s.frozen(s.localHuman) && !s.spectating()) {
                 s.takeReport(step, s.reportAppliesAt(step)); // a viewer takes none: its city is unloaded (SOS-82)
             }
+            s.reportStepSeen(step, battleRuns); // the other humans' PCs, by the same rule (SOS-166)
             s.part = part;
             s.streams.reseed(s.worldSeed(step));
             s.streams.worldPart(true);
@@ -884,8 +908,10 @@ public final class Hooks {
      */
     public static boolean cityCommandHere(int pc) {
         Session s = Engine.session();
-        // in a battle every PC runs the battle PC's game, so its commands apply everywhere (plan 0006)
-        return s == null || !s.ownCity || pc == s.cityPc() || s.battle != null && !s.battle.awaiting;
+        // in a battle every PC runs the battle PC's game, so its commands apply everywhere (plan 0006); a local battle's
+        // tape holds only its commanders' orders, an ally's too, applied alike on its PC and its watchers' (SOS-167)
+        return s == null || !s.ownCity || pc == s.cityPc() || s.battle != null && !s.battle.awaiting
+                || s.ai().applyingTaped();
     }
 
     /** A city view's start or end in the log, at its step (SOS-82). */
@@ -2492,7 +2518,58 @@ public final class Hooks {
         if (s != null) {
             int second = s.worldPromptOtherNext >= 0 ? s.worldPromptOtherNext : s.worldPromptSallyNext;
             s.alliesNext = BattleAllies.asked(s, s.currentHuman, second, a, b);
+            s.alliesSeen = "step " + s.clock.step() + ": human " + s.currentHuman + ", second " + second + ", sides "
+                    + java.util.Arrays.toString(a) + " " + java.util.Arrays.toString(b) + ", asked "
+                    + java.util.Arrays.toString(s.alliesNext);
         }
+    }
+
+    /** Test tooling: the last prompt's ally question, as {@link #worldPromptAllies} saw it; empty before any. */
+    public static String worldPromptAlliesSeen() {
+        Session s = Engine.session();
+        return s == null ? "" : s.alliesSeen;
+    }
+
+    /** Patch 15, the siege poll: a sally's siege is built from here to {@link #sallyPollEnd} (SOS-170). */
+    public static void sallyPollStart() {
+        Session s = Engine.session();
+        if (s != null) {
+            s.sallyPolling = true;
+            s.sallyEmpty = false;
+        }
+    }
+
+    /** Patch 15, the resolver: true while a sally's siege is built. */
+    public static boolean sallyPolling() {
+        Session s = Engine.session();
+        return s != null && s.sallyPolling;
+    }
+
+    /** Patch 15, the resolver: the sally found no men on the defender's side, so nobody is asked. */
+    public static void sallyEmpty() {
+        Session s = Engine.session();
+        if (s != null) {
+            s.sallyEmpty = true;
+        }
+    }
+
+    /** Patch 15, the siege poll: the sally's siege is built; the human in {@code slot} hears of one with nobody (SOS-170). */
+    public static void sallyPollEnd(int slot) {
+        Session s = Engine.session();
+        if (s == null) {
+            return;
+        }
+        if (s.sallyEmpty && slot >= 0) {
+            s.notice(Notice.SALLY_EMPTY, slot, slot, 0);
+        }
+        s.sallyPolling = false;
+        s.sallyEmpty = false;
+    }
+
+    /** Patch 15, a field battle's auto-resolve: see {@link Session#autoResolveCounts}; every human without a session. */
+    public static boolean autoResolveCounts(int asked, int slot) {
+        Session s = Engine.session();
+        return s == null || s.autoResolveCounts(asked, slot);
     }
 
     /** Inside the ally's answer: true when the prompt asked the current human and this is their first answer (SOS-118). */
@@ -2702,6 +2779,11 @@ public final class Hooks {
     }
 
     /** Inside the speed vote's command: true when the PC giving it commands the battle (spec §8). */
+    /** Inside the morale test command (SOS-162): army 0 or 1 of this PC's battle has its morale held from now. */
+    public static void battleMoraleHeld(int army) {
+        Engine.session().moraleArmy = army;
+    }
+
     public static boolean battleSpeedVote(double speed) {
         Session s = Engine.session();
         return s != null && s.battleVote(s.ai().applyingPc(), speed);

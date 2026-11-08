@@ -76,4 +76,16 @@ final class BattleRules {
         part[most] += total - given;
         return part;
     }
+
+    /** Vanilla places a side's line within this many tiles of its middle (BattleStateGenArmy). */
+    static final int HALF_LINE = 220;
+
+    /**
+     * A deployment group's half-width, cut so that the side's groups and the gaps between them stay within vanilla's
+     * line (SOS-160: with three groups or more the outer ones had no room left, and their divisions were never placed).
+     * A group past its width grows in depth instead.
+     */
+    static int groupHalf(int half, int groups, int gap) {
+        return Math.min(half, (2 * HALF_LINE - gap * (groups - 1)) / groups / 2);
+    }
 }

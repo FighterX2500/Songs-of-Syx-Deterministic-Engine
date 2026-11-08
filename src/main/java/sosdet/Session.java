@@ -72,6 +72,8 @@ final class Session {
     /** The open prompt is a sally against this besieging human, asked of the defender only; -1 for none (SOS-83). */
     int worldPromptSally = -1;
     int worldPromptSallyNext = -1;
+    /** Test tooling: the last ally question, for a test's log (never in the hash or the state). */
+    String alliesSeen = "";
     /** The last battle between two humans' outcome, until the mod takes it (SOS-83). */
     BattleOutcome battleOutcome;
     int worldPromptReady;
@@ -81,6 +83,8 @@ final class Session {
     final PromptTimer promptTimer = new PromptTimer();
     /** A battle between two humans' deployment: Start for both when it runs out (SOS-83). */
     final PromptTimer deployTimer = new PromptTimer(PromptTimer.DEPLOY_SECONDS);
+    /** Test tooling: the army (0 or 1) of this PC's battle whose morale is held below zero; -1 for none (SOS-162). */
+    int moraleArmy = -1;
     int[] worldPromptArmies = NO_ARMIES;
     static final int[] NO_ARMIES = new int[0];
     /**
@@ -143,6 +147,10 @@ final class Session {
     boolean battleHold;
     /** The step an Engage applies at while every PC holds before it, and the last one let through; -1 for none. */
     long battleAhead = -1, battleGo = -1;
+    /** In a battle every PC runs, the step the panel's Close in the log applies at, as of this step's start; -1 for none (SOS-169). */
+    long battleEndAhead = -1;
+    /** Inside the siege poll's sally (patch 15), and whether it found no men on the defender's side (SOS-170). */
+    boolean sallyPolling, sallyEmpty;
     /** The engine itself loads a battle save ({@link Engine#battleIn}): the restart hook lets it through. */
     boolean battleLoading;
     /** The mod's actions after each load of a whole game: the new game has none of the old one's (plan 0006). */
@@ -262,6 +270,11 @@ final class Session {
      * (SOS-90); the world part runs to the step before without waiting (-1: none since the load).
      */
     final long[] receivedNextAt = none();
+    /**
+     * By human slot: the last step its own PC took a report at, by the world part's rule, the same on every PC (-1: none
+     * since the load). A frozen human's world waits for that one only (SOS-166).
+     */
+    final long[] reportTakenAt = none();
     /** The step this PC's last report promised its next would apply at, at the earliest (SOS-90). */
     private long reportPromise;
     /** This frame's steps stopped to wait for another PC's report or the host's log (SOS-90). */
@@ -349,8 +362,8 @@ final class Session {
 
     /** Every PC, at the Engage step: the battle of {@code human} runs on its PC only, from the next report step. */
     LocalBattle localEngage(long step, int human) {
-        // one ally: the battle runs on two PCs only (spec §8)
-        int[] allies = alliesJoined(human, 1);
+        // every ally who joined: the battle runs on each of their PCs (spec §8, SOS-160)
+        int[] allies = alliesJoined(human);
         LocalBattle b = localStart(step, human, closedPromptArmies, allies);
         closedPromptArmies = NO_ARMIES;
         return b;
@@ -417,13 +430,18 @@ final class Session {
         if (!b.roster.allies() || b.state != LocalBattle.RUNNING || b.resultStep >= 0) {
             return;
         }
-        int ally = b.roster.commanders[b.roster.leads];
-        View v = views[ally];
-        if (v != null && v.state != View.ENDED && v.state != View.CANCELLED) {
-            return;
-        }
-        if (v == null || v.freeze <= b.freeze || v.why == View.GAME || v.why == View.DESYNC) {
-            views[ally] = new View(ally, pcOf(ally), b.human, b.pc, nextReportStep(step + 1));
+        for (int c = b.roster.leads; c < b.roster.commanders.length; c++) { // every ally's PC (SOS-160)
+            int ally = b.roster.commanders[c];
+            if (removing[ally] || retired(ally)) {
+                continue; // no view for a PC that leaves: it would be cancelled at each freeze
+            }
+            View v = views[ally];
+            if (v != null && v.state != View.ENDED && v.state != View.CANCELLED) {
+                continue;
+            }
+            if (v == null || v.freeze <= b.freeze || v.why == View.GAME || v.why == View.DESYNC) {
+                views[ally] = new View(ally, pcOf(ally), b.human, b.pc, nextReportStep(step + 1));
+            }
         }
     }
 
@@ -719,8 +737,13 @@ final class Session {
         LocalBattle b = localHere();
         if (b != null) {
             localGeneral.drainInto(tape); // the general's changes since the last step, as the player's orders (SOS-150)
-            tape.record(step, localPaused ? 0 : localRounds);
             java.util.ArrayList<sosdet.ai.AiEntry> orders = tape.queued();
+            for (int i = orders.size() - 1; i >= 0; i--) {
+                if (!ai().allowsTaped(orders.get(i))) {
+                    orders.remove(i); // the tape holds what runs here: a watcher has no commanders table (SOS-160)
+                }
+            }
+            tape.record(step, localPaused ? 0 : localRounds);
             for (int i = 0; i < orders.size(); i++) {
                 ai().applyTaped(orders.get(i));
             }
@@ -2035,6 +2058,7 @@ final class Session {
         }
         java.util.Arrays.fill(receivedTakenAt, -1);
         java.util.Arrays.fill(receivedNextAt, -1);
+        java.util.Arrays.fill(reportTakenAt, -1);
         reportPromise = 0;
         for (int slot = 0; slot < SLOTS; slot++) {
             if (removing[slot]) {
@@ -2141,9 +2165,7 @@ final class Session {
         if (battle.awaiting) {
             battle.awaiting = false;
             hashes.worldOnly(false);
-            if (ai().mode() == sosdet.ai.AiMode.HOST) {
-                commandBattle();
-            }
+            commandBattle();
             if (battle.other >= 0) {
                 deployTimer.open();
             }
@@ -2154,9 +2176,10 @@ final class Session {
     }
 
     /**
-     * Host, as the battle loads (plan 0006 M2, SOS-83): who commands it, through the log, so every PC applies it at the
-     * step the host stamps. Army 0, the battle's human's, goes to that human's PC; army 1 to the other human's PC in a
-     * battle between two humans, else to the host's AI general. Divisions come in army order, split evenly.
+     * Every PC alike, as the battle loads (plan 0006 M2, SOS-83): who commands it, from the Engage step on. Not through
+     * the log: its stamp waits past the world's horizon, up to 400 steps of the deployment (SOS-164). Army 0, the
+     * battle's human's, goes to that human's PC; army 1 to the other human's PC in a battle between two humans, else to
+     * the host's AI general. Divisions come in army order, split evenly.
      */
     private void commandBattle() {
         int divisions = sosdet.game.OwnArmy.divisions();
@@ -2174,7 +2197,7 @@ final class Session {
         for (int a = 0; a < armies; a++) {
             artillery[a] = a == 0 ? battle.pc : a == 1 ? army1 : sosdet.ai.AiEntry.AI;
         }
-        ai().captureCommanders(sosdet.ai.Commanders.payload(byDivision, artillery));
+        ai().battleCommanders(byDivision, artillery);
     }
 
     /**
@@ -2254,17 +2277,29 @@ final class Session {
         return true;
     }
 
-    /** The allies who answered Join; the chat hears of each who was asked (SOS-118). */
-    int[] alliesJoined(int lead) {
-        return alliesJoined(lead, allies.length);
+    /**
+     * Inside a field battle's auto-resolve, every PC alike: whether the human in {@code slot} on the side of the human
+     * {@code asked} counts in it: that human, or an ally who answered Join. Who stayed out or never answered keeps its
+     * army out of it, as out of a fought battle (spec §8, SOS-168).
+     */
+    boolean autoResolveCounts(int asked, int slot) {
+        if (slot == asked) {
+            return true;
+        }
+        for (int i = 0; i < allies.length; i++) {
+            if (allies[i] == slot && allyAnswers[i] == 1) {
+                return true;
+            }
+        }
+        return false;
     }
 
-    /** As {@link #alliesJoined(int)}, for a battle that takes {@code most} allies: the first who said yes. */
-    int[] alliesJoined(int lead, int most) {
+    /** The allies who answered Join; the chat hears of each who was asked (SOS-118). */
+    int[] alliesJoined(int lead) {
         int[] joined = new int[allies.length];
         int n = 0;
         for (int i = 0; i < allies.length; i++) {
-            boolean in = allyAnswers[i] == 1 && n < most;
+            boolean in = allyAnswers[i] == 1;
             if (in) {
                 joined[n++] = allies[i];
             }
@@ -2284,7 +2319,8 @@ final class Session {
             return true; // co-op: every PC takes the same reports itself; in a battle the world stands still
         }
         for (int h : humans()) {
-            if (!remote(h) || retired(h) || frozen(h) // a viewer's world reads its last report (SOS-82)
+            // a viewer's world reads its last report (SOS-82), once the last it took before the freeze is in (SOS-166)
+            if (!remote(h) || retired(h) || frozen(h) && receivedTakenAt[h] >= reportTakenAt[h]
                     || receivedTakenAt[h] >= 0 && step < receivedNextAt[h]) {
                 continue;
             }
@@ -2294,6 +2330,21 @@ final class Session {
             }
         }
         return true;
+    }
+
+    /**
+     * Every PC, in the world part of each step: the other humans whose PCs take a report now, by the same rule as this
+     * PC's own (Hooks.stepPart), so a frozen human's last report is known on every PC (SOS-166).
+     */
+    void reportStepSeen(long step, boolean battleRuns) {
+        if (battleRuns || !Reports.takenAt(step)) {
+            return;
+        }
+        for (int h : humans()) {
+            if (remote(h) && !frozen(h) && !spectators[h]) {
+                reportTakenAt[h] = step;
+            }
+        }
     }
 
     /** A report from another PC, of a human it runs: it applies at its step as this PC's own would have. */
@@ -2574,7 +2625,23 @@ final class Session {
         return v != null && locals[v.owner] != null && locals[v.owner].roster.ally(localHuman) ? v : null;
     }
 
-    /** A commander's PC in a local battle, every frame: a press of the speed buttons goes to every PC as a vote. */
+    /** A local battle's speed for this PC's buttons, set at the next frame; -1 for none (SOS-160). */
+    private double speedShown = -1;
+
+    /** A speed change from the log set this PC's game speed: no press, in the world or in a local battle (SOS-171). */
+    void speedFollowed(double speed) {
+        seenSpeed = speed;
+        for (LocalBattle b : locals) {
+            if (b != null) {
+                b.seenSpeed = speed;
+            }
+        }
+    }
+
+    /**
+     * A commander's PC in a local battle, every frame: a press of the speed buttons goes to every PC as a vote, and the
+     * buttons go back to the battle's speed, which changes once a majority votes for one (spec §8, SOS-160).
+     */
     private void localPressed(LocalBattle b, double speed) {
         if (b.seenSpeed < 0) {
             b.seenSpeed = speed;
@@ -2582,6 +2649,22 @@ final class Session {
             b.seenSpeed = speed;
             sosdet.game.cmd.MapBattles.localVote(Math.max(speed, 0));
         }
+        localShown(b, speed);
+    }
+
+    /** The buttons at {@code speed}, a press already sent: they show the battle's speed, the voted one (SOS-160). */
+    void localShown(LocalBattle b, double speed) {
+        if (speed > 0 && !b.paused && speed != b.votedSpeed) {
+            b.seenSpeed = b.votedSpeed;
+            speedShown = b.votedSpeed;
+        }
+    }
+
+    /** The speed this PC's buttons show from the next frame (a local battle's voted speed), once; -1 for none. */
+    double takeSpeedShown() {
+        double s = speedShown;
+        speedShown = -1;
+        return s;
     }
 
     /** Inside the step: the current human's vote in their local battle, or 0 to pause it (spec §8, SOS-119). */

@@ -447,6 +447,42 @@ class AiLogTest {
         assertFalse(log[0].commanders().hashed(), "only the battle's PCs hold the table");
     }
 
+    /** SOS-167: a command from a local battle's tape is the battle's, whichever PC gave it; one from the log is not. */
+    @Test
+    void aTapedEntryIsAppliedAsTaped() {
+        List<Boolean> taped = new ArrayList<>();
+        AiLog[] log = new AiLog[1];
+        log[0] = AiLog.host(START, e -> taped.add(log[0].applyingTaped()));
+        log[0].applyTaped(new AiEntry(1, 1, AiEntry.COMMAND, -1, 0, new byte[4]));
+        log[0].captureOrder(AiEntry.GUARD, 0, AiEntry.ints(1));
+        for (long s = 1; s <= 31; s++) {
+            log[0].stepBegin(s);
+        }
+        assertEquals(List.of(true, false), taped);
+        assertFalse(log[0].applyingTaped(), "only while it applies");
+    }
+
+    /** Mod spec section 12: the step a pending command applies at is known before it applies; -1 with none (SOS-169). */
+    @Test
+    void aPendingCommandsStepIsKnownBeforeItApplies() {
+        java.util.function.Predicate<byte[]> close = p -> CmdReader.idOf(p) == 7962;
+        Recorder r = new Recorder();
+        AiLog host = AiLog.host(START, r);
+        host.captureOrder(AiEntry.COMMAND, -1, new CmdWriter(4000).i(0).bytes());
+        host.stepBegin(1);
+        assertEquals(-1, host.commandStep(close), "another command");
+        host.captureOrder(AiEntry.COMMAND, -1, new CmdWriter(7962).i(0).bytes());
+        host.stepBegin(2);
+        long at = host.commandStep(close);
+        assertTrue(at > 2, "stamped ahead: " + at);
+        for (long s = 3; s < at; s++) {
+            host.stepBegin(s);
+        }
+        assertEquals(at, host.commandStep(close), "still pending the step before");
+        host.stepBegin(at);
+        assertEquals(-1, host.commandStep(close), "applied");
+    }
+
     /** An assault with the peer as attacker: divisions 0 and 1 the host's, 2 and 3 the general's until the peer orders them. */
     private static final int[] ASSAULT = {0, 0, Commanders.claimBy(1), Commanders.claimBy(1)};
     private static final int[] ASSAULT_GUNS = {0, Commanders.claimBy(1)};
@@ -522,6 +558,37 @@ class AiLogTest {
         peer.watchOnly(true);
         peer.captureOrder(AiEntry.GUARD, 3, AiEntry.ints(1));
         assertEquals(3, peer.watchedDropped(), "the next watch isn't the assault's");
+    }
+
+    @Test
+    void aBattleTableHoldsFromTheLoadOnEveryPcWhateverTheWorldDelay() {
+        AiLog host = AiLog.host(START, new ByPc());
+        host.delay(AiLog.MAX_DELAY_STEPS); // the world ran at top speed up to the Engage
+        for (long s = 1; s <= 100; s++) {
+            host.stepBegin(s);
+        }
+        host.delay(AiLog.DELAY_STEPS); // the battle's speed
+        host.captureCommanders(TABLE);
+        host.stepBegin(101);
+        assertFalse(host.commanders().set(), "through the log the table waits past the world's horizon (SOS-164)");
+        for (long s = 102; s <= 100 + AiLog.MAX_DELAY_STEPS; s++) {
+            host.stepBegin(s);
+        }
+        assertFalse(host.commanders().set(), "still unset deep into the deployment");
+
+        AiLog h = AiLog.host(START, new ByPc());
+        AiLog p = AiLog.peer(START, new ByPc());
+        p.localPc(1);
+        int[] byDivision = {0, 0, 1, AiEntry.AI};
+        int[] artillery = {0, 1};
+        h.battleCommanders(byDivision, artillery);
+        p.battleCommanders(byDivision, artillery);
+        assertTrue(h.commanders().set());
+        assertTrue(p.commanders().set());
+        assertEquals(0, h.commanders().ownArmy());
+        assertEquals(1, p.commanders().ownArmy(), "the peer's side is its own from the load");
+        assertEquals(h.commanders().hash(), p.commanders().hash());
+        assertFalse(p.commanders().allows(1, 0), "the host's divisions stay the host's");
     }
 
     @Test

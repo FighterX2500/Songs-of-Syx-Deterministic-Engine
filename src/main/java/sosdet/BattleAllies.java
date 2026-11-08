@@ -233,7 +233,7 @@ final class BattleAllies {
         }
         int total = GAP_TILES * (groups - 1);
         for (int i = 0; i < groups; i++) {
-            half[i] = Math.min(half[i], ROW_DIVISIONS * ROW_TILES) / 2;
+            half[i] = BattleRules.groupHalf(Math.min(half[i], ROW_DIVISIONS * ROW_TILES) / 2, groups, GAP_TILES);
             total += 2 * half[i];
         }
         int at = -total / 2;

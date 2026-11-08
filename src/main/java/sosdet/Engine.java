@@ -390,6 +390,15 @@ public final class Engine {
         return s.battleAhead > s.clock.step() && s.battleAhead != s.battleGo ? s.battleAhead : -1;
     }
 
+    /**
+     * In a battle every PC runs (own-city mode), the step its victory or defeat panel's Close applies at, once the Close
+     * is in this PC's log: every PC loads its world back there, ending the battle. -1 otherwise (SOS-169).
+     */
+    public static long battleEndAhead() {
+        Session s = required();
+        return s.battleEndAhead > s.clock.step() ? s.battleEndAhead : -1;
+    }
+
     /** Every PC, between steps while it holds before an Engage: the step runs, and the battle begins as before. */
     public static void battleGo() {
         Session s = required();
@@ -635,13 +644,15 @@ public final class Engine {
             for (View o : s.views) {
                 if (o != null && o.owner == v.owner && o.freeze == v.freeze && o.frozen()) {
                     o.sent = true;
+                    if (o.battle) {
+                        s.tape.watch(o.viewer); // every view that loads the battle at this step gets its tape (SOS-160)
+                    }
                 }
             }
             // the owner loads its save too: two PCs that load one save run its city alike, a loaded and an unloaded
             // game don't (plan 0013, rig run V82D)
             s.viewLoadStart(state, moves, v.viewer);
             if (v.battle) {
-                s.tape.watch(v.viewer);
                 sosdet.game.GameView.loadSavedBattle(sosdet.game.GameResync.exiter(), battle);
             } else {
                 sosdet.game.GameView.loadSaved();

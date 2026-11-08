@@ -78,6 +78,7 @@ public final class AiLog {
     /** The mod's number for this PC (the host is 0), and the issuer of the entry being applied, if any. */
     private int localPc;
     private int applyingPc = NOT_APPLYING;
+    private boolean applyingTaped;
     /** This PC's last captured command until it applies, and how many repeats of it were dropped. */
     private byte[] lastCommand;
     private long repeatsDropped;
@@ -342,6 +343,16 @@ public final class AiLog {
             }
         }
         return false;
+    }
+
+    /** The step of the first command in the log not yet applied that {@code test} matches, read as is; -1 for none. */
+    public long commandStep(java.util.function.Predicate<byte[]> test) {
+        for (AiEntry e : pending) {
+            if (e.kind == AiEntry.COMMAND && test.test(e.payload())) {
+                return e.step;
+            }
+        }
+        return -1;
     }
 
     /**
@@ -696,21 +707,42 @@ public final class AiLog {
         commanding = here;
     }
 
+    /** Between steps, on every PC alike as a battle loads: its table, set at once rather than stamped (SOS-164). */
+    public void battleCommanders(int[] byDivision, int[] artilleryByArmy) {
+        commanders.set(byDivision, artilleryByArmy);
+    }
+
     /**
      * An order from a local battle's tape, inside the step: by the same rules as an entry of this log, so the command
      * knows the PC that gave it and a division obeys only its commander (SOS-119).
      */
+    /** True when this PC's commanders table lets the taped order through; false counts it skipped (SOS-160). */
+    public boolean allowsTaped(AiEntry e) {
+        if (e.div >= 0 && !commanders.allows(e.pc, e.div)) {
+            commanders.skip();
+            return false;
+        }
+        return true;
+    }
+
     public void applyTaped(AiEntry e) {
         if (e.div >= 0 && !commanders.allows(e.pc, e.div)) {
             commanders.skip();
             return;
         }
         applyingPc = e.pc;
+        applyingTaped = true;
         try {
             applier.apply(e);
         } finally {
             applyingPc = NOT_APPLYING;
+            applyingTaped = false;
         }
+    }
+
+    /** While an entry from a local battle's tape applies: its command is the battle's, whoever gave it (SOS-167). */
+    public boolean applyingTaped() {
+        return applyingTaped;
     }
 
     /** On the two PCs running a local battle with an ally: its table, or null and null at its end (SOS-119). */

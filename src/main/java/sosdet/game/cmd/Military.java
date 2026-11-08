@@ -4,14 +4,21 @@ import java.util.List;
 
 import game.GAME;
 import game.battle.div.Div;
+import game.faction.FACTIONS;
+import init.constant.Config;
 import init.race.Race;
+import init.type.HTYPES;
+import settlement.entity.EntityIterator;
+import settlement.entity.humanoid.Humanoid;
 import settlement.main.SETT;
 import settlement.room.main.RoomInstance;
 import settlement.room.military.artillery.ArtilleryInstance;
+import settlement.stats.Induvidual;
 import settlement.stats.STATS;
 import settlement.stats.colls.StatsBattle.StatTraining;
 import settlement.stats.equip.EquipBattle;
 import sosdet.ai.CmdWriter;
+import world.army.AD;
 
 /** The city's army: divisions' size, training and equipment targets, recruitment (ids 4000-4999). */
 public final class Military {
@@ -25,6 +32,7 @@ public final class Military {
     static final int SEND_UNTRAINED = 4006;
     static final int ARTILLERY_CLEAR = 4007;
     static final int ARTILLERY_TARGET_DIV = 4008;
+    static final int RECRUIT_FOR_TEST = 4009;
 
     static final List<Command> ALL = List.of(
             new Command(MEN, "divisionMen", r -> {
@@ -88,7 +96,8 @@ public final class Military {
                 }
                 ((ArtilleryInstance) room).targetDivSet(target, userSet);
                 return true;
-            }));
+            }),
+            new Command(RECRUIT_FOR_TEST, "divisionRecruitForTest", r -> applyRecruit(r.i())));
 
     private Military() {
     }
@@ -148,6 +157,61 @@ public final class Military {
         }
         Commands.capture(Args.div(Args.div(new CmdWriter(ORDER), replaced), replacer));
         return true;
+    }
+
+    /**
+     * Test tooling, never a player's (SOS-162): {@code men} of this city's citizens join an empty division at once, with
+     * full training and the most equipment as its target, at the command's step in this city only. The division's army
+     * gets its gear from its supplies ({@code armyFillForTest}) once the men have joined it.
+     */
+    public static void recruitForTest(int men) {
+        if (!Commands.capturing()) {
+            throw new IllegalStateException("SOSDET: a recruitment outside a session's play");
+        }
+        Commands.capture(new CmdWriter(RECRUIT_FOR_TEST).i(men));
+    }
+
+    /** The first citizens of the player's race, in entity order, so every PC running this city drafts the same people. */
+    private static boolean applyRecruit(int wanted) {
+        int n = Math.min(wanted, Config.battle().MEN_PER_DIVISION);
+        Div div = null;
+        for (Div d : GAME.ARMIES().player().divisions()) {
+            if (d.info.men() == 0 && d.menNrOf() == 0 && AD.cityDivs().attachedArmy(d) == null && AD.cityDivs().get(d).men() == 0) {
+                div = d;
+                break;
+            }
+        }
+        if (div == null || n <= 0) {
+            return false;
+        }
+        Race race = FACTIONS.player().race();
+        div.info.raceSet(race);
+        div.info.menSet(n);
+        for (StatTraining t : STATS.BATTLE().TRAINING_ALL) {
+            div.info.trainingSet(t, 1.0);
+        }
+        for (EquipBattle e : STATS.EQUIP().BATTLE_ALL()) {
+            e.targetSet(div, e.max());
+        }
+        Div into = div;
+        int[] left = {n};
+        new EntityIterator.Humans() {
+            @Override
+            protected boolean processAndShouldBreakH(Humanoid h, int ie) {
+                Induvidual i = h.indu();
+                if (h.isRemoved() || !i.added() || i.hType() != HTYPES.SUBJECT() || h.race() != race
+                        || STATS.BATTLE().DIV.get(h) != null || STATS.BATTLE().RECRUIT.get(h) != null) {
+                    return false;
+                }
+                STATS.BATTLE().basicTraining.setD(i, 1.0);
+                for (StatTraining t : STATS.BATTLE().TRAINING_ALL) {
+                    t.stat.indu().setD(i, 1.0);
+                }
+                h.setDivision(into);
+                return --left[0] == 0;
+            }
+        }.iterate();
+        return left[0] < n;
     }
 
     /** Hook in {@code ArtilleryInstance.clearTarget}: the battle screen's stop, for the selected or all artillery. */

@@ -33,6 +33,8 @@ public final class OwnBattle {
     volatile boolean awaiting = true;
     /** The battle PC's engine has handed out its battle save. */
     boolean sent;
+    /** The step the first Close of its victory or defeat panel applies at, which ends it; -1 before one (SOS-169). */
+    long closeAt = -1;
 
     OwnBattle(long step, int human, int pc, int other, long worldDraws) {
         this(step, human, pc, other, worldDraws, new int[0]);

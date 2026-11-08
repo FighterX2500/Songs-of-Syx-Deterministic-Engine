@@ -286,14 +286,28 @@ class LocalBattleTest {
         assertFalse(s.ai().commanders().set());
     }
 
-    /** Mod spec section 8, ADR 0009: the battle runs on two PCs: the first who joined is the ally. */
+    /** Mod spec section 8 (SOS-160): every ally who joined fights, in answer order; one who stayed out doesn't. */
     @Test
-    void anNpcBattleTakesOneAlly() {
+    void anNpcBattleTakesEveryAllyWhoJoined() {
+        Session s = session(3);
+        s.allies = new int[] {0, 7, 5};
+        s.allyAnswers = new int[] {1, 1, 0};
+        LocalBattle b = s.localEngage(1234, 3);
+        assertArrayEquals(new int[] {3, 0, 7}, b.roster.commanders);
+    }
+
+    /** SOS-160: each ally's PC follows the battle, its view freezing at the battle's next report step. */
+    @Test
+    void everyAllysPcFollowsTheBattle() {
         Session s = session(3);
         s.allies = new int[] {0, 7};
         s.allyAnswers = new int[] {1, 1};
         LocalBattle b = s.localEngage(1234, 3);
-        assertArrayEquals(new int[] {3, 0}, b.roster.commanders);
+        s.localsAt(b.freeze);
+        assertNotNull(s.views[0], "the first ally watches");
+        assertNotNull(s.views[7], "the second ally watches");
+        assertEquals(s.views[0].freeze, s.views[7].freeze, "both views freeze at one step");
+        assertEquals(3, s.views[7].owner);
     }
 
     /** ADR 0009: the ally's order reaches the fighter's PC through the log; its tape carries it from the ally's PC. */
@@ -335,6 +349,39 @@ class LocalBattleTest {
         s.localVote(5);
         assertFalse(b.paused, "a press goes on");
         assertEquals(5, b.votedSpeed);
+    }
+
+    /** Scenario A3 (SOS-160): a press is a vote; the buttons show the battle's speed, the voted one once it is chosen. */
+    @Test
+    void theButtonsShowTheBattlesSpeedUntilAMajorityVotes() {
+        Session s = session(3);
+        LocalBattle b = withAlly(s);
+        s.localShown(b, 1); // what the battle opened at
+        assertEquals(-1, s.takeSpeedShown());
+        s.localShown(b, 3); // this commander pressed 3x, its vote sent
+        assertEquals(1, s.takeSpeedShown(), "one vote of two: the buttons go back to the battle's 1x");
+        assertEquals(1, b.seenSpeed, "what the buttons show is no press");
+        s.localShown(b, 1);
+        assertEquals(-1, s.takeSpeedShown(), "no second vote");
+        b.votedSpeed = 3; // the other commander's vote made the majority
+        s.localShown(b, 1);
+        assertEquals(3, s.takeSpeedShown(), "the battle's new speed");
+        s.localShown(b, 3);
+        assertEquals(-1, s.takeSpeedShown());
+        b.paused = true; // either commander paused: the buttons stay as they are
+        s.localShown(b, 3);
+        assertEquals(-1, s.takeSpeedShown());
+    }
+
+    /** Scenario A3 (SOS-171): the world's speed change the engine sets is no commander's 1x vote. */
+    @Test
+    void aSpeedFromTheLogIsNoVote() {
+        Session s = session(3);
+        LocalBattle b = withAlly(s);
+        b.seenSpeed = 3; // the commander pressed 3x
+        s.speedFollowed(1);
+        assertEquals(1, b.seenSpeed, "the game speed the log set is what the battle saw, not a press");
+        assertEquals(1, s.seenSpeed);
     }
 
     @Test
@@ -437,6 +484,48 @@ class LocalBattleTest {
         assertEquals(0, s.heldTxns.size());
         s.ownTxns.accept(credits(0));
         assertEquals(1, s.heldTxns.size(), "the watcher's own city waits for it");
+    }
+
+    /** A frozen human's last report before its freeze can still be on its way: the world waits for it (SOS-166). */
+    @Test
+    void theWorldWaitsForAFrozenHumansLastReportBeforeTheFreeze() {
+        Session s = session(0);
+        s.reportReceived(new sosdet.report.CityReport(SMALL, 3, 1200, 1230, 1260, new double[SMALL.size()],
+                new ArrayList<>()));
+        s.reportStepSeen(1230, false); // human 3's PC takes a report at 1230, applying at 1260
+        LocalBattle b = s.localEngage(1234, 3);
+        s.localsAt(b.freeze);
+        s.reportStepSeen(b.freeze, false); // frozen: no report
+        assertTrue(s.frozen(3));
+        assertTrue(s.worldMayRun(1259), "nothing more of human 3's applies before 1260");
+        assertFalse(s.worldMayRun(1260), "the report taken at 1230 applies now, wherever it is");
+        s.reportReceived(new sosdet.report.CityReport(SMALL, 3, 1230, 1260, 1290, new double[SMALL.size()],
+                new ArrayList<>()));
+        assertTrue(s.worldMayRun(1260));
+        assertTrue(s.worldMayRun(1400), "no report is taken while frozen: none to wait for");
+    }
+
+    /** Mod spec section 8: an auto-resolve counts the asked human and the allies who joined, no one else (SOS-168). */
+    @Test
+    void anAutoResolveCountsOnlyTheHumansInTheBattle() {
+        Session s = session(0);
+        assertTrue(s.autoResolveCounts(0, 0), "the asked human");
+        assertFalse(s.autoResolveCounts(0, 3), "a human not asked");
+        s.allies = new int[] {3, 5};
+        s.allyAnswers = new int[] {1, 0};
+        assertTrue(s.autoResolveCounts(0, 3), "an ally who answered Join");
+        assertFalse(s.autoResolveCounts(0, 5), "one who hasn't answered");
+        s.allyAnswers = new int[] {2, 0};
+        assertFalse(s.autoResolveCounts(0, 3), "one who stayed out");
+    }
+
+    /** A freeze right after the load: the human took no report this PC waits for (SOS-166). */
+    @Test
+    void aFrozenHumanWithNoReportTakenSinceTheLoadIsNotWaitedFor() {
+        Session s = session(0);
+        LocalBattle b = s.localEngage(1234, 3);
+        s.localsAt(b.freeze);
+        assertTrue(s.worldMayRun(b.freeze + 100));
     }
 
     /** A PC ahead of this one has thawed already: its first report mustn't be lost (W3, and SOS-95's symptom). */
