@@ -81,6 +81,8 @@ final class Session {
     final PromptTimer promptTimer = new PromptTimer();
     /** A battle between two humans' deployment: Start for both when it runs out (SOS-83). */
     final PromptTimer deployTimer = new PromptTimer(PromptTimer.DEPLOY_SECONDS);
+    /** Test tooling: the army (0 or 1) of this PC's battle whose morale is held below zero; -1 for none (SOS-162). */
+    int moraleArmy = -1;
     int[] worldPromptArmies = NO_ARMIES;
     static final int[] NO_ARMIES = new int[0];
     /**

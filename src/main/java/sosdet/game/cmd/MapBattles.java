@@ -1,10 +1,14 @@
 package sosdet.game.cmd;
 
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
+import game.GAME;
+import game.battle.Army;
+import game.battle.div.Div;
 import game.battle.state.BattleState;
 import game.battle.state.BattleStateResult;
 import settlement.stats.Induvidual;
@@ -13,6 +17,7 @@ import snake2d.util.color.COLOR;
 import sosdet.Engine;
 import sosdet.Hooks;
 import sosdet.ai.CmdWriter;
+import util.data.DOUBLE_O.DOUBLE_OE;
 import view.main.VIEW;
 
 /**
@@ -38,6 +43,8 @@ public final class MapBattles {
     /** An ally's order and a commander's vote in a local battle, through the log to the battle's PCs (SOS-119). */
     static final int LOCAL_ORDER = sosdet.ai.AiLog.LOCAL_ORDER;
     static final int LOCAL_VOTE = sosdet.ai.AiLog.LOCAL_VOTE;
+    /** Test tooling (SOS-162): one army's morale is held below zero until the battle ends, on every PC that runs it. */
+    static final int MORALE_FOR_TEST = 7969;
 
     /** The save the battle's generation writes ({@code BattleState.setGenerate}). */
     private static final String BATTLE_SAVE = "__battle";
@@ -104,9 +111,66 @@ public final class MapBattles {
                 }
                 return Hooks.localAllyOrder(kind, div, payload);
             }),
-            new Command(LOCAL_VOTE, "battleLocalVote", r -> Hooks.localVote(r.d())));
+            new Command(LOCAL_VOTE, "battleLocalVote", r -> Hooks.localVote(r.d())),
+            new Command(MORALE_FOR_TEST, "battleMoraleForTest", r -> {
+                int army = r.i();
+                if (VIEW.b().state() == null || army < 0 || army > 1) {
+                    return false;
+                }
+                Hooks.battleMoraleHeld(army);
+                return true;
+            }));
+
+    /** {@code DivFactors.morale}, which vanilla keeps private: test tooling only (SOS-162). */
+    private static final Field MORALE = moraleField();
 
     private MapBattles() {
+    }
+
+    /**
+     * Test tooling, never a player's (SOS-162): from the command's step, the morale of every division of army 0 (the
+     * battle's player side) or army 1 (its enemy side) stays below zero until the battle ends, so its soldiers flee. It
+     * travels as any battle order: on a local battle's tape, through the log in a battle on every PC. A watcher who
+     * opens the battle after it would run without it.
+     */
+    public static void moraleForTest(int army) {
+        if (!Commands.capturing()) {
+            throw new IllegalStateException("SOSDET: a battle's morale outside a session's play");
+        }
+        Commands.capture(new CmdWriter(MORALE_FOR_TEST).i(army));
+    }
+
+    /** Every PC that runs the battle, at each step's start after its orders: false once no battle is open here. */
+    public static boolean holdMorale(int army) {
+        if (VIEW.b().state() == null) {
+            return false;
+        }
+        Army a = army == 0 ? GAME.ARMIES().player() : GAME.ARMIES().enemy();
+        DOUBLE_OE<Div> morale = morale();
+        for (Div d : a.divisions()) {
+            morale.setD(d, -10);
+        }
+        return true;
+    }
+
+    // DivFactors.morale is a DataDiv, a DOUBLE_OE<Div>: the cast only names its type
+    @SuppressWarnings("unchecked")
+    private static DOUBLE_OE<Div> morale() {
+        try {
+            return (DOUBLE_OE<Div>) MORALE.get(GAME.ARMIES().factors);
+        } catch (IllegalAccessException e) {
+            throw new IllegalStateException("SOSDET: cannot read DivFactors.morale (V71, build 71.44)", e);
+        }
+    }
+
+    private static Field moraleField() {
+        try {
+            Field f = game.battle.factors.DivFactors.class.getDeclaredField("morale");
+            f.setAccessible(true);
+            return f;
+        } catch (NoSuchFieldException e) {
+            throw new IllegalStateException("SOSDET: no field DivFactors.morale in this game build (V71, build 71.44)", e);
+        }
     }
 
     /**

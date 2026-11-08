@@ -261,6 +261,9 @@ public final class Hooks {
         s.stepStartNanos = System.nanoTime(); // timing only, never fed to the simulation
         s.ai().stepBegin(s.clock.step());
         s.localOrders(s.clock.step()); // a local battle's: the fighter's own, or a watcher's from the tape (SOS-109)
+        if (s.moraleArmy >= 0 && !sosdet.game.cmd.MapBattles.holdMorale(s.moraleArmy)) {
+            s.moraleArmy = -1; // test tooling: the battle ended here (SOS-162)
+        }
         if (s.battle != null && !s.battle.awaiting && s.deployTimer.step(s.clock.stepSeconds(), s.clock.agreedSpeed())) {
             sosdet.game.cmd.MapBattles.deployForAll(); // a human between two didn't press Start in time (SOS-83)
         }
@@ -2702,6 +2705,11 @@ public final class Hooks {
     }
 
     /** Inside the speed vote's command: true when the PC giving it commands the battle (spec §8). */
+    /** Inside the morale test command (SOS-162): army 0 or 1 of this PC's battle has its morale held from now. */
+    public static void battleMoraleHeld(int army) {
+        Engine.session().moraleArmy = army;
+    }
+
     public static boolean battleSpeedVote(double speed) {
         Session s = Engine.session();
         return s != null && s.battleVote(s.ai().applyingPc(), speed);

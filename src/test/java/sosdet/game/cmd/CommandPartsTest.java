@@ -97,4 +97,16 @@ class CommandPartsTest {
         assertFalse(CommandParts.everyPc(Names.DIVISION_BANNER));
         assertFalse(CommandParts.everyPc(Names.COLOUR));
     }
+
+    /**
+     * SOS-162's test tooling: a region's gift is a world command; the held morale travels as a battle order (on the
+     * tape, or through the log in a battle on every PC); the recruitment stays in the sender's own city.
+     */
+    @Test
+    void theTestCommandsApplyWhereTheirStateRuns() {
+        assertTrue(CommandParts.world(new CmdWriter(Sieges.REGION_GIVE).i(2).i(40).bytes()));
+        assertTrue(CommandParts.everyPc(Sieges.NPC_VASSAL));
+        assertFalse(CommandParts.world(new CmdWriter(MapBattles.MORALE_FOR_TEST).i(1).bytes()));
+        assertFalse(CommandParts.everyPc(Military.RECRUIT_FOR_TEST));
+    }
 }

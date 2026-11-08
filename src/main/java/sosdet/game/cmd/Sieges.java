@@ -48,6 +48,7 @@ public final class Sieges {
     static final int ARMY_FILL = 7976;
     static final int NPC_WAR = 7977;
     static final int NPC_VASSAL = 7978;
+    static final int REGION_GIVE = 7979;
 
     static final List<Command> ALL = List.of(new Command(SALLY, "siegeSally", r -> applySally()),
             new Command(WAIT_PASSED, "siegeWaitPassed", r -> applyWaitPassed(r.i())),
@@ -73,7 +74,8 @@ public final class Sieges {
             }),
             new Command(NPC_BESIEGE, "npcBesiegeForTest", r -> applyNpcBesiege(r.i())),
             new Command(NPC_WAR, "npcWarForTest", r -> applyNpcWar(r.i(), r.i())),
-            new Command(NPC_VASSAL, "npcVassalForTest", r -> applyNpcVassal(r.i(), r.i())));
+            new Command(NPC_VASSAL, "npcVassalForTest", r -> applyNpcVassal(r.i(), r.i())),
+            new Command(REGION_GIVE, "regionGiveForTest", r -> applyRegionGive(r.i(), r.i())));
 
     /** Patch 15's {@code WBattles.sosdetSally}: the engine compiles against the shipped game, without it. */
     private static final Method SALLY_OUT = sallyOutMethod();
@@ -324,6 +326,29 @@ public final class Sieges {
         int before = Hooks.currentHumanSwap(human); // DIP.set reads the player
         try {
             DIP.VASSAL().set(f, human);
+        } finally {
+            Hooks.currentHumanSwap(before);
+        }
+        return true;
+    }
+
+    /** Test tooling, never a player's: the NPC region {@code region} becomes the human in {@code slot}'s (SOS-162). */
+    public static void regionGiveForTest(int slot, int region) {
+        if (!Commands.capturing()) {
+            throw new IllegalStateException("SOSDET: a region's gift outside a session's play");
+        }
+        Commands.capture(new CmdWriter(REGION_GIVE).i(slot).i(region));
+    }
+
+    private static boolean applyRegionGive(int slot, int region) {
+        Faction human = FACTIONS.getByIndex(slot);
+        Region reg = WORLD.REGIONS().getByIndex(region);
+        if (!(human instanceof Player) || reg == null || reg.capitol() || !(reg.faction() == null || reg.faction() instanceof FactionNPC)) {
+            return false;
+        }
+        int before = Hooks.currentHumanSwap(human); // the owner-change listeners act for "the player", as HumanDeals' regions
+        try {
+            world.region.RD.setFaction(reg, human, true);
         } finally {
             Hooks.currentHumanSwap(before);
         }
