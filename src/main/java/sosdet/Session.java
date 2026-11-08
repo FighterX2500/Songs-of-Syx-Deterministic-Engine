@@ -72,6 +72,8 @@ final class Session {
     /** The open prompt is a sally against this besieging human, asked of the defender only; -1 for none (SOS-83). */
     int worldPromptSally = -1;
     int worldPromptSallyNext = -1;
+    /** Test tooling: the last ally question, for a test's log (never in the hash or the state). */
+    String alliesSeen = "";
     /** The last battle between two humans' outcome, until the mod takes it (SOS-83). */
     BattleOutcome battleOutcome;
     int worldPromptReady;

@@ -2495,7 +2495,16 @@ public final class Hooks {
         if (s != null) {
             int second = s.worldPromptOtherNext >= 0 ? s.worldPromptOtherNext : s.worldPromptSallyNext;
             s.alliesNext = BattleAllies.asked(s, s.currentHuman, second, a, b);
+            s.alliesSeen = "step " + s.clock.step() + ": human " + s.currentHuman + ", second " + second + ", sides "
+                    + java.util.Arrays.toString(a) + " " + java.util.Arrays.toString(b) + ", asked "
+                    + java.util.Arrays.toString(s.alliesNext);
         }
+    }
+
+    /** Test tooling: the last prompt's ally question, as {@link #worldPromptAllies} saw it; empty before any. */
+    public static String worldPromptAlliesSeen() {
+        Session s = Engine.session();
+        return s == null ? "" : s.alliesSeen;
     }
 
     /** Inside the ally's answer: true when the prompt asked the current human and this is their first answer (SOS-118). */
