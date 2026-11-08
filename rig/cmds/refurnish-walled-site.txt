@@ -1,0 +1,32 @@
+# SOS-181. 1. A refurnish of a walled construction site whose jobs are on the map (playtest 2026-11-09, a mason's
+# workshop): making the plan places its doorway again, and the doorway's check read the site's jobs under the half-made
+# plan (ClassCastException in JobRoom.getState; the rig logs it as a cmdskipped event). A mason's workshop built, left
+# to get its jobs, refurnished, the plan edited and left; then refurnished again, grown and built.
+plan WORKSHOP_MASON 5 5
+plan-items 1 0
+plan-items 2 1
+plan-door
+build
+wait 6
+look-site
+wait 3
+refurnish site
+wait 3
+plan-drop-item 1 1
+plan-door
+wait 3
+plan-cancel
+wait 2
+refurnish site
+plan-grow 1
+build
+wait 4
+# 2. A working workshop refurnished with the minimap's maintenance overlay on: its saved maintenance bits stay (a read
+#    outside the step cleared them on this copy only); then the delete tool picked while the plan is open: the plan
+#    ends with its tool and no tile keeps the plan's room
+refurnish WORKSHOP
+plan-maint WORKSHOP
+wait 3
+plan-maint WORKSHOP
+plan-switch-tool
+wait 3

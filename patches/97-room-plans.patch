@@ -1,6 +1,6 @@
 diff -ru -U2 a/settlement/job/JobRoom.java b/settlement/job/JobRoom.java
 --- a/settlement/job/JobRoom.java	2026-06-17 10:48:04.000000000 +0500
-+++ b/settlement/job/JobRoom.java	2026-11-01 22:43:45.455034400 +0500
++++ b/settlement/job/JobRoom.java	2026-11-09 04:50:13.983373200 +0500
 @@ -2,7 +2,6 @@
  
  import static settlement.main.SETT.GRASS;
@@ -58,9 +58,32 @@ diff -ru -U2 a/settlement/job/JobRoom.java b/settlement/job/JobRoom.java
  	}
  
  	@Override
+diff -ru -U2 a/settlement/maintenance/MAINTENANCE.java b/settlement/maintenance/MAINTENANCE.java
+--- a/settlement/maintenance/MAINTENANCE.java	2026-04-13 11:44:10.000000000 +0500
++++ b/settlement/maintenance/MAINTENANCE.java	2026-11-09 04:50:13.991362900 +0500
+@@ -198,7 +198,8 @@
+ 					if (t.validate(tx, ty))
+ 						return true;
+ 				}
+-				pisser.set(tx, ty, false);
++				if (!sosdet.Hooks.outsideStep()) // SOSDET: a read clears the saved bit; a refurnish plan and the overlay are local (SOS-181)
++					pisser.set(tx, ty, false);
+ 			}
+ 			return false;
+ 		}
+@@ -313,7 +314,8 @@
+ 					if (t.validate(tx, ty))
+ 						return t.res(tx, ty, bi);
+ 				}
+-				pisser.set(tx, ty, false);
++				if (!sosdet.Hooks.outsideStep()) // SOSDET: as in isser (SOS-181)
++					pisser.set(tx, ty, false);
+ 			}
+ 			return null;
+ 		}
 diff -ru -U2 a/settlement/room/main/copy/Copier.java b/settlement/room/main/copy/Copier.java
 --- a/settlement/room/main/copy/Copier.java	2026-01-13 11:53:10.000000000 +0500
-+++ b/settlement/room/main/copy/Copier.java	2026-11-01 22:43:45.447512400 +0500
++++ b/settlement/room/main/copy/Copier.java	2026-11-09 04:50:13.983373200 +0500
 @@ -284,6 +284,8 @@
  			}
  			
@@ -72,7 +95,7 @@ diff -ru -U2 a/settlement/room/main/copy/Copier.java b/settlement/room/main/copy
  			
 diff -ru -U2 a/settlement/room/main/copy/SavedPrintsPlacer.java b/settlement/room/main/copy/SavedPrintsPlacer.java
 --- a/settlement/room/main/copy/SavedPrintsPlacer.java	2025-09-12 16:10:30.000000000 +0500
-+++ b/settlement/room/main/copy/SavedPrintsPlacer.java	2026-11-01 22:43:45.448509100 +0500
++++ b/settlement/room/main/copy/SavedPrintsPlacer.java	2026-11-09 04:50:13.984371300 +0500
 @@ -177,6 +177,8 @@
  		
  		@Override
@@ -84,7 +107,7 @@ diff -ru -U2 a/settlement/room/main/copy/SavedPrintsPlacer.java b/settlement/roo
  			
 diff -ru -U2 a/settlement/room/main/MapDataF.java b/settlement/room/main/MapDataF.java
 --- a/settlement/room/main/MapDataF.java	2026-06-17 18:46:30.000000000 +0500
-+++ b/settlement/room/main/MapDataF.java	2026-11-01 22:43:45.447512400 +0500
++++ b/settlement/room/main/MapDataF.java	2026-11-09 04:50:13.984371300 +0500
 @@ -214,7 +214,8 @@
  					tileIndex.set(index, NOTHING);
  					masterTileI.set(index, false);
@@ -97,7 +120,7 @@ diff -ru -U2 a/settlement/room/main/MapDataF.java b/settlement/room/main/MapData
  		}
 diff -ru -U2 a/settlement/room/main/placement/Instance.java b/settlement/room/main/placement/Instance.java
 --- a/settlement/room/main/placement/Instance.java	2025-12-18 09:21:00.000000000 +0500
-+++ b/settlement/room/main/placement/Instance.java	2026-11-01 22:43:45.448509100 +0500
++++ b/settlement/room/main/placement/Instance.java	2026-11-09 04:50:13.984371300 +0500
 @@ -68,7 +68,8 @@
  				continue;
  			
@@ -110,7 +133,7 @@ diff -ru -U2 a/settlement/room/main/placement/Instance.java b/settlement/room/ma
  		
 diff -ru -U2 a/settlement/room/main/placement/PlacerArea.java b/settlement/room/main/placement/PlacerArea.java
 --- a/settlement/room/main/placement/PlacerArea.java	2025-12-18 09:54:26.000000000 +0500
-+++ b/settlement/room/main/placement/PlacerArea.java	2026-11-01 22:43:45.448509100 +0500
++++ b/settlement/room/main/placement/PlacerArea.java	2026-11-09 04:50:13.985367900 +0500
 @@ -72,11 +72,13 @@
  	void clear(int tx, int ty) {
  		if (ConstructionData.dFloored.is(tx, ty, 1)) {
@@ -139,7 +162,7 @@ diff -ru -U2 a/settlement/room/main/placement/PlacerArea.java b/settlement/room/
  				DIR d = DIR.ORTHO.get(i);
 diff -ru -U2 a/settlement/room/main/placement/RoomPlacer.java b/settlement/room/main/placement/RoomPlacer.java
 --- a/settlement/room/main/placement/RoomPlacer.java	2025-11-19 14:21:30.000000000 +0500
-+++ b/settlement/room/main/placement/RoomPlacer.java	2026-11-01 22:43:45.449506300 +0500
++++ b/settlement/room/main/placement/RoomPlacer.java	2026-11-09 04:50:13.985367900 +0500
 @@ -206,6 +206,7 @@
  	}
  	
@@ -171,7 +194,7 @@ diff -ru -U2 a/settlement/room/main/placement/RoomPlacer.java b/settlement/room/
  			structure = this.structure.get();
 diff -ru -U2 a/settlement/room/main/placement/UtilStats.java b/settlement/room/main/placement/UtilStats.java
 --- a/settlement/room/main/placement/UtilStats.java	2026-06-17 10:48:04.000000000 +0500
-+++ b/settlement/room/main/placement/UtilStats.java	2026-11-01 22:43:45.449506300 +0500
++++ b/settlement/room/main/placement/UtilStats.java	2026-11-09 04:50:13.986382000 +0500
 @@ -50,6 +50,8 @@
  	}
  	
@@ -192,7 +215,7 @@ diff -ru -U2 a/settlement/room/main/placement/UtilStats.java b/settlement/room/m
  			if (resRemoved[i] >= 1) {
 diff -ru -U2 a/util/gui/misc/GInputInt.java b/util/gui/misc/GInputInt.java
 --- a/util/gui/misc/GInputInt.java	2026-02-10 12:46:58.000000000 +0500
-+++ b/util/gui/misc/GInputInt.java	2026-11-01 22:43:45.449506300 +0500
++++ b/util/gui/misc/GInputInt.java	2026-11-09 04:50:13.986382000 +0500
 @@ -42,7 +42,8 @@
  				text().clear().add('-');
  			}else {
@@ -215,7 +238,7 @@ diff -ru -U2 a/util/gui/misc/GInputInt.java b/util/gui/misc/GInputInt.java
  	
 diff -ru -U2 a/view/sett/ui/room/construction/Config.java b/view/sett/ui/room/construction/Config.java
 --- a/view/sett/ui/room/construction/Config.java	2025-09-12 16:12:40.000000000 +0500
-+++ b/view/sett/ui/room/construction/Config.java	2026-11-01 22:43:45.450503500 +0500
++++ b/view/sett/ui/room/construction/Config.java	2026-11-09 04:50:13.987372800 +0500
 @@ -137,6 +137,10 @@
  	
  	@Override
@@ -229,7 +252,7 @@ diff -ru -U2 a/view/sett/ui/room/construction/Config.java b/view/sett/ui/room/co
  		SETT.ROOMS().placement.placer.init(null, 0);
 diff -ru -U2 a/view/sett/ui/room/construction/UIRoomPlacer.java b/view/sett/ui/room/construction/UIRoomPlacer.java
 --- a/view/sett/ui/room/construction/UIRoomPlacer.java	2026-03-01 09:29:30.000000000 +0500
-+++ b/view/sett/ui/room/construction/UIRoomPlacer.java	2026-11-01 22:43:45.450503500 +0500
++++ b/view/sett/ui/room/construction/UIRoomPlacer.java	2026-11-09 04:50:13.987372800 +0500
 @@ -94,6 +94,11 @@
  	
  	public void init(RoomInstanceImp ins) {
@@ -244,7 +267,7 @@ diff -ru -U2 a/view/sett/ui/room/construction/UIRoomPlacer.java b/view/sett/ui/r
  		RoomState stat = ins.makeState(ins.mX(), ins.mY(), false);
 diff -ru -U2 a/view/sett/ui/room/copy/Second.java b/view/sett/ui/room/copy/Second.java
 --- a/view/sett/ui/room/copy/Second.java	2026-01-13 11:58:40.000000000 +0500
-+++ b/view/sett/ui/room/copy/Second.java	2026-11-01 22:43:45.450503500 +0500
++++ b/view/sett/ui/room/copy/Second.java	2026-11-09 04:50:13.987372800 +0500
 @@ -46,6 +46,8 @@
  
  	@Override

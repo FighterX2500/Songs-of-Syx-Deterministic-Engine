@@ -8,6 +8,7 @@ import game.GAME;
 import init.type.HGROUP;
 import init.type.WGROUP;
 import settlement.main.SETT;
+import settlement.maintenance.MAINTENANCE;
 import settlement.room.home.house.HomeInstance;
 import settlement.room.main.Room;
 import settlement.room.main.RoomBlueprint;
@@ -23,6 +24,7 @@ import snake2d.util.datatypes.Coo;
 import snake2d.util.datatypes.DIR;
 import snake2d.util.datatypes.RECTANGLE;
 import snake2d.util.datatypes.Rec;
+import snake2d.util.sets.Bitmap2D;
 import sosdet.game.cmd.Refurnish;
 import sosdet.game.cmd.Rooms;
 import sosdet.game.cmd.Tools;
@@ -201,6 +203,17 @@ public final class ToolActions {
             return true;
         case "plan-trash": // plan-trash: the room tool's trash button (SFrame): no build, then the tool closing
             Rig.later(ToolActions::trash);
+            return true;
+        case "plan-maint": // plan-maint <key prefix> [n]: the minimap's maintenance overlay on during a refurnish plan
+            // of that room, and the reads its drawing makes on every tile; the room's saved maintenance bits must stay
+            // (SOS-181)
+            String mtkey = a[1];
+            int mtn = a.length > 2 ? Integer.parseInt(a[2]) : 0;
+            Rig.later(() -> planMaint(areaRoom(mtkey, mtn)));
+            return true;
+        case "plan-switch-tool": // plan-switch-tool: the delete tool picked while a refurnish plan is open; the plan
+            // must end, so that the default tool's hover, delete and Ctrl-click find the room itself (SOS-181)
+            Rig.later(ToolActions::planSwitchTool);
             return true;
         default:
             return false;
@@ -504,6 +517,78 @@ public final class ToolActions {
             throw new IllegalStateException("SOSDET rig: no trash flag in the room tool (V71.44 expected)", e);
         }
         VIEW.s().tools.placer.deactivate();
+    }
+
+    /**
+     * The maintenance overlay over a refurnish plan: its drawing reads {@code MAINTENANCE.isser} and {@code resource} on
+     * each tile, and a read clears the saved bit where no room validates it, as the plan's room doesn't. The bits are
+     * counted from the private bitmap before and after, so the count itself clears nothing.
+     */
+    private static void planMaint(RoomInstance room) {
+        if (!Refurnish.planning()) {
+            throw new IllegalStateException("SOSDET rig: plan-maint: no refurnish plan open");
+        }
+        RECTANGLE b = new Rec(room.body());
+        int before = maintBits(b);
+        VIEW.s().overlayThing.set(SETT.OVERLAY().MAINTENANCE);
+        for (int y = b.y1(); y < b.y2(); y++) {
+            for (int x = b.x1(); x < b.x2(); x++) {
+                SETT.MAINTENANCE().isser.is(x, y);
+                SETT.MAINTENANCE().resource.get(x, y);
+            }
+        }
+        int after = maintBits(b);
+        Rig.note("plan-maint: " + room.blueprint().key + " maintenance bits " + before + " before the overlay's reads, "
+                + after + " after");
+        if (after != before) {
+            throw new IllegalStateException("SOSDET rig: plan-maint: the overlay cleared " + (before - after)
+                    + " maintenance bits outside the step");
+        }
+    }
+
+    private static int maintBits(RECTANGLE b) {
+        Bitmap2D bits;
+        try {
+            Field f = MAINTENANCE.class.getDeclaredField("pisser");
+            f.setAccessible(true);
+            bits = (Bitmap2D) f.get(SETT.MAINTENANCE());
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException("SOSDET rig: no MAINTENANCE.pisser (V71.44 expected)", e);
+        }
+        int n = 0;
+        for (int y = b.y1(); y < b.y2(); y++) {
+            for (int x = b.x1(); x < b.x2(); x++) {
+                if (bits.is(x, y)) {
+                    n++;
+                }
+            }
+        }
+        return n;
+    }
+
+    /**
+     * Another tool picked while a refurnish plan is open: the plan must end with the room tool, and no tile may keep the
+     * plan's room, since the default tool's hover, the delete tool and Ctrl-click fail on it (SOS-181 audit).
+     */
+    private static void planSwitchTool() {
+        if (!Refurnish.planning()) {
+            throw new IllegalStateException("SOSDET rig: plan-switch-tool: no refurnish plan open");
+        }
+        Room.RoomInstanceImp plan = instance();
+        RECTANGLE b = new Rec(plan.body());
+        VIEW.s().tools.place(SETT.ROOMS().DELETE);
+        if (Refurnish.planning()) {
+            throw new IllegalStateException("SOSDET rig: the refurnish plan outlived its tool");
+        }
+        for (int y = b.y1(); y < b.y2(); y++) {
+            for (int x = b.x1(); x < b.x2(); x++) {
+                if (SETT.ROOMS().map.get(x, y) == plan) {
+                    throw new IllegalStateException("SOSDET rig: the plan's room is left at " + x + "," + y);
+                }
+            }
+        }
+        VIEW.s().tools.placer.deactivate();
+        Rig.note("plan-switch-tool: the plan ended with the room tool, no plan tile left");
     }
 
     /** The room placer's plan (its class is package-private in V71.44). */
