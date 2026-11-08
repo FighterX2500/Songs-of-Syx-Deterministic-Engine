@@ -142,6 +142,10 @@ public final class Hooks {
     static int stepsFor(double gameSeconds, double setSpeed, long now) {
         Session s = Engine.session();
         s.speedSeen(setSpeed);
+        double shown = s.takeSpeedShown();
+        if (shown > 0) {
+            GAME.SPEED.speedSet(shown); // a local battle's buttons show its voted speed (SOS-160)
+        }
         s.pace(now);
         s.watchLead(now, setSpeed);
         double speed = frameSpeed(setSpeed); // a local battle's PC keeps the world's pace, whatever the battle's own speed

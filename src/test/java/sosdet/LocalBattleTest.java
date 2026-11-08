@@ -351,6 +351,25 @@ class LocalBattleTest {
         assertEquals(5, b.votedSpeed);
     }
 
+    /** Scenario A3 (SOS-160): a press is a vote; the buttons show the battle's speed, the voted one once it is chosen. */
+    @Test
+    void theButtonsShowTheBattlesSpeedUntilAMajorityVotes() {
+        Session s = session(3);
+        LocalBattle b = withAlly(s);
+        s.speedSeen(1); // what the battle opened at
+        assertEquals(-1, s.takeSpeedShown());
+        s.speedSeen(3); // this commander presses 3x
+        assertEquals(1, s.takeSpeedShown(), "one vote of two: the buttons go back to the battle's 1x");
+        s.speedSeen(1);
+        assertEquals(-1, s.takeSpeedShown(), "no second vote");
+        b.votedSpeed = 3; // the other commander's vote made the majority
+        s.speedSeen(1);
+        assertEquals(3, s.takeSpeedShown(), "the battle's new speed");
+        s.speedSeen(3);
+        assertEquals(-1, s.takeSpeedShown());
+        assertEquals(3, b.seenSpeed, "what the buttons show is no press");
+    }
+
     /** Scenario A3 (SOS-171): the world's speed change the engine sets is no commander's 1x vote. */
     @Test
     void aSpeedFromTheLogIsNoVote() {

@@ -2625,6 +2625,9 @@ final class Session {
         return v != null && locals[v.owner] != null && locals[v.owner].roster.ally(localHuman) ? v : null;
     }
 
+    /** A local battle's speed for this PC's buttons, set at the next frame; -1 for none (SOS-160). */
+    private double speedShown = -1;
+
     /** A speed change from the log set this PC's game speed: no press, in the world or in a local battle (SOS-171). */
     void speedFollowed(double speed) {
         seenSpeed = speed;
@@ -2635,7 +2638,10 @@ final class Session {
         }
     }
 
-    /** A commander's PC in a local battle, every frame: a press of the speed buttons goes to every PC as a vote. */
+    /**
+     * A commander's PC in a local battle, every frame: a press of the speed buttons goes to every PC as a vote, and the
+     * buttons go back to the battle's speed, which changes once a majority votes for one (spec §8, SOS-160).
+     */
     private void localPressed(LocalBattle b, double speed) {
         if (b.seenSpeed < 0) {
             b.seenSpeed = speed;
@@ -2643,6 +2649,17 @@ final class Session {
             b.seenSpeed = speed;
             sosdet.game.cmd.MapBattles.localVote(Math.max(speed, 0));
         }
+        if (speed > 0 && !b.paused && speed != b.votedSpeed) {
+            b.seenSpeed = b.votedSpeed;
+            speedShown = b.votedSpeed;
+        }
+    }
+
+    /** The speed this PC's buttons show from the next frame (a local battle's voted speed), once; -1 for none. */
+    double takeSpeedShown() {
+        double s = speedShown;
+        speedShown = -1;
+        return s;
     }
 
     /** Inside the step: the current human's vote in their local battle, or 0 to pause it (spec §8, SOS-119). */
