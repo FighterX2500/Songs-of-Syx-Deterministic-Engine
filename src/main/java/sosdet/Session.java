@@ -2649,6 +2649,11 @@ final class Session {
             b.seenSpeed = speed;
             sosdet.game.cmd.MapBattles.localVote(Math.max(speed, 0));
         }
+        localShown(b, speed);
+    }
+
+    /** The buttons at {@code speed}, a press already sent: they show the battle's speed, the voted one (SOS-160). */
+    void localShown(LocalBattle b, double speed) {
         if (speed > 0 && !b.paused && speed != b.votedSpeed) {
             b.seenSpeed = b.votedSpeed;
             speedShown = b.votedSpeed;
