@@ -181,7 +181,7 @@ public final class Hooks {
         s.speedNotice(speed, wanted, slowPc, System.nanoTime());
         if (s.followSpeed) {
             GAME.SPEED.speedSet(speed);
-            s.seenSpeed = speed; // not the host player's own change
+            s.speedFollowed(speed); // not the host player's own change
         }
     }
 

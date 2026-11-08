@@ -2625,6 +2625,16 @@ final class Session {
         return v != null && locals[v.owner] != null && locals[v.owner].roster.ally(localHuman) ? v : null;
     }
 
+    /** A speed change from the log set this PC's game speed: no press, in the world or in a local battle (SOS-171). */
+    void speedFollowed(double speed) {
+        seenSpeed = speed;
+        for (LocalBattle b : locals) {
+            if (b != null) {
+                b.seenSpeed = speed;
+            }
+        }
+    }
+
     /** A commander's PC in a local battle, every frame: a press of the speed buttons goes to every PC as a vote. */
     private void localPressed(LocalBattle b, double speed) {
         if (b.seenSpeed < 0) {

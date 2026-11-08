@@ -351,6 +351,17 @@ class LocalBattleTest {
         assertEquals(5, b.votedSpeed);
     }
 
+    /** Scenario A3 (SOS-171): the world's speed change the engine sets is no commander's 1x vote. */
+    @Test
+    void aSpeedFromTheLogIsNoVote() {
+        Session s = session(3);
+        LocalBattle b = withAlly(s);
+        b.seenSpeed = 3; // the commander pressed 3x
+        s.speedFollowed(1);
+        assertEquals(1, b.seenSpeed, "the game speed the log set is what the battle saw, not a press");
+        assertEquals(1, s.seenSpeed);
+    }
+
     @Test
     void aRetreatLeavesTheAllyFighting() {
         Session s = session(3);
