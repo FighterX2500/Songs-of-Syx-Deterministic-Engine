@@ -2079,13 +2079,21 @@ diff -ru -U2 a/world/entity/caravan/Shipment.java b/world/entity/caravan/Shipmen
  	}
 diff -ru -U2 a/world/map/fow/FOW.java b/world/map/fow/FOW.java
 --- a/world/map/fow/FOW.java	2025-12-10 17:58:10.000000000 +0500
-+++ b/world/map/fow/FOW.java	2026-11-08 15:22:24.658456600 +0500
-@@ -82,7 +82,7 @@
++++ b/world/map/fow/FOW.java	2026-11-10 07:46:04.655385000 +0500
+@@ -5,7 +5,6 @@
+ import game.debug.Profiler;
+ import game.faction.FACTIONS;
+ import game.faction.diplomacy.DIP;
+-import game.faction.npc.FactionNPC;
+ import init.constant.C;
+ import settlement.main.SETT;
+ import snake2d.CORE;
+@@ -82,7 +81,7 @@
  					visible.set(t, d, true);
  				if (WORLD.PATH().map.can(t, d)) {
  					Region to = WORLD.REGIONS().map.get(t, d);
 -					if (to == null || from == null || from == to || from.faction() == FACTIONS.player() || (from.faction() != null && DIP.get((FactionNPC) from.faction()).transit))
-+					if (to == null || from == null || from == to || from.faction() == FACTIONS.player() || (from.faction() instanceof FactionNPC && DIP.get((FactionNPC) from.faction()).transit)) // SOSDET: a human that is not this one is no NPC (ADR 0004)
++					if (to == null || from == null || from == to || from.faction() == FACTIONS.player() || (from.faction() != null && DIP.get(from.faction(), FACTIONS.player()).transit)) // SOSDET: any faction's stance, a human's too: a colleague's land lets the fog through as an NPC's does (SOS-182)
  						GUTIL.flooder().pushSmaller(t, d, t.getValue()+d.tileDistance());
  				}
  			}
