@@ -6,14 +6,14 @@ import java.nio.ByteBuffer;
 /**
  * What a world resync carries besides the host's world sections (ADR 0005 §5, SOS-38), as versioned bytes: the step,
  * the hash epoch, the world part's draws counted for the hash, and the world's open changes to each human's city (one
- * ledger per human slot, SOS-52). The city keeps everything else: its transactions applied, its reports, its inputs on
- * their way.
+ * ledger per human slot, SOS-52), and the world's state no save holds ({@code GameWorldLoad.unsaved}, SOS-183). The
+ * city keeps everything else: its transactions applied, its reports, its inputs on their way.
  */
 final class WorldResync {
 
     static final int MAGIC = 0x53445752; // "SDWR"
-    /** 2: one ledger per human slot (SOS-52); 1 carried the host's human's only. */
-    static final int FORMAT_VERSION = 2;
+    /** 3: the world's state no save holds (SOS-183); 2: one ledger per human slot (SOS-52); 1 carried the host's human's only. */
+    static final int FORMAT_VERSION = 3;
 
     final long step;
     final int hashEpoch;
@@ -21,8 +21,10 @@ final class WorldResync {
     /** The human slots, in slot order; {@code ledgers[i]} is slot {@code slots[i]}'s. */
     final int[] slots;
     final byte[][] ledgers;
+    /** The host's world state no save holds, at the step: every PC puts it back after its world load (SOS-183). */
+    final double[] unsaved;
 
-    WorldResync(long step, int hashEpoch, long worldDraws, int[] slots, byte[][] ledgers) {
+    WorldResync(long step, int hashEpoch, long worldDraws, int[] slots, byte[][] ledgers, double[] unsaved) {
         if (slots.length == 0 || slots.length != ledgers.length) {
             throw new IllegalArgumentException("SOSDET: a world resync needs one ledger per human slot (" + slots.length
                     + " slots, " + ledgers.length + " ledgers)");
@@ -35,6 +37,7 @@ final class WorldResync {
         for (int i = 0; i < ledgers.length; i++) {
             this.ledgers[i] = ledgers[i].clone();
         }
+        this.unsaved = unsaved.clone();
     }
 
     /** The ledger of the human in {@code slot}. */
@@ -48,7 +51,7 @@ final class WorldResync {
     }
 
     byte[] toBytes() {
-        int size = 4 + 4 + 8 + 4 + 8 + 4;
+        int size = 4 + 4 + 8 + 4 + 8 + 4 + 4 + 8 * unsaved.length;
         for (byte[] l : ledgers) {
             size += 4 + 4 + l.length;
         }
@@ -56,6 +59,10 @@ final class WorldResync {
         b.putInt(MAGIC).putInt(FORMAT_VERSION).putLong(step).putInt(hashEpoch).putLong(worldDraws).putInt(slots.length);
         for (int i = 0; i < slots.length; i++) {
             b.putInt(slots[i]).putInt(ledgers[i].length).put(ledgers[i]);
+        }
+        b.putInt(unsaved.length);
+        for (double v : unsaved) {
+            b.putDouble(v);
         }
         return b.array();
     }
@@ -83,10 +90,18 @@ final class WorldResync {
                 ledgers[i] = new byte[b.getInt()];
                 b.get(ledgers[i]);
             }
+            int m = b.getInt();
+            if (m < 0 || m > b.remaining() / 8) {
+                throw new IllegalArgumentException("SOSDET: a world resync state with " + m + " unsaved values");
+            }
+            double[] unsaved = new double[m];
+            for (int i = 0; i < m; i++) {
+                unsaved[i] = b.getDouble();
+            }
             if (b.hasRemaining()) {
                 throw new IllegalArgumentException("SOSDET: " + b.remaining() + " bytes after the world resync state");
             }
-            return new WorldResync(step, epoch, draws, slots, ledgers);
+            return new WorldResync(step, epoch, draws, slots, ledgers, unsaved);
         } catch (BufferUnderflowException | NegativeArraySizeException e) {
             throw new IllegalArgumentException("SOSDET: world resync state cut short (" + bytes.length + " bytes)", e);
         }
