@@ -830,7 +830,8 @@ public final class Engine {
     /**
      * Host, own-city mode, between steps: saves the world's sections to {@code file} for a world resync at the
      * current step ({@link GameWorldLoad#save}), and
-     * returns the engine's world state at that step; then holds there. Every PC, the host included, then loads it with
+     * returns the engine's world state at that step, with the world's state no save holds ({@link GameWorldLoad#unsaved()},
+     * SOS-183); then holds there. Every PC, the host included, then loads it with
      * {@link #worldResyncLoad}: only the world reloads, and every city goes on.
      */
     public static byte[] worldResyncSave(Path file) {
@@ -847,6 +848,7 @@ public final class Engine {
             }
         }
         long step = s.clock.step();
+        double[] unsaved = GameWorldLoad.unsaved();
         GameWorldLoad.save(file);
         s.clock.runUntil(step); // the host waits for its own load too
         int[] slots = s.humans();
@@ -854,13 +856,15 @@ public final class Engine {
         for (int i = 0; i < slots.length; i++) {
             ledgers[i] = s.reports(slots[i]).ledgerOut(); // every PC's world keeps every human's ledger (SOS-52)
         }
-        return new WorldResync(step, s.hashes.epoch() + 1, s.streams.worldDraws(), slots, ledgers).toBytes();
+        return new WorldResync(step, s.hashes.epoch() + 1, s.streams.worldDraws(), slots, ledgers, unsaved).toBytes();
     }
 
     /**
      * Every PC, the host included, between steps at the resync step: loads the world's sections of the host's save
-     * ({@link GameWorldLoad#KEYS}) into the running game, keeping this PC's city, and continues with the host's world
-     * state, holding until {@link #runUntil}. Hashes from before the resync are no longer compared.
+     * ({@link GameWorldLoad#KEYS}) into the running game, keeping this PC's city, puts back the host's world state no
+     * save holds, as a view's load does (a PC whose courts' days or peace times had split kept them through every resync,
+     * playtest 2026-11-10, SOS-183), and continues with the host's world state, holding until {@link #runUntil}. Hashes
+     * from before the resync are no longer compared.
      */
     public static void worldResyncLoad(Path file, byte[] state) {
         Session s = required();
@@ -892,6 +896,7 @@ public final class Engine {
             s.worldLoading = false;
         }
         s.worldLoads++;
+        GameWorldLoad.unsaved(r.unsaved);
         s.streams.worldDraws(r.worldDraws);
         for (int slot : r.slots) {
             s.reports(slot).ledgerIn(r.ledger(slot));
