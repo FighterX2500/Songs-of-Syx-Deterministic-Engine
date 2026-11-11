@@ -2561,6 +2561,19 @@ final class Session {
         ai().captureHold(AiEntry.ints(d.pc, (int) (d.step >>> 32), (int) d.step));
     }
 
+    /**
+     * Host, between steps: a hold for a world edit (SOS-188), logged as a desync hold with no PC and no desync step, so
+     * every PC stops at the same step. False when a hold is already logged or held.
+     */
+    boolean worldEditHold() {
+        if (holdLogged || desyncHold != null) {
+            return false;
+        }
+        holdLogged = true;
+        ai().captureHold(AiEntry.ints(-1, -1, -1));
+        return true;
+    }
+
     /** Every PC, as the host's hold entry applies at {@code step}: no step past it until a resync ends the hold. */
     void desyncHold(long step, int pc, long desyncStep) {
         desyncHold = new DesyncHold(desyncStep, pc, step);

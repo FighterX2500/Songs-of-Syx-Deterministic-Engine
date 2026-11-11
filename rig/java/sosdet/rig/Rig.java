@@ -124,6 +124,7 @@ import view.main.VIEW;
  *   carveat &lt;inside|border|x,y&gt;        host: carve a city-state just before the next world resync save (SOS-184)
  *   worldresyncnext &lt;step&gt; [uncarve]  a second world resync once the first is done; the host un-carves first
  *   wresyncsavegame &lt;file&gt;             save the game right after the next world resync load (SOS-184)
+ *   uncarveremoved                      with ondesync resync: the host un-carves a gone human's city-state (SOS-188)
  *   humans                              the human slots and their state
  *   localhuman &lt;slot&gt;                   at step 0: this copy's human (SOS-46)
  *   savegame &lt;file&gt;                     save to the run folder
@@ -337,6 +338,10 @@ public final class Rig implements SCRIPT {
         // the desync flow (SOS-53): what the host chooses at an engine's desync hold ("resync" or "exit"), or null
         private String onDesync;
         private sosdet.DesyncHold seenHold;
+        // uncarveremoved (SOS-188): the host holds every copy for a world edit when a carved city-state's human is gone,
+        // and un-carves it at the hold step before the world resync; the edit hold asked for and not yet loaded
+        private boolean uncarveRemoved;
+        private boolean editAsked;
         // stall sampler: the simulation thread's stack for every step over 100 ms
         private volatile Thread simThread;
         private volatile boolean sampling;
@@ -461,6 +466,11 @@ public final class Rig implements SCRIPT {
             }
             if (running && worldStep >= 0 && Engine.step() == worldStep) {
                 worldAtStep();
+            }
+            if (running && uncarveRemoved && wresyncSaver && !editAsked && Engine.desyncHold() == null
+                    && Engine.uncarveDue() >= 0) {
+                editAsked = Engine.worldEditHold();
+                event("edithold", "\"region\":" + Engine.uncarveDue() + ",\"step\":" + Engine.step());
             }
             if (running && onDesync != null && wresyncStep < 0) {
                 desyncHold();
@@ -1069,6 +1079,14 @@ public final class Rig implements SCRIPT {
                 uncarveNext = false;
                 String done = sosdet.rig.act.WorldActions.uncarve();
                 event("uncarved", "\"step\":" + Engine.step() + ",\"text\":\"" + Instance.clean(done) + "\"");
+            } else if (uncarveRemoved && seenHold != null && seenHold.edit()) {
+                int region = Engine.uncarveDue();
+                if (region >= 0) {
+                    Engine.uncarve(region);
+                }
+                editAsked = false;
+                event("uncarved", String.format(Locale.ROOT, "\"step\":%d,\"text\":\"removed human's region %d; layout %016x\"",
+                        Engine.step(), region, sosdet.game.GameCarve.layoutDigest()));
             }
         }
 
@@ -1487,6 +1505,10 @@ public final class Rig implements SCRIPT {
                 wresyncSave = Paths.get(c[3]);
                 wresyncState = Paths.get(c[4]);
                 event("ondesync", "\"choice\":\"" + onDesync + "\"");
+                return;
+            case "uncarveremoved": // uncarveremoved: the host un-carves a gone human's city-state at an edit hold (SOS-188)
+                uncarveRemoved = true;
+                event("uncarveremoved", "\"on\":true");
                 return;
             case "carveat": // carveat SPEC: copy 1 carves a city-state just before its next world resync save (SOS-184)
                 carveSpec = c[1];

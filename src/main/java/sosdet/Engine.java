@@ -1042,6 +1042,32 @@ public final class Engine {
         }
     }
 
+    /**
+     * The region of a carved city-state no human holds any more (its human removed, or eliminated and the city given to
+     * a neutral NPC), or -1 (SOS-188, hot-join.md decision 6). The host then asks for {@link #worldEditHold}, un-carves it at the
+     * hold step ({@link #uncarve}) and sends the world resync. Any PC, between steps.
+     */
+    public static int uncarveDue() {
+        outsideStep("uncarveDue");
+        return GameCarve.ownerless();
+    }
+
+    /**
+     * Host, between steps: every PC holds at a step a little ahead, as for a desync but with no window and no choice
+     * ({@link DesyncHold#edit}), so the host can change the world there and send the world resync
+     * ({@link #worldResyncSave}; every PC's {@link #worldResyncLoad} ends the hold). False when a hold is already on.
+     */
+    public static boolean worldEditHold() {
+        Session s = required();
+        if (s.streams.isSimulationThread()) {
+            throw new IllegalStateException("SOSDET: worldEditHold is called between steps");
+        }
+        if (s.ai().mode() != AiMode.HOST) {
+            throw new IllegalStateException("SOSDET: only the host holds every PC for a world edit");
+        }
+        return s.worldEditHold();
+    }
+
     private static void outsideStep(String what) {
         Session s = session;
         if (s != null && s.streams.isSimulationThread()) {
