@@ -418,7 +418,7 @@ public final class GameWorldLoad {
         }
     }
 
-    private static double courtDay(NPCCourt c) {
+    static double courtDay(NPCCourt c) {
         try {
             return COURT_DAY.getDouble(c);
         } catch (IllegalAccessException e) {
@@ -432,6 +432,14 @@ public final class GameWorldLoad {
         } catch (IllegalAccessException e) {
             throw new IllegalStateException("SOSDET: cannot write NPCCourt.addT" + VERSION, e);
         }
+    }
+
+    /** Each faction's second its wars end, which no save holds, for the world hash (SOS-183). */
+    static long hashPeaceTimes(long h) {
+        for (double t : peaceTimes()) {
+            h = HashLog.mix(h, Double.doubleToLongBits(t));
+        }
+        return h;
     }
 
     /** Every recipe's NPC production boost, in recipe order, each once. */

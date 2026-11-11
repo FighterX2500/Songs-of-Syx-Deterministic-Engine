@@ -206,6 +206,9 @@ public final class GameHash implements StateSource {
                 h = HashLog.mix(h, DIP.get(f, factions.get(k)).index()); // every stance, not only war (SOS-46)
             }
         }
+        if (Engine.active()) { // no save holds them: a world before its session has a load's, each copy's
+            h = GameWorldLoad.hashPeaceTimes(h); // the half-day peace event acts on them (SOS-183)
+        }
         h = part(w, 3, h);
         h = part(w, 4, GameRelations.hash(h));
         LIST<Raider> raiders = GAME.raiders().ALL();
@@ -250,7 +253,11 @@ public final class GameHash implements StateSource {
         return h;
     }
 
-    /** Every NPC's king and heirs. A king's religion feeds the NPC's rates (SOS-121): a new heir's showed only as they took the throne. */
+    /**
+     * Every NPC's king and heirs, and its court's day counter. A king's religion feeds the NPC's rates (SOS-121): a new
+     * heir's showed only as they took the throne. No save holds the day counter, and the court ages and draws on it once a
+     * day: a PC whose counter had split desynced a day later, on every resync again (SOS-183).
+     */
     private static long npcCourts(long h) {
         LIST<FactionNPC> npcs = FACTIONS.NPCs();
         for (int i = 0; i < npcs.size(); i++) {
@@ -267,6 +274,9 @@ public final class GameHash implements StateSource {
             h = HashLog.mix(h, person.race().index());
             h = HashLog.mix(h, STATS.RELIGION().getter.get(person).religion.index());
             h = HashLog.mix(h, STATS.POP().age.DAYS.get(person));
+        }
+        if (Engine.active()) { // a world before its session has a load's, each copy's
+            h = HashLog.mix(h, Double.doubleToLongBits(GameWorldLoad.courtDay(f.court())));
         }
         return h;
     }
