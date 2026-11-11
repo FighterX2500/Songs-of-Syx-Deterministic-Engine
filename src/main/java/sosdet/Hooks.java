@@ -2325,6 +2325,9 @@ public final class Hooks {
                 VIEW.inters().load.deactivate();
             }
         }
+        if (s.plans().inGame()) {
+            sosdet.game.GameWorldSetup.repairCapitalInfo(); // a campaign from before SOS-185: every PC, the same save
+        }
         for (Runnable r : s.afterLoads) {
             r.run(); // the new game is set: the mod puts its per-update actions and windows in it again (plan 0006)
         }

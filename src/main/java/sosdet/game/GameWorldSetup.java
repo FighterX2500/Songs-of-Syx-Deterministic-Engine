@@ -139,6 +139,38 @@ public final class GameWorldSetup {
         finish(humans[0].tx, humans[0].ty);
     }
 
+    /**
+     * Every human's capital square gets its region info (climate, terrain shares, moisture) if a world built before
+     * patch 17 gave it to region 0's only (SOS-185): a campaign's save carries the zeros, so every PC fixes them at
+     * load, the same way from the same save. Returns how many it fixed.
+     */
+    public static int repairCapitalInfo() {
+        int fixed = 0;
+        for (int slot : GameHumans.get().slots()) {
+            world.map.regions.Region r = FACTIONS.getByIndex(slot).capitolRegion();
+            if (r == null || r.info.area() != world.map.regions.centre.WCentre.TILE_DIM * world.map.regions.centre.WCentre.TILE_DIM
+                    || hasTerrain(r)) {
+                continue;
+            }
+            snake2d.util.datatypes.RECTANGLE b = r.info.bounds();
+            if (!r.info.init(b.x1(), b.y1(), new snake2d.util.datatypes.Rec(b))) {
+                throw new IllegalStateException("SOSDET: human " + slot + "'s capital region " + r.index()
+                        + " gets no region info at " + b.x1() + "," + b.y1());
+            }
+            fixed++;
+        }
+        return fixed;
+    }
+
+    private static boolean hasTerrain(world.map.regions.Region r) {
+        for (init.type.TERRAIN t : init.type.TERRAINS.ALL()) {
+            if (r.info.terrain(t) > 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** This PC's player's banner in the game's save layout, for the mod to send to the PC that builds the world. */
     public static byte[] bannerBytes() {
         GameCodec codec = new GameCodec();
