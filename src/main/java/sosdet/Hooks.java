@@ -2190,7 +2190,7 @@ public final class Hooks {
     public static boolean ordersCapturing() {
         Session s = Engine.session();
         // a local battle's too: they apply at the next step, on the tape a watcher runs from (SOS-109)
-        return s != null && !s.streams.inStep() && !s.loading && s.ai().capturingOrders();
+        return s != null && !s.streams.inStep() && !s.loading && !s.editingWorld && s.ai().capturingOrders();
     }
 
     /** A player's order on this PC: into the host's log, through it on a peer. */

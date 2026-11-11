@@ -32,10 +32,20 @@ dependencies {
 ## What to call
 
 - **`sosdet.Engine` is the API.** It has about 150 static methods, and their Javadoc is the reference. [Requirements §3](requirements.md#3-what-the-mod-can-do-through-the-api) says what each group is for.
-- **Types it hands back:** `HumanStart`, `OwnBattle`, `LocalBattle`, `View`, `Assault`, `BattleOutcome`, `Notice`, `DesyncHold`, `Stats`, `sosdet.hash.Desync`.
+- **Types it hands back:** `HumanStart`, `OwnBattle`, `LocalBattle`, `View`, `Assault`, `BattleOutcome`, `Notice`, `DesyncHold`, `Stats`, `Carved`, `sosdet.hash.Desync`.
 - **`sosdet.Hooks` is for patches.** It is public because the patched game classes call it. Don't call it from a mod. The same goes for `sosdet.Cosmetic` and `sosdet.game`.
 
 Most `Engine` methods throw `IllegalStateException` with no session. `active()`, `locationProblem`, `buildWorld`, `bannerBytes` and `worldHash` work without one.
+
+## Carved city-states
+
+A city-state can be carved into a running world as a new 3x3 region (SOS-186, SOSGSGMP `docs/plan/hot-join.md`):
+
+- `carveProblem(x, y)` says why a centre can't be used, or null. Any PC, between steps.
+- `carve(x, y, name)` carves it on the PC that saves the world: the square, its region info and name, a road and path to the town of each region it touches (no road straight to another human: vanilla's path graph joins a region's town to its borders only, so humans 6 to 15 tiles apart keep SOS-120's trade route), and the split rule for the land it is carved in (unowned land becomes a new NPC; a region of an NPC realm of 4 or more that isn't its capital breaks away; a new NPC is neutral and sanctified). The region has no owner yet. `Carved.noSlot` says a new NPC was wanted but all 64 faction slots are in use.
+- `uncarve(region)` undoes one, in any order: only the roads and path steps no other carve uses go.
+- The undo log is the save section `SOSDET_CARVES`, loaded with the world and in the world hash.
+- After either, every PC loads the world from that PC's save: a world changed in place on one PC never matches one that was loaded (SOS-38, SOS-184).
 
 ## Threads
 

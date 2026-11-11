@@ -1,0 +1,17 @@
+# SOS-186 GUI: the world map around a carved city-state (--carve 251,25 --world-resync 2000 --world-resync2 8000
+# --uncarve --window). Shots before the carve, after it (copy 1, then copy 2 which loaded it), and after the un-carve.
+1: wlook 251 25 0
+1: wshot
+1: wlook 251 25 1
+1: wshot
+wait 40
+1: wcarved
+1: wlook 251 25 0
+1: wshot
+1: wlook 251 25 1
+1: wshot
+2: wlook 251 25 0
+2: wshot
+wait 50
+1: wlook 251 25 0
+1: wshot

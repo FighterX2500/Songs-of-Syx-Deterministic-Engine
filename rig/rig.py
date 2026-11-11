@@ -577,7 +577,7 @@ def scenario_saves(args):
     return saves, autoload
 
 
-def make_humans(game, saves, n, run_dir, new_world=None, difficulty=None, which=None, at=None):
+def make_humans(game, saves, n, run_dir, new_world=None, difficulty=None, which=None, at=None, carve_setup=False):
     """--humans: copy 1 makes n - 1 NPCs humans in the save and saves it, before the run; every copy then starts from
     that save (SOS-46). With --new-world SEED it builds a fresh world around n humans instead (SOS-55). Returns the saves
     and the human slots, slot 0 first."""
@@ -592,9 +592,11 @@ def make_humans(game, saves, n, run_dir, new_world=None, difficulty=None, which=
     if new_world is None:
         made = c.send("makehuman %s" % (which or "auto %d" % (n - 1)), "makehuman", 600)
     else:
-        made = c.send("newworld %d %s%s" % (new_world, "at " + at if at else "auto %d" % n,
+        made = c.send("newworld %d %s%s" % (new_world, "at " + at if at else ("carve %d" if carve_setup else "auto %d") % n,
                                             " " + difficulty if difficulty else ""), "newworld", 900)
         log("new world from seed %d: humans at %s" % (new_world, made["locations"]))
+        if "carved" in made:
+            log("setup by carving: %s" % made["carved"])
         for r in made["routes"]:
             log("route between humans %d and %d, %.1f tiles apart: %s, %.1f tiles walked" % (
                 r["a"], r["b"], r["tiles"], "found" if r["ok"] else "NONE", r["walked"]))
@@ -823,6 +825,9 @@ def main():
     ap.add_argument("--new-world", type=int, default=None,
                     help="with --humans N: copy 1 builds a fresh world from this terrain seed around N humans (SOS-55,"
                          " Engine.buildWorld) instead of turning NPCs into humans; every copy then loads it")
+    ap.add_argument("--carve-setup", action="store_true",
+                    help="with --new-world: setup by carving (SOS-187): the world is built around human 0 alone, then the"
+                         " other humans are carved into it")
     ap.add_argument("--new-world-at", default=None,
                     help="with --new-world: 'x,y;x,y;...', the humans' tiles, such as a playtest's (SOS-122)")
     ap.add_argument("--humans-saves", default="",
@@ -870,6 +875,16 @@ def main():
                          " the resync")
     ap.add_argument("--world-resync", type=int, default=0,
                     help="with --follow or --humans: copy 1 saves at this step, and every copy reloads only the world from it")
+    ap.add_argument("--carve", default="",
+                    help="with --world-resync: copy 1 carves a city-state (inside, border or X,Y) just before it saves the"
+                         " world resync (SOS-184)")
+    ap.add_argument("--world-resync2", type=int, default=0,
+                    help="with --world-resync: a second world resync at this step (SOS-184)")
+    ap.add_argument("--resync-savegame", action="store_true",
+                    help="with --world-resync: every copy saves its game right after the world resync load, as"
+                         " carved-<k>.save in its rig folder, for a fresh process to resume (SOS-184)")
+    ap.add_argument("--uncarve", action="store_true",
+                    help="with --carve and --world-resync2: copy 1 un-carves before the second world resync's save")
     ap.add_argument("--follower-saves", default="",
                     help="with --follow: each follower's own save (copies 2..N, comma-separated) instead of --save; their"
                          " worlds differ from copy 1's until the world resync, which must come before the first hash"
@@ -1022,7 +1037,7 @@ def main():
         human_slots = list(range(args.humans))  # each copy resumes its own game, as the mod's campaign resume does
     elif args.humans:
         saves, human_slots = make_humans(game, saves, args.humans, run_dir, args.new_world, args.difficulty, args.make_humans,
-                                         args.new_world_at)
+                                         args.new_world_at, args.carve_setup)
 
     if args.remote and (not REMOTE or not 1 < args.remote <= args.copies):
         fail("--remote needs SOSDET_RIG_REMOTE=user@host and a copy other than copy 1 (the host)")
@@ -1159,6 +1174,13 @@ def main():
             # several humans)
             c.send("worldresyncat %d %s %s %s" % (args.world_resync, "save" if c.k == 1 else "load", wresync_save,
                                                   wresync_state), "worldresyncat")
+            if args.carve and c.k == 1:
+                c.send("carveat %s" % args.carve, "carveat")
+            if args.resync_savegame:
+                c.send("wresyncsavegame carved-%d.save" % c.k, "wresyncsavegame")
+            if args.world_resync2:
+                c.send("worldresyncnext %d%s" % (args.world_resync2, " uncarve" if args.uncarve else ""),
+                       "worldresyncnext")
         if args.ai == "host" and not args.follow and not args.replay:
             # a peer's player acts too: its orders go to the host, which stamps them into its log (SOS-33)
             if c.k == 1:
