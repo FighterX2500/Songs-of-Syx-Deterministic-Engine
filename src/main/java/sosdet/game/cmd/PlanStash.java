@@ -214,13 +214,13 @@ public final class PlanStash {
         endRefurnish();
         roomTiles.clear();
         stores().read(roomTiles, room, false);
+        refurnished = room; // before the plan: making it places the doorways, whose check reads a site's jobs (siteAt)
         own = true;
         try {
             Refurnish.plan(room);
         } finally {
             own = false;
         }
-        refurnished = room;
     }
 
     /**
