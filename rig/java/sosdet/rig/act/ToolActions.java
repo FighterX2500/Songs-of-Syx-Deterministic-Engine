@@ -122,7 +122,14 @@ public final class ToolActions {
             int pw = Integer.parseInt(a[2]);
             int ph = Integer.parseInt(a[3]);
             int up = a.length > 4 ? Integer.parseInt(a[4]) : 0;
-            Rig.later(() -> plan(pkey, pw, ph, up, null, false));
+            Rig.later(() -> plan(pkey, pw, ph, up, null, false, false));
+            return true;
+        case "plan-cave": // plan-cave <blueprint key> <w> <h>: as plan, on the first free rectangle with a cave tile
+            // next to it, so its walls there are cave fills, whose check reads the jobs around them (SOS-181)
+            String ckey = a[1];
+            int cw = Integer.parseInt(a[2]);
+            int ch = Integer.parseInt(a[3]);
+            Rig.later(() -> plan(ckey, cw, ch, 0, null, false, true));
             return true;
         case "plan-items": // plan-items <n> [group]: n items of the plan's furniture group (default 0), each at the
             // first spot it fits
@@ -130,8 +137,15 @@ public final class ToolActions {
             int igroup = a.length > 2 ? Integer.parseInt(a[2]) : 0;
             Rig.later(() -> planItems(items, igroup));
             return true;
-        case "plan-door": // plan-door: the doorway tool on the first wall tile next to the plan where a doorway fits
-            Rig.later(ToolActions::planDoor);
+        case "plan-item-cave": // plan-item-cave <group>: one item of the group with a work tile beside a cave tile
+            // (SOS-181: a cave doorway there makes the cave fill's check read the jobs around that work tile)
+            int cgroup = Integer.parseInt(a[1]);
+            Rig.later(() -> planItemCave(cgroup));
+            return true;
+        case "plan-door": // plan-door [cave]: the doorway tool on the first wall tile next to the plan where a doorway
+            // fits; with cave, only on a cave tile (SOS-181: its wall check is the cave fill's, which reads the jobs)
+            boolean dcave = a.length > 1 && a[1].equals("cave");
+            Rig.later(() -> planDoor(dcave));
             return true;
         case "build": // build: the plan's Build button (SFrame), then the tool closing (Config.deactivateAction)
             Rig.later(ToolActions::build);
@@ -145,7 +159,7 @@ public final class ToolActions {
             Rig.later(() -> {
                 Rec built = new Rec(instance().body());
                 build();
-                plan(bkey, bw, bh, 0, built, over);
+                plan(bkey, bw, bh, 0, built, over, false);
             });
             return true;
         case "game-save": // game-save: the game's own quick save (the menu's), here while a plan is open; the plan stays
@@ -227,7 +241,7 @@ public final class ToolActions {
      * around the throne, whose every tile the tool accepts. With {@code built}: at its corner ({@code over}), or never
      * within two tiles of it.
      */
-    private static void plan(String key, int w, int h, int upgrade, RECTANGLE built, boolean over) {
+    private static void plan(String key, int w, int h, int upgrade, RECTANGLE built, boolean over, boolean cave) {
         RoomBlueprint b = blueprint(key);
         if (!(b instanceof RoomBlueprintImp) || ((RoomBlueprintImp) b).constructor() == null
                 || !((RoomBlueprintImp) b).constructor().usesArea()) {
@@ -242,19 +256,41 @@ public final class ToolActions {
             return;
         }
         COORDINATE c = THRONE.coo();
-        for (int d = 1; d < 150; d++) {
+        int reach = cave ? Math.max(SETT.TWIDTH, SETT.THEIGHT) : 150; // caves are rare: the whole map
+        for (int d = 1; d < reach; d++) {
             for (int y = c.y() - d; y <= c.y() + d; y++) {
                 for (int x = c.x() - d; x <= c.x() + d; x++) {
                     boolean ring = y == c.y() - d || y == c.y() + d || x == c.x() - d || x == c.x() + d;
-                    if (!ring || built != null && !over && near(built, x, y, w, h) || !fitsArea(tool, x, y, w, h)) {
+                    if (!ring || built != null && !over && near(built, x, y, w, h) || cave && !caveNext(x, y, w, h)
+                            || !fitsArea(tool, x, y, w, h)) {
                         continue;
+                    }
+                    if (cave) {
+                        Rig.note("plan-cave: " + key + " at " + x + "," + y);
                     }
                     drag(tool, new Box(new Rec(x, x + w, y, y + h)));
                     return;
                 }
             }
         }
-        throw new IllegalStateException("SOSDET rig: no free " + w + "x" + h + " area for " + key);
+        throw new IllegalStateException("SOSDET rig: no free " + w + "x" + h + (cave ? " area by a cave" : " area")
+                + " for " + key);
+    }
+
+    /** Whether a tile of the ring around the w x h rectangle at x,y is a cave. */
+    private static boolean caveNext(int x, int y, int w, int h) {
+        if (!SETT.IN_BOUNDS(x - 1, y - 1) || !SETT.IN_BOUNDS(x + w, y + h)) {
+            return false;
+        }
+        for (int ty = y - 1; ty <= y + h; ty++) {
+            for (int tx = x - 1; tx <= x + w; tx++) {
+                boolean ring = ty == y - 1 || ty == y + h || tx == x - 1 || tx == x + w;
+                if (ring && SETT.IN_BOUNDS(tx, ty) && SETT.TERRAIN().CAVE.is(tx, ty)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private static boolean near(RECTANGLE r, int x, int y, int w, int h) {
@@ -304,6 +340,62 @@ public final class ToolActions {
         }
     }
 
+    /**
+     * One item of the group, at the first spot and rotation where one of its work tiles ({@code mustBeReachable}) lies
+     * beside a cave tile outside the plan; any other placement tried is undone with the item tool's undo (SOS-181).
+     */
+    private static void planItemCave(int group) {
+        RoomPlacer placer = SETT.ROOMS().placement.placer;
+        if (placer.blueprint() == null) {
+            throw new IllegalStateException("SOSDET rig: plan-item-cave without a plan");
+        }
+        Room.RoomInstanceImp ins = instance();
+        RECTANGLE b = new Rec(ins.body());
+        PlacableFixed p = placer.item(group);
+        for (int rot = 0; rot < 4; rot++) {
+            p.rotSet(rot);
+            for (int y = b.y1(); y < b.y2(); y++) {
+                for (int x = b.x1(); x < b.x2(); x++) {
+                    if (!fits(p, x, y)) {
+                        continue;
+                    }
+                    int w = p.width();
+                    int h = p.height();
+                    for (int dy = 0; dy < h; dy++) {
+                        for (int dx = 0; dx < w; dx++) {
+                            p.place(x + dx, y + dy, dx, dy);
+                        }
+                    }
+                    p.afterPlaced(x, y);
+                    if (workTileByCave(ins, x, y, w, h)) {
+                        Rig.note("plan-item-cave: " + p.name() + " at " + x + "," + y + ", rotation " + rot);
+                        return;
+                    }
+                    ((PlacableMulti) p.getUndo()).place(x, y, null, null);
+                }
+            }
+        }
+        throw new IllegalStateException("SOSDET rig: no spot for " + p.name() + " with a work tile by a cave");
+    }
+
+    private static boolean workTileByCave(Room.RoomInstanceImp ins, int x1, int y1, int w, int h) {
+        for (int y = y1; y < y1 + h; y++) {
+            for (int x = x1; x < x1 + w; x++) {
+                if (SETT.ROOMS().fData.tile.get(x, y) == null || !SETT.ROOMS().fData.tile.get(x, y).mustBeReachable) {
+                    continue;
+                }
+                for (int i = 0; i < DIR.ORTHO.size(); i++) {
+                    int nx = x + DIR.ORTHO.get(i).x();
+                    int ny = y + DIR.ORTHO.get(i).y();
+                    if (SETT.IN_BOUNDS(nx, ny) && !ins.is(nx, ny) && SETT.TERRAIN().CAVE.is(nx, ny)) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
     private static boolean placeFirst(PlacableFixed p, RECTANGLE b) {
         for (int y = b.y1(); y < b.y2(); y++) {
             for (int x = b.x1(); x < b.x2(); x++) {
@@ -325,7 +417,7 @@ public final class ToolActions {
      * The doorway tool on the first tile, row by row from the bottom (away from the furniture plan-items puts in the
      * top rows), beside a side of the plan (not only its corner) where it fits.
      */
-    private static void planDoor() {
+    private static void planDoor(boolean cave) {
         RoomPlacer placer = SETT.ROOMS().placement.placer;
         Room.RoomInstanceImp ins = instance();
         RECTANGLE b = new Rec(ins.body());
@@ -333,14 +425,32 @@ public final class ToolActions {
             for (int x = b.x1() - 1; x <= b.x2(); x++) {
                 Box tile = new Box(new Rec(x, x + 1, y, y + 1));
                 if (ins.is(x, y) || !besideSide(ins, x, y)
+                        || cave && (!SETT.TERRAIN().CAVE.is(x, y) || !besideWorkTile(ins, x, y))
                         || placer.placerDoor.isPlacable(x, y, tile, PLACER_TYPE.SQUARE) != null) {
                     continue;
                 }
                 placer.placerDoor.place(x, y, tile, PLACER_TYPE.SQUARE);
+                if (cave) {
+                    Rig.note("plan-door: a doorway on the cave at " + x + "," + y);
+                }
                 return;
             }
         }
-        throw new IllegalStateException("SOSDET rig: no spot for a doorway");
+        throw new IllegalStateException("SOSDET rig: no spot for a doorway" + (cave ? " on a cave" : ""));
+    }
+
+    /** Whether a plan tile beside x,y holds an item's work tile ({@code mustBeReachable}), as the cave fill's check
+     * ({@code SettPlacability.willBlock}) looks for. */
+    private static boolean besideWorkTile(Room.RoomInstanceImp ins, int x, int y) {
+        for (int i = 0; i < DIR.ORTHO.size(); i++) {
+            int nx = x + DIR.ORTHO.get(i).x();
+            int ny = y + DIR.ORTHO.get(i).y();
+            if (ins.is(nx, ny) && SETT.ROOMS().fData.tile.get(nx, ny) != null
+                    && SETT.ROOMS().fData.tile.get(nx, ny).mustBeReachable) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static boolean besideSide(Room.RoomInstanceImp ins, int x, int y) {
@@ -428,10 +538,10 @@ public final class ToolActions {
         throw new IllegalArgumentException("SOSDET rig: no area room " + prefix + " " + n);
     }
 
-    /** A tile of the area room's construction site nearest the throne, ring by ring. */
+    /** A tile of the area room's construction site nearest the throne, ring by ring, on the whole map (plan-cave). */
     private static COORDINATE site() {
         COORDINATE c = THRONE.coo();
-        for (int d = 1; d < 150; d++) {
+        for (int d = 1; d < Math.max(SETT.TWIDTH, SETT.THEIGHT); d++) {
             for (int y = c.y() - d; y <= c.y() + d; y++) {
                 for (int x = c.x() - d; x <= c.x() + d; x++) {
                     if (SETT.IN_BOUNDS(x, y) && site(SETT.ROOMS().map.get(x, y))) {

@@ -29,4 +29,15 @@ Checks that compare `blueprintImp` and then cast would fail too, since `blueprin
 
 ## Verification
 
-`rig/cmds/refurnish-walled-site.txt`: on main, case 1 logs the `ClassCastException` as a `cmdskipped` event; with the fix it runs clean, `plan-maint` keeps the bits, `plan-switch-tool` finds no plan tile left, and every copy stays identical. `refurnish.txt` and `refurnish-site.txt` still pass.
+The crash needs a precise layout. The site's doorway lies on a **cave** tile, the only kind whose wall check is the cave fill's (`UtilWallPlacability.wallCanBe`). The plan tile beside it is an item's work tile (`mustBeReachable`), so `SettPlacability.willBlock` looks at that tile's neighbours, and one of them carries a site job. A site on open ground never reaches the jobs: runs RF181M and A to H, without the fix, made their plans with no crash.
+
+`rig/cmds/refurnish-walled-site.txt`, case 1, sets this up with three rig actions:
+- `plan-cave`: a free rectangle by a cave, searched over the whole map;
+- `plan-item-cave`: a work bench whose work tile lies by the cave;
+- `plan-door cave`: the doorway on that cave tile, beside the work tile.
+
+On Mogus-72 the workshop goes to 683,255, the bench to 686,255 and the cave doorway to 688,256.
+
+- **Without the fix (RF181I):** `refurnish site` logs the playtest's `ClassCastException` as a `cmdskipped` event. The half-made plan left behind then crashes the hover (`UIRoom.hover`); in the game the first exception has already ended it.
+- **With the fix (RF181J):** both refurnish plans are made, and the doorway's check gives vanilla's "Room will be blocked" instead of throwing. Both builds apply, `plan-switch-tool` finds no plan tile left, and the 3 copies stay identical to step 16,000 with no engine desync.
+- **Case 2 (`plan-maint`):** the carpenter's workshop had no saved maintenance bit before or after, so it doesn't exercise the `MAINTENANCE` change; that change rests on reading the source.

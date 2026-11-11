@@ -1,10 +1,15 @@
 # SOS-181. 1. A refurnish of a walled construction site whose jobs are on the map (playtest 2026-11-09, a mason's
 # workshop): making the plan places its doorway again, and the doorway's check read the site's jobs under the half-made
 # plan (ClassCastException in JobRoom.getState; the rig logs it as a cmdskipped event). A mason's workshop built, left
-# to get its jobs, refurnished, the plan edited and left; then refurnished again, grown and built.
-plan WORKSHOP_MASON 5 5
+# to get its jobs, refurnished, the plan edited and left; then refurnished again, grown and built. The crash needs a
+# doorway on a cave tile: only the cave fill's check reads the jobs around it, so the workshop goes next to a cave
+# and its doorway on a cave tile beside an item's work tile, whose neighbours carry the site's jobs; a second
+# doorway on open ground lets the room be reached.
+plan-cave WORKSHOP_MASON 5 5
+plan-item-cave 1
+plan-grow 2
 plan-items 1 0
-plan-items 2 1
+plan-door cave
 plan-door
 build
 wait 6
@@ -19,6 +24,7 @@ plan-cancel
 wait 2
 refurnish site
 plan-grow 1
+plan-door
 build
 wait 4
 # 2. A working workshop refurnished with the minimap's maintenance overlay on: its saved maintenance bits stay (a read
