@@ -122,6 +122,9 @@ import view.main.VIEW;
  *   newworld &lt;seed&gt; auto &lt;n&gt;           setup: a fresh terrain and a world built around n humans (SOS-55); then save and load
  *   newworld &lt;seed&gt; carve &lt;n&gt;          setup by carving (SOS-187): a world around human 0, the others carved into it
  *   carveat &lt;inside|border|x,y&gt;        host: carve a city-state just before the next world resync save (SOS-184)
+ *   carveeach &lt;inside|border|x,y&gt;      every copy: carve a city-state right after the next world resync load
+ *   joinslot                          the slot a new human would take (SOS-189)
+ *   addhuman X Y SAVE                 no session: a new human carved at X,Y, the game saved as SAVE (SOS-189)
  *   worldresyncnext &lt;step&gt; [uncarve]  a second world resync once the first is done; the host un-carves first
  *   wresyncsavegame &lt;file&gt;             save the game right after the next world resync load (SOS-184)
  *   uncarveremoved                      with ondesync resync: the host un-carves a gone human's city-state (SOS-188)
@@ -297,6 +300,8 @@ public final class Rig implements SCRIPT {
         // every copy saves its game right after the world resync load (SOS-184: a fresh process resumes it)
         private String wresyncSaveGame;
         private String carveSpec;
+        /** carveeach: every copy carves this itself right after the world resync's load (hot-join's restart route). */
+        private String carveEachSpec;
         private boolean uncarveNext;
         // a city view (SOS-82): the host starts it at viewStep; the owner's copy writes its city to its rig folder, the
         // viewer's copy loads it and compares the owner's view hashes with its own
@@ -1052,6 +1057,13 @@ public final class Rig implements SCRIPT {
             }
             event("worldresynced", String.format(Locale.ROOT, "\"step\":%d,\"loadMs\":%.0f", Engine.step(),
                     (System.nanoTime() - t0) / 1e6));
+            if (carveEachSpec != null) { // every copy, on the world they all loaded: is a carve the same on every PC?
+                carveSpec = carveEachSpec;
+                carveEachSpec = null;
+                carving();
+                event("carvedlayout", String.format(Locale.ROOT, "\"step\":%d,\"layout\":\"%016x\"", Engine.step(),
+                        sosdet.game.GameCarve.layoutDigest()));
+            }
             if (wresyncSaveGame != null) {
                 event("savegame", RigHumans.save(dir.resolve(wresyncSaveGame)));
                 wresyncSaveGame = null;
@@ -1509,6 +1521,24 @@ public final class Rig implements SCRIPT {
             case "uncarveremoved": // uncarveremoved: the host un-carves a gone human's city-state at an edit hold (SOS-188)
                 uncarveRemoved = true;
                 event("uncarveremoved", "\"on\":true");
+                return;
+            case "joinslot": // the slot a new human would take (hot-join, SOS-189)
+                event("joinslot", "\"slot\":" + Engine.joinSlot());
+                return;
+            case "addhuman": { // addhuman X Y SAVE: no session; a new human carved at X,Y, then the game saved as SAVE (SOS-189)
+                int slot = Engine.joinSlot();
+                // the saves folder's path for a new file: PATHS' get() finds existing saves only
+                Path file = PATHS.local().save().get("sosdet-city").resolveSibling(c[3] + ".save");
+                long t0 = System.nanoTime();
+                String done = Engine.addHuman(new sosdet.HumanStart(FACTIONS.player().race().key, "Newcomer", null,
+                        Integer.parseInt(c[1]), Integer.parseInt(c[2])), FACTIONS.player().credits().getD());
+                event("addhuman", String.format(Locale.ROOT, "\"slot\":%d,\"ms\":%.0f,\"text\":\"%s\",%s", slot,
+                        (System.nanoTime() - t0) / 1e6, clean(done), RigHumans.save(file)));
+                return;
+            }
+            case "carveeach": // carveeach SPEC: every copy carves a city-state right after its next world resync load
+                carveEachSpec = c[1];
+                event("carveeach", "\"spec\":\"" + carveEachSpec + "\"");
                 return;
             case "carveat": // carveat SPEC: copy 1 carves a city-state just before its next world resync save (SOS-184)
                 carveSpec = c[1];

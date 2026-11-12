@@ -255,6 +255,39 @@ public final class GameWorldSetup {
         return done.toString();
     }
 
+    /**
+     * Hot-join (SOSGSGMP docs/plan/hot-join.md §5): on a loaded world with its humans, outside any session, {@code h} gets
+     * a city-state carved at its spot (or the nearest that fits, {@link #MOVE_AT_MOST} tiles at most) in the slot
+     * {@link GameHumans#joinSlot} names, starting with {@code credits}. The game is then saved and loaded before a session
+     * runs it, as after {@link #carveHumans}: other objects may still hold the slot's NPC. Returns a line for the log.
+     */
+    public static String addHuman(HumanStart h, double credits) {
+        GameHumans humans = GameHumans.get();
+        int slot = humans.joinSlot();
+        if (slot < 0) {
+            throw new IllegalStateException("SOSDET: no free NPC slot above the last human for a new human");
+        }
+        Race race = race(h.race);
+        int[] at = nearestFit(h.tx, h.ty);
+        if (at == null) {
+            throw new IllegalArgumentException("SOSDET: a new human can't settle at " + h.tx + "," + h.ty + ": "
+                    + GameCarve.problem(h.tx, h.ty));
+        }
+        humans.hold(slot);
+        try {
+            GameCarve.Result r = GameCarve.carve(at[0], at[1], h.name);
+            world.map.regions.Region reg = WORLD.REGIONS().getByIndex(r.record.region);
+            humans.activateNpc(reg, false, slot);
+            reg.setCapitol();
+            Player pl = humans.add(slot);
+            set(pl, h, race);
+            pl.credits().set(credits);
+            return "human " + slot + (at[0] == h.tx && at[1] == h.ty ? "" : " moved to " + at[0] + "," + at[1]) + ": " + r;
+        } finally {
+            humans.hold(-1);
+        }
+    }
+
     /** Tiles a picked spot may move when an earlier human's carve made it unfit (a new road beside it). */
     static final int MOVE_AT_MOST = 3;
 

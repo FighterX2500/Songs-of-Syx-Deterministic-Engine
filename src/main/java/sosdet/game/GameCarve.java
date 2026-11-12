@@ -347,7 +347,8 @@ public final class GameCarve {
 
         @Override
         public String toString() {
-            return record + "; region " + home + ": " + outcome + (noSlot ? " (no free faction slot)" : "");
+            return record + "; region " + home + " " + WORLD.REGIONS().getByIndex(home).info.name() + ": " + outcome
+                    + (noSlot ? " (no free faction slot)" : "");
         }
     }
 
