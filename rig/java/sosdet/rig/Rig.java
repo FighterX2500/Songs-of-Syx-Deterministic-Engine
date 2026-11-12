@@ -295,6 +295,8 @@ public final class Rig implements SCRIPT {
         private Path rejoinWorld;
         private Path rejoinState;
         private int rejoinSlot = -1;
+        // copy 1, with wresyncsavegame: the host's rejoin files right after that save (SOS-193)
+        private boolean rejoinOut;
         // world resync (SOS-38): copy 1 saves at wresyncStep; every copy, copy 1 too, loads only the world from it
         private long wresyncStep = -1;
         private boolean wresyncSaver;
@@ -1081,6 +1083,16 @@ public final class Rig implements SCRIPT {
             if (wresyncSaveGame != null) {
                 event("savegame", RigHumans.save(dir.resolve(wresyncSaveGame)));
                 wresyncSaveGame = null;
+                if (rejoinOut) { // the host's rejoin files for the saves just made, as the mod's restart (SOS-193)
+                    byte[] rejoin = Engine.rejoinOut(dir.resolve("rejoin-world.save"));
+                    try {
+                        Files.write(dir.resolve("rejoin.state"), rejoin);
+                    } catch (IOException e) {
+                        throw new IllegalStateException("SOSDET rig: cannot write the rejoin state", e);
+                    }
+                    event("rejoinout", "\"step\":" + Engine.step() + ",\"bytes\":" + rejoin.length);
+                    rejoinOut = false;
+                }
             }
             wresyncStep = -1;
             if (wresyncNext >= 0) {
@@ -1215,14 +1227,11 @@ public final class Rig implements SCRIPT {
          * thaws, before step 1.
          */
         private void rejoin() throws IOException {
-            byte[] world = Files.readAllBytes(rejoinState);
-            int humans = sosdet.game.GameHumans.get().slots().length;
-            java.nio.ByteBuffer b = java.nio.ByteBuffer.allocate(4 + world.length + 4 + 2 * humans);
-            b.putInt(world.length).put(world).putInt(humans); // no human retired: the flags stay 0
+            byte[] state = Files.readAllBytes(rejoinState);
             Path copy = dir.resolve("rejoin-world.save");
             Files.copy(rejoinWorld, copy, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
             long t0 = System.nanoTime();
-            Engine.rejoinLoad(copy, b.array());
+            Engine.rejoinLoad(copy, state);
             int held = sosdet.game.GameHumans.get().frozen().heldFor(rejoinSlot);
             Engine.thawHuman(rejoinSlot);
             event("rejoined", String.format(Locale.ROOT, "\"slot\":%d,\"step\":%d,\"held\":%d,\"ms\":%.0f,\"frozen\":%b",
@@ -1690,6 +1699,10 @@ public final class Rig implements SCRIPT {
                 viewStallStep = Long.parseLong(c[1]);
                 viewStallMs = Long.parseLong(c[2]);
                 event("viewstall", "\"at\":" + viewStallStep + ",\"ms\":" + viewStallMs);
+                return;
+            case "rejoinout": // rejoinout: copy 1 writes the host's rejoin files right after its wresyncsavegame save (SOS-193)
+                rejoinOut = true;
+                event("rejoinoutat", "");
                 return;
             case "rejoin": // rejoin <world save> <world resync state> <slot>: at the run's start, every copy loads that world and thaws the slot (SOS-193)
                 rejoinWorld = Path.of(c[1]);

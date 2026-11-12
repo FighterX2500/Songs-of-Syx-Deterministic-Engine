@@ -1963,6 +1963,18 @@ final class Session {
         return icedSlots[slot];
     }
 
+    /** A rejoin's world load (SOS-193): the reports this PC has, set aside while it reads the host's. */
+    sosdet.report.Reports[] reportsAside() {
+        sosdet.report.Reports[] was = reports.clone();
+        java.util.Arrays.fill(reports, null);
+        return was;
+    }
+
+    /** After that load: the reports set aside are back, as they were. */
+    void reportsBack(sosdet.report.Reports[] was) {
+        System.arraycopy(was, 0, reports, 0, reports.length);
+    }
+
     /** The human slots' flags changed (a load, a thaw): {@link #humans} reads them again. */
     void humansChanged() {
         humans = null;
@@ -1991,7 +2003,7 @@ final class Session {
     /** A rejoin (SOS-193): the human in {@code slot} thaws; on its own PC the transactions that waited for it apply. */
     void thaw(int slot) {
         java.util.List<sosdet.game.HeldTxn> held = sosdet.game.GameHumans.get().frozen().thaw(slot);
-        reports(slot).clear();
+        reports(slot).thaw(); // a load report of the returning PC that came in already stays
         humans = null;
         if (slot != localHuman || reportsFrom >= 0) {
             return;
@@ -2469,7 +2481,10 @@ final class Session {
         }
         // a human takes no report while frozen, so one from past its freeze is its thaw report, from a PC ahead of this
         // one: it applies after this PC's own thaw (SOS-109, SOS-95)
-        if (retired(r.faction) || iced(r.faction) || removing[r.faction] && r.takenAt > removeCutoff[r.faction]) {
+        // a frozen human's report before the first step after a load is the returning PC's load report, which may come
+        // in before this PC's own thaw (SOS-193); later, none comes from a PC that is gone
+        if (retired(r.faction) || iced(r.faction) && clock.step() > 0
+                || removing[r.faction] && r.takenAt > removeCutoff[r.faction]) {
             return; // past its human's last report every PC reads (SOS-66)
         }
         reports(r.faction).stamp(r);

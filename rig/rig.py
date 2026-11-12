@@ -880,7 +880,7 @@ def main():
                     help="with --remove: copy 1 freezes the human instead of removing it, and the stopped copy saves its"
                          " game as frozen-<k>.save in its rig folder, its city as the player left it (SOS-193)")
     ap.add_argument("--rejoin", default="",
-                    help="'WORLD|STATE|SLOT' (a world resync's save and state, e.g. from --world-resync with"
+                    help="'WORLD|STATE|SLOT' (the host's rejoin-world.save and rejoin.state, from --freeze --world-resync with"
                          " --resync-savegame): at the run's start every copy loads that world into its own game and the"
                          " frozen human in SLOT thaws, as the mod's rejoin (SOS-193); use with --humans-saves")
     ap.add_argument("--uncarve-removed", action="store_true",
@@ -1223,6 +1223,8 @@ def main():
                 c.send("carveeach %s" % args.carve_each, "carveeach")
             if args.resync_savegame:
                 c.send("wresyncsavegame carved-%d.save" % c.k, "wresyncsavegame")
+                if args.freeze and c.k == 1:
+                    c.send("rejoinout", "rejoinoutat")  # the host's rejoin files for those saves (SOS-193)
             if args.world_resync2:
                 c.send("worldresyncnext %d%s" % (args.world_resync2, " uncarve" if args.uncarve else ""),
                        "worldresyncnext")

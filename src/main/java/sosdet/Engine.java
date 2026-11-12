@@ -1250,19 +1250,38 @@ public final class Engine {
     /**
      * Rejoin, host (SOS-193, mod spec §11 Freezing a player), between steps at the restart's hold, right after the
      * campaign save every PC reloads: saves the world's sections to {@code file} and returns the world's state no save
-     * holds, with which humans are retired; every PC then calls {@link #rejoinLoad} with both.
+     * holds, which humans are retired, and each human's city report the host reads now; every PC then calls
+     * {@link #rejoinLoad} with both. The mod holds every PC there; this call holds nothing.
      */
     public static byte[] rejoinOut(Path file) {
         Session s = required();
         if (!s.ownCity || s.ai().mode() != AiMode.HOST) {
             throw new IllegalStateException("SOSDET: the host saves a rejoin's world, in own-city mode");
         }
-        byte[] world = worldResyncSave(file);
+        if (s.streams.inStep()) {
+            throw new IllegalStateException("SOSDET: a rejoin's world is saved between steps, not inside one");
+        }
+        double[] unsaved = GameWorldLoad.unsaved();
+        GameWorldLoad.save(file);
         int[] slots = s.humans();
-        java.nio.ByteBuffer b = java.nio.ByteBuffer.allocate(4 + world.length + 4 + slots.length * 2);
+        byte[][] ledgers = new byte[slots.length][];
+        byte[][] reports = new byte[slots.length][];
+        int size = 0;
+        for (int i = 0; i < slots.length; i++) {
+            ledgers[i] = s.reports(slots[i]).ledgerOut();
+            sosdet.report.CityReport r = s.reports(slots[i]).current();
+            reports[i] = r == null ? new byte[0] : r.toBytes();
+            size += 4 + reports[i].length;
+        }
+        byte[] world = new WorldResync(s.clock.step(), s.hashes.epoch() + 1, s.streams.worldDraws(), slots, ledgers,
+                unsaved).toBytes();
+        java.nio.ByteBuffer b = java.nio.ByteBuffer.allocate(4 + world.length + 4 + slots.length * 2 + size);
         b.putInt(world.length).put(world).putInt(slots.length);
         for (int slot : slots) {
             b.put((byte) (s.retired(slot) ? 1 : 0)).put((byte) (s.spectators[slot] ? 1 : 0));
+        }
+        for (byte[] r : reports) {
+            b.putInt(r.length).put(r);
         }
         return b.array();
     }
@@ -1292,14 +1311,31 @@ public final class Engine {
                     + " loaded in a game of slots " + java.util.Arrays.toString(s.humans())
                     + ": a player joined since this city froze");
         }
-        s.rejoinWorld(file, r.unsaved, r.worldDraws);
-        for (int slot : r.slots) {
-            boolean retired = b.get() == 1;
-            boolean eliminated = b.get() == 1;
-            if (retired && !s.retired(slot)) {
-                s.city().retiredAgain(slot, eliminated); // removed since the returning PC's city froze
+        boolean[] retired = new boolean[r.slots.length];
+        boolean[] eliminated = new boolean[r.slots.length];
+        for (int i = 0; i < r.slots.length; i++) {
+            retired[i] = b.get() == 1;
+            eliminated[i] = b.get() == 1;
+        }
+        // the load counts the soldiers away from each city as the world part would, from its report (SOS-32): every PC
+        // reads the host's, as no PC has every other's report yet after the restart's load; the reports this PC has
+        // (its own load report, another PC's that came in already) are set aside meanwhile
+        sosdet.report.Reports[] aside = s.reportsAside();
+        for (int i = 0; i < r.slots.length; i++) {
+            byte[] report = new byte[b.getInt()];
+            b.get(report);
+            if (report.length > 0) {
+                s.reports(r.slots[i]).restore(sosdet.report.CityReport.fromBytes(report, s.city().layout()),
+                        r.ledger(r.slots[i]));
             }
         }
+        s.rejoinWorld(file, r.unsaved, r.worldDraws);
+        for (int i = 0; i < r.slots.length; i++) {
+            if (retired[i] && !s.retired(r.slots[i])) {
+                s.city().retiredAgain(r.slots[i], eliminated[i]); // removed since the returning PC's city froze
+            }
+        }
+        s.reportsBack(aside);
         s.humansChanged();
     }
 

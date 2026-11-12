@@ -112,6 +112,15 @@ public final class Reports {
         ledger.fromBytes(ledgerBytes);
     }
 
+    /**
+     * A frozen human thaws (SOS-193): the last report before its freeze and the world's changes since go; a report its
+     * PC sent since, waiting to apply, stays.
+     */
+    public void thaw() {
+        current = null;
+        ledger.clear();
+    }
+
     /** A load or resync: the city's reports start again. */
     public void clear() {
         current = null;
