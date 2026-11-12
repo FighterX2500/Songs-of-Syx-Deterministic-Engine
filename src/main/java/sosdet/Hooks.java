@@ -996,6 +996,20 @@ public final class Hooks {
     }
 
     /**
+     * The human whose fog of war this PC shows (SOS-197): this PC's own, also in the world part, where
+     * {@code FACTIONS.player()} is the human the step works on; a spectator's, the living human the game reads as
+     * (SOS-111). {@code first}, slot 0's, without a session and while a game loads.
+     */
+    public static Player seer(Player first) {
+        Session s = Engine.session();
+        if (s == null || s.loading || s.localHuman <= 0) {
+            return first;
+        }
+        Faction f = FACTIONS.getByIndex(s.spectators[s.localHuman] ? s.living : s.localHuman);
+        return f instanceof Player ? (Player) f : first;
+    }
+
+    /**
      * Whether a game message sent now is this PC's player's to see (SOS-89): {@code FACTIONS.player()} at the send is
      * this PC's human. The world part runs every human's raids, events and diplomacy on every PC, each with its human
      * current, and a viewer's PC runs the viewed city: their messages are for another PC's player. Without a session,

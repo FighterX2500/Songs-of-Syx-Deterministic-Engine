@@ -1042,8 +1042,9 @@ public final class Engine {
 
     /**
      * Why a city-state can't be carved with its centre at {@code tx, ty} (SOSGSGMP docs/plan/hot-join.md §3.1), or null:
-     * the terrain; a road, water or the map's edge beside it; another town or a human's capital near; an army on the
-     * square; a siege; a region it would cut in two; no free region; no road to a town it touches. Any PC, between steps.
+     * the terrain; the map's edge beside it; a town or a human's capital closer than 6 tiles (SOS-199); an army on the
+     * square; a siege; a region it would cut in two, or whose road it would cut off from its town; no free region; no
+     * road to a town it touches. Any PC, between steps.
      */
     public static String carveProblem(int tx, int ty) {
         outsideStep("carveProblem");

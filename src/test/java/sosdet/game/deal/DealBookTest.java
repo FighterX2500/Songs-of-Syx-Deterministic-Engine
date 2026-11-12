@@ -2,6 +2,7 @@ package sosdet.game.deal;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -168,5 +169,17 @@ class DealBookTest {
         assertEquals(List.of(new DealBook.Answer(1, 1, 0, Outcome.DECLINED)), b.answers());
         assertEquals(List.of(), b.tributes());
         assertEquals(2, b.toInts()[0], "it saves as version 2");
+    }
+
+    @Test
+    void stancesNeedReachButPeaceCancelAndGiftsDont() { // SOS-197: as vanilla's deals with an NPC
+        assertTrue(DealBook.needsReach(DealBook.TRADE));
+        assertTrue(DealBook.needsReach(DealBook.PACT));
+        assertTrue(DealBook.needsReach(DealBook.ALLY));
+        assertTrue(DealBook.needsReach(DealBook.PROTECTOR));
+        assertTrue(DealBook.needsReach(DealBook.VASSAL));
+        assertFalse(DealBook.needsReach(DealBook.PEACE));
+        assertFalse(DealBook.needsReach(DealBook.CANCEL_ALL));
+        assertFalse(DealBook.needsReach(DealBook.NO_TREATY));
     }
 }
