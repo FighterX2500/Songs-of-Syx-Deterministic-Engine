@@ -42,15 +42,15 @@ public final class GameCarve {
 
     /** A capital's square: {@code WCentre.TILE_DIM} tiles a side (3). */
     public static final int DIM = WCentre.TILE_DIM;
-    /** Tiles around the square kept free of roads, paths, water and other towns' squares. */
+    /** Tiles around the square that must lie on the map: the carve links roads through them. */
     static final int RING = 1;
     /**
-     * Least Chebyshev distance between the new centre and any other region's: a centre's siege ring is its centre ±2
-     * ({@code WREGIONS.init}), so at 5 neither square nor ring touches another town's, and no old centre has to move.
+     * As {@code HumanStart.MIN_DISTANCE}: the new centre at least this many tiles from every region's town and every
+     * human's capital (mod spec §5, owner 2026-11-12, SOS-199). A centre's siege ring is its centre ±2
+     * ({@code WREGIONS.init}); 6 tiles apart in a straight line is 5 or more on one axis, so neither square nor ring
+     * touches another town's, and no old centre has to move.
      */
-    static final int CENTRE_GAP = 5;
-    /** As {@code HumanStart.MIN_DISTANCE}: a human's capital at least this many tiles from another's (mod spec §5). */
-    static final double HUMAN_GAP = 6;
+    static final double TOWN_GAP = 6;
 
     private static final String GAME_VERSION = " (SOSDET supports Songs of Syx V71, build 71.44)";
     private static final Field DIR_BITS = field(WDirMap.class, "m");
@@ -77,26 +77,21 @@ public final class GameCarve {
                 if (!WORLD.IN_BOUNDS(x, y)) {
                     return "Too near the map's edge.";
                 }
-                if (WORLD.WATER().isBig.is(x, y)) {
-                    return "Too near the sea or a lake.";
-                }
-                if (WORLD.ROADS().is(x, y) || WORLD.PATH().map.is.is(x, y)) {
-                    return "On or beside a road.";
-                }
+                // roads and water beside the square don't matter; the square's own terrain is vanilla's rule (SOS-199)
                 if (inSquare(cx, cy, x, y) && WORLD.REGIONS().map.get(x, y) == null) {
                     return "Outside every region.";
                 }
             }
         }
         for (Region a : WORLD.REGIONS().active()) {
-            if (Math.max(Math.abs(a.cx() - cx), Math.abs(a.cy() - cy)) < CENTRE_GAP) {
-                return "Too near the town of " + a.info.name() + ".";
+            if (Math.hypot(a.cx() - cx, a.cy() - cy) < TOWN_GAP) {
+                return "Closer than " + (int) TOWN_GAP + " tiles to the town of " + a.info.name() + ".";
             }
         }
         for (int s : GameHumans.get().slots()) {
             Region c = FACTIONS.getByIndex(s).capitolRegion();
-            if (c != null && Math.hypot(c.cx() - cx, c.cy() - cy) < HUMAN_GAP) {
-                return "Closer than " + (int) HUMAN_GAP + " tiles to a player's capital.";
+            if (c != null && Math.hypot(c.cx() - cx, c.cy() - cy) < TOWN_GAP) {
+                return "Closer than " + (int) TOWN_GAP + " tiles to a player's capital.";
             }
         }
         if (WORLD.ENTITIES().fillTiles(cx - DIM / 2, cx + DIM / 2 + 1, cy - DIM / 2, cy + DIM / 2 + 1).size() > 0) {
@@ -116,6 +111,9 @@ public final class GameCarve {
             }
             if (splits(reg, cx, cy)) {
                 return "It would cut " + reg.info.name() + " in two.";
+            }
+            if (cutsRoads(reg, cx, cy)) {
+                return "It would cut a road of " + reg.info.name() + " off from its town.";
             }
         }
         if (freeRegion() == null) {
@@ -208,8 +206,8 @@ public final class GameCarve {
         int h = b.height() + 2;
         int x0 = b.x1() - 1;
         int y0 = b.y1() - 1;
-        int all = reached(reg, x0, y0, w, h, cx, cy, false);
-        int left = reached(reg, x0, y0, w, h, cx, cy, true);
+        int all = reached(reg, x0, y0, w, h, cx, cy, false, false);
+        int left = reached(reg, x0, y0, w, h, cx, cy, true, false);
         int taken = 0;
         for (int y = cy - DIM / 2; y <= cy + DIM / 2; y++) {
             for (int x = cx - DIM / 2; x <= cx + DIM / 2; x++) {
@@ -221,8 +219,27 @@ public final class GameCarve {
         return left < all - taken;
     }
 
-    /** How many of {@code reg}'s tiles its centre reaches, orthogonally, with or without the square cut out. */
-    private static int reached(Region reg, int x0, int y0, int w, int h, int cx, int cy, boolean withoutSquare) {
+    /**
+     * Whether taking the square out of {@code reg} cuts one of its roads off from its town (SOS-199): a road may cross the
+     * square, which the carve's links join to the new town, but every path tile of {@code reg} outside the square that
+     * its town reaches along the path network must still be reached without the square. Else the region's own route
+     * would run through the city-state.
+     */
+    private static boolean cutsRoads(Region reg, int cx, int cy) {
+        Rec b = new Rec(reg.info.bounds());
+        int w = b.width() + 2;
+        int h = b.height() + 2;
+        int x0 = b.x1() - 1;
+        int y0 = b.y1() - 1;
+        return reached(reg, x0, y0, w, h, cx, cy, true, true) < reached(reg, x0, y0, w, h, cx, cy, false, true);
+    }
+
+    /**
+     * How many of {@code reg}'s tiles its centre reaches, with or without the square cut out: orthogonally over its land,
+     * or with {@code roads} along its path steps, counting only the tiles outside the square.
+     */
+    private static int reached(Region reg, int x0, int y0, int w, int h, int cx, int cy, boolean withoutSquare,
+            boolean roads) {
         boolean[] seen = new boolean[w * h];
         int[] queue = new int[w * h];
         int head = 0;
@@ -232,11 +249,15 @@ public final class GameCarve {
         }
         queue[tail++] = (reg.cy() - y0) * w + (reg.cx() - x0);
         seen[queue[0]] = true;
+        int outside = inSquare(cx, cy, reg.cx(), reg.cy()) ? 0 : 1;
         while (head < tail) {
             int i = queue[head++];
             int x = x0 + i % w;
             int y = y0 + i / w;
-            for (DIR d : DIR.ORTHO) {
+            for (DIR d : roads ? DIR.ALL : DIR.ORTHO) {
+                if (roads && !WORLD.PATH().map.can(x, y, d)) {
+                    continue;
+                }
                 int nx = x + d.x();
                 int ny = y + d.y();
                 int lx = nx - x0;
@@ -250,9 +271,10 @@ public final class GameCarve {
                 }
                 seen[j] = true;
                 queue[tail++] = j;
+                outside += inSquare(cx, cy, nx, ny) ? 0 : 1;
             }
         }
-        return tail;
+        return roads ? outside : tail;
     }
 
     /** An unused region: no tiles, no owner. Null when every index is in use. */
