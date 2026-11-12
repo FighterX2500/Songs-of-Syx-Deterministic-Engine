@@ -56,7 +56,7 @@ A player can leave a running campaign and come back later (SOS-193, SOSGSGMP spe
 - `freezeHuman(slot)`, host, between steps: refused as `removeHuman` is (`freezeRefusal` says why, or null). The entry applies at the same step on every PC, as a removal does, and nobody waits for that PC from the call on. The human keeps its slot and its capital; every stance but a trade or a pact becomes neutral (its wars end, its vassals go free); its other regions become free land; its open deals and the siege of its capital end; its armies go home and stand still, as they are.
 - While frozen (`frozen(slot)`), every PC reads its city as its last report showed it, also after any load (the report is in the world save, section `SOSDET_FROZEN`). The transactions for its city wait there too. No NPC makes war on it, raids it or gathers on its border; deals, wars and tariffs with it are refused; its city can't be viewed.
 - `removeHuman(slot)` still removes a frozen human for good, at once.
-- **Rejoin:** at a restart like hot-join's, the host calls `rejoinOut(file)` right after the campaign save every PC reloads; every PC, the returning one from its own freeze save, calls `rejoinLoad(file, state)` in its session before step 1, then `thawHuman(slot)`. The returning PC's city goes on where it stopped, and the transactions that waited for it apply there. `rejoinLoad` refuses a game whose human slots differ from the host's (a player joined since the city froze).
+- **Rejoin:** at a restart like hot-join's, the host calls `rejoinOut(file)` right after the campaign save every PC reloads; every PC, the returning one from its own freeze save, calls `rejoinLoad(file, state)` in its session before step 1, then `thawHuman(slot)`. The returning PC's city goes on where it stopped, and the transactions that waited for it apply there. On the returning PC, `addMissingHumans(hostSlots)` comes first, right after its freeze save's load: the human slots of players who joined since it froze become stand-ins, which the host's world replaces; then it saves and loads its game again, as after `addHuman` (SOS-204). `rejoinLoad` refuses a game whose human slots still differ from the host's.
 
 ## Threads
 
@@ -116,6 +116,5 @@ A resync carries a save file as well as the returned bytes, so send both. The en
 - V71, build 71.44 only.
 - The host can't change during a session: `aiHost` and `aiPeer` throw after step 0.
 - `removeHuman` and `freezeHuman` refuse slot 0.
-- A frozen human can't rejoin once another player has joined since it froze.
 - In `ownCity` mode each city differs by PC, so only the world is compared.
 - The scenario suite checks little today: see [rig/README.md](../rig/README.md).

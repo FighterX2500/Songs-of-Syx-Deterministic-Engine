@@ -288,6 +288,52 @@ public final class GameWorldSetup {
         }
     }
 
+    /**
+     * Rejoin after a hot-join (SOS-204), on the returning PC between its freeze save's load and the world's: the human
+     * slots of {@code hostSlots} this game lacks (players who joined after this city froze) become humans, in slot order,
+     * so the host's world loads into the same slots. Each is a stand-in, which the host's world replaces whole: the
+     * slot's NPC as it is when it still has a realm, else that NPC given a free region as its capitol (any NPC's region
+     * that is no capitol when the map has none free). Returns a line for the log, empty when no slot was missing.
+     */
+    public static String addMissingHumans(int[] hostSlots) {
+        GameHumans humans = GameHumans.get();
+        int[] sorted = hostSlots.clone();
+        java.util.Arrays.sort(sorted);
+        StringBuilder line = new StringBuilder();
+        for (int slot : sorted) {
+            if (GameHumans.isHuman(FACTIONS.getByIndex(slot))) {
+                continue;
+            }
+            Faction npc = FACTIONS.getByIndex(slot);
+            if (!npc.isActive() || npc.capitolRegion() == null) {
+                world.map.regions.Region reg = standInRegion();
+                humans.activateNpc(reg, false, slot);
+                reg.setCapitol();
+            }
+            humans.add(slot);
+            line.append(line.length() == 0 ? "stand-in humans for the joins since the freeze:" : "").append(' ').append(slot);
+        }
+        return line.toString();
+    }
+
+    /** A free region, or else an NPC's region that is no capitol, freed: a stand-in human's capitol (SOS-204). */
+    private static world.map.regions.Region standInRegion() {
+        world.map.regions.Region owned = null;
+        for (world.map.regions.Region r : WORLD.REGIONS().active()) {
+            if (r.realm() == null) {
+                return r;
+            }
+            if (owned == null && !r.capitol() && !GameHumans.isHuman(r.faction())) {
+                owned = r;
+            }
+        }
+        if (owned == null) {
+            throw new IllegalStateException("SOSDET: no region to stand in for a human who joined since this city froze");
+        }
+        owned.fationSet(null, false);
+        return owned;
+    }
+
     /** Tiles a picked spot may move when an earlier human's carve made it unfit (a new road beside it). */
     static final int MOVE_AT_MOST = 3;
 
