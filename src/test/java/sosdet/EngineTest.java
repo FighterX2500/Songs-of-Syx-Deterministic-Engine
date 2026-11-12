@@ -705,9 +705,83 @@ class EngineTest {
     /** Applies the removal entries of a log as the game's applier does (SOS-66); nothing else. */
     private static final sosdet.ai.AiApplier REMOVALS = e -> {
         if (e.kind == sosdet.ai.AiEntry.REMOVE) {
-            Hooks.humanRemoved(e.intAt(0));
+            Hooks.humanRemoved(e.intAt(0), e.ints() > 3 && e.intAt(3) == 1);
         }
     };
+
+    /**
+     * SOS-193: the host freezes a human whose player left. It waits for none of that human's reports past the last one it
+     * has; from the entry's step that human is frozen, not retired, and every PC reads its last report on. A late report
+     * is dropped, nobody waits for it, and the host can still remove it for good.
+     */
+    @Test
+    void theHostFreezesAHumanAndItsLastReportIsReadOn() {
+        Session s = ownCity(0);
+        boolean[] frozen = new boolean[Session.SLOTS];
+        CitySource base = humans(0, 3);
+        s.city = new CitySource() {
+            @Override
+            public ReportLayout layout() {
+                return base.layout();
+            }
+
+            @Override
+            public int faction() {
+                return base.faction();
+            }
+
+            @Override
+            public int[] humans() {
+                return base.humans();
+            }
+
+            @Override
+            public void fill(double[] values) {
+                base.fill(values);
+            }
+
+            @Override
+            public int indexOf(sosdet.report.Field f, Object key) {
+                return base.indexOf(f, key);
+            }
+
+            @Override
+            public boolean frozen(int slot) {
+                return frozen[slot];
+            }
+        };
+        java.util.List<Integer> retired = new java.util.ArrayList<>();
+        s.remover = retired::add;
+        s.freezer = slot -> frozen[slot] = true;
+        s.ai(sosdet.ai.AiLog.host(1, REMOVALS));
+        Engine.pcHuman(0, 0);
+        Engine.pcHuman(1, 3);
+        Engine.runFreely();
+        Engine.reportsIn(1, reportRecord(3, 1, 1));
+        assertEquals(59, steps(100, 1), "slot 3's last report, taken at 1, is read to step 59");
+        assertThrows(IllegalArgumentException.class, () -> Engine.freezeHuman(0), "the host's own human");
+        assertNull(Engine.freezeRefusal(3));
+
+        Engine.freezeHuman(3);
+        assertNotNull(Engine.freezeRefusal(3), "once");
+        assertEquals(30, steps(30, 1), "no more waiting for slot 3; its entry is stamped for step 90");
+        assertFalse(Engine.frozen(3), "nothing freezes before the entry's step");
+        assertEquals(1, steps(1, 1));
+        assertTrue(Engine.frozen(3), "frozen in step 90's world part");
+        assertTrue(retired.isEmpty(), "not retired");
+        assertFalse(Engine.retired(3));
+        assertEquals(1, s.reports(3).current().takenAt, "its last report is read on");
+        Engine.reportsIn(1, reportRecord(3, 60, 90));
+        assertEquals(1, s.reports(3).current().takenAt, "a late one is dropped");
+        assertEquals("That player is frozen already.", Engine.freezeRefusal(3));
+        assertEquals(100, steps(100, 1), "nobody waits for it");
+        assertEquals(1, s.reports(3).current().takenAt);
+
+        assertNull(Engine.removeRefusal(3, false), "the host can remove a frozen human for good");
+        Engine.removeHuman(3);
+        assertEquals(31, steps(31, 1));
+        assertEquals(java.util.List.of(3), retired, "retired at the removal entry's step");
+    }
 
     /**
      * SOS-66: the host removes a human whose PC is gone. It waits for none of that human's reports past the last one

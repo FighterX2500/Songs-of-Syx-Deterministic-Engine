@@ -1225,6 +1225,106 @@ public final class Engine {
      * returns to the last save then. {@link #removeRefusal} says beforehand whether the call would be refused.
      */
     public static void removeHuman(int slot) {
+        remove(slot, false);
+    }
+
+    /**
+     * Host, own-city mode, between steps: freezes the human in {@code slot}, whose player left and may rejoin (SOS-193,
+     * mod spec §11 Freezing a player). It goes as a removal does, from the same entry at the same step, and refused in
+     * the same cases ({@link #removeRefusal}); but the human keeps its slot and its capital, and every PC reads its city
+     * as its last report showed it, with the transactions for it waiting in the world save, until it rejoins.
+     */
+    public static void freezeHuman(int slot) {
+        remove(slot, true);
+    }
+
+    /** Why {@link #freezeHuman} would be refused now, as a sentence for the player, or null (SOS-193). */
+    public static String freezeRefusal(int slot) {
+        String r = removeRefusal(slot, false);
+        if (r != null) {
+            return r;
+        }
+        return required().iced(slot) ? "That player is frozen already." : null;
+    }
+
+    /**
+     * Rejoin, host (SOS-193, mod spec §11 Freezing a player), between steps at the restart's hold, right after the
+     * campaign save every PC reloads: saves the world's sections to {@code file} and returns the world's state no save
+     * holds, with which humans are retired; every PC then calls {@link #rejoinLoad} with both.
+     */
+    public static byte[] rejoinOut(Path file) {
+        Session s = required();
+        if (!s.ownCity || s.ai().mode() != AiMode.HOST) {
+            throw new IllegalStateException("SOSDET: the host saves a rejoin's world, in own-city mode");
+        }
+        byte[] world = worldResyncSave(file);
+        int[] slots = s.humans();
+        java.nio.ByteBuffer b = java.nio.ByteBuffer.allocate(4 + world.length + 4 + slots.length * 2);
+        b.putInt(world.length).put(world).putInt(slots.length);
+        for (int slot : slots) {
+            b.put((byte) (s.retired(slot) ? 1 : 0)).put((byte) (s.spectators[slot] ? 1 : 0));
+        }
+        return b.array();
+    }
+
+    /**
+     * Rejoin, every PC (SOS-193), in the session between steps after the restart's load and before its first step: loads
+     * the world's sections of the host's {@code file} into this PC's game, keeping its city, with the host's world state
+     * ({@link #rejoinOut}). The returning PC loaded its own game from its freeze, so its world is older; every other PC
+     * loaded its own copy of the host's save and loads the world again, so every world comes from the same load, as at
+     * a view's thaw. Then {@link #thawHuman} on every PC. Refused when the human slots differ from the save's: a player
+     * joined since the city froze.
+     */
+    public static void rejoinLoad(Path file, byte[] state) {
+        Session s = required();
+        if (s.streams.inStep()) {
+            throw new IllegalStateException("SOSDET: a rejoin's world is loaded between steps, not inside one");
+        }
+        java.nio.ByteBuffer b = java.nio.ByteBuffer.wrap(state);
+        byte[] world = new byte[b.getInt()];
+        b.get(world);
+        WorldResync r = WorldResync.fromBytes(world);
+        if (b.getInt() != r.slots.length) {
+            throw new IllegalArgumentException("SOSDET: a rejoin's state with mismatched human flags");
+        }
+        if (!java.util.Arrays.equals(r.slots, s.humans())) {
+            throw new IllegalStateException("SOSDET: a rejoin's world of human slots " + java.util.Arrays.toString(r.slots)
+                    + " loaded in a game of slots " + java.util.Arrays.toString(s.humans())
+                    + ": a player joined since this city froze");
+        }
+        s.rejoinWorld(file, r.unsaved, r.worldDraws);
+        for (int slot : r.slots) {
+            boolean retired = b.get() == 1;
+            boolean eliminated = b.get() == 1;
+            if (retired && !s.retired(slot)) {
+                s.city().retiredAgain(slot, eliminated); // removed since the returning PC's city froze
+            }
+        }
+        s.humansChanged();
+    }
+
+    /**
+     * Rejoin, every PC (SOS-193), after {@link #rejoinLoad}: the frozen human in {@code slot} is frozen no more, and its
+     * PC runs its city from here. The transactions that waited for it apply on that PC, in the order they came; every
+     * other PC drops them, as it drops any other PC's city's.
+     */
+    public static void thawHuman(int slot) {
+        Session s = required();
+        if (s.streams.inStep()) {
+            throw new IllegalStateException("SOSDET: a human thaws between steps, not inside one");
+        }
+        if (!s.iced(slot)) {
+            throw new IllegalStateException("SOSDET: the human in slot " + slot + " is not frozen");
+        }
+        s.thaw(slot);
+    }
+
+    /** True for a slot whose human is frozen ({@link #freezeHuman}): no PC runs its city. */
+    public static boolean frozen(int slot) {
+        return required().iced(slot);
+    }
+
+    private static void remove(int slot, boolean freeze) {
         Session s = required();
         if (!s.ownCity || s.ai().mode() != AiMode.HOST) {
             throw new IllegalStateException("SOSDET: the host removes a human, in own-city mode (mode " + s.ai().mode() + ")");
@@ -1233,6 +1333,15 @@ public final class Engine {
             throw new IllegalStateException("SOSDET: a human is removed between steps, not inside one");
         }
         removable(s, slot);
+        if (s.iced(slot)) {
+            if (freeze) {
+                throw new IllegalStateException("SOSDET: the human in slot " + slot + " is frozen already");
+            }
+            // a frozen human has no PC and sends no report: it retires at the entry's step (SOS-193)
+            s.removing[slot] = true;
+            s.ai().captureRemove(AiEntry.ints(slot, -1, -1));
+            return;
+        }
         String battle = battleRefusal(s, slot);
         if (battle != null) {
             throw new IllegalStateException("SOSDET: " + battle);
@@ -1241,7 +1350,9 @@ public final class Engine {
         long cutoff = s.receivedTakenAt[slot];
         s.removing[slot] = true;
         s.removeCutoff[slot] = cutoff;
-        s.ai().captureRemove(AiEntry.ints(slot, (int) (cutoff >>> 32), (int) cutoff));
+        s.freezing[slot] = freeze;
+        s.ai().captureRemove(freeze ? AiEntry.ints(slot, (int) (cutoff >>> 32), (int) cutoff, 1)
+                : AiEntry.ints(slot, (int) (cutoff >>> 32), (int) cutoff));
         s.pacer.drop(pc); // its PC is gone: the host's pace waits for it no more
         s.ai().pcGone(pc); // and none of its orders still to come goes into the log
     }

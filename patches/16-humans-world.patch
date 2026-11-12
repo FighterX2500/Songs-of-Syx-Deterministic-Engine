@@ -124,7 +124,7 @@ diff -ru -U2 a/game/events/faction/player/EventDiplomacy.java b/game/events/fact
 -				war.updateAll(TIME.secondsPerDay());
 -				peace.update();
 +				for (int sosdetK = 0; sosdetK < sosdetHs.length; sosdetK++) {
-+					if (sosdet.Hooks.retired(sosdetHs[sosdetK])) continue; // SOSDET: a removed human runs nothing (SOS-66)
++					if (sosdet.Hooks.dormant(sosdetHs[sosdetK])) continue; // SOSDET: a removed human runs nothing (SOS-66), nor a frozen one (SOS-193)
 +					int sosdetBefore = sosdet.Hooks.currentHumanSwap(sosdetHs[sosdetK]);
 +					war.updateAll(TIME.secondsPerDay());
 +					peace.update();
@@ -134,7 +134,7 @@ diff -ru -U2 a/game/events/faction/player/EventDiplomacy.java b/game/events/fact
  			FactionNPC fa = FACTIONS.NPCs().get(ii);
 -			process(fa);
 +			for (int sosdetK = 0; sosdetK < sosdetHs.length; sosdetK++) {
-+				if (sosdet.Hooks.retired(sosdetHs[sosdetK])) continue; // SOSDET: a removed human runs nothing (SOS-66)
++				if (sosdet.Hooks.dormant(sosdetHs[sosdetK])) continue; // SOSDET: a removed human runs nothing (SOS-66), nor a frozen one (SOS-193)
 +				int sosdetBefore = sosdet.Hooks.currentHumanSwap(sosdetHs[sosdetK]);
 +				process(fa);
 +				sosdet.Hooks.currentHumanSwap(sosdetBefore);
@@ -292,7 +292,7 @@ diff -ru -U2 a/game/events/world/EventWorldRebellion.java b/game/events/world/Ev
  	protected void update(double ds) {
 +		int[] sosdetHs = sosdet.Hooks.humanSlots(); // SOSDET: each human's, with that human current (SOS-46 M4)
 +		for (int sosdetK = 0; sosdetK < sosdetHs.length; sosdetK++) {
-+			if (sosdet.Hooks.retired(sosdetHs[sosdetK])) continue; // SOSDET: a removed human runs nothing (SOS-66)
++			if (sosdet.Hooks.dormant(sosdetHs[sosdetK])) continue; // SOSDET: a removed human runs nothing (SOS-66), nor a frozen one (SOS-193)
 +			int sosdetBefore = sosdet.Hooks.currentHumanSwap(sosdetHs[sosdetK]);
 +			sosdetUpdate(sosdetK, ds);
 +			sosdet.Hooks.currentHumanSwap(sosdetBefore);
@@ -404,7 +404,7 @@ diff -ru -U2 a/game/faction/royalty/Royalty.java b/game/faction/royalty/Royalty.
 -		ROPINION.BOOST().update(this, seconds);
 +		int[] hs = sosdet.Hooks.humanSlots(); // SOSDET: the opinion of each human, with that human current (SOS-46 M3)
 +		for (int k = 0; k < hs.length; k++) {
-+			if (sosdet.Hooks.retired(hs[k])) continue; // SOSDET: a removed human runs nothing (SOS-66)
++			if (sosdet.Hooks.dormant(hs[k])) continue; // SOSDET: a removed human runs nothing (SOS-66), nor a frozen one (SOS-193)
 +			int before = sosdet.Hooks.currentHumanSwap(hs[k]);
 +			ROPINION.BOOST().update(this, seconds);
 +			sosdet.Hooks.currentHumanSwap(before);
@@ -482,7 +482,7 @@ diff -ru -U2 a/game/raiding/RAIDING.java b/game/raiding/RAIDING.java
 -		current.update(ds, prof);
 +		int[] sosdetHs = sosdet.Hooks.humanSlots(); // SOSDET: each human's raid, with that human current (SOS-46 M4)
 +		for (int sosdetK = 0; sosdetK < sosdetHs.length; sosdetK++) {
-+			if (sosdet.Hooks.retired(sosdetHs[sosdetK])) continue; // SOSDET: a removed human runs nothing (SOS-66)
++			if (sosdet.Hooks.dormant(sosdetHs[sosdetK])) continue; // SOSDET: a removed human runs nothing (SOS-66), nor a frozen one (SOS-193)
 +			int sosdetBefore = sosdet.Hooks.currentHumanSwap(sosdetHs[sosdetK]);
 +			sosdetCurrents[sosdetK].update(ds, prof);
 +			sosdet.Hooks.currentHumanSwap(sosdetBefore);
@@ -713,7 +713,7 @@ diff -ru -U2 a/game/raiding/Updater.java b/game/raiding/Updater.java
 -		if (GAME.raiders().current.current() != null)
 +		int[] sosdetHs = sosdet.Hooks.humanSlots(); // SOSDET: each human's raid, with that human current (SOS-46 M4)
 +		for (int sosdetK = 0; sosdetK < sosdetHs.length; sosdetK++) {
-+			if (sosdet.Hooks.retired(sosdetHs[sosdetK])) continue; // SOSDET: a removed human runs nothing (SOS-66)
++			if (sosdet.Hooks.dormant(sosdetHs[sosdetK])) continue; // SOSDET: a removed human runs nothing (SOS-66), nor a frozen one (SOS-193)
 +			int sosdetBefore = sosdet.Hooks.currentHumanSwap(sosdetHs[sosdetK]);
 +			sosdetUpdate(sosdetK, i, timeSinceLast);
 +			sosdet.Hooks.currentHumanSwap(sosdetBefore);
@@ -1135,7 +1135,7 @@ diff -ru -U2 a/world/region/RDOwner.java b/world/region/RDOwner.java
  	public void update(Region reg, double time) {
 +		int[] sosdetHs = sosdet.Hooks.humanSlots(); // SOSDET: each human's support, with that human current (SOS-46 M3)
 +		for (int sosdetK = 0; sosdetK < sosdetHs.length; sosdetK++) {
-+		if (sosdet.Hooks.retired(sosdetHs[sosdetK])) continue; // SOSDET: a removed human runs nothing (SOS-66)
++		if (sosdet.Hooks.dormant(sosdetHs[sosdetK])) continue; // SOSDET: a removed human runs nothing (SOS-66), nor a frozen one (SOS-193)
 +		int sosdetBefore = sosdet.Hooks.currentHumanSwap(sosdetHs[sosdetK]);
  		int tar = 255;
  		double d = 255.0*time*dTime;
