@@ -29,6 +29,14 @@ public final class DealBook {
             VASSAL = 7;
     private static final int TREATIES = 8;
 
+    /**
+     * Whether {@code treaty} needs the proposer to reach the other side, as vanilla's stance deals and absorbing do
+     * with an NPC ({@code DealBools}): every stance up from trade. Peace, cancelling every treaty and a deal with no treaty don't (SOS-197).
+     */
+    public static boolean needsReach(int treaty) {
+        return treaty == TRADE || treaty == PACT || treaty == ALLY || treaty == PROTECTOR || treaty == VASSAL;
+    }
+
     /** A vassal's yearly tribute, in percent of its worth, unless the deal sets another (owner, 2026-10-27). */
     public static final int DEFAULT_TRIBUTE = 10;
     /** The regions one side may give in one deal. */

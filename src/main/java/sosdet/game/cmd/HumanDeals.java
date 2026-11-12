@@ -117,6 +117,9 @@ public final class HumanDeals {
     }
 
     private static final String SPECTATOR = "A spectator can't act in the game.";
+    /** As vanilla's text for an NPC out of reach, with a player's wider reach (SOS-197). */
+    static final String OUT_OF_REACH = "Out of reach: this needs that player to be your neighbour, or reached through"
+            + " land your trade may cross.";
 
     /** On a spectator's PC the game's player is a living human, who must not act through it (SOS-111). */
     private static boolean spectating() {
@@ -149,9 +152,21 @@ public final class HumanDeals {
         return spectating() ? SPECTATOR : tariffRefusal(FACTIONS.player(), human(to), percent);
     }
 
-    /** Why this PC's player can't propose {@code terms} to the human in slot {@code to} now; null when they can. */
+    /**
+     * Why this PC's player can't propose {@code terms} to the human in slot {@code to} now; null when they can. A
+     * treaty that needs reach, as vanilla's deals with an NPC do, needs this human's reach to the other: the rule its
+     * trade walks, which is vanilla's and more (SOS-197, mod spec §6). Checked here only, on the proposer's PC, as
+     * vanilla checks it for its player alone.
+     */
     public static String proposeRefusal(int to, Terms terms) {
-        return spectating() ? SPECTATOR : refusal(FACTIONS.player(), human(to), terms);
+        if (spectating()) {
+            return SPECTATOR;
+        }
+        String why = refusal(FACTIONS.player(), human(to), terms);
+        if (why == null && DealBook.needsReach(terms.treaty) && !tradeReaches(to)) {
+            return OUT_OF_REACH;
+        }
+        return why;
     }
 
     /** Why this PC's player can't accept the proposal {@code id} now; null when they can. */
