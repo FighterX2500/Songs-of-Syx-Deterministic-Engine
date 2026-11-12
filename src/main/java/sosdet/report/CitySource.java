@@ -20,6 +20,20 @@ public interface CitySource {
         return false;
     }
 
+    /** True for a human slot whose human is frozen (SOS-193): its player left and may rejoin. */
+    default boolean frozen(int slot) {
+        return false;
+    }
+
+    /** A transaction for a frozen human's city: it waits, in the world save, for the human's return (SOS-193). */
+    default void holdFrozen(sosdet.txn.Txn t) {
+    }
+
+    /** A frozen human's last report and the world's open changes to it, as the world save holds them; null for none. */
+    default byte[][] frozenReport(int slot) {
+        return null;
+    }
+
     /** The human in {@code slot} is retired, or eliminated, again in a game loaded from before that. */
     default void retiredAgain(int slot, boolean eliminated) {
     }

@@ -71,7 +71,7 @@ public final class GameWorldLoad {
      */
     public static final List<String> KEYS = Arrays.asList("TIME", "WORLD", "FACTIONS", "RAIDING", "TEMP_EVENTS", "EVENTS",
             GameCityDivs.KEY, GameRelations.KEY, GameEvents.KEY, GameDeals.KEY, GameTariffs.KEY, GameSieges.KEY,
-            GameTraded.KEY, GamePassed.KEY, GameCarves.KEY);
+            GameTraded.KEY, GamePassed.KEY, GameCarves.KEY, GameFrozen.KEY);
     /** Saved and loaded with only the world's events ({@link StepParts#worldEvent}): the city's are each PC's own. */
     private static final String EVENTS_KEY = "EVENTS";
 

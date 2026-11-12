@@ -1044,6 +1044,17 @@ public final class WorldActions {
             // left and defeated, the treasury and the last messages: what a sally's end changes (SOS-149)
             Rig.later(() -> Rig.note(raidEnd()));
             return true;
+        case "wgiveregion": { // wgiveregion <region>: that NPC or free region becomes this player's (test tooling, SOS-162)
+            int region = Integer.parseInt(a[1]);
+            Rig.later(() -> sosdet.game.cmd.Sieges.regionGiveForTest(FACTIONS.player().index(), region));
+            return true;
+        }
+        case "wfrozen": { // wfrozen <slot>: notes the human in <slot>: frozen, its regions, armies and their tiles, its stances
+            // that are not neutral, the transactions waiting for it, and what this player is refused against it (SOS-193)
+            int slot = Integer.parseInt(a[1]);
+            Rig.later(() -> Rig.note(frozenProbe(slot)));
+            return true;
+        }
         case "wnpcvassal": { // wnpcvassal <faction>: the NPC in that slot becomes this player's vassal (test tooling, SOS-146)
             int npc = Integer.parseInt(a[1]);
             Rig.later(() -> sosdet.game.cmd.Sieges.npcVassalForTest(FACTIONS.player().index(), npc));
@@ -2047,5 +2058,28 @@ public final class WorldActions {
             b.append(" || ");
         }
         return b.length() == 0 ? "no carved region" : b.toString();
+    }
+
+    /** What {@code wfrozen} notes (SOS-193). */
+    public static String frozenProbe(int slot) {
+        game.faction.Faction f = FACTIONS.getByIndex(slot);
+        StringBuilder s = new StringBuilder("frozen probe of slot " + slot + ": frozen " + Engine.frozen(slot) + ", regions "
+                + f.realm().regions() + ", capital " + (f.capitolRegion() == null ? "none" : f.capitolRegion().index())
+                + ", armies");
+        for (int i = 0; i < f.armies().all().size(); i++) {
+            WArmy w = f.armies().all().get(i);
+            s.append(' ').append(w.armyIndex()).append('@').append(w.ctx()).append(',').append(w.cty()).append(':')
+                    .append(AD.men(null).get(w)).append(" men ").append(w.state().name(w));
+        }
+        s.append("; stances");
+        for (game.faction.Faction o : FACTIONS.active()) {
+            if (o != f && DIP.get(f, o) != DIP.NEUTRAL()) {
+                s.append(' ').append(o.index()).append('=').append(DIP.get(f, o).key());
+            }
+        }
+        s.append("; overlord ").append(DIP.overlord(f) == null ? -1 : DIP.overlord(f).index());
+        s.append("; held ").append(sosdet.game.GameHumans.get().frozen().heldFor(slot));
+        s.append("; war refused: ").append(Engine.warRefusal(slot));
+        return s.toString();
     }
 }

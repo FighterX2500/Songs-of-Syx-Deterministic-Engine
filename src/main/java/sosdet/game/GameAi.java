@@ -126,7 +126,7 @@ public final class GameAi implements AiApplier {
             Hooks.desyncHold(e.step, e.intAt(0), ((long) e.intAt(1) << 32) | (e.intAt(2) & 0xFFFFFFFFL)); // SOS-53
             return;
         case AiEntry.REMOVE:
-            Hooks.humanRemoved(e.intAt(0)); // SOS-66
+            Hooks.humanRemoved(e.intAt(0), e.ints() > 3 && e.intAt(3) == 1); // SOS-66; a freeze: SOS-193
             return;
         case AiEntry.VIEW:
             Hooks.viewEntry(e.step, e.intAt(0), e.intAt(1), e.intAt(2)); // SOS-82

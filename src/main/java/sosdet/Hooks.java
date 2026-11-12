@@ -372,6 +372,9 @@ public final class Hooks {
                     if (s.retired(h)) {
                         clock = HashLog.mix(clock, -1); // and which are removed; a game with none hashes as before (SOS-66)
                     }
+                    if (s.iced(h)) {
+                        clock = HashLog.mix(clock, -2); // and which are frozen (SOS-193)
+                    }
                 }
                 for (int pc : s.pcHumans) {
                     clock = HashLog.mix(clock, pc);
@@ -802,6 +805,9 @@ public final class Hooks {
         if (s == null) {
             return false;
         }
+        if (frozenFaction(a.faction())) {
+            return true; // a frozen human's army stands still until its human rejoins (SOS-193)
+        }
         int index = a.armyIndex();
         for (LocalBattle b : s.locals) {
             if (b != null && contains(b.armies, index)) {
@@ -866,6 +872,9 @@ public final class Hooks {
             for (int h : humans) {
                 if (s.retired(h) || s.removing[h] && s.reports(h).current() == null && !s.reports(h).pending()) {
                     continue; // removed, or being removed after a load: it sends no report (SOS-66)
+                }
+                if (s.iced(h) && s.reports(h).current() == null && !s.reports(h).pending()) {
+                    s.restoreFrozen(h); // after a load: no PC sends it again, the world save holds it (SOS-193)
                 }
                 s.currentHuman = h; // a report's inputs act for its own human
                 s.reports(h).applyDue(step, s.inputApplier());
@@ -1097,6 +1106,22 @@ public final class Hooks {
         return s == null ? FIRST_HUMAN : s.humans();
     }
 
+    /**
+     * True for the slot of a removed human or a frozen one (SOS-66, SOS-193): vanilla's per-human world updates (its
+     * diplomacy, raids, opinions, rebellions, garrison) run nothing for it. Per human and step: no allocation.
+     */
+    public static boolean dormant(int slot) {
+        if (retired(slot)) {
+            return true;
+        }
+        Session s = Engine.session();
+        if (s == null || slot < 0 || slot >= Session.SLOTS) {
+            return false;
+        }
+        // while a game loads, the session's lists are the old game's: the loaded flags are read
+        return s.loading ? sosdet.game.GameHumans.get().frozen().frozen(slot) : s.iced(slot);
+    }
+
     /** True for the slot of a removed human (SOS-66): nothing runs for it. Per human and step: no allocation. */
     public static boolean retired(int slot) {
         Session s = Engine.session();
@@ -1107,9 +1132,35 @@ public final class Hooks {
         return s.loading ? sosdet.game.GameHumans.get().retired(slot) : s.retired(slot);
     }
 
-    /** As the host's removal entry applies, on every PC (SOS-66). */
-    public static void humanRemoved(int slot) {
-        Engine.session().humanRemoved(slot);
+    /**
+     * True for a frozen human's faction (SOS-193): its armies stand still, with their supplies and stats, and vanilla's
+     * upkeep, training, ageing and desertion skip them. Per army and world update: no allocation.
+     */
+    public static boolean frozenFaction(Object faction) {
+        Session s = Engine.session();
+        if (s == null || faction == null) {
+            return false;
+        }
+        s.humans();
+        return s.anyIced && faction instanceof game.faction.player.Player
+                && s.iced(((game.faction.Faction) faction).index());
+    }
+
+    /** As the host's removal entry applies, on every PC (SOS-66); {@code freeze}: it freezes the human (SOS-193). */
+    public static void humanRemoved(int slot, boolean freeze) {
+        Engine.session().humanRemoved(slot, freeze);
+    }
+
+    /**
+     * As the world save is written: the frozen human's report the world reads now and the world's open changes to it,
+     * {report, ledger}; null with no session or no report, when the section keeps what it loaded (SOS-193).
+     */
+    public static byte[][] frozenReportOut(int slot) {
+        Session s = Engine.session();
+        if (s == null || s.reports(slot).current() == null) {
+            return null;
+        }
+        return new byte[][] {s.reports(slot).current().toBytes(), s.reports(slot).ledgerOut()};
     }
 
     /**

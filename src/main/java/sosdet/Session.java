@@ -215,6 +215,9 @@ final class Session {
     private int[] humans;
     /** By slot, read with {@link #humans}: a removed human, retired on every PC from its removal's step (SOS-66). */
     private boolean[] retired;
+    /** By slot, read with {@link #humans}: a frozen human (SOS-193); {@link #anyIced} when there is one. */
+    private boolean[] icedSlots;
+    boolean anyIced;
     /**
      * By slot: a removal in the host's log, not yet applied (SOS-66). This PC waits for no report of that human taken
      * after {@link #removeCutoff}, the last one every PC reads: the host's when it logged the removal (-1: none).
@@ -223,10 +226,14 @@ final class Session {
     final long[] removeCutoff = none();
     /** By slot: a removal that applied, its realm freed at the start of a world part once no battle runs (SOS-66). */
     final boolean[] removeDue = new boolean[SLOTS];
+    /** By slot: the removal in the log freezes its human instead of retiring it (SOS-193). */
+    final boolean[] freezing = new boolean[SLOTS];
     /** By slot: a load in the session cleared the reports, and none has come in since (SOS-66). */
     private final boolean[] reportsLost = new boolean[SLOTS];
     /** What retires a human in the game: the game, made at first use; tests put in their own. */
     java.util.function.IntConsumer remover;
+    /** What freezes a human in the game (SOS-193): the game, made at first use; tests put in their own. */
+    java.util.function.IntConsumer freezer;
     /** Where the reports come from: the game, made at the first report; tests put in their own. */
     CitySource city;
     long reportsTaken;
@@ -298,6 +305,8 @@ final class Session {
             this.heldTxns.add(sosdet.game.HeldTxn.of(t)); // the queue clears and reuses t after the step (SOS-97)
         } else if (t.human == cityHuman() && !frozen(t.human)) { // a fighter's waits on its own PC, a watcher's game too
             txnApplier().accept(t);
+        } else if (iced(t.human)) {
+            city().holdFrozen(t); // a frozen human's waits for its return, on every PC alike (SOS-193)
         }
     };
 
@@ -434,7 +443,7 @@ final class Session {
         }
         for (int c = b.roster.leads; c < b.roster.commanders.length; c++) { // every ally's PC (SOS-160)
             int ally = b.roster.commanders[c];
-            if (removing[ally] || retired(ally)) {
+            if (removing[ally] || retired(ally) || iced(ally)) {
                 continue; // no view for a PC that leaves: it would be cancelled at each freeze
             }
             View v = views[ally];
@@ -1659,7 +1668,7 @@ final class Session {
      */
     String viewRefusal(int viewer, int owner, View self) {
         if (viewer == owner || !isHuman(viewer) || !isHuman(owner) || retired(viewer) && !watching(viewer)
-                || retired(owner) || removing[viewer] || removing[owner]) {
+                || retired(owner) || removing[viewer] || removing[owner] || iced(viewer) || iced(owner)) {
             return "That city can't be viewed.";
         }
         if (locals[viewer] != null) {
@@ -1778,11 +1787,17 @@ final class Session {
         if (humans == null) {
             int[] hs = city().humans();
             boolean[] r = new boolean[SLOTS];
+            boolean[] ice = new boolean[SLOTS];
+            boolean any = false;
             for (int h : hs) {
                 r[h] = city().retired(h);
+                ice[h] = city().frozen(h);
+                any |= ice[h];
                 spectators[h] |= city().eliminated(h); // who the save holds as eliminated watches on
             }
             retired = r;
+            icedSlots = ice;
+            anyIced = any;
             humans = hs;
             int was = living;
             spectatorsChanged();
@@ -1815,6 +1830,7 @@ final class Session {
                 continue;
             }
             removing[slot] = true;
+            freezing[slot] = e.ints() > 3 && e.intAt(3) == 1; // a freeze (SOS-193)
             long cutoff = ((long) e.intAt(1) << 32) | (e.intAt(2) & 0xFFFFFFFFL);
             removeCutoff[slot] = reportsLost[slot] ? -1 : cutoff;
             dropReportsAfter(slot, cutoff);
@@ -1829,6 +1845,11 @@ final class Session {
 
     /** Every PC, as a removal entry applies: its realm is freed in the next world part with no battle running. */
     void humanRemoved(int slot) {
+        humanRemoved(slot, false);
+    }
+
+    /** As {@link #humanRemoved(int)}; {@code freeze}: the human is frozen instead (SOS-193). */
+    void humanRemoved(int slot, boolean freeze) {
         if (!isHuman(slot) || slot == 0 && !spectators[0]) {
             throw new IllegalStateException("SOSDET: a removal of slot " + slot + ", no human but the host's");
         }
@@ -1838,6 +1859,20 @@ final class Session {
         }
         removing[slot] = true;
         removeDue[slot] = true;
+        freezing[slot] = freeze;
+    }
+
+    /**
+     * As a freeze applies (SOS-193): the human keeps its slot and its last report, which every PC reads from now; its
+     * battle ends with no result, as at a removal, and nobody waits for its PC.
+     */
+    private void freezeDue(int slot) {
+        freezer().accept(slot);
+        removeDue[slot] = false;
+        removing[slot] = false;
+        freezing[slot] = false;
+        locals[slot] = null;
+        humans = null;
     }
 
     /**
@@ -1868,8 +1903,13 @@ final class Session {
             }
             int asked = slot;
             stepPrompts.values().removeIf(p -> (Integer) p[2] == asked);
+            if (freezing[slot]) {
+                freezeDue(slot);
+                continue;
+            }
             remover().accept(slot);
             retired[slot] = true;
+            icedSlots[slot] = false; // a frozen human removed for good (SOS-193)
             removeDue[slot] = false;
             removing[slot] = false;
             reports(slot).clear();
@@ -1905,6 +1945,87 @@ final class Session {
             remover = slot -> sosdet.game.GameHumans.get().retire(slot);
         }
         return remover;
+    }
+
+    java.util.function.IntConsumer freezer() {
+        if (freezer == null) {
+            freezer = slot -> sosdet.game.GameHumans.get().freeze(slot);
+        }
+        return freezer;
+    }
+
+    /**
+     * True for a human slot whose human is frozen (SOS-193): its player left and may rejoin; no PC runs its city, and
+     * every PC reads it as its last report showed it.
+     */
+    boolean iced(int slot) {
+        humans();
+        return icedSlots[slot];
+    }
+
+    /** A rejoin's world load (SOS-193): the reports this PC has, set aside while it reads the host's. */
+    sosdet.report.Reports[] reportsAside() {
+        sosdet.report.Reports[] was = reports.clone();
+        java.util.Arrays.fill(reports, null);
+        return was;
+    }
+
+    /** After that load: the reports set aside are back, as they were. */
+    void reportsBack(sosdet.report.Reports[] was) {
+        System.arraycopy(was, 0, reports, 0, reports.length);
+    }
+
+    /** The human slots' flags changed (a load, a thaw): {@link #humans} reads them again. */
+    void humansChanged() {
+        humans = null;
+    }
+
+    /** A rejoin's world load (SOS-193): the host's world sections into this PC's game, keeping its city. */
+    void rejoinWorld(java.nio.file.Path file, double[] unsaved, long worldDraws) {
+        java.nio.file.Path scratch;
+        try {
+            scratch = java.nio.file.Files.createTempFile("sosdet-city", ".bin");
+        } catch (java.io.IOException e) {
+            throw new IllegalStateException("SOSDET: no scratch file for the city's part of the player faction", e);
+        }
+        worldLoading = true;
+        try {
+            sosdet.game.GameWorldLoad.load(file, scratch); // the host's file stays: the mod deletes it
+        } finally {
+            worldLoading = false;
+        }
+        worldLoads++;
+        sosdet.game.GameWorldLoad.unsaved(unsaved);
+        streams.worldDraws(worldDraws);
+        humans = null;
+    }
+
+    /** A rejoin (SOS-193): the human in {@code slot} thaws; on its own PC the transactions that waited for it apply. */
+    void thaw(int slot) {
+        java.util.List<sosdet.game.HeldTxn> held = sosdet.game.GameHumans.get().frozen().thaw(slot);
+        reports(slot).thaw(); // a load report of the returning PC that came in already stays
+        humans = null;
+        if (slot != localHuman || reportsFrom >= 0) {
+            return;
+        }
+        part = StepParts.CITY;
+        for (sosdet.game.HeldTxn h : held) {
+            Txn t = h.resolve(); // the loaded game's objects (SOS-97)
+            if (t != null) {
+                txnApplier().accept(t);
+            }
+        }
+        part = -1;
+    }
+
+    /** A frozen human's report after a load, which no PC sends again: the one the world save holds (SOS-193). */
+    void restoreFrozen(int slot) {
+        byte[][] saved = city().frozenReport(slot);
+        if (saved == null) {
+            throw new IllegalStateException("SOSDET: the frozen human in slot " + slot + " has no report in the save");
+        }
+        sosdet.report.CityReport r = sosdet.report.CityReport.fromBytes(saved[0], city().layout());
+        reports(slot).restore(r, saved[1]);
     }
 
     /**
@@ -2322,7 +2443,7 @@ final class Session {
         }
         for (int h : humans()) {
             // a viewer's world reads its last report (SOS-82), once the last it took before the freeze is in (SOS-166)
-            if (!remote(h) || retired(h) || frozen(h) && receivedTakenAt[h] >= reportTakenAt[h]
+            if (!remote(h) || retired(h) || iced(h) || frozen(h) && receivedTakenAt[h] >= reportTakenAt[h]
                     || receivedTakenAt[h] >= 0 && step < receivedNextAt[h]) {
                 continue;
             }
@@ -2343,7 +2464,7 @@ final class Session {
             return;
         }
         for (int h : humans()) {
-            if (remote(h) && !frozen(h) && !spectators[h]) {
+            if (remote(h) && !frozen(h) && !spectators[h] && !iced(h)) {
                 reportTakenAt[h] = step;
             }
         }
@@ -2360,7 +2481,10 @@ final class Session {
         }
         // a human takes no report while frozen, so one from past its freeze is its thaw report, from a PC ahead of this
         // one: it applies after this PC's own thaw (SOS-109, SOS-95)
-        if (retired(r.faction) || removing[r.faction] && r.takenAt > removeCutoff[r.faction]) {
+        // a frozen human's report before the first step after a load is the returning PC's load report, which may come
+        // in before this PC's own thaw (SOS-193); later, none comes from a PC that is gone
+        if (retired(r.faction) || iced(r.faction) && clock.step() > 0
+                || removing[r.faction] && r.takenAt > removeCutoff[r.faction]) {
             return; // past its human's last report every PC reads (SOS-66)
         }
         reports(r.faction).stamp(r);
@@ -2438,8 +2562,8 @@ final class Session {
             return;
         }
         for (int h : hs) {
-            if (retired(h) || removing[h]) {
-                continue; // a removed human has no PC (SOS-66)
+            if (retired(h) || removing[h] || iced(h)) {
+                continue; // a removed or frozen human has no PC (SOS-66, SOS-193)
             }
             int pcs = 0;
             for (int pc : pcHumans) {

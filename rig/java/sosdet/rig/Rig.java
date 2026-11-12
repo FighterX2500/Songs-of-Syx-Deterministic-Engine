@@ -289,6 +289,14 @@ public final class Rig implements SCRIPT {
         private boolean battleHold;
         // a removed human (SOS-66): each slot's retirement, logged once with what it still owns
         private final boolean[] retiredSeen = new boolean[64];
+        // a frozen human (SOS-193): each slot's freeze, logged once with what it still owns
+        private final boolean[] frozenSeen = new boolean[64];
+        // a rejoin (SOS-193): at the run's start, the world of a world resync's save goes in, then the slot thaws
+        private Path rejoinWorld;
+        private Path rejoinState;
+        private int rejoinSlot = -1;
+        // copy 1, with wresyncsavegame: the host's rejoin files right after that save (SOS-193)
+        private boolean rejoinOut;
         // world resync (SOS-38): copy 1 saves at wresyncStep; every copy, copy 1 too, loads only the world from it
         private long wresyncStep = -1;
         private boolean wresyncSaver;
@@ -594,6 +602,14 @@ public final class Rig implements SCRIPT {
                 return;
             }
             for (int slot : sosdet.game.GameHumans.get().slots()) {
+                if (!frozenSeen[slot] && Engine.frozen(slot)) {
+                    frozenSeen[slot] = true;
+                    Faction f = FACTIONS.getByIndex(slot);
+                    event("humanfrozen", String.format(Locale.ROOT, "\"slot\":%d,\"step\":%d,\"regions\":%d,\"armies\":%d,"
+                            + "\"active\":%b,\"held\":%d", slot, Engine.step(), f.realm().regions(), f.armies().all().size(),
+                            FACTIONS.active().contains(f), sosdet.game.GameHumans.get().frozen().heldFor(slot)));
+                    note(sosdet.rig.act.WorldActions.frozenProbe(slot)); // its stances and armies as the freeze left them
+                }
                 if (!retiredSeen[slot] && Engine.retired(slot)) {
                     retiredSeen[slot] = true;
                     Faction f = FACTIONS.getByIndex(slot);
@@ -1067,6 +1083,16 @@ public final class Rig implements SCRIPT {
             if (wresyncSaveGame != null) {
                 event("savegame", RigHumans.save(dir.resolve(wresyncSaveGame)));
                 wresyncSaveGame = null;
+                if (rejoinOut) { // the host's rejoin files for the saves just made, as the mod's restart (SOS-193)
+                    byte[] rejoin = Engine.rejoinOut(dir.resolve("rejoin-world.save"));
+                    try {
+                        Files.write(dir.resolve("rejoin.state"), rejoin);
+                    } catch (IOException e) {
+                        throw new IllegalStateException("SOSDET rig: cannot write the rejoin state", e);
+                    }
+                    event("rejoinout", "\"step\":" + Engine.step() + ",\"bytes\":" + rejoin.length);
+                    rejoinOut = false;
+                }
             }
             wresyncStep = -1;
             if (wresyncNext >= 0) {
@@ -1193,6 +1219,25 @@ public final class Rig implements SCRIPT {
             }
             runOn();
             event("resynced", String.format(Locale.ROOT, "\"step\":%d,\"loadSeconds\":%.1f", Engine.step(), seconds));
+        }
+
+        /**
+         * A rejoin (SOS-193), as the mod's restart does: this copy loaded its own save (the returning copy its freeze save);
+         * the world of the host's world resync save goes in, with its state and no human retired since, then the slot
+         * thaws, before step 1.
+         */
+        private void rejoin() throws IOException {
+            byte[] state = Files.readAllBytes(rejoinState);
+            Path copy = dir.resolve("rejoin-world.save");
+            Files.copy(rejoinWorld, copy, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            long t0 = System.nanoTime();
+            Engine.rejoinLoad(copy, state);
+            int held = sosdet.game.GameHumans.get().frozen().heldFor(rejoinSlot);
+            Engine.thawHuman(rejoinSlot);
+            event("rejoined", String.format(Locale.ROOT, "\"slot\":%d,\"step\":%d,\"held\":%d,\"ms\":%.0f,\"frozen\":%b",
+                    rejoinSlot, Engine.step(), held, (System.nanoTime() - t0) / 1e6, Engine.frozen(rejoinSlot)));
+            note("after the rejoin, " + sosdet.rig.act.WorldActions.frozenProbe(rejoinSlot));
+            rejoinWorld = null;
         }
 
         /** Lets the run go on to its last step, or freely. */
@@ -1655,6 +1700,20 @@ public final class Rig implements SCRIPT {
                 viewStallMs = Long.parseLong(c[2]);
                 event("viewstall", "\"at\":" + viewStallStep + ",\"ms\":" + viewStallMs);
                 return;
+            case "rejoinout": // rejoinout: copy 1 writes the host's rejoin files right after its wresyncsavegame save (SOS-193)
+                rejoinOut = true;
+                event("rejoinoutat", "");
+                return;
+            case "rejoin": // rejoin <world save> <world resync state> <slot>: at the run's start, every copy loads that world and thaws the slot (SOS-193)
+                rejoinWorld = Path.of(c[1]);
+                rejoinState = Path.of(c[2]);
+                rejoinSlot = Integer.parseInt(c[3]);
+                event("rejoinat", "\"slot\":" + rejoinSlot);
+                return;
+            case "freezehuman": // freezehuman <slot>: the host freezes a human whose copy was held (SOS-193)
+                Engine.freezeHuman(Integer.parseInt(c[1]));
+                event("freezehuman", "\"slot\":" + c[1] + ",\"step\":" + Engine.step());
+                return;
             case "removehuman": // removehuman <slot>: the host removes a human whose copy was held (SOS-66)
                 Engine.removeHuman(Integer.parseInt(c[1]));
                 event("removehuman", "\"slot\":" + c[1] + ",\"step\":" + Engine.step());
@@ -1778,6 +1837,9 @@ public final class Rig implements SCRIPT {
             log.write("step,hash,men,gameSeconds\n");
             openTiming();
             startStallSampler(dir.resolve(tag + "-stalls.txt"));
+            if (rejoinWorld != null) {
+                rejoin();
+            }
             Engine.resetStats();
             long from = Engine.step();
             lastStep = steps > 0 ? from + steps : Long.MAX_VALUE; // 0: until hold
@@ -1858,6 +1920,13 @@ public final class Rig implements SCRIPT {
                         + "\"endHash\":\"%s\",\"men\":%d,\"wallSeconds\":%.1f,\"stats\":{}", tag, subSteps, gameSeconds, end, men(),
                         (System.nanoTime() - started) / 1e9));
                 return;
+            }
+            if (ownCity && Engine.active()) {
+                for (int slot : sosdet.game.GameHumans.get().slots()) {
+                    if (Engine.frozen(slot)) {
+                        note("at the end, " + sosdet.rig.act.WorldActions.frozenProbe(slot)); // SOS-193
+                    }
+                }
             }
             event("finished", String.format(Locale.ROOT, "\"tag\":\"%s\",\"endStep\":%d,\"endHash\":\"%s\",\"men\":%d,\"wallSeconds\":%.1f,"
                     + "\"pacedFrames\":%d,\"pacedSeconds\":%.1f,\"longestHoldSeconds\":%.2f,\"capacity\":%d,\"stats\":%s", tag,

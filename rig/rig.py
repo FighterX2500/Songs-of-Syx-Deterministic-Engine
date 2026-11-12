@@ -876,6 +876,13 @@ def main():
     ap.add_argument("--difficulty", default=None,
                     help="with --new-world: every human gets this difficulty mode (a file in the game's player/mode"
                          " folder, e.g. 00_FIRST_NAME), as the mod's world build gives the lobby's (SOS-69)")
+    ap.add_argument("--freeze", action="store_true",
+                    help="with --remove: copy 1 freezes the human instead of removing it, and the stopped copy saves its"
+                         " game as frozen-<k>.save in its rig folder, its city as the player left it (SOS-193)")
+    ap.add_argument("--rejoin", default="",
+                    help="'WORLD|STATE|SLOT' (the host's rejoin-world.save and rejoin.state, from --freeze --world-resync with"
+                         " --resync-savegame): at the run's start every copy loads that world into its own game and the"
+                         " frozen human in SLOT thaws, as the mod's rejoin (SOS-193); use with --humans-saves")
     ap.add_argument("--uncarve-removed", action="store_true",
                     help="with --on-desync resync: once a carved city-state's human is gone (--remove), the host holds every"
                          " copy, un-carves it and sends the world resync (SOS-188)")
@@ -1202,6 +1209,9 @@ def main():
         if args.on_desync:
             c.send("ondesync %s %s %s %s" % (args.on_desync, "save" if c.k == 1 else "load", wresync_save, wresync_state),
                    "ondesync")
+        if args.rejoin:
+            w, st, slot = args.rejoin.split("|")
+            c.send("rejoin %s %s %s" % (w, st, slot), "rejoinat")
         if args.world_resync:
             # copy 1 saves the world at that step; every copy, copy 1 too, reloads only the world (SOS-38; SOS-52 with
             # several humans)
@@ -1213,6 +1223,8 @@ def main():
                 c.send("carveeach %s" % args.carve_each, "carveeach")
             if args.resync_savegame:
                 c.send("wresyncsavegame carved-%d.save" % c.k, "wresyncsavegame")
+                if args.freeze and c.k == 1:
+                    c.send("rejoinout", "rejoinoutat")  # the host's rejoin files for those saves (SOS-193)
             if args.world_resync2:
                 c.send("worldresyncnext %d%s" % (args.world_resync2, " uncarve" if args.uncarve else ""),
                        "worldresyncnext")
@@ -1360,9 +1372,13 @@ def main():
             finished[remove_copy] = gone.wait_finished(mark, 600, gone.rig / ("%s-c%d.csv" % (args.tag, gone.k)))
             watcher.drop(remove_copy)
             log("copy %d stopped at step %d" % (remove_copy, finished[remove_copy]["endStep"]))
+            if args.freeze:
+                gone.send("savegame frozen-%d.save" % gone.k, "savegame")
+                log("copy %d saved its game as frozen-%d.save" % (gone.k, gone.k))
             time.sleep(5)
-            copies[0].send("removehuman %d" % human_slots[remove_copy - 1], "removehuman")
-            log("copy 1 removed the human in slot %d" % human_slots[remove_copy - 1])
+            verb = "freezehuman" if args.freeze else "removehuman"
+            copies[0].send("%s %d" % (verb, human_slots[remove_copy - 1]), verb)
+            log("copy 1 %s the human in slot %d" % ("froze" if args.freeze else "removed", human_slots[remove_copy - 1]))
         done = copies[ref - 1].find("finished", 0)
         if done:
             finished[ref] = done
@@ -1405,7 +1421,20 @@ def main():
         identical, lines = compare(kept, run_dir, args.tag, ref, args.steps, {k: e for k, e in ends.items()
                                                                                if k != remove_copy}, after,
                                    resync["step"] if resync else 0)
-    if remove_copy:
+    if remove_copy and args.freeze:
+        asked = copies[0].find("freezehuman", 0)
+        lines.insert(0, "freeze: copy %d stopped at step %s; copy 1 froze slot %s at step %s"
+                     % (remove_copy, ends.get(remove_copy), asked and asked["slot"], asked and asked["step"]))
+        for c in copies:
+            if c.k == remove_copy:
+                continue
+            r = c.find("humanfrozen", 0)
+            lines.insert(1, "freeze: copy %d %s" % (c.k, "froze it by step %d: %d regions, %d armies, active %s, %d held"
+                                                    % (r["step"], r["regions"], r["armies"], r["active"], r["held"]) if r
+                                                    else "NEVER froze it"))
+            if not r or not r["active"]:
+                identical = False
+    elif remove_copy:
         asked = copies[0].find("removehuman", 0)
         lines.insert(0, "removal: copy %d stopped at step %s; copy 1 removed slot %s at step %s"
                      % (remove_copy, ends.get(remove_copy), asked and asked["slot"], asked and asked["step"]))

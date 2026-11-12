@@ -77,6 +77,7 @@ public final class GameHumans extends Savable {
     private final GameTraded traded = new GameTraded();
     private final GamePassed passed = new GamePassed();
     private final GameCarves carves = new GameCarves();
+    private final GameFrozen frozen = new GameFrozen();
     /** Setup by carving: NPC slots 1 to this - 1 wait for the humans ({@link #reserve}); 0 when none do. */
     private int reservedTo;
     /** Hot-join: the slot a new human takes, out of {@link #freeNpc}'s reach while its city-state is carved; -1: none. */
@@ -100,6 +101,7 @@ public final class GameHumans extends Savable {
         world(traded); // the market trade between humans (SOS-135)
         world(passed); // the stances passed to the humans' vassals (SOS-140)
         world(carves); // the carved city-states' undo log (SOS-186)
+        world(frozen); // the frozen humans, their last reports and what waits for them (SOS-193)
     }
 
     /**
@@ -206,6 +208,76 @@ public final class GameHumans extends Savable {
         return retired[slot];
     }
 
+    /** The frozen humans (SOS-193). */
+    public GameFrozen frozen() {
+        return frozen;
+    }
+
+    /**
+     * Inside the step's world part, on every PC (SOS-193, mod spec §11 Freezing a player): the human in {@code slot}
+     * leaves and may rejoin. It keeps its slot and its capital; its open deals and the siege of its capital end, and the
+     * stances passed to it go. Owner, 2026-11-12: every stance with it but a trade or a pact becomes neutral at once, no
+     * truce, so its wars end and its vassals go free (and it leaves an overlord or an alliance it can't keep); every
+     * region it holds but its capital becomes free land, and its armies go home to stand there, as they are, until it
+     * rejoins (vanilla's upkeep, training and desertion skip them: patch 15).
+     */
+    public void freeze(int slot) {
+        human(slot);
+        if (slot == 0) {
+            throw new IllegalArgumentException("SOSDET: slot 0 is the host's human, which is never frozen");
+        }
+        if (retired[slot]) {
+            throw new IllegalArgumentException("SOSDET: slot " + slot + " is retired, not to freeze");
+        }
+        deals.book().dropHuman(slot); // their open deals close as dropped (SOS-72)
+        sieges.book().dropHuman(slot); // and the siege of their capital (SOS-92)
+        passed.book().drop(slot); // and the stances passed to them (SOS-140)
+        Faction f = all.get(slot);
+        int before = sosdet.Hooks.currentHumanSwap(f); // DIP.set reads the player for its war timer
+        try {
+            for (Faction o : all) {
+                if (o == f || !o.isActive()) {
+                    continue;
+                }
+                game.faction.diplomacy.DipStance s = game.faction.diplomacy.DIP.get(f, o);
+                if (s != game.faction.diplomacy.DIP.NEUTRAL() && s != game.faction.diplomacy.DIP.TRADE()
+                        && s != game.faction.diplomacy.DIP.PACT()) {
+                    game.faction.diplomacy.DIP.NEUTRAL().set(f, o);
+                }
+            }
+        } finally {
+            sosdet.Hooks.currentHumanSwap(before);
+        }
+        world.map.regions.Region capital = f.capitolRegion();
+        for (int i = f.realm().regions() - 1; i >= 0; i--) {
+            world.map.regions.Region r = f.realm().region(i);
+            if (r != capital) {
+                world.region.RD.setFaction(r, null, true);
+            }
+        }
+        for (int i = 0; i < f.armies().all().size(); i++) {
+            sendHome(f.armies().all().get(i), capital);
+        }
+        frozen.freeze(slot);
+    }
+
+    /** A frozen human's army goes to the first open tile next to its capital, nearest first (SOS-193). */
+    private static void sendHome(world.entity.army.WArmy a, world.map.regions.Region capital) {
+        for (int r = 1; r <= 4; r++) {
+            for (int dy = -r; dy <= r; dy++) {
+                for (int dx = -r; dx <= r; dx++) {
+                    int tx = capital.cx() + dx;
+                    int ty = capital.cy() + dy;
+                    if ((Math.abs(dx) == r || Math.abs(dy) == r) && world.WORLD.PATH().map.is.is(tx, ty)) {
+                        a.teleport(tx, ty);
+                        return;
+                    }
+                }
+            }
+        }
+        a.teleport(capital.cx(), capital.cy());
+    }
+
     /**
      * Inside the step's world part, on every PC (SOS-66): the human in {@code slot} leaves the game as vanilla destroys
      * a faction. Its armies are disbanded and every region it held is freed. It stays in its slot, retired.
@@ -217,6 +289,9 @@ public final class GameHumans extends Savable {
         }
         retired[slot] = true;
         eliminated[slot] = sosdet.Hooks.spectator(slot);
+        if (frozen.frozen(slot)) {
+            frozen.thaw(slot); // a frozen human removed for good: what waited for its city goes with it (SOS-193)
+        }
         deals.book().dropHuman(slot); // their open deals close as dropped (SOS-72)
         tariffs.book().dropHuman(slot); // and their tariffs go, both ways (SOS-77)
         sieges.book().dropHuman(slot); // and the siege of their capital (SOS-92)

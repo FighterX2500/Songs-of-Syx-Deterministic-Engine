@@ -105,6 +105,22 @@ public final class Reports {
         pending.removeIf(r -> r.takenAt > takenAt);
     }
 
+    /** A frozen human's report back after a load (SOS-193): the world reads it, with its open changes, from now. */
+    public void restore(CityReport r, byte[] ledgerBytes) {
+        clear();
+        current = r;
+        ledger.fromBytes(ledgerBytes);
+    }
+
+    /**
+     * A frozen human thaws (SOS-193): the last report before its freeze and the world's changes since go; a report its
+     * PC sent since, waiting to apply, stays.
+     */
+    public void thaw() {
+        current = null;
+        ledger.clear();
+    }
+
     /** A load or resync: the city's reports start again. */
     public void clear() {
         current = null;
