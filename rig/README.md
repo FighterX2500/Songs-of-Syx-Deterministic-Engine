@@ -101,6 +101,10 @@ python rig\rig.py city --tag H1 --save Mogus-72-19f86f1e048-47002c-0-121c.save -
 
 `--new-world-at 'x,y;x,y;...'` (with `--new-world`, SOS-122): the humans' tiles, such as a playtest's, instead of the rig's own choice. The log gives each pair's tiles apart and tiles walked.
 
+`--carve-setup` (with `--new-world`, SOS-187): setup by carving. Copy 1 builds the world around human 0 alone (`newworld SEED carve N`, `Engine.buildWorldForCarving`), picks a spot for each other human (7 to 15 tiles from human 0 where one fits, else anywhere) and carves them in (`Engine.carveHumans`). The runner logs each carve. Example, the SOS-187 check: `--copies 3 --humans 3 --new-world 12345 --carve-setup --steps 3000`.
+
+`--carve SPEC` (with `--world-resync`, SOS-184/186): copy 1 carves a city-state (`inside`, `border` or `X,Y`) just before it saves the world resync, through `Engine.carve`. `--world-resync2 STEP --uncarve`: a second world resync at that step, copy 1 un-carving first. `--resync-savegame`: every copy saves its game right after the first load (`carved-K.save`). Probes for `--cmds`: `wcarvespots N`, `wcarvecases`, `wcarveprobe X Y`, `wcarved`, `wlayout`, `wregion R`, `whumanregions`; `rig/cmds/carve.txt` and `carve-shots.txt` (with `--window`, `wlook X Y Z`). Example, the SOS-186 check: `--copies 3 --humans 3 --world-resync 2000 --carve 128,2 --world-resync2 8000 --uncarve --steps 11000 --cmds @rig/cmds/carve.txt`.
+
 `--difficulty MODE` (with `--new-world`, SOS-69): after the build, every human gets that difficulty mode (`newworld SEED auto N MODE`, a file in the game's `player/mode` folder such as `00_FIRST_NAME`), as the mod's world build gives the lobby's. Without it the humans have none, and the difficulty's boosters never enter the run. Example, the SOS-69 check: `--copies 2 --humans 2 --new-world 4242 --difficulty 00_FIRST_NAME --world-resync 600 --steps 2400`.
 
 In `--cmds`, `k: <action>` is copy k's player's action, so each human acts for itself; the other copies get it through the host's log at the same step.

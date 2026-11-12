@@ -1,23 +1,6 @@
-diff -ru -U2 a/world/WorldGen.java b/world/WorldGen.java
---- a/world/WorldGen.java	2024-02-28 15:03:52.000000000 +0500
-+++ b/world/WorldGen.java	2026-10-25 16:40:36.286622700 +0500
-@@ -24,6 +24,13 @@
- 	public String map = null;
- 	public int seed = RND.seed();
- 	public int playerX,playerY;
-+	/** SOSDET: the other humans' locations, as playerX/playerY, during world setup only; empty otherwise (SOS-55). */
-+	public int[] sosdetX = new int[0], sosdetY = new int[0];
-+	
-+	/** SOSDET: region {@code index} is another human's capital square, regions 1 to N-1 (SOS-55). */
-+	public boolean sosdetHuman(int index) {
-+		return index >= 1 && index <= sosdetX.length;
-+	}
- 	
- 	
- 	public WorldGen(WORLD world) {
 diff -ru -U2 a/world/map/regions/GenAssign.java b/world/map/regions/GenAssign.java
 --- a/world/map/regions/GenAssign.java	2026-06-17 10:48:06.000000000 +0500
-+++ b/world/map/regions/GenAssign.java	2026-10-25 16:40:36.288624000 +0500
++++ b/world/map/regions/GenAssign.java	2026-11-12 00:00:53.278942300 +0500
 @@ -62,7 +62,7 @@
  			}
  		});
@@ -38,7 +21,7 @@ diff -ru -U2 a/world/map/regions/GenAssign.java b/world/map/regions/GenAssign.ja
  			}
 diff -ru -U2 a/world/map/regions/GenInit.java b/world/map/regions/GenInit.java
 --- a/world/map/regions/GenInit.java	2025-02-21 09:38:52.000000000 +0500
-+++ b/world/map/regions/GenInit.java	2026-10-25 16:40:36.288624000 +0500
++++ b/world/map/regions/GenInit.java	2026-11-12 00:00:53.278942300 +0500
 @@ -55,6 +55,8 @@
  			WORLD.REGIONS().player.info.name().clear().add(FACTIONS.player().name);
  			return;
@@ -50,7 +33,7 @@ diff -ru -U2 a/world/map/regions/GenInit.java b/world/map/regions/GenInit.java
  			LOG.ln(a + " " + WorldCentrePlacablity.regionC(a.info.cx(), a.info.cy()));
 diff -ru -U2 a/world/map/regions/GenPlayer.java b/world/map/regions/GenPlayer.java
 --- a/world/map/regions/GenPlayer.java	2025-09-12 10:40:30.000000000 +0500
-+++ b/world/map/regions/GenPlayer.java	2026-10-25 16:40:36.287625200 +0500
++++ b/world/map/regions/GenPlayer.java	2026-11-12 00:00:53.278942300 +0500
 @@ -120,6 +120,14 @@
  		}
  		
@@ -68,17 +51,31 @@ diff -ru -U2 a/world/map/regions/GenPlayer.java b/world/map/regions/GenPlayer.ja
  		return true;
 diff -ru -U2 a/world/map/regions/GenValidator.java b/world/map/regions/GenValidator.java
 --- a/world/map/regions/GenValidator.java	2025-11-20 16:45:34.000000000 +0500
-+++ b/world/map/regions/GenValidator.java	2026-10-25 20:03:35.000000000 +0500
-@@ -70,5 +70,5 @@
++++ b/world/map/regions/GenValidator.java	2026-11-12 00:00:53.279942200 +0500
+@@ -69,7 +69,7 @@
+ 
  			}
  			
 -			if (WorldCentrePlacablity.regionC(reg.cx(), reg.cy()) != null && reg != WORLD.REGIONS().player) {
 +			if (WorldCentrePlacablity.regionC(reg.cx(), reg.cy()) != null && reg != WORLD.REGIONS().player && !WORLD.GEN().sosdetHuman(reg.index())) { // SOSDET: a human's capital is checked as the player's (two-PC test T6)
  				if (error != null) {
  					error.problem = "Region problem: " + WorldCentrePlacablity.regionC(reg.cx(), reg.cy());
+ 					error.coo.set(reg.cx(), reg.cy());
+diff -ru -U2 a/world/map/regions/RegionInfo.java b/world/map/regions/RegionInfo.java
+--- a/world/map/regions/RegionInfo.java	2026-06-17 18:45:40.000000000 +0500
++++ b/world/map/regions/RegionInfo.java	2026-11-12 00:00:53.282917800 +0500
+@@ -193,7 +193,7 @@
+ 		
+ 		if (centre == null) {
+ 			centre = backup;
+-			if (backup == null || !WORLD.REGIONS().player.is(backup))
++			if (backup == null || (!WORLD.REGIONS().player.is(backup) && area != WCentre.TILE_DIM*WCentre.TILE_DIM)) // SOSDET: every human's 3x3 square, not only region 0's (SOS-185, SOS-184)
+ 				return false;
+ 		}
+ 		
 diff -ru -U2 a/world/region/Gen.java b/world/region/Gen.java
 --- a/world/region/Gen.java	2025-09-12 10:35:58.000000000 +0500
-+++ b/world/region/Gen.java	2026-10-25 16:40:36.289625900 +0500
++++ b/world/region/Gen.java	2026-11-12 00:00:53.279942200 +0500
 @@ -37,7 +37,13 @@
  		
  		RD.PROSPECT().generate();
@@ -108,3 +105,20 @@ diff -ru -U2 a/world/region/Gen.java b/world/region/Gen.java
  		{
  			LIST<RegDist> dd  = rr.all(r, treaty, WRegSel.DUMMY(r));
  			if (dd.size() > 2) {
+diff -ru -U2 a/world/WorldGen.java b/world/WorldGen.java
+--- a/world/WorldGen.java	2024-02-28 15:03:52.000000000 +0500
++++ b/world/WorldGen.java	2026-11-12 00:00:53.277941500 +0500
+@@ -24,6 +24,13 @@
+ 	public String map = null;
+ 	public int seed = RND.seed();
+ 	public int playerX,playerY;
++	/** SOSDET: the other humans' locations, as playerX/playerY, during world setup only; empty otherwise (SOS-55). */
++	public int[] sosdetX = new int[0], sosdetY = new int[0];
++	
++	/** SOSDET: region {@code index} is another human's capital square, regions 1 to N-1 (SOS-55). */
++	public boolean sosdetHuman(int index) {
++		return index >= 1 && index <= sosdetX.length;
++	}
+ 	
+ 	
+ 	public WorldGen(WORLD world) {

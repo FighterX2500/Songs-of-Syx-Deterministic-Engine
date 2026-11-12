@@ -169,6 +169,8 @@ final class Session {
     final java.util.ArrayDeque<Runnable> betweenSteps = new java.util.ArrayDeque<>();
     /** A save is loading: its own resets of the game's state are never a player's commands (ADR 0002). */
     boolean loading;
+    /** The engine changes the world itself between steps (a carve, SOS-186): the game's own calls are not a player's. */
+    boolean editingWorld;
     /** When the running step started (0 between steps); read by the rig's stall sampler on another thread. */
     volatile long stepStartNanos;
     /** The time this frame's steps took, for this PC's capacity (SOS-94); timing only. */

@@ -8,6 +8,7 @@ import java.nio.file.Path;
 import java.util.List;
 
 import sosdet.game.GameAi;
+import sosdet.game.GameCarve;
 import sosdet.game.GameHash;
 import sosdet.game.GameHumans;
 import sosdet.game.GameOwnCity;
@@ -962,9 +963,90 @@ public final class Engine {
         GameWorldSetup.build(humans);
     }
 
+    /**
+     * Setup by carving (SOS-187, SOSGSGMP docs/plan/hot-join.md §4), step 1, on the one PC that builds the world: the whole
+     * world around the host alone at {@code host}'s location, as vanilla makes it for one player, with NPC slots 1 to
+     * {@code humans} - 1 kept free. Then this PC saves, every PC loads that save, and each other player picks a spot on
+     * its map ({@link #carveProblem}). No session.
+     */
+    public static void buildWorldForCarving(HumanStart host, int humans) {
+        GameWorldSetup.buildForCarving(host, humans);
+    }
+
+    /**
+     * Setup by carving, step 2, on the PC that built the world: {@code humans[1..]} each get a city-state carved at their
+     * spot, in slots 1 to N - 1 in order ({@link #carve}'s links and split rule); a spot an earlier carve made unfit moves
+     * to the nearest that fits, at most 3 tiles. {@code humans[0]} is the host, placed in step 1. Then this PC saves, and
+     * every PC loads that save before step 0, as after {@link #buildWorld}. Returns a line per human for the log. No
+     * session.
+     */
+    public static String carveHumans(HumanStart[] humans) {
+        return GameWorldSetup.carveHumans(humans);
+    }
+
     /** Setup: this PC's player's banner, as {@link HumanStart} carries it to the PC that builds the world. */
     public static byte[] bannerBytes() {
         return GameWorldSetup.bannerBytes();
+    }
+
+    /**
+     * Why a city-state can't be carved with its centre at {@code tx, ty} (SOSGSGMP docs/plan/hot-join.md §3.1), or null:
+     * the terrain; a road, water or the map's edge beside it; another town or a human's capital near; an army on the
+     * square; a siege; a region it would cut in two; no free region; no road to a town it touches. Any PC, between steps.
+     */
+    public static String carveProblem(int tx, int ty) {
+        outsideStep("carveProblem");
+        return GameCarve.problem(tx, ty);
+    }
+
+    /**
+     * On the PC that saves the world, between steps (setup by carving, a hot-join): carves a city-state named
+     * {@code name} with its centre at {@code tx, ty}, linked by road to the town of each region it touches (a human 6 to
+     * 15 tiles away is reached by SOS-120's trade route, as at a classic setup). The land it is carved in follows the
+     * split rule (hot-join.md decision 3). The region has no owner: the caller gives it one, then every PC loads the
+     * world from this PC's save.
+     */
+    public static Carved carve(int tx, int ty, String name) {
+        outsideStep("carve");
+        Session s = session;
+        if (s != null) {
+            s.editingWorld = true; // a new NPC's court and the like call hooked setters: no player's commands
+        }
+        try {
+            GameCarve.Result r = GameCarve.carve(tx, ty, name);
+            return new Carved(r.record.region, r.home, r.record.newNpc(), r.noSlot);
+        } finally {
+            if (s != null) {
+                s.editingWorld = false;
+            }
+        }
+    }
+
+    /**
+     * On the PC that saves the world, between steps (removal, Eliminate): un-carves the city-state of {@code region}: its
+     * square back to the regions it was cut from, and the roads and paths only it added. A human's faction there is the
+     * caller's to remove first. Then every PC loads the world from this PC's save.
+     */
+    public static void uncarve(int region) {
+        outsideStep("uncarve");
+        Session s = session;
+        if (s != null) {
+            s.editingWorld = true;
+        }
+        try {
+            GameCarve.uncarve(region);
+        } finally {
+            if (s != null) {
+                s.editingWorld = false;
+            }
+        }
+    }
+
+    private static void outsideStep(String what) {
+        Session s = session;
+        if (s != null && s.streams.isSimulationThread()) {
+            throw new IllegalStateException("SOSDET: " + what + " is called between steps");
+        }
     }
 
     /**

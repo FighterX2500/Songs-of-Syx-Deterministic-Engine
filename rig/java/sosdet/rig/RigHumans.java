@@ -66,13 +66,26 @@ final class RigHumans {
      * locations and a path check between every two of them 6 to 15 tiles apart (mod spec §5). With a fourth word, every
      * human gets that difficulty mode after the build, as the mod's world build gives the lobby's (SOS-69). {@code <seed>
      * at x,y;x,y;...} puts the humans at those tiles instead, such as a playtest's (SOS-122). The route check gives the
-     * tiles walked.
+     * tiles walked. {@code <seed> carve <n>} is setup by carving (SOS-187): the world is built around human 0 alone, then
+     * the others are carved into it 7 to 15 tiles from human 0 where they fit, else anywhere.
      */
+    /** A pick at least 6 tiles from each earlier one and with its 5x5 clear of theirs (rig picks before any is carved). */
+    private static boolean apart(int x, int y, int[] xs, int[] ys, int k) {
+        for (int i = 0; i < k; i++) {
+            if (Math.hypot(x - xs[i], y - ys[i]) < 6 || Math.max(Math.abs(x - xs[i]), Math.abs(y - ys[i])) < 6) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     static String newWorld(String args) {
         String[] a = args.trim().split("\\s+");
-        if (a.length < 3 || a.length > 4 || !(a[1].equals("auto") || a[1].equals("at"))) {
-            throw new IllegalArgumentException("SOSDET rig: newworld <seed> auto <n> | at <x,y;x,y;...> [difficulty], not " + args);
+        if (a.length < 3 || a.length > 4 || !(a[1].equals("auto") || a[1].equals("at") || a[1].equals("carve"))) {
+            throw new IllegalArgumentException("SOSDET rig: newworld <seed> auto <n> | at <x,y;x,y;...> | carve <n> [difficulty], not "
+                    + args);
         }
+        boolean carving = a[1].equals("carve");
         String[] at = a[1].equals("at") ? a[2].split(";") : new String[0];
         int n = a[1].equals("at") ? at.length : Integer.parseInt(a[2]);
         // the rig builds in the game it loaded, unlike the mod's fresh game: its NPCs and armies go while they still exist
@@ -97,7 +110,56 @@ final class RigHumans {
             xs[k] = Integer.parseInt(at[k].split(",")[0]);
             ys[k] = Integer.parseInt(at[k].split(",")[1]);
         }
-        for (int k = at.length > 0 ? n : 0; k < n; k++) {
+        String race = FACTIONS.player().race().key;
+        String carvedText = null;
+        if (carving) {
+            xs[0] = -1;
+            for (int rad = 0; rad < WORLD.TWIDTH() && xs[0] < 0; rad++) {
+                for (int dy = -rad; dy <= rad && xs[0] < 0; dy++) {
+                    for (int dx = -rad; dx <= rad && xs[0] < 0; dx++) {
+                        if (Math.max(Math.abs(dx), Math.abs(dy)) == rad
+                                && Engine.locationProblem(cx + dx, cy + dy, new int[0], new int[0]) == null) {
+                            xs[0] = cx + dx;
+                            ys[0] = cy + dy;
+                        }
+                    }
+                }
+            }
+            Engine.buildWorldForCarving(new HumanStart(race, "Human 0", null, xs[0], ys[0]), n);
+            for (int k = 1; k < n; k++) {
+                boolean found = false;
+                for (int pass = 0; pass < 2 && !found; pass++) // 7 to 15 tiles from human 0 first, then anywhere
+                for (int rad = 0; rad < WORLD.TWIDTH() && !found; rad++) {
+                    for (int dy = -rad; dy <= rad && !found; dy++) {
+                        for (int dx = -rad; dx <= rad && !found; dx++) {
+                            int x = xs[0] + dx;
+                            int y = ys[0] + dy;
+                            double d = Math.hypot(dx, dy);
+                            if (Math.max(Math.abs(dx), Math.abs(dy)) != rad || (pass == 0 && (d < 7 || d > 15))
+                                    || !apart(x, y, xs, ys, k) || Engine.carveProblem(x, y) != null) {
+                                continue;
+                            }
+                            xs[k] = x;
+                            ys[k] = y;
+                            found = true;
+                        }
+                    }
+                }
+                if (!found) {
+                    throw new IllegalStateException("SOSDET rig: no carving spot for human " + k);
+                }
+            }
+            HumanStart[] cs = new HumanStart[n];
+            for (int k = 0; k < n; k++) {
+                cs[k] = new HumanStart(race, "Human " + k, null, xs[k], ys[k]);
+            }
+            carvedText = Engine.carveHumans(cs);
+            for (int k = 0; k < n; k++) { // where each capital ended up: a spot may have moved
+                xs[k] = FACTIONS.getByIndex(k).capitolRegion().cx();
+                ys[k] = FACTIONS.getByIndex(k).capitolRegion().cy();
+            }
+        }
+        for (int k = at.length > 0 || carving ? n : 0; k < n; k++) {
             boolean found = false;
             for (int pass = 0; pass < 2 && !found; pass++) // 7 to 15 tiles from human 0 first, then anywhere
             for (int rad = 0; rad < WORLD.TWIDTH() && !found; rad++) {
@@ -124,12 +186,13 @@ final class RigHumans {
                 throw new IllegalStateException("SOSDET rig: no location for human " + k + " near " + xs[0] + "," + ys[0]);
             }
         }
-        HumanStart[] starts = new HumanStart[n];
-        String race = FACTIONS.player().race().key;
-        for (int k = 0; k < n; k++) {
-            starts[k] = new HumanStart(race, "Human " + k, null, xs[k], ys[k]);
+        if (!carving) {
+            HumanStart[] starts = new HumanStart[n];
+            for (int k = 0; k < n; k++) {
+                starts[k] = new HumanStart(race, "Human " + k, null, xs[k], ys[k]);
+            }
+            Engine.buildWorld(starts);
         }
-        Engine.buildWorld(starts);
         if (a.length == 4) {
             for (int k = 0; k < n; k++) {
                 ((game.faction.player.Player) FACTIONS.getByIndex(k)).bonusesCustom.setMode(a[3]);
@@ -139,7 +202,11 @@ final class RigHumans {
         for (int k = 0; k < n; k++) {
             b.append(k == 0 ? "" : ",").append('[').append(xs[k]).append(',').append(ys[k]).append(']');
         }
-        b.append("],\"routes\":[");
+        b.append("],");
+        if (carvedText != null) {
+            b.append("\"carved\":\"").append(carvedText.replace("\"", "'")).append("\",");
+        }
+        b.append("\"routes\":[");
         boolean first = true;
         for (int i = 0; i < n; i++) {
             for (int j = i + 1; j < n; j++) {

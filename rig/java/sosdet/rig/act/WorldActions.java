@@ -50,6 +50,8 @@ public final class WorldActions {
 
     /** whover: the capital the map shows as hovered, every frame (test tooling: one rig process, one run). */
     private static Region hovering;
+    /** Copy 1's last carved city-state's region, to un-carve (SOS-184); -1 for none. Rig tooling only. */
+    private static int carved = -1;
 
     /**
      * After each frame, outside the step, as the prompt answers: with {@code sallyother} queued, sallies out once a
@@ -76,12 +78,13 @@ public final class WorldActions {
     /** Queues the action named by {@code a[0]} to run outside the step; false if this area has no such action. */
     public static boolean run(String[] a) {
         switch (a[0]) {
-        case "wlook": { // wlook X Y: the world view, zoomed out once, on that tile, for a screenshot (with --window)
+        case "wlook": { // wlook X Y [Z]: the world view, zoomed out Z times (1), on that tile, for a screenshot (with --window)
             int x = Integer.parseInt(a[1]);
             int y = Integer.parseInt(a[2]);
+            int z = a.length > 3 ? Integer.parseInt(a[3]) : 1;
             Rig.later(() -> {
                 view.main.VIEW.world().activate();
-                view.main.VIEW.world().window.setZoomout(1);
+                view.main.VIEW.world().window.setZoomout(z);
                 view.main.VIEW.world().window.centererTile.set(x, y);
             });
             return true;
@@ -219,6 +222,46 @@ public final class WorldActions {
             Rig.later(() -> Rig.note(npcStock(npc)));
             return true;
         }
+        case "wregion": { // wregion R: notes region R's info: centre, area, climate, terrain, moisture, owner (SOS-184, SOS-185)
+            int r = Integer.parseInt(a[1]);
+            Rig.later(() -> Rig.note(sosdet.game.GameCarve.describe(WORLD.REGIONS().getByIndex(r))));
+            return true;
+        }
+        case "whumanregions": // whumanregions: notes every human's capital region info (SOS-185)
+            Rig.later(() -> {
+                StringBuilder b = new StringBuilder();
+                for (int h : Hooks.humanSlots()) {
+                    b.append("human ").append(h).append(": ")
+                            .append(sosdet.game.GameCarve.describe(FACTIONS.getByIndex(h).capitolRegion())).append(" | ");
+                }
+                Rig.note(b.toString());
+            });
+            return true;
+        case "wlayout": // wlayout: notes the digest of the world's layout (each tile's region, roads, path steps) (SOS-184)
+            Rig.later(() -> Rig.note(String.format(java.util.Locale.ROOT, "layout %016x, active regions %d",
+                    sosdet.game.GameCarve.layoutDigest(), WORLD.REGIONS().active().size())));
+            return true;
+        case "wcarvespots": { // wcarvespots N: notes the first N spots inside a region and on a border (SOS-184)
+            int n = Integer.parseInt(a[1]);
+            Rig.later(() -> Rig.note(carveSpots(n)));
+            return true;
+        }
+        case "wcarvecases": // wcarvecases: notes the first spot for each of the split rule's cases (SOS-186)
+            Rig.later(() -> Rig.note(carveCases()));
+            return true;
+        case "wcarveprobe": { // wcarveprobe X Y: notes why a city-state can't be carved there, or "fits" (SOS-184)
+            int x = Integer.parseInt(a[1]);
+            int y = Integer.parseInt(a[2]);
+            Rig.later(() -> {
+                String p = sosdet.game.GameCarve.problem(x, y);
+                Rig.note("carve " + x + "," + y + ": " + (p == null ? "fits" : p));
+            });
+            return true;
+        }
+        case "wcarved": // wcarved: notes the carved region (copy 1 knows the carve; others look it up by centre) and the
+            // paths from each linked town to it (SOS-184)
+            Rig.later(() -> Rig.note(carvedReport()));
+            return true;
         case "wmap": { // wmap X1 Y1 X2 Y2: notes the terrain and walking edges of those tiles (SOS-120)
             int x1 = Integer.parseInt(a[1]);
             int y1 = Integer.parseInt(a[2]);
@@ -1882,5 +1925,127 @@ public final class WorldActions {
         s.append(" | to humans' regions (region>faction):").append(regions);
         s.append(" | vanilla's list here ").append(new view.world.ui.panels.UICaravanList().all().size());
         return s.toString();
+    }
+
+    // ------------------------------------------------------------ carved city-states (SOS-184)
+
+    /** Copy 1's carve before a world resync save: "inside", "border", or "X,Y". */
+    public static String carve(String spec) {
+        int[] at;
+        if (spec.equals("inside") || spec.equals("border")) {
+            at = sosdet.game.GameCarve.spot(spec.equals("border"), -1);
+            if (at == null) {
+                return "no spot " + spec;
+            }
+        } else {
+            String[] xy = spec.split(",");
+            at = new int[] {Integer.parseInt(xy[0]), Integer.parseInt(xy[1])};
+        }
+        String before = String.format(java.util.Locale.ROOT, "%016x", sosdet.game.GameCarve.layoutDigest());
+        Region home = WORLD.REGIONS().map.get(at[0], at[1]);
+        String homeBefore = sosdet.game.GameCarve.describe(home);
+        sosdet.Carved r = sosdet.Engine.carve(at[0], at[1], "Rigstate");
+        carved = r.region();
+        return r + " " + sosdet.game.GameHumans.get().carves().book().find(carved) + "; layout before " + before + ", after "
+                + String.format(java.util.Locale.ROOT, "%016x", sosdet.game.GameCarve.layoutDigest()) + "; "
+                + sosdet.game.GameCarve.describe(WORLD.REGIONS().getByIndex(carved)) + " | home before: " + homeBefore
+                + " | home after: " + sosdet.game.GameCarve.describe(home);
+    }
+
+    /** Copy 1's un-carve of its last carve before a world resync save. */
+    public static String uncarve() {
+        if (carved < 0) {
+            return "nothing carved";
+        }
+        sosdet.Engine.uncarve(carved);
+        String r = "uncarved region " + carved + "; layout "
+                + String.format(java.util.Locale.ROOT, "%016x", sosdet.game.GameCarve.layoutDigest());
+        carved = -1;
+        return r;
+    }
+
+    private static String carveSpots(int n) {
+        StringBuilder b = new StringBuilder();
+        for (boolean border : new boolean[] {false, true}) {
+            b.append(border ? "border:" : "inside:");
+            int after = -1;
+            for (int i = 0; i < n; i++) {
+                int[] at = sosdet.game.GameCarve.spot(border, after);
+                if (at == null) {
+                    break;
+                }
+                after = at[2];
+                b.append(' ').append(at[0]).append(',').append(at[1]).append(" (region ")
+                        .append(WORLD.REGIONS().map.get(at[0], at[1]).index()).append(')');
+            }
+            b.append(" | ");
+        }
+        return b.toString();
+    }
+
+    /**
+     * The first spot, row by row, for each case of the split rule: land nobody owns, a small NPC realm (under 4 regions),
+     * a big realm's region that isn't its capital, a big realm's capital, a human's region that isn't their capital.
+     */
+    private static String carveCases() {
+        String[] names = {"nobody", "small", "breakaway", "bigcapital", "human"};
+        String[] found = new String[names.length];
+        int left = names.length;
+        for (int tile = 0; tile < WORLD.TAREA() && left > 0; tile++) {
+            int x = tile % WORLD.TWIDTH();
+            int y = tile / WORLD.TWIDTH();
+            Region here = WORLD.REGIONS().map.get(x, y);
+            if (here == null || !here.active() || WORLD.ROADS().is(x, y) || WORLD.WATER().isBig.is(x, y)) {
+                continue;
+            }
+            game.faction.Faction f = here.faction();
+            int c;
+            if (f == null) {
+                c = 0;
+            } else if (f instanceof game.faction.player.Player) {
+                c = here.capitol() ? -1 : 4;
+            } else if (f.realm().regions() < sosdet.game.carve.CarveRules.SPLIT_FROM) {
+                c = 1;
+            } else {
+                c = here.capitol() ? 3 : 2;
+            }
+            if (c < 0 || found[c] != null || sosdet.game.GameCarve.problem(x, y) != null) {
+                continue;
+            }
+            found[c] = x + "," + y + " (region " + here.index() + ", " + (f == null ? "nobody" : f.index() + " " + f.name
+                    + ", " + f.realm().regions() + " regions") + ")";
+            left--;
+        }
+        StringBuilder s = new StringBuilder();
+        for (int i = 0; i < names.length; i++) {
+            s.append(names[i]).append(": ").append(found[i] == null ? "none" : found[i]).append(" | ");
+        }
+        return s.toString();
+    }
+
+    /** Every carved city-state in the world's carve book, and the walk to it from each region it is linked to. */
+    private static String carvedReport() {
+        StringBuilder b = new StringBuilder();
+        for (sosdet.game.carve.CarveRecord c : sosdet.game.GameHumans.get().carves().book().all()) {
+            Region reg = WORLD.REGIONS().getByIndex(c.region);
+            b.append(c).append(" | ").append(sosdet.game.GameCarve.describe(reg));
+            for (int i : c.linkedRegions()) {
+                Region o = WORLD.REGIONS().getByIndex(i);
+                snake2d.PathTile t = WORLD.PATH().path(o.cx(), o.cy(), reg.cx(), reg.cy());
+                int steps = 0;
+                for (snake2d.PathTile p = t; p != null; p = p.getParent()) {
+                    steps++;
+                }
+                b.append(" | from region ").append(i).append(" (").append(o.cx()).append(',').append(o.cy()).append("): ")
+                        .append(t == null ? "no path" : steps + " tiles walked");
+            }
+            if (c.newNpc() >= 0) {
+                b.append(" | new NPC ").append(c.newNpc()).append(' ')
+                        .append(game.faction.FACTIONS.getByIndex(c.newNpc()).name).append(" sanctified ")
+                        .append(((game.faction.npc.FactionNPC) game.faction.FACTIONS.getByIndex(c.newNpc())).sanctified);
+            }
+            b.append(" || ");
+        }
+        return b.length() == 0 ? "no carved region" : b.toString();
     }
 }

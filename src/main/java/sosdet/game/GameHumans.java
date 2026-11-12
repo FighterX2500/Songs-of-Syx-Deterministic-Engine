@@ -76,6 +76,9 @@ public final class GameHumans extends Savable {
     private final GameSieges sieges = new GameSieges();
     private final GameTraded traded = new GameTraded();
     private final GamePassed passed = new GamePassed();
+    private final GameCarves carves = new GameCarves();
+    /** Setup by carving: NPC slots 1 to this - 1 wait for the humans ({@link #reserve}); 0 when none do. */
+    private int reservedTo;
 
     /** {@code FACTIONS}'s constructor, at its end: {@code all} and {@code npcs} are its own lists. */
     public GameHumans(ArrayList<Faction> all, ArrayList<FactionNPC> npcs) throws IOException {
@@ -94,6 +97,7 @@ public final class GameHumans extends Savable {
         world(sieges); // the sieges of the humans' capitals (SOS-92)
         world(traded); // the market trade between humans (SOS-135)
         world(passed); // the stances passed to the humans' vassals (SOS-140)
+        world(carves); // the carved city-states' undo log (SOS-186)
     }
 
     /**
@@ -134,6 +138,11 @@ public final class GameHumans extends Savable {
     /** The stances passed to this game's humans' NPC vassals (SOS-140). */
     public GamePassed passed() {
         return passed;
+    }
+
+    /** The carved city-states' undo log (SOS-186). */
+    public GameCarves carves() {
+        return carves;
     }
 
     /** The sieges of this game's humans' capitals (SOS-92). */
@@ -272,6 +281,106 @@ public final class GameHumans extends Savable {
             throw new IllegalStateException("SOSDET: cannot read a faction's activity" + GAME_VERSION, e);
         }
         return p;
+    }
+
+    /**
+     * A free NPC slot takes {@code reg} as its whole realm, as vanilla's {@code FACTIONS.activateNext} does, but never the
+     * game's "other faction" (the invaders' banner): vanilla takes the first inactive NPC, whichever it is. The new NPC
+     * is neutral to every faction (vanilla's activation clears its stances) and, with {@code sanctified}, has vanilla's
+     * start-neighbour protection: no NPC wars on it, no expansion, no collapse. No world log line: the mod tells the
+     * players. Null when no slot is free. Outside the step, on the PC that saves the world (SOS-186).
+     */
+    public FactionNPC activateNpc(world.map.regions.Region reg, boolean sanctified) {
+        return activateNpc(reg, sanctified, -1);
+    }
+
+    /** {@link #activateNpc(world.map.regions.Region, boolean)} in slot {@code slot}, which must be a free NPC; -1: any. */
+    public FactionNPC activateNpc(world.map.regions.Region reg, boolean sanctified, int slot) {
+        if (reg.realm() != null) {
+            throw new IllegalArgumentException("SOSDET: region " + reg.index() + " has an owner already");
+        }
+        FactionNPC ff;
+        if (slot < 0) {
+            ff = freeNpc();
+        } else {
+            Faction f = slot < all.size() ? all.get(slot) : null;
+            if (!(f instanceof FactionNPC) || f.isActive() || f == FACTIONS.otherFaction()) {
+                throw new IllegalArgumentException("SOSDET: slot " + slot + " is not a free NPC slot (" + f + ")");
+            }
+            ff = (FactionNPC) f;
+        }
+        if (ff == null) {
+            return null;
+        }
+        ff.clear();
+        reg.fationSet(ff, false);
+        reg.info.name().clear().add(ff.name);
+        ff.generate(null, true);
+        ff.sanctified = sanctified;
+        try {
+            @SuppressWarnings("unchecked") // Faction.FactionActivityListener.all is a LinkedList of them
+            LinkedList<Faction.FactionActivityListener> listeners = (LinkedList<Faction.FactionActivityListener>) LISTENERS
+                    .get(null);
+            for (Faction.FactionActivityListener li : listeners) {
+                li.add(ff);
+            }
+            WAS_ACTIVE.setBoolean(ff, true);
+            DIRTY.setBoolean(SELF.get(null), true);
+        } catch (IllegalAccessException e) {
+            throw new IllegalStateException("SOSDET: cannot activate an NPC" + GAME_VERSION, e);
+        }
+        return ff;
+    }
+
+    /** True when {@link #activateNpc} has a slot to take. */
+    public boolean npcSlotFree() {
+        return freeNpc() != null;
+    }
+
+    /**
+     * Setup by carving (SOS-187): slots 1 to {@code humans} - 1 wait for the humans. They leave vanilla's NPC list, so
+     * the world generator's {@code FACTIONS.activateNext} doesn't take them, and {@link #activateNpc} skips them unless
+     * asked for one. {@link #release} ends it. Setup only; nothing of it is saved.
+     */
+    public void reserve(int humans) {
+        reservedTo = humans;
+        npcs.clear();
+        for (int i = 0; i < all.size(); i++) {
+            if (all.get(i) instanceof FactionNPC && (i == 0 || i >= humans)) {
+                npcs.add((FactionNPC) all.get(i));
+            }
+        }
+        dirty();
+    }
+
+    /** Ends {@link #reserve}: every NPC slot is vanilla's again. */
+    public void release() {
+        reservedTo = 0;
+        npcs.clear();
+        for (int i = 0; i < all.size(); i++) {
+            if (all.get(i) instanceof FactionNPC) {
+                npcs.add((FactionNPC) all.get(i));
+            }
+        }
+        dirty();
+    }
+
+    private void dirty() {
+        try {
+            DIRTY.setBoolean(SELF.get(null), true);
+        } catch (IllegalAccessException e) {
+            throw new IllegalStateException("SOSDET: cannot mark the faction lists changed" + GAME_VERSION, e);
+        }
+    }
+
+    private FactionNPC freeNpc() {
+        for (int i = Math.max(1, reservedTo); i < all.size(); i++) {
+            Faction f = all.get(i);
+            if (f instanceof FactionNPC && !f.isActive() && f != FACTIONS.otherFaction()) {
+                return (FactionNPC) f;
+            }
+        }
+        return null;
     }
 
     /** A spare takes slot {@code slot}, and the NPC there leaves the slots and the NPC list. */

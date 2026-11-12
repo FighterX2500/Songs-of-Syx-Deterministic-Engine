@@ -2190,7 +2190,7 @@ public final class Hooks {
     public static boolean ordersCapturing() {
         Session s = Engine.session();
         // a local battle's too: they apply at the next step, on the tape a watcher runs from (SOS-109)
-        return s != null && !s.streams.inStep() && !s.loading && s.ai().capturingOrders();
+        return s != null && !s.streams.inStep() && !s.loading && !s.editingWorld && s.ai().capturingOrders();
     }
 
     /** A player's order on this PC: into the host's log, through it on a peer. */
@@ -2324,6 +2324,9 @@ public final class Hooks {
                 // a map battle's end or a resync: the session goes on at this step, with no "click to continue" (SOS-41)
                 VIEW.inters().load.deactivate();
             }
+        }
+        if (s.plans().inGame()) {
+            sosdet.game.GameWorldSetup.repairCapitalInfo(); // a campaign from before SOS-185: every PC, the same save
         }
         for (Runnable r : s.afterLoads) {
             r.run(); // the new game is set: the mod puts its per-update actions and windows in it again (plan 0006)

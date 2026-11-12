@@ -120,6 +120,10 @@ import view.main.VIEW;
  *   hash                                the current battle and city hashes
  *   makehuman &lt;auto n|k,k&gt;              setup: NPC slots become humans (SOS-46); then save and load
  *   newworld &lt;seed&gt; auto &lt;n&gt;           setup: a fresh terrain and a world built around n humans (SOS-55); then save and load
+ *   newworld &lt;seed&gt; carve &lt;n&gt;          setup by carving (SOS-187): a world around human 0, the others carved into it
+ *   carveat &lt;inside|border|x,y&gt;        host: carve a city-state just before the next world resync save (SOS-184)
+ *   worldresyncnext &lt;step&gt; [uncarve]  a second world resync once the first is done; the host un-carves first
+ *   wresyncsavegame &lt;file&gt;             save the game right after the next world resync load (SOS-184)
  *   humans                              the human slots and their state
  *   localhuman &lt;slot&gt;                   at step 0: this copy's human (SOS-46)
  *   savegame &lt;file&gt;                     save to the run folder
@@ -286,6 +290,13 @@ public final class Rig implements SCRIPT {
         private boolean wresyncSaver;
         private Path wresyncSave;
         private Path wresyncState;
+        // carved city-states (SOS-184): copy 1 carves (or un-carves) just before it saves the world resync, and a second
+        // world resync may follow at wresyncNext
+        private long wresyncNext = -1;
+        // every copy saves its game right after the world resync load (SOS-184: a fresh process resumes it)
+        private String wresyncSaveGame;
+        private String carveSpec;
+        private boolean uncarveNext;
         // a city view (SOS-82): the host starts it at viewStep; the owner's copy writes its city to its rig folder, the
         // viewer's copy loads it and compares the owner's view hashes with its own
         private long viewStep = -1;
@@ -1007,6 +1018,7 @@ public final class Rig implements SCRIPT {
             byte[] state;
             try {
                 if (wresyncSaver) {
+                    carving();
                     state = Engine.battle() != null ? Engine.battleResyncSave(wresyncSave) : Engine.worldResyncSave(wresyncSave);
                     Files.write(wresyncState, state);
                     Files.write(done, Long.toString(Engine.step()).getBytes(StandardCharsets.US_ASCII));
@@ -1030,8 +1042,34 @@ public final class Rig implements SCRIPT {
             }
             event("worldresynced", String.format(Locale.ROOT, "\"step\":%d,\"loadMs\":%.0f", Engine.step(),
                     (System.nanoTime() - t0) / 1e6));
+            if (wresyncSaveGame != null) {
+                event("savegame", RigHumans.save(dir.resolve(wresyncSaveGame)));
+                wresyncSaveGame = null;
+            }
             wresyncStep = -1;
+            if (wresyncNext >= 0) {
+                wresyncStep = wresyncNext;
+                wresyncNext = -1;
+                limit(Math.min(lastStep, wresyncStep)); // held there for the second world resync
+                return;
+            }
             runOn();
+        }
+
+        /** Copy 1, before it saves a world resync: the carve or un-carve asked for (SOS-184), each once. */
+        private void carving() {
+            if (carveSpec != null) {
+                String spec = carveSpec;
+                carveSpec = null;
+                long t0 = System.nanoTime();
+                String done = sosdet.rig.act.WorldActions.carve(spec);
+                event("carved", String.format(Locale.ROOT, "\"step\":%d,\"ms\":%.0f,\"text\":\"%s\"", Engine.step(),
+                        (System.nanoTime() - t0) / 1e6, Instance.clean(done)));
+            } else if (uncarveNext) {
+                uncarveNext = false;
+                String done = sosdet.rig.act.WorldActions.uncarve();
+                event("uncarved", "\"step\":" + Engine.step() + ",\"text\":\"" + Instance.clean(done) + "\"");
+            }
         }
 
         /**
@@ -1449,6 +1487,19 @@ public final class Rig implements SCRIPT {
                 wresyncSave = Paths.get(c[3]);
                 wresyncState = Paths.get(c[4]);
                 event("ondesync", "\"choice\":\"" + onDesync + "\"");
+                return;
+            case "carveat": // carveat SPEC: copy 1 carves a city-state just before its next world resync save (SOS-184)
+                carveSpec = c[1];
+                event("carveat", "\"spec\":\"" + carveSpec + "\"");
+                return;
+            case "wresyncsavegame": // wresyncsavegame FILE: save the game to the run folder right after the next world resync load (SOS-184)
+                wresyncSaveGame = c[1];
+                event("wresyncsavegame", "\"file\":\"" + clean(c[1]) + "\"");
+                return;
+            case "worldresyncnext": // worldresyncnext STEP [uncarve]: a second world resync once the first is done (SOS-184)
+                wresyncNext = Long.parseLong(c[1]);
+                uncarveNext = c.length > 2 && c[2].equals("uncarve");
+                event("worldresyncnext", "\"step\":" + wresyncNext);
                 return;
             case "worldresyncat":
                 wresyncStep = Long.parseLong(c[1]);

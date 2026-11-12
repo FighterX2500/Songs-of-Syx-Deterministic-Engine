@@ -139,6 +139,143 @@ public final class GameWorldSetup {
         finish(humans[0].tx, humans[0].ty);
     }
 
+    /**
+     * Every human's capital square gets its region info (climate, terrain shares, moisture) if a world built before
+     * patch 17 gave it to region 0's only (SOS-185): a campaign's save carries the zeros, so every PC fixes them at
+     * load, the same way from the same save. Returns how many it fixed.
+     */
+    public static int repairCapitalInfo() {
+        int fixed = 0;
+        for (int slot : GameHumans.get().slots()) {
+            world.map.regions.Region r = FACTIONS.getByIndex(slot).capitolRegion();
+            if (r == null || r.info.area() != world.map.regions.centre.WCentre.TILE_DIM * world.map.regions.centre.WCentre.TILE_DIM
+                    || hasTerrain(r)) {
+                continue;
+            }
+            snake2d.util.datatypes.RECTANGLE b = r.info.bounds();
+            if (!r.info.init(b.x1(), b.y1(), new snake2d.util.datatypes.Rec(b))) {
+                throw new IllegalStateException("SOSDET: human " + slot + "'s capital region " + r.index()
+                        + " gets no region info at " + b.x1() + "," + b.y1());
+            }
+            fixed++;
+        }
+        return fixed;
+    }
+
+    private static boolean hasTerrain(world.map.regions.Region r) {
+        for (init.type.TERRAIN t : init.type.TERRAINS.ALL()) {
+            if (r.info.terrain(t) > 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Setup by carving (SOS-187, SOSGSGMP docs/plan/hot-join.md §4), step 1, on the PC that builds the world: the whole
+     * world around the host alone, at {@code host}'s location, as vanilla makes it for one player, with NPC slots 1 to
+     * {@code humans} - 1 left free for the other humans. The caller saves; every PC loads it, and each other player
+     * picks a spot on its real map ({@link GameCarve#problem}). Then {@link #carveHumans}.
+     */
+    public static void buildForCarving(HumanStart host, int humans) {
+        if (!WORLD.GEN().hasGeneratedTerrain) {
+            throw new IllegalStateException("SOSDET: the world is built on a confirmed terrain; none is generated");
+        }
+        if (GameHumans.get().slots().length != 1) {
+            throw new IllegalStateException("SOSDET: the world is built once, with no humans but slot 0's (humans "
+                    + java.util.Arrays.toString(GameHumans.get().slots()) + ")");
+        }
+        if (humans < 1 || humans > (GameHumans.SPARES + 1)) {
+            throw new IllegalArgumentException("SOSDET: " + humans + " humans; 1 to " + (GameHumans.SPARES + 1));
+        }
+        String p = terrainProblem(host.tx, host.ty);
+        if (p != null) {
+            throw new IllegalArgumentException("SOSDET: the host can't start at " + host.tx + "," + host.ty + ": " + p);
+        }
+        Race race = race(host.race);
+        Player h = FACTIONS.player();
+        set(h, host, race);
+        // the game's "other faction" (invaders' banner) can't be a human: it moves past the humans' slots
+        FactionNPC other = (FactionNPC) FACTIONS.getByIndex(humans);
+        FACTIONS.otherFactionSet(other);
+        GameHumans.get().reserve(humans);
+        try {
+            generate(host.tx, host.ty);
+        } finally {
+            GameHumans.get().release();
+        }
+        set(h, host, race);
+        finish(host.tx, host.ty);
+    }
+
+    /**
+     * Setup by carving, step 2, on the PC that built the world in step 1, before step 0: each other human, in slot order,
+     * gets a city-state carved at its picked spot ({@link GameCarve#carve}: links, the split rule) in slot 1 to N - 1.
+     * {@code humans[0]} is the host, placed in step 1. The caller then saves, and every PC loads that save before step 0
+     * as after {@link #build}; each other PC then makes its city with {@code Engine.ownCityAt}.
+     */
+    public static String carveHumans(HumanStart[] humans) {
+        int n = humans.length;
+        if (GameHumans.get().slots().length != 1) {
+            throw new IllegalStateException("SOSDET: the humans are carved once, with no humans but slot 0's (humans "
+                    + java.util.Arrays.toString(GameHumans.get().slots()) + ")");
+        }
+        for (int k = 1; k < n; k++) {
+            Faction f = FACTIONS.getByIndex(k);
+            if (!(f instanceof FactionNPC) || f.isActive() || f == FACTIONS.otherFaction()) {
+                throw new IllegalStateException("SOSDET: slot " + k + " isn't free for human " + k
+                        + " (a world from buildForCarving keeps slots 1 to N - 1 free)");
+            }
+        }
+        Player host = FACTIONS.player();
+        StringBuilder done = new StringBuilder();
+        GameHumans.get().reserve(n);
+        try {
+            for (int k = 1; k < n; k++) {
+                HumanStart h = humans[k];
+                Race race = race(h.race);
+                int[] at = nearestFit(h.tx, h.ty);
+                if (at == null) {
+                    throw new IllegalArgumentException("SOSDET: human " + k + " can't settle at " + h.tx + "," + h.ty + ": "
+                            + GameCarve.problem(h.tx, h.ty));
+                }
+                GameCarve.Result r = GameCarve.carve(at[0], at[1], h.name);
+                world.map.regions.Region reg = WORLD.REGIONS().getByIndex(r.record.region);
+                GameHumans.get().activateNpc(reg, false, k);
+                reg.setCapitol();
+                Player pl = GameHumans.get().add(k);
+                set(pl, h, race);
+                pl.credits().set(host.credits().getD()); // every player starts with the same (mod spec §5)
+                done.append(k == 1 ? "" : "; ").append("human ").append(k).append(at[0] == h.tx && at[1] == h.ty ? "" : " moved to "
+                        + at[0] + "," + at[1]).append(": ").append(r);
+            }
+        } finally {
+            GameHumans.get().release();
+        }
+        return done.toString();
+    }
+
+    /** Tiles a picked spot may move when an earlier human's carve made it unfit (a new road beside it). */
+    static final int MOVE_AT_MOST = 3;
+
+    /**
+     * {@code tx, ty} if a city-state fits there, else the nearest spot that fits within {@link #MOVE_AT_MOST} tiles (ring
+     * by ring, row by row), else null. Each player picks before the others are carved, so an earlier carve's road can
+     * pass beside a later pick.
+     */
+    private static int[] nearestFit(int tx, int ty) {
+        for (int r = 0; r <= MOVE_AT_MOST; r++) {
+            for (int y = ty - r; y <= ty + r; y++) {
+                for (int x = tx - r; x <= tx + r; x++) {
+                    if (Math.max(Math.abs(x - tx), Math.abs(y - ty)) == r && GameCarve.problem(x, y) == null) {
+                        return new int[] {x, y};
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
     /** This PC's player's banner in the game's save layout, for the mod to send to the PC that builds the world. */
     public static byte[] bannerBytes() {
         GameCodec codec = new GameCodec();

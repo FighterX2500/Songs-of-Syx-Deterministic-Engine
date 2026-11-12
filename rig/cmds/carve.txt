@@ -1,0 +1,20 @@
+# SOS-184. A carved city-state: copy 1 carves at the world resync (--carve, --world-resync 2000), every copy loads it;
+# with --world-resync2 8000 --uncarve copy 1 un-carves and every copy loads that. About 80 steps a second at 5x.
+# Before: the spots copy 1 finds, and every copy's layout digest.
+1: wcarvespots 3
+1: wlayout
+2: wlayout
+3: wlayout
+wait 30
+# After the carve: the carved region on every copy, the walk to its town from each region it touches, the digests.
+1: wcarved
+2: wcarved
+3: wcarved
+1: wlayout
+2: wlayout
+3: wlayout
+wait 50
+# After the un-carve: every copy's digest is the one from before.
+1: wlayout
+2: wlayout
+3: wlayout
