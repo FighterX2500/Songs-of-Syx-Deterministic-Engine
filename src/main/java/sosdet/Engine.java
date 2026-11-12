@@ -1023,10 +1023,12 @@ public final class Engine {
         long m = (GameCarve.layoutDigest() ^ (s == null ? 0 : step())) * 0x9E3779B97F4A7C15L;
         snake2d.util.rnd.RND.setSeed((int) (m ^ (m >>> 32)));
         if (s == null) {
+            sosdet.game.GameNames.align(); // a new state's names, the same on every PC (SOS-190)
             return edit.get();
         }
         s.streams.enter(); // the edit's draws come from that generator, as a load's do (Hooks.loadBegin)
         try {
+            sosdet.game.GameNames.align();
             return edit.get();
         } finally {
             s.streams.leave();
