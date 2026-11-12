@@ -984,6 +984,27 @@ public final class Engine {
         return GameWorldSetup.carveHumans(humans);
     }
 
+    /**
+     * Hot-join (SOSGSGMP docs/plan/hot-join.md §5): the slot a new human would take, the first free NPC slot above the
+     * last human's, or -1 when the map has none (a join is impossible). Any PC with a world loaded.
+     */
+    public static int joinSlot() {
+        return sosdet.game.GameHumans.get().joinSlot();
+    }
+
+    /**
+     * Hot-join, on a loaded world with its humans and no session: {@code human} gets a city-state carved at its spot
+     * (the nearest that fits, at most 3 tiles off) in {@link #joinSlot}'s slot, with {@code credits} (the campaign's
+     * starting value, not this PC's). Then this PC saves and loads the game before a session runs it. Returns a line for
+     * the log.
+     */
+    public static String addHuman(HumanStart human, double credits) {
+        if (session != null) {
+            throw new IllegalStateException("SOSDET: addHuman runs on a loaded world with no session");
+        }
+        return GameWorldSetup.addHuman(human, credits);
+    }
+
     /** Setup: this PC's player's banner, as {@link HumanStart} carries it to the PC that builds the world. */
     public static byte[] bannerBytes() {
         return GameWorldSetup.bannerBytes();

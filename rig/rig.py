@@ -881,6 +881,9 @@ def main():
     ap.add_argument("--carve", default="",
                     help="with --world-resync: copy 1 carves a city-state (inside, border or X,Y) just before it saves the"
                          " world resync (SOS-184)")
+    ap.add_argument("--carve-each", default="",
+                    help="with --world-resync: every copy carves a city-state (inside, border or X,Y) itself right after"
+                         " the world resync's load, with no second load: is a carve the same on every PC? (hot-join)")
     ap.add_argument("--world-resync2", type=int, default=0,
                     help="with --world-resync: a second world resync at this step (SOS-184)")
     ap.add_argument("--resync-savegame", action="store_true",
@@ -1181,6 +1184,8 @@ def main():
                                                   wresync_state), "worldresyncat")
             if args.carve and c.k == 1:
                 c.send("carveat %s" % args.carve, "carveat")
+            if args.carve_each:
+                c.send("carveeach %s" % args.carve_each, "carveeach")
             if args.resync_savegame:
                 c.send("wresyncsavegame carved-%d.save" % c.k, "wresyncsavegame")
             if args.world_resync2:

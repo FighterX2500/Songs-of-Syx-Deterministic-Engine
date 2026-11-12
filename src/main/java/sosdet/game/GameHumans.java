@@ -79,6 +79,8 @@ public final class GameHumans extends Savable {
     private final GameCarves carves = new GameCarves();
     /** Setup by carving: NPC slots 1 to this - 1 wait for the humans ({@link #reserve}); 0 when none do. */
     private int reservedTo;
+    /** Hot-join: the slot a new human takes, out of {@link #freeNpc}'s reach while its city-state is carved; -1: none. */
+    private int heldSlot = -1;
 
     /** {@code FACTIONS}'s constructor, at its end: {@code all} and {@code npcs} are its own lists. */
     public GameHumans(ArrayList<Faction> all, ArrayList<FactionNPC> npcs) throws IOException {
@@ -332,6 +334,27 @@ public final class GameHumans extends Savable {
         return ff;
     }
 
+    /**
+     * Hot-join (SOSGSGMP docs/plan/hot-join.md §5.1): the slot a new human takes, the first free NPC slot above the last
+     * human's (humans join in slot order, {@link #add}), never the game's "other faction"; -1 when none is free, on a
+     * crowded map.
+     */
+    public int joinSlot() {
+        int[] humans = slots();
+        for (int i = humans[humans.length - 1] + 1; i < all.size(); i++) {
+            Faction f = all.get(i);
+            if (f instanceof FactionNPC && !f.isActive() && f != FACTIONS.otherFaction()) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /** Hot-join: {@code slot} stays free while a carve may activate an NPC (its break-away state); -1 ends it. */
+    public void hold(int slot) {
+        heldSlot = slot;
+    }
+
     /** True when {@link #activateNpc} has a slot to take. */
     public boolean npcSlotFree() {
         return freeNpc() != null;
@@ -376,7 +399,7 @@ public final class GameHumans extends Savable {
     private FactionNPC freeNpc() {
         for (int i = Math.max(1, reservedTo); i < all.size(); i++) {
             Faction f = all.get(i);
-            if (f instanceof FactionNPC && !f.isActive() && f != FACTIONS.otherFaction()) {
+            if (i != heldSlot && f instanceof FactionNPC && !f.isActive() && f != FACTIONS.otherFaction()) {
                 return (FactionNPC) f;
             }
         }
