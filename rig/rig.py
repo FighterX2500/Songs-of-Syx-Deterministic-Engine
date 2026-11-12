@@ -882,7 +882,7 @@ def main():
     ap.add_argument("--rejoin", default="",
                     help="'WORLD|STATE|SLOT' (a world resync's save and state, e.g. from --world-resync with"
                          " --resync-savegame): at the run's start every copy loads that world into its own game and the"
-                         " frozen human in SLOT thaws, as the mod's rejoin (SOS-193); use with --humans-saves
+                         " frozen human in SLOT thaws, as the mod's rejoin (SOS-193); use with --humans-saves")
     ap.add_argument("--uncarve-removed", action="store_true",
                     help="with --on-desync resync: once a carved city-state's human is gone (--remove), the host holds every"
                          " copy, un-carves it and sends the world resync (SOS-188)")
