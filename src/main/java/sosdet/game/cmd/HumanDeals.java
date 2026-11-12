@@ -119,7 +119,7 @@ public final class HumanDeals {
     private static final String SPECTATOR = "A spectator can't act in the game.";
     /** As vanilla's text for an NPC out of reach, with a player's wider reach (SOS-197). */
     static final String OUT_OF_REACH = "Out of reach: this needs that player to be your neighbour, or reached through"
-            + " land your trade may cross.";
+            + " land your trade may cross or a colleague's land.";
 
     /** On a spectator's PC the game's player is a living human, who must not act through it (SOS-111). */
     private static boolean spectating() {
@@ -163,7 +163,8 @@ public final class HumanDeals {
             return SPECTATOR;
         }
         String why = refusal(FACTIONS.player(), human(to), terms);
-        if (why == null && DealBook.needsReach(terms.treaty) && !tradeReaches(to)) {
+        // trade reach, or vanilla's reach of this PC's human, which a colleague's land carries on (SOS-200)
+        if (why == null && DealBook.needsReach(terms.treaty) && !tradeReaches(to) && !RD.DIST().reachable(human(to))) {
             return OUT_OF_REACH;
         }
         return why;
