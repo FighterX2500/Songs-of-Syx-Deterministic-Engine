@@ -1015,6 +1015,24 @@ public final class Engine {
     }
 
     /**
+     * Rejoin after a hot-join (SOS-204), on the returning PC only, in its session between steps, right after its freeze
+     * save loaded and before {@link #rejoinLoad}: the human slots of {@code hostSlots} (every human in the host's game,
+     * removed ones too) this game lacks become stand-in humans, which the host's world replaces. Then this PC saves and
+     * loads the game, as after {@link #addHuman}, before the world loads. Returns a line for the log, empty when no slot
+     * was missing.
+     */
+    public static String addMissingHumans(int[] hostSlots) {
+        Session s = required();
+        outsideStep("addMissingHumans");
+        s.editingWorld = true; // the stand-ins' setters are hooked: no player's commands
+        try {
+            return seeded(s, () -> GameWorldSetup.addMissingHumans(hostSlots));
+        } finally {
+            s.editingWorld = false;
+        }
+    }
+
+    /**
      * Runs a world edit on vanilla's generator seeded from the world's carve layout and the step, so every PC that loaded
      * the same world draws the same: between steps, and with no session, the game's draws are otherwise each PC's own
      * (a break-away NPC's court and stocks differed on every copy in rig run CE1, SOS-189).
