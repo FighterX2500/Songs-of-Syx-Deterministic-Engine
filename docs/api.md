@@ -46,6 +46,7 @@ A city-state can be carved into a running world as a new 3x3 region (SOS-186, SO
 - `uncarve(region)` undoes one, in any order: only the roads and path steps no other carve uses go.
 - The undo log is the save section `SOSDET_CARVES`, loaded with the world and in the world hash.
 - After either, every PC loads the world from that PC's save: a world changed in place on one PC never matches one that was loaded (SOS-38, SOS-184).
+- **A gone human's city-state (SOS-188):** `uncarveDue()` names a carved region no human holds any more (its human removed, or eliminated and the city given to a neutral NPC), or -1; it allocates nothing, so a mod can ask every frame. The host then calls `worldEditHold()`: every PC holds at a step a little ahead, as for a desync, but `desyncHold().edit()` is true (no PC differs, nothing to choose). At the hold step the host calls `uncarve(region)` and `worldResyncSave()`; every PC's `worldResyncLoad` ends the hold.
 
 ## Threads
 

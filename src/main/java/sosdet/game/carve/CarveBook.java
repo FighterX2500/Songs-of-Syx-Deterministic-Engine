@@ -23,6 +23,15 @@ public final class CarveBook {
         return records.isEmpty();
     }
 
+    /** The number of records; with {@link #get}, read without allocating (asked every frame). */
+    public int size() {
+        return records.size();
+    }
+
+    public CarveRecord get(int i) {
+        return records.get(i);
+    }
+
     public List<CarveRecord> all() {
         return Collections.unmodifiableList(records);
     }

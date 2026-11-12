@@ -1000,6 +1000,16 @@ public final class Engine {
     }
 
     /**
+     * Setup by carving, before the others are carved (SOS-187): why a human can't settle with its centre at
+     * {@code tx, ty}: {@link #carveProblem}, then 6 tiles from the other humans' spots not carved yet, by the rule a
+     * classic setup's locations follow ({@link #locationProblem}); null when it can. Any PC, no session needed.
+     */
+    public static String settleProblem(int tx, int ty, int[] otherTx, int[] otherTy) {
+        String p = carveProblem(tx, ty);
+        return p != null ? p : HumanStart.tooClose(tx, ty, otherTx, otherTy);
+    }
+
+    /**
      * On the PC that saves the world, between steps (setup by carving, a hot-join): carves a city-state named
      * {@code name} with its centre at {@code tx, ty}, linked by road to the town of each region it touches (a human 6 to
      * 15 tiles away is reached by SOS-120's trade route, as at a classic setup). The land it is carved in follows the
@@ -1040,6 +1050,32 @@ public final class Engine {
                 s.editingWorld = false;
             }
         }
+    }
+
+    /**
+     * The region of a carved city-state no human holds any more (its human removed, or eliminated and the city given to
+     * a neutral NPC), or -1 (SOS-188, hot-join.md decision 6). The host then asks for {@link #worldEditHold}, un-carves it at the
+     * hold step ({@link #uncarve}) and sends the world resync. Any PC, between steps.
+     */
+    public static int uncarveDue() {
+        outsideStep("uncarveDue");
+        return GameCarve.ownerless();
+    }
+
+    /**
+     * Host, between steps: every PC holds at a step a little ahead, as for a desync but with no window and no choice
+     * ({@link DesyncHold#edit}), so the host can change the world there and send the world resync
+     * ({@link #worldResyncSave}; every PC's {@link #worldResyncLoad} ends the hold). False when a hold is already on.
+     */
+    public static boolean worldEditHold() {
+        Session s = required();
+        if (s.streams.isSimulationThread()) {
+            throw new IllegalStateException("SOSDET: worldEditHold is called between steps");
+        }
+        if (s.ai().mode() != AiMode.HOST) {
+            throw new IllegalStateException("SOSDET: only the host holds every PC for a world edit");
+        }
+        return s.worldEditHold();
     }
 
     private static void outsideStep(String what) {

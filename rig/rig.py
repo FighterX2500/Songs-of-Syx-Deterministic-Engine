@@ -869,6 +869,9 @@ def main():
     ap.add_argument("--difficulty", default=None,
                     help="with --new-world: every human gets this difficulty mode (a file in the game's player/mode"
                          " folder, e.g. 00_FIRST_NAME), as the mod's world build gives the lobby's (SOS-69)")
+    ap.add_argument("--uncarve-removed", action="store_true",
+                    help="with --on-desync resync: once a carved city-state's human is gone (--remove), the host holds every"
+                         " copy, un-carves it and sends the world resync (SOS-188)")
     ap.add_argument("--on-desync", choices=["resync", "exit"], default=None,
                     help="with --humans: the host's choice when an engine finds a desync and every copy holds (SOS-53):"
                          " a world resync at the hold step, or save and exit; the copies are compared from the step after"
@@ -1166,6 +1169,8 @@ def main():
                 c.send("reportsout %s" % reports_file, "reportsout")
             else:
                 c.send("reportsfrom 0 %s" % reports_file, "reportsfrom")
+        if args.on_desync and args.uncarve_removed:
+            c.send("uncarveremoved", "uncarveremoved")
         if args.on_desync:
             c.send("ondesync %s %s %s %s" % (args.on_desync, "save" if c.k == 1 else "load", wresync_save, wresync_state),
                    "ondesync")
@@ -1297,8 +1302,9 @@ def main():
             if resync:
                 load_resync(copies, resync, resync_save, resync_state)
         if args.on_desync and held is None:
-            holds = [c.find("desynchold", 0) for c in copies]
-            if all(holds) and args.on_desync == "resync" and all(c.find("worldresynced", 0) for c in copies):
+            live = [c for c in copies if c.k != remove_copy]  # a removed copy never holds (SOS-188's un-carve hold)
+            holds = [c.find("desynchold", 0) for c in live]
+            if all(holds) and args.on_desync == "resync" and all(c.find("worldresynced", 0) for c in live):
                 held = holds[0]
                 log("every copy held at step %d for the desync at step %d (PC %d) and resynced"
                     % (held["holdStep"], held["desyncStep"], held["pc"]))
