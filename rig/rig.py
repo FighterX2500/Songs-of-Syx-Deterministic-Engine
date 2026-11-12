@@ -577,7 +577,8 @@ def scenario_saves(args):
     return saves, autoload
 
 
-def make_humans(game, saves, n, run_dir, new_world=None, difficulty=None, which=None, at=None, carve_setup=False):
+def make_humans(game, saves, n, run_dir, new_world=None, difficulty=None, which=None, at=None, carve_setup=False,
+                add_each=False):
     """--humans: copy 1 makes n - 1 NPCs humans in the save and saves it, before the run; every copy then starts from
     that save (SOS-46). With --new-world SEED it builds a fresh world around n humans instead (SOS-55). Returns the saves
     and the human slots, slot 0 first."""
@@ -603,6 +604,7 @@ def make_humans(game, saves, n, run_dir, new_world=None, difficulty=None, which=
         if not all(r["ok"] for r in made["routes"]):
             fail("--new-world: two humans 6-15 tiles apart have no route (mod spec 5)")
     c.send("savegame humans.save", "savegame", 600)
+    join_slot = c.send("joinslot", "joinslot")["slot"] if add_each else None
     if new_world is not None:
         # the save -> load round trip keeps every human's slot and capital (SOS-55)
         rt = c.send("roundtrip humans.save humans-rt.save", "roundtrip", 900)
@@ -618,6 +620,11 @@ def make_humans(game, saves, n, run_dir, new_world=None, difficulty=None, which=
         fail("--humans %d: the save has %d humans: %s" % (n, len(slots), slots))
     shutil.copy2(c.rig / "humans.save", run_dir / "humans.save")
     log("the save with %d humans, slots %s: %s" % (n, slots, run_dir / "humans.save"))
+    if add_each:
+        if join_slot < 0:
+            fail("--add-human-each: the save has no free NPC slot for a new human")
+        slots = slots + [join_slot]  # every copy adds the newcomer itself before its session (hot-join, SOS-189)
+        log("--add-human-each: the newcomer takes slot %d" % join_slot)
     return {"sosdet-city.save": run_dir / "humans.save"}, slots
 
 
@@ -884,6 +891,10 @@ def main():
     ap.add_argument("--carve-each", default="",
                     help="with --world-resync: every copy carves a city-state (inside, border or X,Y) itself right after"
                          " the world resync's load, with no second load: is a carve the same on every PC? (hot-join)")
+    ap.add_argument("--add-human-each", default="",
+                    help="with --humans N: the save gets N - 1 humans; every copy then loads it with no session, adds"
+                         " the newcomer at X,Y itself (Engine.addHuman), saves and starts from that save: hot-join's"
+                         " restart route (SOS-189)")
     ap.add_argument("--world-resync2", type=int, default=0,
                     help="with --world-resync: a second world resync at this step (SOS-184)")
     ap.add_argument("--resync-savegame", action="store_true",
@@ -1042,8 +1053,9 @@ def main():
     if humans_saves:
         human_slots = list(range(args.humans))  # each copy resumes its own game, as the mod's campaign resume does
     elif args.humans:
-        saves, human_slots = make_humans(game, saves, args.humans, run_dir, args.new_world, args.difficulty, args.make_humans,
-                                         args.new_world_at, args.carve_setup)
+        saves, human_slots = make_humans(game, saves, args.humans - (1 if args.add_human_each else 0), run_dir,
+                                         args.new_world, args.difficulty, args.make_humans, args.new_world_at,
+                                         args.carve_setup, bool(args.add_human_each))
 
     if args.remote and (not REMOTE or not 1 < args.remote <= args.copies):
         fail("--remote needs SOSDET_RIG_REMOTE=user@host and a copy other than copy 1 (the host)")
@@ -1118,6 +1130,7 @@ def main():
             c.wait("finished", 0, 600)
             c.base = c.events_count()
             log("copy %d played 30 game seconds before the session" % c.k)
+        city_save = "sosdet-city"
         c.send("begin", "begin")
         if args.ai == "host":
             c.send("ai %s %s" % ("host" if c.k == 1 and not args.replay else "peer", start_id), "ai")
@@ -1132,7 +1145,19 @@ def main():
         else:
             if args.hold_world:
                 c.send("holdworld 1", "holdworld")
-            c.send("load sosdet-city", "loaded", 600)
+            if args.add_human_each:
+                # the restart route of hot-join (SOS-189): in its session, every copy loads the same save, adds the
+                # newcomer itself at step 0, saves and loads that save, as every PC would restart from its campaign save
+                c.send("load sosdet-city", "loaded", 600)
+                time.sleep(3)
+                x, y = args.add_human_each.split(",")
+                added = c.send("addhuman %s %s sosdet-city-added" % (x, y), "addhuman", 600)
+                log("copy %d added the newcomer in slot %d in %s ms: %s" % (c.k, added["slot"], added["ms"], added["text"]))
+                if added["slot"] != human_slots[-1]:
+                    fail("copy %d put the newcomer in slot %d, not %d" % (c.k, added["slot"], human_slots[-1]))
+                c.send("loadseed %d" % LOAD_SEED, "loadseed")
+                city_save = "sosdet-city-added"
+            c.send("load %s" % city_save, "loaded", 600)
         time.sleep(5)
         if args.ai == "host":
             c.send("ailog %s %s" % ("host" if c.k == 1 and not args.replay else "peer", host_log), "ailog")

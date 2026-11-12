@@ -993,16 +993,44 @@ public final class Engine {
     }
 
     /**
-     * Hot-join, on a loaded world with its humans and no session: {@code human} gets a city-state carved at its spot
-     * (the nearest that fits, at most 3 tiles off) in {@link #joinSlot}'s slot, with {@code credits} (the campaign's
-     * starting value, not this PC's). Then this PC saves and loads the game before a session runs it. Returns a line for
-     * the log.
+     * Hot-join, on a loaded world with its humans: {@code human} gets a city-state carved at its spot (the nearest that
+     * fits, at most 3 tiles off) in {@link #joinSlot}'s slot, with {@code credits} (the campaign's starting value, not
+     * this PC's). Every PC does it at the same point of the same world: in a session, between steps, after a load (a
+     * load with no session isn't seeded, and the copies of rig run AH1 differed). Then this PC saves and loads the game
+     * before the session runs on. Returns a line for the log.
      */
     public static String addHuman(HumanStart human, double credits) {
-        if (session != null) {
-            throw new IllegalStateException("SOSDET: addHuman runs on a loaded world with no session");
+        Session s = session;
+        if (s != null) {
+            outsideStep("addHuman");
+            s.editingWorld = true; // the new human's and NPC's setters are hooked: no player's commands
         }
-        return GameWorldSetup.addHuman(human, credits);
+        try {
+            return seeded(s, () -> GameWorldSetup.addHuman(human, credits));
+        } finally {
+            if (s != null) {
+                s.editingWorld = false;
+            }
+        }
+    }
+
+    /**
+     * Runs a world edit on vanilla's generator seeded from the world's carve layout and the step, so every PC that loaded
+     * the same world draws the same: between steps, and with no session, the game's draws are otherwise each PC's own
+     * (a break-away NPC's court and stocks differed on every copy in rig run CE1, SOS-189).
+     */
+    private static <T> T seeded(Session s, java.util.function.Supplier<T> edit) {
+        long m = (GameCarve.layoutDigest() ^ (s == null ? 0 : step())) * 0x9E3779B97F4A7C15L;
+        snake2d.util.rnd.RND.setSeed((int) (m ^ (m >>> 32)));
+        if (s == null) {
+            return edit.get();
+        }
+        s.streams.enter(); // the edit's draws come from that generator, as a load's do (Hooks.loadBegin)
+        try {
+            return edit.get();
+        } finally {
+            s.streams.leave();
+        }
     }
 
     /** Setup: this PC's player's banner, as {@link HumanStart} carries it to the PC that builds the world. */
@@ -1044,7 +1072,7 @@ public final class Engine {
             s.editingWorld = true; // a new NPC's court and the like call hooked setters: no player's commands
         }
         try {
-            GameCarve.Result r = GameCarve.carve(tx, ty, name);
+            GameCarve.Result r = seeded(s, () -> GameCarve.carve(tx, ty, name));
             return new Carved(r.record.region, r.home, r.record.newNpc(), r.noSlot);
         } finally {
             if (s != null) {
@@ -1065,7 +1093,10 @@ public final class Engine {
             s.editingWorld = true;
         }
         try {
-            GameCarve.uncarve(region);
+            seeded(s, () -> {
+                GameCarve.uncarve(region);
+                return null;
+            });
         } finally {
             if (s != null) {
                 s.editingWorld = false;
