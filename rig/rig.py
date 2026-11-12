@@ -577,7 +577,8 @@ def scenario_saves(args):
     return saves, autoload
 
 
-def make_humans(game, saves, n, run_dir, new_world=None, difficulty=None, which=None, at=None, carve_setup=False):
+def make_humans(game, saves, n, run_dir, new_world=None, difficulty=None, which=None, at=None, carve_setup=False,
+                add_each=False):
     """--humans: copy 1 makes n - 1 NPCs humans in the save and saves it, before the run; every copy then starts from
     that save (SOS-46). With --new-world SEED it builds a fresh world around n humans instead (SOS-55). Returns the saves
     and the human slots, slot 0 first."""
@@ -603,6 +604,7 @@ def make_humans(game, saves, n, run_dir, new_world=None, difficulty=None, which=
         if not all(r["ok"] for r in made["routes"]):
             fail("--new-world: two humans 6-15 tiles apart have no route (mod spec 5)")
     c.send("savegame humans.save", "savegame", 600)
+    join_slot = c.send("joinslot", "joinslot")["slot"] if add_each else None
     if new_world is not None:
         # the save -> load round trip keeps every human's slot and capital (SOS-55)
         rt = c.send("roundtrip humans.save humans-rt.save", "roundtrip", 900)
@@ -618,6 +620,11 @@ def make_humans(game, saves, n, run_dir, new_world=None, difficulty=None, which=
         fail("--humans %d: the save has %d humans: %s" % (n, len(slots), slots))
     shutil.copy2(c.rig / "humans.save", run_dir / "humans.save")
     log("the save with %d humans, slots %s: %s" % (n, slots, run_dir / "humans.save"))
+    if add_each:
+        if join_slot < 0:
+            fail("--add-human-each: the save has no free NPC slot for a new human")
+        slots = slots + [join_slot]  # every copy adds the newcomer itself before its session (hot-join, SOS-189)
+        log("--add-human-each: the newcomer takes slot %d" % join_slot)
     return {"sosdet-city.save": run_dir / "humans.save"}, slots
 
 
@@ -869,6 +876,16 @@ def main():
     ap.add_argument("--difficulty", default=None,
                     help="with --new-world: every human gets this difficulty mode (a file in the game's player/mode"
                          " folder, e.g. 00_FIRST_NAME), as the mod's world build gives the lobby's (SOS-69)")
+    ap.add_argument("--freeze", action="store_true",
+                    help="with --remove: copy 1 freezes the human instead of removing it, and the stopped copy saves its"
+                         " game as frozen-<k>.save in its rig folder, its city as the player left it (SOS-193)")
+    ap.add_argument("--rejoin", default="",
+                    help="'WORLD|STATE|SLOT' (the host's rejoin-world.save and rejoin.state, from --freeze --world-resync with"
+                         " --resync-savegame): at the run's start every copy loads that world into its own game and the"
+                         " frozen human in SLOT thaws, as the mod's rejoin (SOS-193); use with --humans-saves")
+    ap.add_argument("--uncarve-removed", action="store_true",
+                    help="with --on-desync resync: once a carved city-state's human is gone (--remove), the host holds every"
+                         " copy, un-carves it and sends the world resync (SOS-188)")
     ap.add_argument("--on-desync", choices=["resync", "exit"], default=None,
                     help="with --humans: the host's choice when an engine finds a desync and every copy holds (SOS-53):"
                          " a world resync at the hold step, or save and exit; the copies are compared from the step after"
@@ -878,6 +895,13 @@ def main():
     ap.add_argument("--carve", default="",
                     help="with --world-resync: copy 1 carves a city-state (inside, border or X,Y) just before it saves the"
                          " world resync (SOS-184)")
+    ap.add_argument("--carve-each", default="",
+                    help="with --world-resync: every copy carves a city-state (inside, border or X,Y) itself right after"
+                         " the world resync's load, with no second load: is a carve the same on every PC? (hot-join)")
+    ap.add_argument("--add-human-each", default="",
+                    help="with --humans N: the save gets N - 1 humans; every copy then loads it with no session, adds"
+                         " the newcomer at X,Y itself (Engine.addHuman), saves and starts from that save: hot-join's"
+                         " restart route (SOS-189)")
     ap.add_argument("--world-resync2", type=int, default=0,
                     help="with --world-resync: a second world resync at this step (SOS-184)")
     ap.add_argument("--resync-savegame", action="store_true",
@@ -1036,8 +1060,9 @@ def main():
     if humans_saves:
         human_slots = list(range(args.humans))  # each copy resumes its own game, as the mod's campaign resume does
     elif args.humans:
-        saves, human_slots = make_humans(game, saves, args.humans, run_dir, args.new_world, args.difficulty, args.make_humans,
-                                         args.new_world_at, args.carve_setup)
+        saves, human_slots = make_humans(game, saves, args.humans - (1 if args.add_human_each else 0), run_dir,
+                                         args.new_world, args.difficulty, args.make_humans, args.new_world_at,
+                                         args.carve_setup, bool(args.add_human_each))
 
     if args.remote and (not REMOTE or not 1 < args.remote <= args.copies):
         fail("--remote needs SOSDET_RIG_REMOTE=user@host and a copy other than copy 1 (the host)")
@@ -1112,6 +1137,7 @@ def main():
             c.wait("finished", 0, 600)
             c.base = c.events_count()
             log("copy %d played 30 game seconds before the session" % c.k)
+        city_save = "sosdet-city"
         c.send("begin", "begin")
         if args.ai == "host":
             c.send("ai %s %s" % ("host" if c.k == 1 and not args.replay else "peer", start_id), "ai")
@@ -1126,7 +1152,19 @@ def main():
         else:
             if args.hold_world:
                 c.send("holdworld 1", "holdworld")
-            c.send("load sosdet-city", "loaded", 600)
+            if args.add_human_each:
+                # the restart route of hot-join (SOS-189): in its session, every copy loads the same save, adds the
+                # newcomer itself at step 0, saves and loads that save, as every PC would restart from its campaign save
+                c.send("load sosdet-city", "loaded", 600)
+                time.sleep(3)
+                x, y = args.add_human_each.split(",")
+                added = c.send("addhuman %s %s sosdet-city-added" % (x, y), "addhuman", 600)
+                log("copy %d added the newcomer in slot %d in %s ms: %s" % (c.k, added["slot"], added["ms"], added["text"]))
+                if added["slot"] != human_slots[-1]:
+                    fail("copy %d put the newcomer in slot %d, not %d" % (c.k, added["slot"], human_slots[-1]))
+                c.send("loadseed %d" % LOAD_SEED, "loadseed")
+                city_save = "sosdet-city-added"
+            c.send("load %s" % city_save, "loaded", 600)
         time.sleep(5)
         if args.ai == "host":
             c.send("ailog %s %s" % ("host" if c.k == 1 and not args.replay else "peer", host_log), "ailog")
@@ -1166,9 +1204,14 @@ def main():
                 c.send("reportsout %s" % reports_file, "reportsout")
             else:
                 c.send("reportsfrom 0 %s" % reports_file, "reportsfrom")
+        if args.on_desync and args.uncarve_removed:
+            c.send("uncarveremoved", "uncarveremoved")
         if args.on_desync:
             c.send("ondesync %s %s %s %s" % (args.on_desync, "save" if c.k == 1 else "load", wresync_save, wresync_state),
                    "ondesync")
+        if args.rejoin:
+            w, st, slot = args.rejoin.split("|")
+            c.send("rejoin %s %s %s" % (w, st, slot), "rejoinat")
         if args.world_resync:
             # copy 1 saves the world at that step; every copy, copy 1 too, reloads only the world (SOS-38; SOS-52 with
             # several humans)
@@ -1176,8 +1219,12 @@ def main():
                                                   wresync_state), "worldresyncat")
             if args.carve and c.k == 1:
                 c.send("carveat %s" % args.carve, "carveat")
+            if args.carve_each:
+                c.send("carveeach %s" % args.carve_each, "carveeach")
             if args.resync_savegame:
                 c.send("wresyncsavegame carved-%d.save" % c.k, "wresyncsavegame")
+                if args.freeze and c.k == 1:
+                    c.send("rejoinout", "rejoinoutat")  # the host's rejoin files for those saves (SOS-193)
             if args.world_resync2:
                 c.send("worldresyncnext %d%s" % (args.world_resync2, " uncarve" if args.uncarve else ""),
                        "worldresyncnext")
@@ -1297,8 +1344,9 @@ def main():
             if resync:
                 load_resync(copies, resync, resync_save, resync_state)
         if args.on_desync and held is None:
-            holds = [c.find("desynchold", 0) for c in copies]
-            if all(holds) and args.on_desync == "resync" and all(c.find("worldresynced", 0) for c in copies):
+            live = [c for c in copies if c.k != remove_copy]  # a removed copy never holds (SOS-188's un-carve hold)
+            holds = [c.find("desynchold", 0) for c in live]
+            if all(holds) and args.on_desync == "resync" and all(c.find("worldresynced", 0) for c in live):
                 held = holds[0]
                 log("every copy held at step %d for the desync at step %d (PC %d) and resynced"
                     % (held["holdStep"], held["desyncStep"], held["pc"]))
@@ -1324,9 +1372,13 @@ def main():
             finished[remove_copy] = gone.wait_finished(mark, 600, gone.rig / ("%s-c%d.csv" % (args.tag, gone.k)))
             watcher.drop(remove_copy)
             log("copy %d stopped at step %d" % (remove_copy, finished[remove_copy]["endStep"]))
+            if args.freeze:
+                gone.send("savegame frozen-%d.save" % gone.k, "savegame")
+                log("copy %d saved its game as frozen-%d.save" % (gone.k, gone.k))
             time.sleep(5)
-            copies[0].send("removehuman %d" % human_slots[remove_copy - 1], "removehuman")
-            log("copy 1 removed the human in slot %d" % human_slots[remove_copy - 1])
+            verb = "freezehuman" if args.freeze else "removehuman"
+            copies[0].send("%s %d" % (verb, human_slots[remove_copy - 1]), verb)
+            log("copy 1 %s the human in slot %d" % ("froze" if args.freeze else "removed", human_slots[remove_copy - 1]))
         done = copies[ref - 1].find("finished", 0)
         if done:
             finished[ref] = done
@@ -1369,7 +1421,20 @@ def main():
         identical, lines = compare(kept, run_dir, args.tag, ref, args.steps, {k: e for k, e in ends.items()
                                                                                if k != remove_copy}, after,
                                    resync["step"] if resync else 0)
-    if remove_copy:
+    if remove_copy and args.freeze:
+        asked = copies[0].find("freezehuman", 0)
+        lines.insert(0, "freeze: copy %d stopped at step %s; copy 1 froze slot %s at step %s"
+                     % (remove_copy, ends.get(remove_copy), asked and asked["slot"], asked and asked["step"]))
+        for c in copies:
+            if c.k == remove_copy:
+                continue
+            r = c.find("humanfrozen", 0)
+            lines.insert(1, "freeze: copy %d %s" % (c.k, "froze it by step %d: %d regions, %d armies, active %s, %d held"
+                                                    % (r["step"], r["regions"], r["armies"], r["active"], r["held"]) if r
+                                                    else "NEVER froze it"))
+            if not r or not r["active"]:
+                identical = False
+    elif remove_copy:
         asked = copies[0].find("removehuman", 0)
         lines.insert(0, "removal: copy %d stopped at step %s; copy 1 removed slot %s at step %s"
                      % (remove_copy, ends.get(remove_copy), asked and asked["slot"], asked and asked["step"]))

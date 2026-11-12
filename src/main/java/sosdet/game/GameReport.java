@@ -188,6 +188,21 @@ public final class GameReport implements CitySource {
     }
 
     @Override
+    public boolean frozen(int slot) {
+        return GameHumans.get().frozen().frozen(slot);
+    }
+
+    @Override
+    public void holdFrozen(sosdet.txn.Txn t) {
+        GameHumans.get().frozen().hold(t);
+    }
+
+    @Override
+    public byte[][] frozenReport(int slot) {
+        return GameHumans.get().frozen().report(slot);
+    }
+
+    @Override
     public void fill(double[] v) {
         ReportLayout l = layout;
         v[l.slot(Field.CREDITS, 0)] = FACTIONS.player().credits().getD();

@@ -347,7 +347,8 @@ public final class GameCarve {
 
         @Override
         public String toString() {
-            return record + "; region " + home + ": " + outcome + (noSlot ? " (no free faction slot)" : "");
+            return record + "; region " + home + " " + WORLD.REGIONS().getByIndex(home).info.name() + ": " + outcome
+                    + (noSlot ? " (no free faction slot)" : "");
         }
     }
 
@@ -607,6 +608,21 @@ public final class GameCarve {
         }
         book().remove(c);
         reinit(c.cutFrom());
+    }
+
+    /**
+     * The first carved region in the book that no human holds, or -1 (SOS-188): its human is gone. A removed human's
+     * land is left with no owner; an eliminated human's capital goes to a neutral NPC (spec section 9).
+     */
+    public static int ownerless() {
+        CarveBook book = book();
+        for (int i = 0; i < book.size(); i++) { // the mod asks every frame: nothing allocated
+            int region = book.get(i).region;
+            if (!GameHumans.isHuman(WORLD.REGIONS().getByIndex(region).faction())) {
+                return region;
+            }
+        }
+        return -1;
     }
 
     // ------------------------------------------------------------ after a load, on every PC

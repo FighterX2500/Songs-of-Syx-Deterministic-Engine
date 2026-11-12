@@ -3,7 +3,9 @@ package sosdet;
 /**
  * A world desync the host found, and the step every PC stops at for it (SOS-53): what the mod's window shows while the
  * host chooses between a resync ({@link Engine#worldResyncSave}, then {@link Engine#worldResyncLoad} on every PC) and
- * saving and leaving. Immutable.
+ * saving and leaving. Or, when {@link #edit} is true, a hold the host asked for to change the world itself (SOS-188:
+ * un-carving a gone human's city-state): no desync, no choice; at the hold step the host makes the change and sends
+ * the world resync. Immutable.
  */
 public final class DesyncHold {
 
@@ -20,8 +22,14 @@ public final class DesyncHold {
         this.holdStep = holdStep;
     }
 
+    /** True for the host's world edit ({@link Engine#worldEditHold}), not a desync: {@link #pc} and the desync step are -1. */
+    public boolean edit() {
+        return pc < 0;
+    }
+
     @Override
     public String toString() {
-        return "desync at step " + desyncStep + " with PC " + pc + ", every PC holds at step " + holdStep;
+        return edit() ? "world edit, every PC holds at step " + holdStep
+                : "desync at step " + desyncStep + " with PC " + pc + ", every PC holds at step " + holdStep;
     }
 }

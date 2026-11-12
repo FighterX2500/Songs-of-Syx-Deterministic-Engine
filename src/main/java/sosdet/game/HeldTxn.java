@@ -12,6 +12,7 @@ import settlement.battle.invasion.Invador;
 import settlement.trade.PBuyer;
 import settlement.trade.PSeller;
 import sosdet.txn.Txn;
+import sosdet.txn.TxnKind;
 import world.WORLD;
 import world.entity.army.WArmy;
 
@@ -88,6 +89,127 @@ public final class HeldTxn {
             break;
         }
         return h;
+    }
+
+    /** The human whose city it is for. */
+    public int human() {
+        return t.human;
+    }
+
+    /**
+     * Whether a save can hold a transaction of {@code kind} (SOS-193): the kinds that can reach a frozen human's city,
+     * whose capital nobody attacks and whose armies stand still: trade, money, a war's end, invasions called off and
+     * immigrants. The others carry the world's own objects (people, divisions, an invasion), which no key finds again.
+     */
+    public static boolean storable(TxnKind kind) {
+        switch (kind) {
+        case BUYER_RESERVE:
+        case BUYER_DELIVER:
+        case SELLER_REMOVE:
+        case CREDITS:
+        case CREDITS_TRADE:
+        case WAR_ENDED:
+        case INVASION_CANCEL:
+        case IMMIGRANTS_HIGHER:
+            return true;
+        default:
+            return false;
+        }
+    }
+
+    /** Writes a {@link #storable} transaction, by the keys of its game objects. */
+    void save(snake2d.util.file.FilePutter file) {
+        if (!storable(t.kind)) {
+            throw new IllegalStateException("SOSDET: a held transaction of kind " + t.kind + " can't be saved");
+        }
+        file.i(t.kind.ordinal());
+        file.i(t.human);
+        file.i(t.i);
+        file.i(t.j);
+        file.l(Double.doubleToRawLongBits(t.d));
+        file.i(keyA);
+        file.i(keyC);
+        switch (t.kind) {
+        case BUYER_RESERVE:
+        case BUYER_DELIVER:
+        case SELLER_REMOVE:
+            file.i(((init.trade.TRADE_TYPE) t.b).index);
+            break;
+        case CREDITS:
+            file.i(((game.faction.FCredits.CTYPE) t.b).ordinal());
+            break;
+        case CREDITS_TRADE:
+            file.i(((game.faction.FCredits.CTYPE) t.b).ordinal());
+            file.i(((init.trade.TRADABLE) t.c).index());
+            break;
+        case WAR_ENDED:
+            file.i(factions[0]);
+            file.i(factions[1]);
+            file.i(stanceIndex(stances[0]));
+            file.i(stanceIndex(stances[1]));
+            break;
+        case IMMIGRANTS_HIGHER:
+            file.i(((init.race.Race) t.a).index());
+            break;
+        default:
+            break;
+        }
+    }
+
+    /** Reads a transaction {@link #save} wrote, with this game's data objects; its others {@link #resolve} finds. */
+    static HeldTxn load(snake2d.util.file.FileGetter file) throws java.io.IOException {
+        int kind = file.i();
+        if (kind < 0 || kind >= TxnKind.values().length || !storable(TxnKind.values()[kind])) {
+            throw new java.io.IOException("SOSDET: a held transaction of kind " + kind);
+        }
+        HeldTxn h = new HeldTxn();
+        Txn t = h.t;
+        t.kind = TxnKind.values()[kind];
+        t.human = file.i();
+        t.i = file.i();
+        t.j = file.i();
+        t.d = Double.longBitsToDouble(file.l());
+        h.keyA = file.i();
+        h.keyC = file.i();
+        switch (t.kind) {
+        case BUYER_RESERVE:
+        case BUYER_DELIVER:
+        case SELLER_REMOVE:
+            t.b = init.trade.TRADE_TYPE.all.get(file.i());
+            break;
+        case CREDITS:
+            t.b = game.faction.FCredits.CTYPE.values()[file.i()];
+            break;
+        case CREDITS_TRADE:
+            t.b = game.faction.FCredits.CTYPE.values()[file.i()];
+            t.c = TR.ALL().get(file.i());
+            break;
+        case WAR_ENDED:
+            h.factions = new int[] {file.i(), file.i()};
+            h.stances = new String[] {stances()[file.i()].key(), stances()[file.i()].key()};
+            break;
+        case IMMIGRANTS_HIGHER:
+            t.a = init.race.RACES.all().get(file.i());
+            break;
+        default:
+            break;
+        }
+        return h;
+    }
+
+    /** The stances a war's end names, in the order a save numbers them (SOS-193). */
+    private static DipStance[] stances() {
+        return new DipStance[] {DIP.WAR(), DIP.NEUTRAL(), DIP.TRADE(), DIP.PACT(), DIP.ALLY(), DIP.VASSAL(), DIP.OVERLORD()};
+    }
+
+    private static int stanceIndex(String key) {
+        DipStance[] all = stances();
+        for (int i = 0; i < all.length; i++) {
+            if (all[i].key().equals(key)) {
+                return i;
+            }
+        }
+        throw new IllegalStateException("SOSDET: no diplomatic stance " + key + " in this game build" + VERSION);
     }
 
     /** The transaction, with the loaded game's objects; null when there is nothing left to apply it to. */

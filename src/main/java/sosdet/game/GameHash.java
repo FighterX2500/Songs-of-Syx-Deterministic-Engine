@@ -224,7 +224,7 @@ public final class GameHash implements StateSource {
         if (w != null) {
             w.eventHumans = GameEvents.keep(w.events);
         }
-        h = part(w, 7, GameCarves.hash(GamePassed.hash(GameTraded.hash(GameSieges.hash(GameTariffs.hash(GameDeals.hash(h))))))); // the carves (SOS-186), the tariffs, sieges, trade and passed stances with the deals: between humans
+        h = part(w, 7, GameFrozen.hash(GameCarves.hash(GamePassed.hash(GameTraded.hash(GameSieges.hash(GameTariffs.hash(GameDeals.hash(h)))))))); // the frozen humans (SOS-193), the carves (SOS-186), the tariffs, sieges, trade and passed stances with the deals: between humans
         h = part(w, 8, Engine.active() ? GameWorldLoad.hashFboosts(h) : h); // a world before its session: a load's draws, each copy's
         h = part(w, 9, npcStocks(h));
         h = part(w, 10, regionPopulations(h));

@@ -821,7 +821,7 @@ diff -ru -U2 a/world/region/building/RDBuildPoints.java b/world/region/building/
 -		
 +		upI = sosdet.Hooks.partKey(GAME.updateI());
 +		for (int h : sosdet.Hooks.humanSlots()) { // SOSDET: every human's regions, each as the world part's current human (SOS-46)
-+			if (sosdet.Hooks.retired(h)) continue; // SOSDET: a removed human runs nothing (SOS-66)
++			if (sosdet.Hooks.dormant(h)) continue; // SOSDET: a removed human runs nothing (SOS-66), nor a frozen one (SOS-193)
 +			int was = sosdet.Hooks.currentHumanSwap(h);
 +			calc(FACTIONS.getByIndex(h).realm());
 +			sosdet.Hooks.currentHumanSwap(was);
@@ -1272,7 +1272,7 @@ diff -ru -U2 a/world/region/RDDistance.java b/world/region/RDDistance.java
 +		init();
 +		int[] hs = sosdet.Hooks.humanSlots();
 +		for (int k = 0; k < hs.length; k++) {
-+			if (sosdet.Hooks.retired(hs[k])) continue; // SOSDET: a removed human runs nothing (SOS-66)
++			if (sosdet.Hooks.dormant(hs[k])) continue; // SOSDET: a removed human runs nothing (SOS-66), nor a frozen one (SOS-193)
 +			if (factionBorders.get(k, f) == 1)
 +				return FACTIONS.getByIndex(hs[k]);
 +		}

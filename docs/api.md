@@ -46,6 +46,17 @@ A city-state can be carved into a running world as a new 3x3 region (SOS-186, SO
 - `uncarve(region)` undoes one, in any order: only the roads and path steps no other carve uses go.
 - The undo log is the save section `SOSDET_CARVES`, loaded with the world and in the world hash.
 - After either, every PC loads the world from that PC's save: a world changed in place on one PC never matches one that was loaded (SOS-38, SOS-184).
+- **A gone human's city-state (SOS-188):** `uncarveDue()` names a carved region no human holds any more (its human removed, or eliminated and the city given to a neutral NPC), or -1; it allocates nothing, so a mod can ask every frame. The host then calls `worldEditHold()`: every PC holds at a step a little ahead, as for a desync, but `desyncHold().edit()` is true (no PC differs, nothing to choose). At the hold step the host calls `uncarve(region)` and `worldResyncSave()`; every PC's `worldResyncLoad` ends the hold.
+- **A new human (hot-join, SOS-189):** `joinSlot()` names the slot a newcomer would take, the first free NPC slot above the last human's, or -1 when the map has none. `addHuman(human, credits)` carves the newcomer's city-state at its spot (or the nearest that fits, 3 tiles at most) and makes that slot a human with `credits`. Hot-join restarts every PC: each loads its own copy of the same campaign save in its session, calls `addHuman` with the same arguments before step 0, saves and loads that save, then runs. The carve and the new human are the same on every PC (seeded from the world, rig runs CE1, CE2, AH2); a load with no session isn't, so `addHuman` comes after a session's load. The names a carve gives a new NPC state, its capital and its king come from vanilla's race name lists, whose cursors are per-PC state; every such edit first sets them from the seeded stream, past any human's name, so every PC names the new state alike (SOSGSGMP HJ5).
+
+## Frozen humans
+
+A player can leave a running campaign and come back later (SOS-193, SOSGSGMP spec §11 Freezing a player, [plan 0020](plan/0020-freeze.md)):
+
+- `freezeHuman(slot)`, host, between steps: refused as `removeHuman` is (`freezeRefusal` says why, or null). The entry applies at the same step on every PC, as a removal does, and nobody waits for that PC from the call on. The human keeps its slot and its capital; every stance but a trade or a pact becomes neutral (its wars end, its vassals go free); its other regions become free land; its open deals and the siege of its capital end; its armies go home and stand still, as they are.
+- While frozen (`frozen(slot)`), every PC reads its city as its last report showed it, also after any load (the report is in the world save, section `SOSDET_FROZEN`). The transactions for its city wait there too. No NPC makes war on it, raids it or gathers on its border; deals, wars and tariffs with it are refused; its city can't be viewed.
+- `removeHuman(slot)` still removes a frozen human for good, at once.
+- **Rejoin:** at a restart like hot-join's, the host calls `rejoinOut(file)` right after the campaign save every PC reloads; every PC, the returning one from its own freeze save, calls `rejoinLoad(file, state)` in its session before step 1, then `thawHuman(slot)`. The returning PC's city goes on where it stopped, and the transactions that waited for it apply there. `rejoinLoad` refuses a game whose human slots differ from the host's (a player joined since the city froze).
 
 ## Threads
 
@@ -104,6 +115,7 @@ A resync carries a save file as well as the returned bytes, so send both. The en
 
 - V71, build 71.44 only.
 - The host can't change during a session: `aiHost` and `aiPeer` throw after step 0.
-- `removeHuman` refuses slot 0.
+- `removeHuman` and `freezeHuman` refuse slot 0.
+- A frozen human can't rejoin once another player has joined since it froze.
 - In `ownCity` mode each city differs by PC, so only the world is compared.
 - The scenario suite checks little today: see [rig/README.md](../rig/README.md).

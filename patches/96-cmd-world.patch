@@ -96,7 +96,7 @@ diff -ru -U2 a/game/faction/npc/NPCRequest.java b/game/faction/npc/NPCRequest.ja
 -			expire();
 +		int[] hs = sosdet.Hooks.humanSlots(); // SOSDET: each human's request, expired with that human current (SOS-46 M3)
 +		for (int k = 0; k < hs.length; k++) {
-+			if (sosdet.Hooks.retired(hs[k])) continue; // SOSDET: a removed human runs nothing (SOS-66)
++			if (sosdet.Hooks.dormant(hs[k])) continue; // SOSDET: a removed human runs nothing (SOS-66), nor a frozen one (SOS-193)
 +			if (has[k] & Math.abs(TIME.currentSecond()-time[k]) > TIME.secondsPerDay()){
 +				int before = sosdet.Hooks.currentHumanSwap(hs[k]);
 +				expire();
@@ -842,7 +842,7 @@ diff -ru -U2 a/world/army/AD.java b/world/army/AD.java
  		updaterDiv.update(ds);
 +		if (sosdet.Hooks.everyHuman()) { // SOSDET: every human's stored divisions, each as its own human (SOS-46)
 +			for (int h : sosdet.Hooks.humanSlots()) {
-+				if (sosdet.Hooks.retired(h)) continue; // SOSDET: a removed human runs nothing (SOS-66)
++				if (sosdet.Hooks.dormant(h)) continue; // SOSDET: a removed human runs nothing (SOS-66), nor a frozen one (SOS-193)
 +				sosdet.Hooks.currentHuman(h);
 +				cityDivs(h).update(ds);
 +			}

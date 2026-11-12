@@ -621,6 +621,9 @@ public final class HumanDeals {
      * step and, for the UI, outside it: each side's money and goods are read as that side, from its city's report in the
      * world part.
      */
+    /** Why nobody deals with a frozen player (SOS-193, mod spec §11 Freezing a player). */
+    static final String FROZEN = "That player is frozen: no new deals until they come back.";
+
     public static String refusal(Faction from, Faction to, Terms terms) {
         if (!(from instanceof Player) || !(to instanceof Player)) {
             return "Deals here are between players.";
@@ -630,6 +633,9 @@ public final class HumanDeals {
         }
         if (Hooks.retired(from.index()) || Hooks.retired(to.index())) {
             return "That player was removed from the game.";
+        }
+        if (Hooks.dormant(from.index()) || Hooks.dormant(to.index())) {
+            return FROZEN; // no new deal with a frozen player (SOS-193)
         }
         if (terms.empty()) {
             return "The deal has nothing in it.";
@@ -753,6 +759,9 @@ public final class HumanDeals {
         if (Hooks.retired(from.index()) || Hooks.retired(to.index())) {
             return "That player was removed from the game.";
         }
+        if (Hooks.dormant(from.index()) || Hooks.dormant(to.index())) {
+            return FROZEN; // no new deal with a frozen player (SOS-193)
+        }
         return DIP.WAR().is(from, to) ? "Already at war." : null;
     }
 
@@ -766,6 +775,9 @@ public final class HumanDeals {
         }
         if (Hooks.retired(from.index()) || Hooks.retired(to.index())) {
             return "That player was removed from the game.";
+        }
+        if (Hooks.dormant(from.index()) || Hooks.dormant(to.index())) {
+            return FROZEN; // no new deal with a frozen player (SOS-193)
         }
         if (!DIP.get(from, to).trades) {
             return "Needs a trade agreement first.";
