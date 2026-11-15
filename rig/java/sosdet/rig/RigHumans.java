@@ -113,19 +113,22 @@ final class RigHumans {
         String race = FACTIONS.player().race().key;
         String carvedText = null;
         if (carving) {
+            // around a stand-in capital the generator places; human 0 carves too (SOS-214), nearest the map's centre
+            Engine.buildWorldForCarving(new HumanStart(race, "Human 0", null, -1, -1), n);
             xs[0] = -1;
             for (int rad = 0; rad < WORLD.TWIDTH() && xs[0] < 0; rad++) {
                 for (int dy = -rad; dy <= rad && xs[0] < 0; dy++) {
                     for (int dx = -rad; dx <= rad && xs[0] < 0; dx++) {
-                        if (Math.max(Math.abs(dx), Math.abs(dy)) == rad
-                                && Engine.locationProblem(cx + dx, cy + dy, new int[0], new int[0]) == null) {
+                        if (Math.max(Math.abs(dx), Math.abs(dy)) == rad && Engine.carveProblem(cx + dx, cy + dy) == null) {
                             xs[0] = cx + dx;
                             ys[0] = cy + dy;
                         }
                     }
                 }
             }
-            Engine.buildWorldForCarving(new HumanStart(race, "Human 0", null, xs[0], ys[0]), n);
+            if (xs[0] < 0) {
+                throw new IllegalStateException("SOSDET rig: no carving spot for human 0");
+            }
             for (int k = 1; k < n; k++) {
                 boolean found = false;
                 for (int pass = 0; pass < 2 && !found; pass++) // 7 to 15 tiles from human 0 first, then anywhere
