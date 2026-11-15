@@ -2755,12 +2755,18 @@ final class Session {
     private int updateBase;
     private boolean updateBaseSet;
 
-    /** A step starts, the counter already counted for it. */
-    void updateSeen(int updateI) {
+    /**
+     * A step starts, the counter already counted for it: returns the counter for this step. The first step sets it to
+     * {@code agreed}, the same on every PC, not to the counter of this PC's own save. A PC that loaded an older save
+     * (a player back from a freeze, or one who joined) counted from another number, and a city whose timers read the
+     * counter (a house's candle) then ran differently on a viewer's PC (playtest 2026-11-14, SOS-208).
+     */
+    int updateSeen(int updateI, int agreed) {
         if (!updateBaseSet) {
-            updateBase = updateI - (int) clock.step() - 1;
+            updateBase = agreed - (int) clock.step() - 1;
             updateBaseSet = true;
         }
+        return updateBase + (int) clock.step() + 1;
     }
 
     /** The counter after a load between steps: the step's, however old the save; before the first step, the save's. */

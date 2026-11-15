@@ -563,9 +563,15 @@ public final class Hooks {
         return true;
     }
 
-    /** Patch 10, as a step starts: see {@link #updateLoaded}. */
-    public static void updateSeen(int updateI) {
-        Engine.session().updateSeen(updateI);
+    /**
+     * Patch 10, as a step starts: the game's update counter for this step (see {@link #updateLoaded}). The session's
+     * first step sets it from the world's calendar, which every PC has alike, one per 1x step of game time since the
+     * world began: so it only grows from one session to the next, and a PC that loaded an older save of its city counts
+     * as the others do (SOS-208).
+     */
+    public static int updateSeen(int updateI) {
+        long ticks = (long) Math.floor(game.time.TIME.currentSecond() / Engine.STEP_SECONDS);
+        return Engine.session().updateSeen(updateI, (int) (ticks & 0x3FFF_FFFFL));
     }
 
     /**

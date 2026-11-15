@@ -1,6 +1,6 @@
 diff -ru -U2 a/game/GAME.java b/game/GAME.java
 --- a/game/GAME.java	2026-06-17 19:41:18.000000000 +0500
-+++ b/game/GAME.java	2026-11-05 05:21:06.219795000 +0500
++++ b/game/GAME.java	2026-11-15 14:00:09.936197100 +0500
 @@ -108,7 +108,7 @@
  				
  				SPEED.load(file);
@@ -49,7 +49,7 @@ diff -ru -U2 a/game/GAME.java b/game/GAME.java
 +					game.updateI++; // SOSDET: counted as the step starts, before its commands apply: between steps the UI sees
 +					// the tick just run, so a tick-keyed cache the simulation filled is only read, and one the UI fills is
 +					// refilled in the step before a command reads it (SOS-32, SOS-36)
-+					sosdet.Hooks.updateSeen(game.updateI);
++					game.updateI = sosdet.Hooks.updateSeen(game.updateI); // SOSDET: every PC's the same count from the session's first step (SOS-208)
 +					if (!sosdet.Hooks.stepBegin()) {
 +						game.updateI--; // no step ran
 +						break;
