@@ -235,6 +235,27 @@ class EngineTest {
     }
 
     /**
+     * SOS-209: in own-city mode a player's division order (a muster, a guard, a placement) acts in that player's city
+     * only, as a city command does; the general's changes apply as before, and in a battle every PC's order does.
+     */
+    @Test
+    void aPlayersDivisionOrderActsInTheirOwnCityOnly() {
+        Session s = ownCity(0);
+        s.city = humans(0, 3);
+        Engine.pcHuman(0, 0);
+        Engine.pcHuman(1, 3);
+        assertTrue(Hooks.cityOrderHere(0), "this PC's own order");
+        assertFalse(Hooks.cityOrderHere(1), "PC 1's muster is for PC 1's city, not this one");
+        assertTrue(Hooks.cityOrderHere(sosdet.ai.AiEntry.AI), "the general's change");
+        Engine.runFreely();
+        Engine.reportsIn(1, reportRecord(3, 1, 1));
+        steps(20, 1);
+        s.battle = new OwnBattle(Engine.step(), 3, s.pcOf(3), -1, s.streams.worldDraws());
+        s.battle.awaiting = false;
+        assertTrue(Hooks.cityOrderHere(1), "the battle is every PC's game");
+    }
+
+    /**
      * Plan 0006: a battle holds every PC at its Engage step until the battle PC's battle is loaded; while it runs, every
      * PC draws the step's seed, acts as the battle's human, takes no reports and keeps the others' for after it.
      */

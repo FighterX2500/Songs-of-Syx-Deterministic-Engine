@@ -929,6 +929,15 @@ public final class Hooks {
                 || s.ai().applyingTaped();
     }
 
+    /**
+     * Whether a division's, an artillery piece's or a placement's change from PC {@code pc} applies here: the general's
+     * always, as before; a player's order as a city command, only in that player's own city (SOS-209: a muster in one
+     * city mustered the same division in every city, and in a viewer's copy of another's).
+     */
+    public static boolean cityOrderHere(int pc) {
+        return pc == sosdet.ai.AiEntry.AI || cityCommandHere(pc);
+    }
+
     /** A city view's start or end in the log, at its step (SOS-82). */
     public static void viewEntry(long step, int viewer, int owner, int ownerPc) {
         Engine.session().viewEntry(step, viewer, owner, ownerPc);
