@@ -173,9 +173,11 @@ public final class GameWorldSetup {
 
     /**
      * Setup by carving (SOS-187, SOSGSGMP docs/plan/hot-join.md §4), step 1, on the PC that builds the world: the whole
-     * world around the host alone, at {@code host}'s location, as vanilla makes it for one player, with NPC slots 1 to
-     * {@code humans} - 1 left free for the other humans. The caller saves; every PC loads it, and each other player
-     * picks a spot on its real map ({@link GameCarve#problem}). Then {@link #carveHumans}.
+     * world as vanilla makes it for one player, with NPC slots 1 to {@code humans} - 1 left free for the other humans.
+     * The host has no spot yet (SOS-214): the world is built around a stand-in capital for them, where vanilla's generator
+     * places one itself ({@code GenPlayer} with no location), and the host carves their city-state in step 2 like every
+     * other human. {@code host}'s race and name are used; its spot must be none (negative). The caller saves; every PC
+     * loads it, and each player picks a spot on its real map ({@link GameCarve#problem}). Then {@link #carveHumans}.
      */
     public static void buildForCarving(HumanStart host, int humans) {
         if (!WORLD.GEN().hasGeneratedTerrain) {
@@ -188,9 +190,9 @@ public final class GameWorldSetup {
         if (humans < 1 || humans > (GameHumans.SPARES + 1)) {
             throw new IllegalArgumentException("SOSDET: " + humans + " humans; 1 to " + (GameHumans.SPARES + 1));
         }
-        String p = terrainProblem(host.tx, host.ty);
-        if (p != null) {
-            throw new IllegalArgumentException("SOSDET: the host can't start at " + host.tx + "," + host.ty + ": " + p);
+        if (host.tx >= 0 || host.ty >= 0) {
+            throw new IllegalArgumentException("SOSDET: the host carves their spot after the build (SOS-214); a spot "
+                    + host.tx + "," + host.ty + " was given");
         }
         Race race = race(host.race);
         Player h = FACTIONS.player();
@@ -200,19 +202,25 @@ public final class GameWorldSetup {
         FACTIONS.otherFactionSet(other);
         GameHumans.get().reserve(humans);
         try {
-            generate(host.tx, host.ty);
+            generate(-1, -1); // GenPlayer picks the stand-in's spot
         } finally {
             GameHumans.get().release();
         }
+        world.map.regions.Region standIn = h.capitolRegion();
+        if (standIn == null) {
+            throw new IllegalStateException("SOSDET: the generator placed no stand-in capital for the host");
+        }
         set(h, host, race);
-        finish(host.tx, host.ty);
+        finish(standIn.cx(), standIn.cy());
     }
 
     /**
-     * Setup by carving, step 2, on the PC that built the world in step 1, before step 0: each other human, in slot order,
-     * gets a city-state carved at its picked spot ({@link GameCarve#carve}: links, the split rule) in slot 1 to N - 1.
-     * {@code humans[0]} is the host, placed in step 1. The caller then saves, and every PC loads that save before step 0
-     * as after {@link #build}; each other PC then makes its city with {@code Engine.ownCityAt}.
+     * Setup by carving, step 2, on the PC that built the world in step 1, before step 0: each human, in slot order, gets a
+     * city-state carved at its picked spot ({@link GameCarve#carve}: links, the split rule), the host's (slot 0) first
+     * (SOS-214), then slots 1 to N - 1. The host's capital moves from the stand-in to their city-state, the stand-in
+     * becomes a new neutral NPC state (unowned land with no free slot), and the host's city is generated at their
+     * capital. The caller then saves, and every PC loads that save before step 0 as after {@link #build}; each other PC
+     * then makes its city with {@code Engine.ownCityAt}.
      */
     public static String carveHumans(HumanStart[] humans) {
         int n = humans.length;
@@ -231,7 +239,7 @@ public final class GameWorldSetup {
         StringBuilder done = new StringBuilder();
         GameHumans.get().reserve(n);
         try {
-            for (int k = 1; k < n; k++) {
+            for (int k = 0; k < n; k++) {
                 HumanStart h = humans[k];
                 Race race = race(h.race);
                 int[] at = nearestFit(h.tx, h.ty);
@@ -241,18 +249,47 @@ public final class GameWorldSetup {
                 }
                 GameCarve.Result r = GameCarve.carve(at[0], at[1], h.name);
                 world.map.regions.Region reg = WORLD.REGIONS().getByIndex(r.record.region);
-                GameHumans.get().activateNpc(reg, false, k);
-                reg.setCapitol();
-                Player pl = GameHumans.get().add(k);
-                set(pl, h, race);
-                pl.credits().set(host.credits().getD()); // every player starts with the same (mod spec §5)
-                done.append(k == 1 ? "" : "; ").append("human ").append(k).append(at[0] == h.tx && at[1] == h.ty ? "" : " moved to "
-                        + at[0] + "," + at[1]).append(": ").append(r);
+                String standIn = "";
+                if (k == 0) {
+                    standIn = moveHost(host, reg);
+                } else {
+                    GameHumans.get().activateNpc(reg, false, k);
+                    reg.setCapitol();
+                    Player pl = GameHumans.get().add(k);
+                    set(pl, h, race);
+                    pl.credits().set(host.credits().getD()); // every player starts with the same (mod spec §5)
+                }
+                done.append(k == 0 ? "" : "; ").append("human ").append(k).append(at[0] == h.tx && at[1] == h.ty ? "" : " moved to "
+                        + at[0] + "," + at[1]).append(": ").append(r).append(standIn);
             }
         } finally {
             GameHumans.get().release();
         }
+        world.map.regions.Region capital = host.capitolRegion();
+        GAME.s().CreateFromWorldMap(capital.cx() - 1, capital.cy() - 1, false); // as finish() did at the stand-in
         return done.toString();
+    }
+
+    /**
+     * The host's capital moves from the stand-in to {@code reg}, their carved city-state; the stand-in goes to a new
+     * neutral NPC state (protected as the carve rule's new states are), or to nobody with no free slot. Returns a note
+     * for the log.
+     */
+    private static String moveHost(Player host, world.map.regions.Region reg) {
+        world.map.regions.Region standIn = host.capitolRegion();
+        if (standIn == null || standIn == reg) {
+            throw new IllegalStateException("SOSDET: the host has no stand-in capital to leave (" + standIn + ")");
+        }
+        reg.fationSet(host, false);
+        reg.setCapitol();
+        if (host.realm().regions() != 2 || host.capitolRegion() != reg) {
+            throw new IllegalStateException("SOSDET: the host's realm after the carve: " + host.realm().regions()
+                    + " regions, capital " + host.capitolRegion());
+        }
+        standIn.fationSet(null, false);
+        FactionNPC npc = GameHumans.get().activateNpc(standIn, true);
+        return npc == null ? " (the stand-in, region " + standIn.index() + ", left unowned: no free slot)"
+                : " (the stand-in, region " + standIn.index() + ", to NPC " + npc.index() + ")";
     }
 
     /**

@@ -965,9 +965,10 @@ public final class Engine {
 
     /**
      * Setup by carving (SOS-187, SOSGSGMP docs/plan/hot-join.md §4), step 1, on the one PC that builds the world: the whole
-     * world around the host alone at {@code host}'s location, as vanilla makes it for one player, with NPC slots 1 to
-     * {@code humans} - 1 kept free. Then this PC saves, every PC loads that save, and each other player picks a spot on
-     * its map ({@link #carveProblem}). No session.
+     * world as vanilla makes it for one player, around a stand-in capital for the host that vanilla's generator places
+     * (SOS-214; {@code host} gives the race and name, its spot must be none), with NPC slots 1 to {@code humans} - 1 kept
+     * free. Then this PC saves, every PC loads that save, and every player, the host too, picks a spot on its map
+     * ({@link #carveProblem}). No session.
      */
     public static void buildWorldForCarving(HumanStart host, int humans) {
         GameWorldSetup.buildForCarving(host, humans);
@@ -975,8 +976,9 @@ public final class Engine {
 
     /**
      * Setup by carving, step 2, on the PC that built the world: {@code humans[1..]} each get a city-state carved at their
-     * spot, in slots 1 to N - 1 in order ({@link #carve}'s links and split rule); a spot an earlier carve made unfit moves
-     * to the nearest that fits, at most 3 tiles. {@code humans[0]} is the host, placed in step 1. Then this PC saves, and
+     * spot, in slots 0 to N - 1 in order ({@link #carve}'s links and split rule); a spot an earlier carve made unfit moves
+     * to the nearest that fits, at most 3 tiles. {@code humans[0]} is the host: their capital moves from step 1's stand-in,
+     * which becomes a neutral NPC state, and their city is made at it (SOS-214). Then this PC saves, and
      * every PC loads that save before step 0, as after {@link #buildWorld}. Returns a line per human for the log. No
      * session.
      */
