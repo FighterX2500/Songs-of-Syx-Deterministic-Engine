@@ -587,6 +587,27 @@ public final class GameWorldLoad {
         }
     }
 
+    /**
+     * Starts the city's own events and its population classes' temporary boosts as a new game does ({@code
+     * EVENTS.generate} clears every event): a city made on a loaded world keeps neither the loaded city's (SOS-215).
+     * The world's events stay.
+     */
+    static void clearCityParts() {
+        try {
+            LIST<EVENTS.EventResource> all = GAME.events().all();
+            for (int i = 0; i < all.size(); i++) {
+                if (!StepParts.worldEvent(all.get(i).key)) {
+                    EVENT_CLEAR.invoke(all.get(i));
+                }
+            }
+        } catch (IllegalAccessException | InvocationTargetException e) {
+            throw new IllegalStateException("SOSDET: cannot clear the city's events" + VERSION, e);
+        }
+        for (SAVABLE b : popBoosts()) {
+            b.clear();
+        }
+    }
+
     /** The temporary boosts of the city's population classes ({@code TEMP_EVENTS}' {@code popcl} range). */
     private static SAVABLE[] popBoosts() {
         try {
