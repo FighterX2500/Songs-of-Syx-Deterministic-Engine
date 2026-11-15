@@ -1022,7 +1022,7 @@ diff -ru -U2 a/world/region/RDBoostCache.java b/world/region/RDBoostCache.java
  			cache.set(reg, upI);
 diff -ru -U2 a/world/region/RDDistance.java b/world/region/RDDistance.java
 --- a/world/region/RDDistance.java	2026-06-17 10:48:04.000000000 +0500
-+++ b/world/region/RDDistance.java	2026-11-12 17:39:09.432208700 +0500
++++ b/world/region/RDDistance.java	2026-11-15 13:41:17.560545500 +0500
 @@ -47,32 +47,41 @@
  	private static CharSequence ¤¤Borders = "¤Borders";
  	private static CharSequence ¤¤Reachable = "¤Reachable";
@@ -1172,7 +1172,7 @@ diff -ru -U2 a/world/region/RDDistance.java b/world/region/RDDistance.java
  		for (RegDist d : WORLD.PATH().regFinder.all(cap, Treaty.FACTION_CAN_ATTACK, WRegSel.DUMMY())) {
  			if (d.reg.faction() != null) {
  				if (d.reg.capitol()) {
-@@ -247,6 +260,73 @@
+@@ -247,6 +260,158 @@
  		}
  	}
  	
@@ -1180,28 +1180,49 @@ diff -ru -U2 a/world/region/RDDistance.java b/world/region/RDDistance.java
 +	 * SOSDET: a human with a transit stance to this one (colleagues, an alliance), whose capitol this human's trade
 +	 * reaches, carries this human's reach on, as an NPC's land with transit does in vanilla's walk: the walk goes on from
 +	 * that human's capitol by this human's stances. A human's land often lies past an NPC's region, reached only by the
-+	 * guaranteed route (SOS-120); without this, a colleague there opened nothing (SOS-200). The world part fills it, from
-+	 * world state only, as the rest of the slice.
++	 * guaranteed route (SOS-120); without this, a colleague there opened nothing (SOS-200). The reach goes on along that
++	 * human's own guaranteed routes too, and through each colleague it reaches so (playtest 2026-11-14: a colleague's
++	 * route partner stayed out of reach and fogged). The world part fills it, from world state only, as the rest of the
++	 * slice.
 +	 */
 +	private void sosdetThroughHumans(Region cap, int h, ArrayList<FactionNPC> borders) {
 +		Faction me = cap.faction();
-+		for (int slot : sosdet.Hooks.humanSlots()) {
-+			Faction other = FACTIONS.getByIndex(slot);
-+			Region there = other.capitolRegion();
-+			if (other == me || there == null || !sosdetTradeReach[h][slot] || sosdet.Hooks.retired(slot)
-+					|| regionReachable.get(there) == 1 || !DIP.get(me, other).transit)
-+				continue;
-+			sosdetThroughOrigin = cap;
-+			for (RegDist d : WORLD.PATH().regFinder.all(there, sosdetThrough, WRegSel.DUMMY())) {
-+				if (regionReachable.get(d.reg) == 1)
++		Arrays.fill(sosdetCarried, false);
++		for (boolean grew = true; grew;) { // a colleague reached through another carries on too (playtest 2026-11-14)
++			grew = false;
++			for (int slot : sosdet.Hooks.humanSlots()) {
++				Faction other = FACTIONS.getByIndex(slot);
++				Region there = other.capitolRegion();
++				if (other == me || there == null || sosdetCarried[slot] || !sosdetTradeReach[h][slot]
++						|| sosdet.Hooks.retired(slot) || !DIP.get(me, other).transit)
 +					continue;
-+				regionReachable.set(d.reg, 1);
-+				if (d.reg.faction() != null && d.reg.capitol()) {
-+					factionReachable.set(d.reg.faction(), 1);
-+					if (d.reg.faction() instanceof FactionNPC)
-+						borders.add((FactionNPC) d.reg.faction());
++				sosdetCarried[slot] = true;
++				grew = true;
++				sosdetThroughOrigin = cap;
++				for (RegDist d : WORLD.PATH().regFinder.all(there, sosdetThrough, sosdetFresh()))
++					sosdetReached(d.reg, borders);
++				for (int to : sosdet.Hooks.humanSlots()) { // and along that human's own guaranteed routes (playtest 2026-11-14)
++					Region t = FACTIONS.getByIndex(to).capitolRegion();
++					if (t == null || t == cap || t == there || sosdet.Hooks.retired(to) || regionReachable.get(t) == 1
++							|| !sosdet.HumanStart.inRouteRange(there.cx(), there.cy(), t.cx(), t.cy()))
++						continue;
++					sosdetRouteTo = t;
++					if (WORLD.PATH().regFinder.single(there.cx(), there.cy(), Treaty.DUMMY, sosdetRouteSel) != null)
++						sosdetReached(t, borders);
 +				}
 +			}
++		}
++	}
++
++	/** SOSDET: {@code reg} is in reach of the human whose slice init fills, and its NPC owner a neighbour (SOS-200). */
++	private void sosdetReached(Region reg, ArrayList<FactionNPC> borders) {
++		if (regionReachable.get(reg) == 1)
++			return;
++		regionReachable.set(reg, 1);
++		if (reg.faction() != null && reg.capitol()) {
++			factionReachable.set(reg.faction(), 1);
++			if (reg.faction() instanceof FactionNPC)
++				borders.add((FactionNPC) reg.faction());
 +		}
 +	}
 +	
@@ -1217,24 +1238,88 @@ diff -ru -U2 a/world/region/RDDistance.java b/world/region/RDDistance.java
 +	
 +	/**
 +	 * SOSDET: fills which humans the trade of slice {@code h}'s human reaches, as {@link #tradePartners} walks it
-+	 * without the trade agreement: across land the trade may cross, a human's at peace included (SOS-73), or by the
-+	 * guaranteed route to a human 6 to 15 tiles away (SOS-120). For the UI only: nothing in the step reads it (SOS-134).
++	 * without the trade agreement (SOS-134). For the UI; the step's trade walks the same chain in tradePartners.
 +	 */
 +	private void sosdetTradeReach(Region cap, int h) {
-+		boolean[] reach = sosdetTradeReach[h];
++		sosdetTradeChain(cap, sosdetTradeReach[h]);
++	}
++
++	/**
++	 * SOSDET: which humans the trade from the capitol {@code cap} reaches: across land the trade may cross, a human's at
++	 * peace included (SOS-73), or by the guaranteed route to a human 6 to 15 tiles away (SOS-120); and on from each human
++	 * it reaches at peace, through their land and along their own guaranteed routes (mod spec section 7; playtest
++	 * 2026-11-14: a route to a colleague carried the trade no further). From world state only, the same on every PC.
++	 */
++	private void sosdetTradeChain(Region cap, boolean[] reach) {
 +		Arrays.fill(reach, false);
-+		for (RegDist d : WORLD.PATH().regFinder.all(cap, Treaty.FACTION_REACHABLE_HUMAN_TRADE, WRegSel.DUMMY())) {
++		Arrays.fill(sosdetCarried, false);
++		Faction me = cap.faction();
++		sosdetTradeFrom(cap, cap, reach);
++		for (boolean grew = true; grew;) {
++			grew = false;
++			for (int slot : sosdet.Hooks.humanSlots()) {
++				Faction other = FACTIONS.getByIndex(slot);
++				Region there = other.capitolRegion();
++				if (!reach[slot] || sosdetCarried[slot] || there == null || there == cap || sosdet.Hooks.retired(slot)
++						|| !sosdet.game.cmd.HumanDeals.tradePasses(me, other))
++					continue;
++				sosdetCarried[slot] = true;
++				grew = true;
++				sosdetTradeFrom(cap, there, reach);
++			}
++		}
++	}
++
++	/** SOSDET: marks the humans the trade from {@code origin} reaches on from {@code from}: across land, and by its routes. */
++	private void sosdetTradeFrom(Region origin, Region from, boolean[] reach) {
++		sosdetThroughOrigin = origin;
++		for (RegDist d : WORLD.PATH().regFinder.all(from, sosdetTradeThrough, sosdetFresh())) {
 +			if (d.reg.capitol() && d.reg.faction() instanceof game.faction.player.Player)
 +				reach[d.reg.faction().index()] = true;
 +		}
 +		for (int slot : sosdet.Hooks.humanSlots()) {
 +			Region there = FACTIONS.getByIndex(slot).capitolRegion();
-+			if (reach[slot] || there == null || there == cap || sosdet.Hooks.retired(slot)
-+					|| !sosdet.HumanStart.inRouteRange(cap.cx(), cap.cy(), there.cx(), there.cy()))
++			if (reach[slot] || there == null || there == origin || sosdet.Hooks.retired(slot)
++					|| !sosdet.HumanStart.inRouteRange(from.cx(), from.cy(), there.cx(), there.cy()))
 +				continue;
 +			sosdetRouteTo = there;
-+			reach[slot] = WORLD.PATH().regFinder.single(cap.cx(), cap.cy(), Treaty.DUMMY, sosdetRouteSel) != null;
++			reach[slot] = WORLD.PATH().regFinder.single(from.cx(), from.cy(), Treaty.DUMMY, sosdetRouteSel) != null;
 +		}
++	}
++
++	/** SOSDET: the human trade walk from any capitol, by the trade rules of the human it started from (sosdetThroughOrigin). */
++	private final Treaty sosdetTradeThrough = new Treaty() {
++
++		@Override
++		public boolean can(Region origin, Region from, Region to, int tx, int ty, double dist) {
++			return Treaty.FACTION_REACHABLE_HUMAN_TRADE.can(sosdetThroughOrigin, from, to, tx, ty, dist);
++		}
++	};
++
++	/** SOSDET: per human, whether the walk went on from their capitol yet (playtest 2026-11-14). */
++	private final boolean[] sosdetCarried = new boolean[FACTIONS.MAX()];
++	private boolean sosdetFlip;
++	private final WRegSel sosdetAllA = new WRegSel() {
++		@Override
++		public boolean is(Region t) {
++			return true;
++		}
++	};
++	private final WRegSel sosdetAllB = new WRegSel() {
++		@Override
++		public boolean is(Region t) {
++			return true;
++		}
++	};
++
++	/**
++	 * SOSDET: every region, as WRegSel.DUMMY, but never the selector of the finder's last walk: the finder hands back its
++	 * last list for a walk with the same start, treaty and selector in one update, and the walks on from another human's
++	 * capitol share one treaty whose origin changes between them.
++	 */
++	private WRegSel sosdetFresh() {
++		sosdetFlip = !sosdetFlip;
++		return sosdetFlip ? sosdetAllA : sosdetAllB;
 +	}
 +	
 +	/** SOSDET: true when this human's trade reaches the human {@code f}'s capitol, as the world part last saw it (SOS-134). */
@@ -1246,17 +1331,20 @@ diff -ru -U2 a/world/region/RDDistance.java b/world/region/RDDistance.java
  	public int distance(Faction f) {
  		init();
  		return distance.get(f.capitolRegion());
-@@ -290,17 +370,191 @@
+@@ -290,17 +455,193 @@
  			return WORLD.PATH().regFinder.all(start.capitolRegion(), Treaty.FACTION_REACHABLE_NPC_TRADE, selTrade);
  		}
  		
 -		return WORLD.PATH().regFinder.all(start.capitolRegion(), Treaty.FACTION_REACHABLE, selTrade);
++		// SOSDET: the chain first: each walk reuses the finder's list and its distances (playtest 2026-11-14)
++		sosdetTradeChain(start.capitolRegion(), sosdetChain);
 +		return sosdetRouted(start, WORLD.PATH().regFinder.all(start.capitolRegion(), Treaty.FACTION_REACHABLE_HUMAN_TRADE, selTrade)); // SOSDET: a human's trade crosses a human's land at peace (SOS-73)
 +	}
 +
 +	/**
-+	 * SOSDET: {@code reached}, and each human 6 to 15 tiles from {@code start} it trades with: their route is guaranteed,
-+	 * across any land, the way caravans walk it (mod spec 5; SOS-120). {@code reached} is the finder's own list.
++	 * SOSDET: {@code reached}, and each other human it trades with that its trade reaches only by a guaranteed route
++	 * (SOS-120) or on past another human (sosdetTradeChain, playtest 2026-11-14), at the distance of the walk from
++	 * capitol to capitol across any land, the way caravans walk it (mod spec 5). {@code reached} is the finder's own list.
 +	 */
 +	private LIST<RegDist> sosdetRouted(Faction start, LIST<RegDist> reached) {
 +		Region home = start.capitolRegion();
@@ -1264,8 +1352,7 @@ diff -ru -U2 a/world/region/RDDistance.java b/world/region/RDDistance.java
 +		for (int slot : sosdet.Hooks.humanSlots()) {
 +			Faction other = FACTIONS.getByIndex(slot);
 +			Region there = other.capitolRegion();
-+			if (other == start || there == null || sosdet.Hooks.retired(slot) || !selTrade.is(there)
-+					|| !sosdet.HumanStart.inRouteRange(home.cx(), home.cy(), there.cx(), there.cy()))
++			if (other == start || there == null || sosdet.Hooks.retired(slot) || !sosdetChain[slot] || !selTrade.is(there))
 +				continue;
 +			boolean listed = false;
 +			for (int i = 0; i < reached.size(); i++)
@@ -1441,12 +1528,13 @@ diff -ru -U2 a/world/region/RDDistance.java b/world/region/RDDistance.java
  			if (d == null)
  				dists[f.index()] = 0;
  			else {
-@@ -311,6 +565,15 @@
+@@ -311,6 +652,16 @@
  	}
  	
  	private Faction selTradeF;
 +	private final ArrayList<RegDist> sosdetPartners = new ArrayList<RegDist>(world.map.regions.WREGIONS.MAX); // SOSDET: SOS-120
 +	private Region sosdetRouteTo; // SOSDET: SOS-120
++	private final boolean[] sosdetChain = new boolean[FACTIONS.MAX()]; // SOSDET: tradePartners' chain (playtest 2026-11-14)
 +	private final WRegSel sosdetRouteSel = new WRegSel() {
 +
 +		@Override
