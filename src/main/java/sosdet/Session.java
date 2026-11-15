@@ -2626,8 +2626,18 @@ final class Session {
         if (speed <= 0 || speed == seenSpeed) {
             return; // paused, or no change
         }
-        seenSpeed = speed;
         AiLog log = ai();
+        if (log.mode() == AiMode.PEER && followSpeed && battle == null && watchingBattle() == null) {
+            // the host sets the world's speed (mod spec §4): another PC's press only asks for one, and its buttons go
+            // back to the agreed speed (playtest 2026-11-14)
+            if (speed != clock.agreedSpeed()) {
+                speedAsked = speed;
+                speedShown = clock.agreedSpeed();
+            }
+            seenSpeed = clock.agreedSpeed();
+            return;
+        }
+        seenSpeed = speed;
         if (log.mode() == AiMode.IN_STEP) {
             clock.agreedSpeed(speed);
         } else if (log.mode() == AiMode.HOST) {
@@ -2764,8 +2774,17 @@ final class Session {
         return v != null && locals[v.owner] != null && locals[v.owner].roster.ally(localHuman) ? v : null;
     }
 
-    /** A local battle's speed for this PC's buttons, set at the next frame; -1 for none (SOS-160). */
+    /** The speed this PC's buttons show from the next frame (a local battle's voted, or the world's agreed); -1 for none. */
     private double speedShown = -1;
+    /** A speed this PC's player pressed that only the host can set, until the mod takes it; 0 for none. */
+    private double speedAsked;
+
+    /** The speed this PC's player last asked the host for since the last call, or 0 (mod spec §4). */
+    double takeSpeedAsked() {
+        double s = speedAsked;
+        speedAsked = 0;
+        return s;
+    }
 
     /** A speed change from the log set this PC's game speed: no press, in the world or in a local battle (SOS-171). */
     void speedFollowed(double speed) {

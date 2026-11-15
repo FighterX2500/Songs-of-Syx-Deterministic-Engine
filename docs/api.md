@@ -89,6 +89,8 @@ The engine has no network. Your mod carries every byte. Each frame, after the up
 
 Bytes may arrive in any pieces, but deliver them all, in order, for each sender. The engine has no timeouts. A peer holds where the host's log ends, and the world waits for the reports it reads.
 
+Only the host sets the world's speed. On every other PC that follows it (`followAgreedSpeed()`), a press of another speed changes nothing: the buttons go back to the agreed speed at the next frame, and `takeSpeedAsked()` returns the pressed speed once (0 otherwise), for your mod to pass on as a request. Pauses and battles' speeds are never requests.
+
 A report from a PC whose game data isn't this one's (other mods or game files) is not read: `reportMismatch()` returns it, a `sosdet.report.ReportMismatch` whose `what` names the size that differs (a `Count`, such as `BOOSTS`), with `theirs`, `ours` and the sender's `pc`. The world then waits for that PC's reports, so the mod ends the session with that message (SOS-159).
 
 When they come up:

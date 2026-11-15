@@ -2055,6 +2055,16 @@ public final class Engine {
         return required().speedNoticeNow(System.nanoTime());
     }
 
+    /**
+     * Outside the step, on a PC that follows the agreed speed ({@link #followAgreedSpeed}) and isn't the host: the world
+     * speed its player pressed since the last call, or 0. Only the host sets the world's speed (mod spec §4), so such a
+     * press changes nothing: the buttons go back to the agreed speed at the next frame, and the press is a request for
+     * the mod to pass on. Pauses and battles' speeds aren't requests. No allocation.
+     */
+    public static double takeSpeedAsked() {
+        return required().takeSpeedAsked();
+    }
+
     /** Host: frames the slowest PC held it in, their seconds, and the longest hold in seconds (SOS-42). */
     public static long heldFrames() {
         return required().pacer.heldFrames();

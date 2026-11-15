@@ -864,6 +864,31 @@ class EngineTest {
         assertTrue(Engine.retired(3));
     }
 
+    /**
+     * Playtest 2026-11-14: only the host sets the world's speed. A press of another speed on a PC that follows it
+     * changes nothing there: the buttons go back to the agreed speed and the press is a request, taken once. A press of
+     * the agreed speed, or a pause, asks for nothing.
+     */
+    @Test
+    void aPeersSpeedPressOnlyAsksTheHost() {
+        begin();
+        Session s = Engine.session();
+        s.ai(sosdet.ai.AiLog.peer(1, REMOVALS));
+        Engine.followAgreedSpeed();
+        Engine.runFreely();
+        s.speedSeen(1); // the agreed speed: no change
+        assertEquals(0.0, Engine.takeSpeedAsked());
+        s.speedSeen(25);
+        assertEquals(25.0, Engine.takeSpeedAsked(), "a request");
+        assertEquals(0.0, Engine.takeSpeedAsked(), "taken once");
+        assertEquals(1.0, s.takeSpeedShown(), "the buttons go back to the agreed speed");
+        assertEquals(1.0, s.clock.agreedSpeed(), "nothing changed");
+        s.speedSeen(1); // the buttons back on the agreed speed: no press
+        s.speedSeen(0); // a pause is no request
+        assertEquals(0.0, Engine.takeSpeedAsked());
+        assertEquals(-1.0, s.takeSpeedShown());
+    }
+
     /** SOS-66: a resumed campaign starts without a missing player's human: no PC waits for its load report. */
     @Test
     void aHumanRemovedAtTheStartSendsNoLoadReport() {
