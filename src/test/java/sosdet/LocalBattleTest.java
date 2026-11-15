@@ -218,8 +218,24 @@ class LocalBattleTest {
     void aLoadKeepsTheUpdateCounterOnTheStep() {
         Session s = session(0);
         assertEquals(500, s.updateLoaded(500), "before the first step the save's");
-        s.updateSeen(501);
+        assertEquals(501, s.updateSeen(501, 501));
         assertEquals(500, s.updateLoaded(123), "at step 0, the first step not run yet");
+    }
+
+    /**
+     * SOS-208: two PCs whose saves held other counters (one came back from a freeze) count alike from the first step,
+     * from the number every PC agrees on, and a city loaded between steps (a view) gets that count too.
+     */
+    @Test
+    void everyPcCountsTheSameFromTheFirstStep() {
+        Session a = session(0);
+        int first = a.updateSeen(70_001, 900_001);
+        Engine.end(); // the other PC
+        Session b = session(3);
+        assertEquals(first, b.updateSeen(4_001, 900_001), "the agreed number, not the save's");
+        assertEquals(900_001, first);
+        assertEquals(first, b.updateSeen(first, 123), "set once, at the first step");
+        assertEquals(a.updateLoaded(55), b.updateLoaded(66_666), "a load between steps: the same count on both");
     }
 
     /** Mod spec section 8, SOS-119: the ally's PC follows the battle by itself, on every PC alike. */

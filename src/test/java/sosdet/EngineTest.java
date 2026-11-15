@@ -235,6 +235,27 @@ class EngineTest {
     }
 
     /**
+     * SOS-209: in own-city mode a player's division order (a muster, a guard, a placement) acts in that player's city
+     * only, as a city command does; the general's changes apply as before, and in a battle every PC's order does.
+     */
+    @Test
+    void aPlayersDivisionOrderActsInTheirOwnCityOnly() {
+        Session s = ownCity(0);
+        s.city = humans(0, 3);
+        Engine.pcHuman(0, 0);
+        Engine.pcHuman(1, 3);
+        assertTrue(Hooks.cityOrderHere(0), "this PC's own order");
+        assertFalse(Hooks.cityOrderHere(1), "PC 1's muster is for PC 1's city, not this one");
+        assertTrue(Hooks.cityOrderHere(sosdet.ai.AiEntry.AI), "the general's change");
+        Engine.runFreely();
+        Engine.reportsIn(1, reportRecord(3, 1, 1));
+        steps(20, 1);
+        s.battle = new OwnBattle(Engine.step(), 3, s.pcOf(3), -1, s.streams.worldDraws());
+        s.battle.awaiting = false;
+        assertTrue(Hooks.cityOrderHere(1), "the battle is every PC's game");
+    }
+
+    /**
      * Plan 0006: a battle holds every PC at its Engage step until the battle PC's battle is loaded; while it runs, every
      * PC draws the step's seed, acts as the battle's human, takes no reports and keeps the others' for after it.
      */
@@ -862,6 +883,31 @@ class EngineTest {
         assertEquals(1, steps(1, 1), "step 90, as on the host");
         assertEquals(java.util.List.of(3), retired);
         assertTrue(Engine.retired(3));
+    }
+
+    /**
+     * Playtest 2026-11-14: only the host sets the world's speed. A press of another speed on a PC that follows it
+     * changes nothing there: the buttons go back to the agreed speed and the press is a request, taken once. A press of
+     * the agreed speed, or a pause, asks for nothing.
+     */
+    @Test
+    void aPeersSpeedPressOnlyAsksTheHost() {
+        begin();
+        Session s = Engine.session();
+        s.ai(sosdet.ai.AiLog.peer(1, REMOVALS));
+        Engine.followAgreedSpeed();
+        Engine.runFreely();
+        s.speedSeen(1); // the agreed speed: no change
+        assertEquals(0.0, Engine.takeSpeedAsked());
+        s.speedSeen(25);
+        assertEquals(25.0, Engine.takeSpeedAsked(), "a request");
+        assertEquals(0.0, Engine.takeSpeedAsked(), "taken once");
+        assertEquals(1.0, s.takeSpeedShown(), "the buttons go back to the agreed speed");
+        assertEquals(1.0, s.clock.agreedSpeed(), "nothing changed");
+        s.speedSeen(1); // the buttons back on the agreed speed: no press
+        s.speedSeen(0); // a pause is no request
+        assertEquals(0.0, Engine.takeSpeedAsked());
+        assertEquals(-1.0, s.takeSpeedShown());
     }
 
     /** SOS-66: a resumed campaign starts without a missing player's human: no PC waits for its load report. */

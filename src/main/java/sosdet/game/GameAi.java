@@ -120,7 +120,9 @@ public final class GameAi implements AiApplier {
         case AiEntry.ARTILLERY:
         case AiEntry.ARTILLERY_MUSTER:
         case AiEntry.ARTILLERY_FIRE:
-            artillery(e);
+            if (Hooks.cityOrderHere(e.pc)) {
+                artillery(e);
+            }
             return;
         case AiEntry.HOLD:
             Hooks.desyncHold(e.step, e.intAt(0), ((long) e.intAt(1) << 32) | (e.intAt(2) & 0xFFFFFFFFL)); // SOS-53
@@ -135,6 +137,9 @@ public final class GameAi implements AiApplier {
             Hooks.assaultEnded(e.step, e.intAt(0), e.intAt(1)); // SOS-92
             return;
         case AiEntry.TELEPORT:
+            if (!Hooks.cityOrderHere(e.pc)) {
+                return; // own-city mode: another PC's own city (SOS-209)
+            }
             ArrayList<Div> divs = new ArrayList<>(e.ints());
             Commanders c = Hooks.commanders();
             for (int i = 0; i < e.ints(); i++) {
@@ -147,7 +152,9 @@ public final class GameAi implements AiApplier {
             GAME.ARMIES().initAndTeleport(divs);
             return;
         default:
-            division(GAME.ARMIES().division((short) e.div), e);
+            if (Hooks.cityOrderHere(e.pc)) {
+                division(GAME.ARMIES().division((short) e.div), e);
+            }
         }
     }
 

@@ -2626,8 +2626,18 @@ final class Session {
         if (speed <= 0 || speed == seenSpeed) {
             return; // paused, or no change
         }
-        seenSpeed = speed;
         AiLog log = ai();
+        if (log.mode() == AiMode.PEER && followSpeed && battle == null && watchingBattle() == null) {
+            // the host sets the world's speed (mod spec §4): another PC's press only asks for one, and its buttons go
+            // back to the agreed speed (playtest 2026-11-14)
+            if (speed != clock.agreedSpeed()) {
+                speedAsked = speed;
+                speedShown = clock.agreedSpeed();
+            }
+            seenSpeed = clock.agreedSpeed();
+            return;
+        }
+        seenSpeed = speed;
         if (log.mode() == AiMode.IN_STEP) {
             clock.agreedSpeed(speed);
         } else if (log.mode() == AiMode.HOST) {
@@ -2745,12 +2755,18 @@ final class Session {
     private int updateBase;
     private boolean updateBaseSet;
 
-    /** A step starts, the counter already counted for it. */
-    void updateSeen(int updateI) {
+    /**
+     * A step starts, the counter already counted for it: returns the counter for this step. The first step sets it to
+     * {@code agreed}, the same on every PC, not to the counter of this PC's own save. A PC that loaded an older save
+     * (a player back from a freeze, or one who joined) counted from another number, and a city whose timers read the
+     * counter (a house's candle) then ran differently on a viewer's PC (playtest 2026-11-14, SOS-208).
+     */
+    int updateSeen(int updateI, int agreed) {
         if (!updateBaseSet) {
-            updateBase = updateI - (int) clock.step() - 1;
+            updateBase = agreed - (int) clock.step() - 1;
             updateBaseSet = true;
         }
+        return updateBase + (int) clock.step() + 1;
     }
 
     /** The counter after a load between steps: the step's, however old the save; before the first step, the save's. */
@@ -2764,8 +2780,17 @@ final class Session {
         return v != null && locals[v.owner] != null && locals[v.owner].roster.ally(localHuman) ? v : null;
     }
 
-    /** A local battle's speed for this PC's buttons, set at the next frame; -1 for none (SOS-160). */
+    /** The speed this PC's buttons show from the next frame (a local battle's voted, or the world's agreed); -1 for none. */
     private double speedShown = -1;
+    /** A speed this PC's player pressed that only the host can set, until the mod takes it; 0 for none. */
+    private double speedAsked;
+
+    /** The speed this PC's player last asked the host for since the last call, or 0 (mod spec §4). */
+    double takeSpeedAsked() {
+        double s = speedAsked;
+        speedAsked = 0;
+        return s;
+    }
 
     /** A speed change from the log set this PC's game speed: no press, in the world or in a local battle (SOS-171). */
     void speedFollowed(double speed) {
