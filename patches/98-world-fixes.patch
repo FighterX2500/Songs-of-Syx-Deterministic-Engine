@@ -37,7 +37,7 @@ diff -ru -U2 a/game/boosting/Boostable.java b/game/boosting/Boostable.java
  	}
  	
  	public double get(BOOSTABLE_O t) {
-+		if (t instanceof settlement.stats.Induvidual && sosdet.Hooks.reportRead()) // SOSDET: a person's faction() is this PC's player (SOS-121)
++		if (t instanceof settlement.stats.Induvidual && sosdet.Hooks.personBoostByRace()) // SOSDET: a person's faction() is this PC's player (SOS-121, SOS-216)
 +			return ((settlement.stats.Induvidual) t).race().bvalue(this);
  		if (deadlockCheck > 1) {
  			throw new RuntimeException(

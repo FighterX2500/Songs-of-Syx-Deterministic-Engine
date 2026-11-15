@@ -1329,6 +1329,16 @@ public final class Hooks {
     }
 
     /**
+     * {@code Boostable.get} on a person (SOS-121): their race's value alone, not one read through this PC's player, where
+     * every PC must draw the same: the world part, and a world edit every PC makes between steps (SOS-216: a hot-join's
+     * carve made a new NPC's court with this PC's player's religion weights, and the PCs' worlds differed at once).
+     */
+    public static boolean personBoostByRace() {
+        Session s = Engine.session();
+        return s != null && (s.part == StepParts.WORLD_PART || s.editingWorld);
+    }
+
+    /**
      * {@code WDivStored}'s men, race and kit (B4): read from the city's report in the world part and in a world resync's
      * load, which counts the soldiers away as the world part would (on a follower the live city is another city).
      */
