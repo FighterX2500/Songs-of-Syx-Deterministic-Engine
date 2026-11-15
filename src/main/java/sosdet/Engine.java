@@ -1070,6 +1070,15 @@ public final class Engine {
     }
 
     /**
+     * The regions a city-state carved with its centre at {@code tx, ty} would get a road link to, by index, in index
+     * order: each region the square's sides touch (SOS-213, for the settling's notice). Any PC, between steps.
+     */
+    public static int[] carveLinks(int tx, int ty) {
+        outsideStep("carveLinks");
+        return GameCarve.links(tx, ty);
+    }
+
+    /**
      * Setup by carving, before the others are carved (SOS-187): why a human can't settle with its centre at
      * {@code tx, ty}: {@link #carveProblem}, then 6 tiles from the other humans' spots not carved yet, by the rule a
      * classic setup's locations follow ({@link #locationProblem}); null when it can. Any PC, no session needed.

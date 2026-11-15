@@ -161,6 +161,23 @@ public final class GameCarve {
         return Math.abs(x - cx) <= DIM / 2 && Math.abs(y - cy) <= DIM / 2;
     }
 
+    /** The regions {@link #carve} would link the square at {@code cx, cy} to, by index, in index order. */
+    public static int[] links(int cx, int cy) {
+        boolean[] near = touching(cx, cy);
+        int n = 0;
+        for (boolean b : near) {
+            n += b ? 1 : 0;
+        }
+        int[] out = new int[n];
+        n = 0;
+        for (int i = 0; i < near.length; i++) {
+            if (near[i]) {
+                out[n++] = i;
+            }
+        }
+        return out;
+    }
+
     /** The regions holding the square's tiles, by index. */
     private static boolean[] cutRegions(int cx, int cy) {
         boolean[] cut = new boolean[WREGIONS.MAX];
