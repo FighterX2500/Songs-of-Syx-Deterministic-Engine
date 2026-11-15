@@ -504,11 +504,13 @@ public final class GameCarve {
     }
 
     /**
-     * The cheapest way from {@code sx, sy} to {@code to}'s centre over the land of {@code to} and of the region at
-     * {@code sx, sy}: vanilla's path graph joins a region's town to its borders only, so a link through a third region
-     * would never be walked (SOS-187's setup run: two humans 14.6 tiles apart walked 253 tiles beside such a road). With
-     * {@code keep} the flooder stays open for the caller to read the way and close; without, it's closed and a non-null
-     * result only says a way exists.
+     * The cheapest way from {@code sx, sy} to {@code to}'s centre over the land of {@code to} and of the city-state's
+     * square: vanilla's path graph joins a region's town to its borders only, so a link through a third region would never
+     * be walked (SOS-187's setup run: two humans 14.6 tiles apart walked 253 tiles beside such a road). With {@code keep}
+     * (the carve's link) the square is the carved region at {@code sx, sy}, and the flooder stays open for the caller to
+     * read the way and close; without (the rule's check, before the carve) the square is its nine tiles, not the whole
+     * region they lie in now, so the check walks what the link will (SOS-214's rig run: a spot the rule took had its only
+     * way through the rest of its old region), and the flooder is closed: a non-null result only says a way exists.
      */
     private static PathTile route(int sx, int sy, Region to, boolean keep) {
         Region home = WORLD.REGIONS().map.get(sx, sy);
@@ -527,8 +529,7 @@ public final class GameCarve {
                     continue;
                 }
                 Region there = WORLD.REGIONS().map.get(t, d);
-                boolean ours = there == to || there == home
-                        || (!keep && inSquare(sx, sy, t.x() + d.x(), t.y() + d.y()));
+                boolean ours = there == to || (keep ? there == home : inSquare(sx, sy, t.x() + d.x(), t.y() + d.y()));
                 if (!ours) {
                     continue;
                 }
