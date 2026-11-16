@@ -15,14 +15,15 @@ What it does today:
 - **Sieges:** a human's capital can be besieged, sallied from and stormed after a wait. The attacker then chooses sack, vassalage or elimination.
 - **Viewing:** a PC can run another human's city in lockstep with its owner's.
 - **Desyncs:** a state hash every 30 steps finds the first difference. The host can hold every PC and resync the world or a battle. The engine never resyncs on its own.
-- **Pace:** the slowest PC caps the speed. A human who leaves is removed at the same step on every PC.
+- **Pace:** the slowest PC caps the speed. A human who leaves is removed or frozen at the same step on every PC; a frozen one keeps their capital and comes back later.
+- **Carving:** a city-state can be carved into a running world as a small region of its own, and un-carved again. A new human joins this way, at a restart from a campaign save, and a whole world can be set up around the humans' carved city-states.
 
 What it doesn't do yet:
 
 - It runs only on V71, build 71.44. On any other build it stops the game at start-up and says so.
 - The API may still change, and nothing about it is promised.
 - The host can't change during a session.
-- The scenario suite's recordings need making again. Until then `python rig\suite.py` checks only the own-city world and reports FAIL.
+- The scenario suite's recordings need making again. Until then `python rig\suite.py` checks only the own-city world, and its other scenarios say RECORD, so its result is FAIL. It has no scenario with several humans, carving or freezing yet.
 
 Until something starts an engine session the game simulates as vanilla, with a few exceptions listed in [docs/hooks.md](docs/hooks.md): every game holds 15 spare Players and every save seven extra sections, and captive counts in manual battles differ slightly.
 
