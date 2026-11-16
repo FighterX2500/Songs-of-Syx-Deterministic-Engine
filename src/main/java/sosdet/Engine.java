@@ -1477,6 +1477,64 @@ public final class Engine {
     }
 
     /**
+     * Every PC, own-city mode, at step 0 before the run: a resumed campaign starts without the human in {@code slot},
+     * whose player is missing, and keeps it frozen, so the player can come back later ({@link #rejoinLoad},
+     * {@link #thawHuman}). It freezes as {@link #freezeHuman} does, in the first world part, on every PC alike, and every
+     * PC reads its city from the last report the save holds. No PC waits for its load report or its PC. Refused as
+     * {@link #freezeAtStartRefusal} says.
+     */
+    public static void freezeHumanAtStart(int slot) {
+        Session s = required();
+        if (!s.ownCity) {
+            throw new IllegalStateException("SOSDET: freezing a human is for own-city mode");
+        }
+        if (s.clock.step() != 0) {
+            throw new IllegalStateException("SOSDET: a human is frozen at the start before the run (step "
+                    + s.clock.step() + ")");
+        }
+        removable(s, slot);
+        String why = freezeAtStartRefusal(slot);
+        if (why != null) {
+            throw new IllegalStateException("SOSDET: the human in slot " + slot + " can't freeze at the start: " + why);
+        }
+        s.removing[slot] = true;
+        s.removeCutoff[slot] = -1;
+        s.removeDue[slot] = true;
+        s.freezing[slot] = true;
+    }
+
+    /**
+     * Every PC, at step 0: why {@link #freezeHumanAtStart} would refuse the human in {@code slot}, as a sentence for the
+     * player, or null when it would freeze it. Every PC loaded the same save, so every PC gives the same answer.
+     */
+    public static String freezeAtStartRefusal(int slot) {
+        Session s = required();
+        if (!s.ownCity) {
+            return "Freezing a player needs own-city mode.";
+        }
+        if (slot == 0) {
+            return "The player in slot 0 can't be frozen.";
+        }
+        if (slot < 0 || slot >= Session.SLOTS || !s.isHuman(slot)) {
+            return "Slot " + slot + " is not a player's.";
+        }
+        if (s.iced(slot) || s.freezing[slot]) {
+            return "That player is frozen already.";
+        }
+        if (s.retired(slot) || s.removing[slot]) {
+            return "That player is already removed.";
+        }
+        if (s.clock.step() != 0) {
+            return "The game has already started.";
+        }
+        if (s.city().lastReport(slot) == null) {
+            return "This campaign was saved by an older version, which keeps no report of that player's city to freeze."
+                    + " Remove the player or wait for them instead.";
+        }
+        return null;
+    }
+
+    /**
      * Host, between steps: why {@link #removeHuman} would refuse the human in {@code slot} now, as a sentence for the
      * player, or null when it would remove it (SOS-65). With {@code atStart}, why {@link #removeHumanAtStart} would.
      */

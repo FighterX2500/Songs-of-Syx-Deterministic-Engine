@@ -7,18 +7,20 @@ import game.faction.FACTIONS;
 import game.save.Savable;
 import snake2d.util.file.FileGetter;
 import snake2d.util.file.FilePutter;
+import sosdet.report.LastReports;
 import sosdet.txn.Txn;
 
 /**
  * The frozen humans (SOS-193, mod spec §11 Freezing a player), saved with the world. A frozen human keeps its slot and
  * its capital; no PC runs its city, and every PC reads it as its last report showed it, with the world's changes to it
  * since, until its player rejoins. The transactions for its city wait here meanwhile, so views, resyncs and resumes keep
- * them. A save without the section (any one before SOS-193) has no frozen human.
+ * them. A save without the section (any one before SOS-193) has no frozen human. Format 2 also keeps each playing
+ * human's last report, which a resume reads when it freezes a missing player's human at the start; format 1 has none.
  */
 public final class GameFrozen extends Savable {
 
     static final String KEY = "SOSDET_FROZEN";
-    private static final int VERSION = 1;
+    private static final int VERSION = 2;
     /** After the section: vanilla's FileGetter.d refuses a file's last 8 bytes, and this may be the save's last section. */
     private static final int END = 0x5344465A; // "SDFZ"
 
@@ -30,6 +32,8 @@ public final class GameFrozen extends Savable {
     private final ArrayList<HeldTxn> held = new ArrayList<>();
     /** Transactions of a kind no save holds, dropped for a frozen city (none is expected: see {@link HeldTxn#storable}). */
     private int dropped;
+    /** Each playing human's last report and the world's open changes to it, as the last save or load had them. */
+    private final LastReports last = new LastReports(FACTIONS.MAX());
 
     GameFrozen() {
         super(KEY);
@@ -92,6 +96,14 @@ public final class GameFrozen extends Savable {
         return frozen[slot] && report[slot] != null ? new byte[][] {report[slot], ledger[slot]} : null;
     }
 
+    /**
+     * The last report of the human in {@code slot}, playing when the save was made, and the world's open changes to it,
+     * as the last load had them; null for a frozen human, or none (a save of format 1). For a freeze at the start.
+     */
+    public byte[][] lastReport(int slot) {
+        return frozen[slot] ? null : last.get(slot);
+    }
+
     @Override
     protected void save(FilePutter file) {
         file.i(VERSION);
@@ -121,7 +133,24 @@ public final class GameFrozen extends Savable {
             h.save(file);
         }
         file.i(dropped);
+        bytes(file, lastReportsOut());
         file.i(END);
+    }
+
+    /** Each playing human's last report: the session's, or as the last load had it while the session has none. */
+    private byte[] lastReportsOut() {
+        GameHumans humans = GameHumans.get();
+        for (int slot : humans.slots()) {
+            if (frozen[slot] || humans.retired(slot)) {
+                last.remove(slot);
+                continue;
+            }
+            byte[][] live = sosdet.Hooks.frozenReportOut(slot);
+            if (live != null) {
+                last.put(slot, live[0], live[1]);
+            }
+        }
+        return last.toBytes();
     }
 
     @Override
@@ -130,6 +159,7 @@ public final class GameFrozen extends Savable {
         java.util.Arrays.fill(report, null);
         java.util.Arrays.fill(ledger, null);
         held.clear();
+        last.clear();
         int version = file.i();
         if (version < 1 || version > VERSION) {
             throw new IOException("SOSDET: a frozen humans section of version " + version + ", this engine reads 1 to "
@@ -156,6 +186,13 @@ public final class GameFrozen extends Savable {
             held.add(HeldTxn.load(file));
         }
         dropped = file.i();
+        if (version >= 2) {
+            try {
+                last.fromBytes(bytes(file));
+            } catch (IllegalArgumentException e) {
+                throw new IOException("SOSDET: the frozen humans section's last reports", e);
+            }
+        }
         if (file.i() != END) {
             throw new IOException("SOSDET: a frozen humans section without its end marker");
         }
@@ -168,6 +205,7 @@ public final class GameFrozen extends Savable {
         java.util.Arrays.fill(ledger, null);
         held.clear();
         dropped = 0;
+        last.clear();
     }
 
     private static void bytes(FilePutter file, byte[] b) {

@@ -927,6 +927,118 @@ class EngineTest {
         assertThrows(IllegalStateException.class, () -> Engine.removeHumanAtStart(3), "after the start");
     }
 
+    /** {@code base} as a loaded save has it: these frozen humans, and these last reports of the playing ones. */
+    private static CitySource savedGame(CitySource base, boolean[] frozen, java.util.function.IntFunction<byte[][]> last) {
+        return new CitySource() {
+            @Override
+            public ReportLayout layout() {
+                return base.layout();
+            }
+
+            @Override
+            public int faction() {
+                return base.faction();
+            }
+
+            @Override
+            public int[] humans() {
+                return base.humans();
+            }
+
+            @Override
+            public void fill(double[] values) {
+                base.fill(values);
+            }
+
+            @Override
+            public int indexOf(Field f, Object key) {
+                return base.indexOf(f, key);
+            }
+
+            @Override
+            public boolean frozen(int slot) {
+                return frozen[slot];
+            }
+
+            @Override
+            public byte[][] lastReport(int slot) {
+                return frozen[slot] ? null : last.apply(slot);
+            }
+        };
+    }
+
+    /**
+     * A resumed campaign starts with a missing player's human frozen: no PC waits for its load report. It freezes in the
+     * first world part as in play, and every PC reads its city from the last report the save holds, with the save's open
+     * changes to it.
+     */
+    @Test
+    void aHumanFrozenAtTheStartReadsTheReportTheSaveHolds() {
+        Session s = ownCity(0);
+        boolean[] frozen = new boolean[Session.SLOTS];
+        double[] v = new double[SMALL.size()];
+        v[SMALL.slot(Field.CREDITS, 0)] = 500;
+        CityReport last = new CityReport(SMALL, 3, 900, 930, v);
+        sosdet.report.Reports open = new sosdet.report.Reports();
+        open.stamp(last);
+        open.applyDue(930);
+        open.change(931, Field.CREDITS, 0, 40); // the world paid slot 3 after that report was taken
+        byte[][] saved = {last.toBytes(), open.ledgerOut()};
+        s.city = savedGame(humans(0, 3), frozen, slot -> slot == 3 ? saved : null);
+        java.util.List<Integer> retired = new java.util.ArrayList<>();
+        s.remover = retired::add;
+        s.freezer = slot -> {
+            assertNotNull(s.reports(slot).current(), "the freeze has its report, as in play");
+            frozen[slot] = true;
+        };
+        Engine.pcHuman(0, 0);
+        assertThrows(IllegalArgumentException.class, () -> Engine.freezeHumanAtStart(0), "the host's own human");
+        assertEquals("The player in slot 0 can't be frozen.", Engine.freezeAtStartRefusal(0));
+        assertEquals("Slot 5 is not a player's.", Engine.freezeAtStartRefusal(5));
+        assertNull(Engine.freezeAtStartRefusal(3));
+
+        Engine.freezeHumanAtStart(3);
+        assertEquals("That player is frozen already.", Engine.freezeAtStartRefusal(3));
+        assertThrows(IllegalStateException.class, () -> Engine.freezeHumanAtStart(3), "once");
+        assertNotNull(Engine.removeRefusal(3, true));
+        assertFalse(Engine.frozen(3), "it freezes in the first world part");
+        Engine.runFreely();
+        assertEquals(50, steps(50, 1), "slot 3 has no PC and sends nothing");
+        assertTrue(Engine.frozen(3));
+        assertTrue(retired.isEmpty(), "frozen, not retired");
+        assertEquals(last, s.reports(3).current(), "the save's last report");
+        assertEquals(540.0, s.reports(3).value(Field.CREDITS, 0), "with the save's open change to it");
+        assertEquals(50, steps(50, 1));
+        assertEquals(last, s.reports(3).current(), "and reads it on");
+    }
+
+    /**
+     * A save from before the last reports holds none to freeze with: the host removes the missing player or waits. After
+     * the start it is too late. A human whose PC is there reads that PC's load report, never the save's.
+     */
+    @Test
+    void aFreezeAtTheStartIsRefusedForAnOlderSaveAndAfterTheStart() {
+        Session s = ownCity(0);
+        CityReport stale = new CityReport(SMALL, 3, 900, 930, new double[SMALL.size()]);
+        byte[][] saved = {stale.toBytes(), new sosdet.report.Reports().ledgerOut()};
+        boolean[] olderSave = {true};
+        s.city = savedGame(humans(0, 3), new boolean[Session.SLOTS], slot -> olderSave[0] ? null : saved);
+        Engine.pcHuman(0, 0);
+        Engine.pcHuman(1, 3);
+        assertTrue(Engine.freezeAtStartRefusal(3).startsWith("This campaign was saved by an older version"));
+        assertThrows(IllegalStateException.class, () -> Engine.freezeHumanAtStart(3));
+        assertNull(Engine.removeRefusal(3, true), "removing it still works");
+        olderSave[0] = false;
+        assertNull(Engine.freezeAtStartRefusal(3));
+
+        Engine.runFreely();
+        Engine.reportsIn(1, reportRecord(3, 1, 1));
+        assertEquals(10, steps(10, 1));
+        assertEquals(1, s.reports(3).current().takenAt, "its PC's load report, not the save's");
+        assertEquals("The game has already started.", Engine.freezeAtStartRefusal(3));
+        assertThrows(IllegalStateException.class, () -> Engine.freezeHumanAtStart(3), "after the start");
+    }
+
     @Test
     void theDialogShowsTheLastQuestionAskedUntilItIsAnswered() {
         begin();
