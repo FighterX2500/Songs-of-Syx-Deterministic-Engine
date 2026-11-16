@@ -1,6 +1,6 @@
 # SOSDET for agents: architecture and desync causes
 
-A short map for an AI agent (or a person) about to change SOSDET. Read it first, then the files your task touches. The rules themselves live in [AGENTS.md](../AGENTS.md) (coding) and [.claude/rules/determinism.md](../.claude/rules/determinism.md) (determinism). [CLAUDE.md](../CLAUDE.md) is the owner's own workflow; outside contributors can skip its Jira and approval steps.
+A short map for an AI agent (or a person) about to change SOSDET. Read it first, then the files your task touches. The rules themselves live in [AGENTS.md](../AGENTS.md) (coding) and [.claude/rules/determinism.md](../.claude/rules/determinism.md) (determinism). [CLAUDE.md](../CLAUDE.md) is the owner's own workflow; outside contributors can skip its approval steps.
 
 ## What it is
 

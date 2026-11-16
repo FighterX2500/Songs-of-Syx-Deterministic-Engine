@@ -2,7 +2,7 @@
 
 Version 0.2 · 2026-10-23
 
-What the deterministic engine must do. It does not say how; that belongs in `docs/decisions/` and the cards. Changes to a rule here need the owner's approval, and the change goes in the same PR.
+What the deterministic engine must do. It does not say how; that belongs in `docs/decisions/` and the plans. Changes to a rule here need the owner's approval, and the change goes in the same PR.
 
 The engine exists for the SoS GSG MP multiplayer mod ([SOSGSGMP](https://github.com/FighterX2500/SOSGSGMP), [ADR 0004](https://github.com/FighterX2500/SOSGSGMP/blob/main/docs/decisions/0004-engine-split.md)). Where this file and the mod's spec (`docs/spec.md` there) disagree, stop and ask.
 
@@ -13,6 +13,7 @@ Every PC that starts from the same save and seed (a battle, a city or the campai
 ## 2. Scope
 
 - **Game build:** Songs of Syx V71, build 71.44, pinned (mod spec §3). Later game versions are out of scope.
+- **Platforms (owner, 2026-11-16):** Windows, Linux and macOS, as the mod (spec §3). Section 1's bit-identical simulation holds between PCs on different systems, macOS under Rosetta included. No mixed-system session has confirmed it yet.
 - **v1:** field battles, as decided in the mod's [ADR 0003](https://github.com/FighterX2500/SOSGSGMP/blob/main/docs/decisions/0003-battle-lockstep.md), including the AI general on the host.
 - **City (owner, 2026-10-23; plan 0002):** the whole city simulation runs in lockstep, including players' city commands (SOS-34). Siege assaults run in lockstep too: the mod's decision SOS-17 settled it ([ADR 0006](https://github.com/FighterX2500/SOSGSGMP/blob/main/docs/decisions/0006-lockstep-city-viewing-and-assaults.md), 2026-10-24).
 - **World map (owner, 2026-10-23; plan 0002):** the world simulation runs in lockstep on every PC, and the host's save recovers a PC that splits. Everything the world reads from a city, and every change the world makes to a city, crosses as a stamped input applied at the same world step on every PC (plan 0002, stage E).

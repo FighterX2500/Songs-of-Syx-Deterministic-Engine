@@ -6,7 +6,7 @@ Guidance for coding agents working on SOSDET, the deterministic simulation engin
 Fill these in and keep them current. Agents must not guess them.
 
 *   **Target game version:** `V71` (build 71.44, from `game/VERSION.java`), pinned (requirements §2).
-*   **Platform:** Windows only. Use `gradlew.bat` and Windows paths.
+*   **Platform:** players run the engine on Windows, Linux (the Steam Deck too) and macOS, the same as SoS GSG MP (its spec section 3). Development is on Windows: use `gradlew.bat` and Windows paths. Engine code never calls the operating system directly; the game finds the game's data folder: `%APPDATA%\songsofsyx` on Windows, `~/.local/share/songsofsyx` on Linux, `~/Library/Application Support/songsofsyx` on macOS. The `%APPDATA%` paths below are the Windows ones, and the test rig is Windows only. The game's macOS Java is x86_64, so on Apple Silicon it runs under Rosetta; a step on it must match a Windows or Linux PC bit for bit, which the state hash checks.
 *   **Game folder (`<game>`):** outside the repository, located through the `SOS_GAME_DIR` environment variable. On the main dev PC: `C:\ClaudeFolder\Songs of Syx`. Nothing under it is ever committed.
 *   **Game source:** `<game>/info/SongsOfSyx-sources/`, shipped with the game. Read it freely; never copy or commit it. The engine changes it only through its patch set (see "Patches to Game Code").
 *   **Game jar:** `<game>/SongsOfSyx.jar`. Never shade, copy, or commit it. It already contains steamworks4j 1.9.0 and the Steam native libraries.
@@ -38,7 +38,7 @@ Touch only what you must. Clean up only your own mess.
 *   **Minimal Impact:** In game source above all: change only the lines a hook needs. Don't "improve" adjacent code, comments, or formatting, and don't run a formatter over game files.
 *   **Style Match:** Match existing style, even if you'd do it differently.
 *   **Cleanup Scope:** Remove imports/fields/methods that YOUR changes made unused. Don't remove pre-existing dead code unless asked.
-*   **Traceability:** Every changed line should trace directly to the user's request or the Jira card being worked on.
+*   **Traceability:** Every changed line should trace directly to the user's request or the task being worked on.
 
 ## Goal-Driven Execution
 Define success criteria. Loop until verified.
