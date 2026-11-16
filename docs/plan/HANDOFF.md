@@ -1,4 +1,4 @@
-# Engine notes (updated 2026-11-01, main at PR #73)
+# Engine notes (updated 2026-11-16, main at PR #100)
 
 The project's handoff, for both repositories, is `C:\ClaudeFolder\SOS\docs\plan\HANDOFF.md`. Read that first. This file keeps the engine's own notes: its reading list, where it stands, how to work here and the owner's decisions about it.
 
@@ -11,13 +11,13 @@ The project's handoff, for both repositories, is `C:\ClaudeFolder\SOS\docs\plan\
 5. ADRs `docs/decisions/0002-player-commands.md` (accepted) and `docs/decisions/0003-room-planning.md` (accepted).
 6. ADR `docs/decisions/0004-several-humans.md` (accepted) and `docs/plan/0004-several-humans.md`: several humans on one world, its milestones, playtests and known gaps.
 7. `docs/plan/0005-add-human.md` (the world built around several humans at setup) and `docs/plan/0006-own-city-battles.md` (battles with own cities, its milestones).
-8. The plans of the mod's features, each recording the engine's half: `0007-remove-human.md` (SOS-66), `0008-siege-by-other-humans.md` (SOS-71), `0009-human-deals.md` (SOS-72), `0010-human-market.md` (SOS-77), `0011-regions-vassals.md` (SOS-73), `0012-war-between-humans.md` (SOS-74, SOS-83), `0013-city-viewing.md` (SOS-82), `0014-sieges.md` (SOS-92), `0016-local-battles.md` (SOS-93), `0017-watching-local-battles.md` (SOS-109) and `0018-several-humans-in-a-battle.md` (SOS-118).
+8. The plans of the mod's features, each recording the engine's half: `0007-remove-human.md` (SOS-66), `0008-siege-by-other-humans.md` (SOS-71), `0009-human-deals.md` (SOS-72), `0010-human-market.md` (SOS-77), `0011-regions-vassals.md` (SOS-73), `0012-war-between-humans.md` (SOS-74, SOS-83), `0013-city-viewing.md` (SOS-82), `0014-sieges.md` (SOS-92), `0016-local-battles.md` (SOS-93), `0017-watching-local-battles.md` (SOS-109), `0018-several-humans-in-a-battle.md` (SOS-118), `0019-several-allies-in-npc-battles.md` (SOS-160) and `0020-freeze.md` (SOS-193). Carving and hot-join: [docs/api.md](../api.md), "Carved city-states", and SOSGSGMP's `docs/plan/hot-join-restart.md`.
 
 ## 2. Where things stand
 
 **Repositories:**
 - **Engine:** `C:\ClaudeFolder\SOSDET`, GitHub `FighterX2500/Songs-of-Syx-Deterministic-Engine` (public). The local folder and the launcher mod name are still SOSDET; `gh` needs `--repo FighterX2500/Songs-of-Syx-Deterministic-Engine`.
-- **Mod:** `C:\ClaudeFolder\SOS`, GitHub `FighterX2500/SOSGSGMP`. It plays over direct IP and Steam: setup (map, factions, locations), the game over the network, the desync window, battles over the network, a playtest log, campaign saves and resume, disconnects, diplomacy, trade and war between players, battles between players and city viewing. Its own handoff lists what is next.
+- **Mod:** `C:\ClaudeFolder\SOS`, GitHub `FighterX2500/SOSGSGMP`. It plays over direct IP and Steam: setup (map, factions, locations) and the living world, the game over the network, the desync window, battles over the network, a playtest log, campaign saves and resume, disconnects and reconnect, joining a running campaign, freezing a player, diplomacy, trade and war between players, battles between players, sieges and city viewing. Its own handoff lists what is next.
 
 **Done and merged into engine main:**
 - SOS-32 M1 (orders and speed in the host's log) and M2a (city groundwork).
@@ -48,8 +48,11 @@ The project's handoff, for both repositories, is `C:\ClaudeFolder\SOS\docs\plan\
 - SOS-106 (PR #66, plan 0015): the step profile and the path heap. SOS-93 (PR #67, plan 0016): battles against NPC armies on their human's PC. SOS-110 (PR #68): notices.
 - SOS-109 (PR #70, plan 0017): watching a local battle, with SOS-111 to SOS-114. Plan 0006 M3 (PR #70): a battle's resync, `Engine.battleResyncSave` and `battleResyncLoad`.
 - SOS-116 to SOS-119 (PR #71, plan 0018): several humans in one battle. SOS-120 (PR #72): setup, and market trade at 6 to 15 tiles. SOS-121 to SOS-125 (PR #73): batch 2 of the playtest fixes.
+- PRs #74 to #82: the release docs and playtest batches 3 to 9. SOS-158 (PR #83) and SOS-159 (PR #84): a local battle's result and other game data in a city report, as the mod reads them. Batch 10 (PR #85, plan 0019): every ally in a battle against NPCs (SOS-160) and the battle tests' fixes.
+- SOS-182 (PR #86): fog through a colleague's land. SOS-183 (PR #87): the world resync carries the state no save holds; the hash covers court days and peace times. SOS-181 (PR #88): refurnishing a walled site.
+- SOS-184 to SOS-188 (PR #89): carved city-states, un-carving and the setup by carving. SOS-192, SOS-193 (PR #92, plan 0020): freezing a human and its rejoin. SOS-189 (PR #93, which also brought #90 and #91 into main): hot-join by restart. SOS-197, SOS-199 (PR #94), SOS-204 (PR #95), batch 11 (PR #96), the living world's settling (SOS-212 to SOS-214, PR #97), hot-join fixes (SOS-215, SOS-216, PRs #98, #99).
 
-**Open PRs:** none on 2026-11-01.
+**Open PRs (2026-11-16):** only the docs review of that day.
 
 **Still open in the engine:**
 - Changing host during a session: requirements §3 asks for it, and `Engine.aiHost` and `aiPeer` refuse it after step 0.
@@ -57,11 +60,11 @@ The project's handoff, for both repositories, is `C:\ClaudeFolder\SOS\docs\plan\
 - The V01B rig split at step 154,365.
 - The resync-with-open-prompt gap (plan 0002, stage D).
 - High speeds in a playtest: SOS-90 keeps the lockstep windows at half a second at every speed; whether 5x and above now reach their full rate is still to see.
-- The suite's recordings: every one in `rig\golden` is older than the AI log's format 8 (SOS-90) and the hash format 8 (SOS-94), so the suite says `RECORD` until it is recorded again (`python rig\suite.py --record`).
+- The suite's recordings: every one in `rig\golden` is older than the AI log's format 8 (SOS-90) and the hash format 8 (SOS-94), so those scenarios say `RECORD` and the suite's result is FAIL until they are recorded again (`python rig\suite.py --record`). It has no scenario with several humans, carving or freezing yet.
 
 ## 3. How to work here
 
-- **Planning first:** propose larger work and wait for the owner's approval. One card at a time.
+- **Planning first:** propose larger work and wait for the owner's approval. One piece of work at a time.
 - **PRs:** base every PR on main, never stacked. Report at the end as AGENTS.md "Reporting" describes.
 - **Rig** (`rig/rig.py`, from `C:\ClaudeFolder\SOSDET`):
   - **Automatic test** with a scripted player:
