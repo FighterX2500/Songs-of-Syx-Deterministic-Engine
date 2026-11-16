@@ -49,7 +49,7 @@ The jar holds the engine's code (package `sosdet`) and the game classes compiled
 ## Building
 
 You need:
-- Windows;
+- Windows, where development happens (players run the mod on Windows, Linux and macOS);
 - a JDK 21 or newer (`JAVA_HOME` set), for example Eclipse Temurin;
 - `git` on the `PATH` (the build applies patches with `git apply`);
 - Songs of Syx V71, build 71.44. The build refuses other builds, and the mod refuses them at start-up.

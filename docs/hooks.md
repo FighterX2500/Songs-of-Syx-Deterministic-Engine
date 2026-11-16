@@ -12,7 +12,7 @@ With no engine session a hook gives the game's own behaviour. The known exceptio
 - `ResolverPlayer.Manual.afterBattle` counts each side through `sosdetCount` (`15-humans`), so single-player captive counts differ slightly from vanilla;
 - every game holds 15 spare Players, and every save nine extra sections: `SOSDET_HUMANS`, `SOSDET_CITY_DIVS`, `SOSDET_RELATIONS`, `SOSDET_EVENTS`, `SOSDET_DEALS`, `SOSDET_TARIFFS`, `SOSDET_SIEGES`, `SOSDET_TRADED` and `SOSDET_PASSED` (SOS-140) (`GameHumans`, from the `FACTIONS` constructor). Every one but `SOSDET_HUMANS` is in the world save too (`GameWorldLoad.KEYS`); `GameHumans` refuses to start with one that isn't (SOS-137).
 
-| Hook | Point | Game file | Calls into the engine | Why no API or reflection route was enough | Card |
+| Hook | Point | Game file | Calls into the engine | Why no API or reflection route was enough | Card or PR |
 | --- | --- | --- | --- | --- | --- |
 | `10-fixed-step` | B7 | `game/GAME.java` | `fixedSteps`, `stepsFor`, `stepBegin`, `stepEnd`, `skipPausedFrame`, `autoSaveAllowed`, `worldHeld`, `battleStateInStep` | The frame is cut into sub-steps inside `GAME.update`, a private loop over a private list; nothing outside can change the step length, stop at a step, or hold the world still | SOS-27 |
 | `10-fixed-step` | B7, B16 | `game/GAME.java` | `stepSeconds`, `outsideStep`, `uniformWarnings` | In a session (SOS-32): the step length is read every step (a speed change from the log applies at its step); `afterTick` runs at the start of each step for what the step updates, not per frame (it does simulation work); the tick counts up as a step starts, before the step's commands apply (SOS-36: they ran under the old tick, so a command could read a tick-keyed cache that only this PC's UI had filled, the competitor's two-PC employment desync), so the UI between steps never fills a tick-keyed cache the next step reads; `GAME.Cache` refreshes as in vanilla, since only the UI uses it (SOS-147: refusing it outside the step froze the world map's inbound caravan list, the top panel's two big buttons and four notifications, Trespassing among them, at their first values); `GAME.Warn`/`Error` only log, never pause or throw by this PC's DEVELOPER/DEBUG flags | SOS-32 |
@@ -275,7 +275,7 @@ With no engine session a hook gives the game's own behaviour. The known exceptio
 
 ## Hook points without a patch
 
-| Point | Where in the engine | Why no patch is needed | Card |
+| Point | Where in the engine | Why no patch is needed | Card or PR |
 | --- | --- | --- | --- |
 | B12 | `Engine.atStepZero` | The mod runs the battle's start (deploy) itself, inside the simulation | SOS-27 |
 | B13 | `Hooks.stepEnd` takes the state hash; `sosdet.game.GameHash` reads the state | Soldiers, other entities, divisions, (SOS-35) the world map's armies, region owners, credits and wars, and (SOS-38) the raiders and the city report the world part read, and (SOS-93) every NPC's goods and production rates, and (SOS-32) the calendar, are read through public members; the NPC production boosts through the one reflected `FBoost.mul`; projectiles through the bytes of their own public `save`, written to a `FilePutter` whose private buffer the adapter reads (`GameCodec`, one reflected field) | SOS-29 |
@@ -288,6 +288,6 @@ With no engine session a hook gives the game's own behaviour. The known exceptio
 
 `rig/patches/` holds patches that only the test rig's mod (SOSDET-rig) carries. They never reach a release, and the build refuses one that touches a game file the engine patches.
 
-| Hook | Game file | What it does | Card |
+| Hook | Game file | What it does | Card or PR |
 | --- | --- | --- | --- |
 | `90-autoload` | `menu/Menu.java` | Loads the save named in `SOSDET_RIG_AUTOLOAD` at start-up, so rig runs need no clicks | SOS-27 |

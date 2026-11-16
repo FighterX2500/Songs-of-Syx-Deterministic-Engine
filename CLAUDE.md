@@ -6,7 +6,7 @@ Deterministic simulation engine for Songs of Syx V71: the same save, seed, playe
 
 AGENTS.md holds the coding rules; `.claude/rules/determinism.md` holds the determinism rules. This file holds the project workflow. If they ever seem to conflict, stop and ask.
 
-Read [docs/architecture.md](docs/architecture.md) first: how a session runs, the code map, the known desync causes and the pitfalls. The workflow below is the owner's own; contributors from outside can skip its Jira and approval steps.
+Read [docs/architecture.md](docs/architecture.md) first: how a session runs, the code map, the known desync causes and the pitfalls. The workflow below is the owner's own; contributors from outside can skip its approval steps.
 
 ## Source of truth
 
@@ -31,10 +31,10 @@ Spikes for open questions go under `spikes/<name>/` and end with a report in `do
 ## Working style
 
 - Planning first: for anything larger than a small fix, propose a plan and wait for my approval before editing.
-- One Jira card at a time, on the SOS board (Jira project SOS). The branch is `SOS-N-short-name`, and the PR title starts with the key. Close a card only when I say its PR is merged.
+- One piece of work at a time, on its own branch and PR.
 - Game runs one at a time on this PC, and one combined smoke run per stage (the owner's direction: speed up, test less). Never build while a rig run is live. Use parallel read-only subagents for audits and reviews; give any agent that edits files its own worktree.
 - Before each PR: `gradlew.bat build`, then `python rig\suite.py --short` (about 6 minutes; ask me before running it). A change meant to alter the simulation records the suite again (`--record`) and says so in the PR (SOS-31).
 - The timing rule (requirements §4) applies to any change that touches the step.
 - Write multi-line scripts with the Write and Edit tools, not shell heredocs.
-- Never print the keys in `.env` (SOSGSGMP holds the Jira and GitHub keys).
+- Never print the keys in `.env` (SOSGSGMP holds them).
 - Report at the end as AGENTS.md "Reporting" describes, plus which requirements sections the work touched.
