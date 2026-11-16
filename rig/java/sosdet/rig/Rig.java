@@ -1714,6 +1714,16 @@ public final class Rig implements SCRIPT {
                 Engine.freezeHuman(Integer.parseInt(c[1]));
                 event("freezehuman", "\"slot\":" + c[1] + ",\"step\":" + Engine.step());
                 return;
+            case "freezeatstart": { // freezeatstart <slot>: at step 0, a resume keeps a missing player's human frozen (plan 0021)
+                int slot = Integer.parseInt(c[1]);
+                String refused = Engine.freezeAtStartRefusal(slot);
+                if (refused == null) {
+                    Engine.freezeHumanAtStart(slot);
+                }
+                event("freezeatstart", "\"slot\":" + slot + ",\"refused\":"
+                        + (refused == null ? "null" : "\"" + refused.replace("\"", "'") + "\""));
+                return;
+            }
             case "removehuman": // removehuman <slot>: the host removes a human whose copy was held (SOS-66)
                 Engine.removeHuman(Integer.parseInt(c[1]));
                 event("removehuman", "\"slot\":" + c[1] + ",\"step\":" + Engine.step());

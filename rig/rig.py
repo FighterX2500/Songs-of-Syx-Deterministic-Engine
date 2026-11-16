@@ -880,9 +880,14 @@ def main():
                     help="with --remove: copy 1 freezes the human instead of removing it, and the stopped copy saves its"
                          " game as frozen-<k>.save in its rig folder, its city as the player left it (SOS-193)")
     ap.add_argument("--rejoin", default="",
-                    help="'WORLD|STATE|SLOT' (the host's rejoin-world.save and rejoin.state, from --freeze --world-resync with"
-                         " --resync-savegame): at the run's start every copy loads that world into its own game and the"
-                         " frozen human in SLOT thaws, as the mod's rejoin (SOS-193); use with --humans-saves")
+                    help="'WORLD|STATE|SLOT' (the host's rejoin-world.save and rejoin.state, from --freeze or"
+                         " --freeze-at-start, --world-resync with --resync-savegame): at the run's start every copy loads"
+                         " that world into its own game and the frozen human in SLOT thaws, as the mod's rejoin (SOS-193);"
+                         " use with --humans-saves")
+    ap.add_argument("--freeze-at-start", type=int, default=None,
+                    help="with --humans N and --humans-saves (N - 1 saves): the human in this slot has no copy; every copy"
+                         " freezes it at step 0, as the mod's resume without a player does (Engine.freezeHumanAtStart,"
+                         " plan 0021)")
     ap.add_argument("--uncarve-removed", action="store_true",
                     help="with --on-desync resync: once a carved city-state's human is gone (--remove), the host holds every"
                          " copy, un-carves it and sends the world resync (SOS-188)")
@@ -977,10 +982,10 @@ def main():
                         or args.resync_on_desync):
         fail("--follow needs a city run with the AI on the host, without --replay or --resync (a whole-game resync"
              " would take the followers' cities; use --world-resync)")
-    if args.humans and (args.humans != args.copies or args.humans < 2 or args.scenario != "city" or args.ai != "host"
+    if args.humans and (args.humans != args.copies + (args.freeze_at_start is not None) or args.humans < 2 or args.scenario != "city" or args.ai != "host"
                         or args.follow or args.replay or args.resync or args.resync_on_desync):
-        fail("--humans N needs N copies (2 or more), a city run with the AI on the host, without --follow, --replay"
-             " or --resync")
+        fail("--humans N needs N copies (2 or more; N - 1 with --freeze-at-start), a city run with the AI on the host,"
+             " without --follow, --replay or --resync")
     link_delay = (0, 0)
     if args.link_delay:
         parts = args.link_delay.split(":")
@@ -1055,10 +1060,14 @@ def main():
         for s in humans_saves:
             if not (REAL / "saves" / "saves" / s).is_file():
                 fail("no save %s" % (REAL / "saves" / "saves" / s))
+    if args.freeze_at_start is not None and (not humans_saves or args.remove
+                                             or not 1 <= args.freeze_at_start < args.humans):
+        fail("--freeze-at-start SLOT needs --humans-saves, no --remove, and SLOT from 1 to %d" % (args.humans - 1))
     saves, autoload = scenario_saves(args)
     human_slots = []
     if humans_saves:
-        human_slots = list(range(args.humans))  # each copy resumes its own game, as the mod's campaign resume does
+        # each copy resumes its own game, as the mod's campaign resume does; a human frozen at the start has no copy
+        human_slots = [s for s in range(args.humans) if s != args.freeze_at_start]
     elif args.humans:
         saves, human_slots = make_humans(game, saves, args.humans - (1 if args.add_human_each else 0), run_dir,
                                          args.new_world, args.difficulty, args.make_humans, args.new_world_at,
@@ -1173,6 +1182,10 @@ def main():
             # will send them over the network
             for o in copies:
                 c.send("pchuman %d %d" % (o.k - 1, human_slots[o.k - 1]), "pchuman")
+            if args.freeze_at_start is not None:
+                r = c.send("freezeatstart %d" % args.freeze_at_start, "freezeatstart")
+                if r["refused"]:
+                    fail("copy %d can't freeze slot %d at the start: %s" % (c.k, args.freeze_at_start, r["refused"]))
             c.send("reportsout %s" % (c.rig / "reports.bin"), "reportsout")
             for o in copies:
                 if o.k != c.k:
@@ -1223,7 +1236,7 @@ def main():
                 c.send("carveeach %s" % args.carve_each, "carveeach")
             if args.resync_savegame:
                 c.send("wresyncsavegame carved-%d.save" % c.k, "wresyncsavegame")
-                if args.freeze and c.k == 1:
+                if (args.freeze or args.freeze_at_start is not None) and c.k == 1:
                     c.send("rejoinout", "rejoinoutat")  # the host's rejoin files for those saves (SOS-193)
             if args.world_resync2:
                 c.send("worldresyncnext %d%s" % (args.world_resync2, " uncarve" if args.uncarve else ""),
@@ -1421,6 +1434,15 @@ def main():
         identical, lines = compare(kept, run_dir, args.tag, ref, args.steps, {k: e for k, e in ends.items()
                                                                                if k != remove_copy}, after,
                                    resync["step"] if resync else 0)
+    if args.freeze_at_start is not None:
+        for c in reversed(copies):
+            r = next((e for e in c.all_of("humanfrozen") if e["slot"] == args.freeze_at_start), None)
+            lines.insert(0, "freeze at start: copy %d %s" % (c.k, "froze slot %d by step %d: %d regions, %d armies,"
+                                                              " active %s, %d held" % (r["slot"], r["step"], r["regions"],
+                                                                                       r["armies"], r["active"], r["held"])
+                                                              if r else "NEVER froze slot %d" % args.freeze_at_start))
+            if not r or not r["active"]:
+                identical = False
     if remove_copy and args.freeze:
         asked = copies[0].find("freezehuman", 0)
         lines.insert(0, "freeze: copy %d stopped at step %s; copy 1 froze slot %s at step %s"
