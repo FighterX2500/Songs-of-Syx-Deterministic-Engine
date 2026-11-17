@@ -1181,8 +1181,9 @@ public final class Hooks {
     }
 
     /**
-     * As the world save is written: the frozen human's report the world reads now and the world's open changes to it,
-     * {report, ledger}; null with no session or no report, when the section keeps what it loaded (SOS-193).
+     * As the world save is written: the report the world reads now of the human in {@code slot}, frozen or playing, and
+     * the world's open changes to it, {report, ledger}; null with no session or no report, when the section keeps what
+     * it loaded (SOS-193).
      */
     public static byte[][] frozenReportOut(int slot) {
         Session s = Engine.session();

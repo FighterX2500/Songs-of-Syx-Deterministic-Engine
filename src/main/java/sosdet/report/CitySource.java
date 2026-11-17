@@ -34,6 +34,14 @@ public interface CitySource {
         return null;
     }
 
+    /**
+     * A human's last report and the world's open changes to it, as the world save holds them for a human playing when
+     * it was made (a freeze at the start); null for none.
+     */
+    default byte[][] lastReport(int slot) {
+        return null;
+    }
+
     /** The human in {@code slot} is retired, or eliminated, again in a game loaded from before that. */
     default void retiredAgain(int slot, boolean eliminated) {
     }

@@ -1867,6 +1867,15 @@ final class Session {
      * battle ends with no result, as at a removal, and nobody waits for its PC.
      */
     private void freezeDue(int slot) {
+        if (reports(slot).current() == null && !reports(slot).pending()) {
+            // frozen at the start (Engine.freezeHumanAtStart): no PC sends its report, every PC reads the save's
+            byte[][] saved = city().lastReport(slot);
+            if (saved == null) {
+                throw new IllegalStateException("SOSDET: the human in slot " + slot + " freezes with no report, and the"
+                        + " save holds none");
+            }
+            restoreReport(slot, saved);
+        }
         freezer().accept(slot);
         removeDue[slot] = false;
         removing[slot] = false;
@@ -2024,6 +2033,11 @@ final class Session {
         if (saved == null) {
             throw new IllegalStateException("SOSDET: the frozen human in slot " + slot + " has no report in the save");
         }
+        restoreReport(slot, saved);
+    }
+
+    /** A report and its ledger from a save, {report, ledger}: the world reads them from now. */
+    private void restoreReport(int slot, byte[][] saved) {
         sosdet.report.CityReport r = sosdet.report.CityReport.fromBytes(saved[0], city().layout());
         reports(slot).restore(r, saved[1]);
     }
