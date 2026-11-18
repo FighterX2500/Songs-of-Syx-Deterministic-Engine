@@ -47,7 +47,12 @@ public enum TxnKind {
      * C1 two-phase (SOS-233): the host supplies an ally's army stationed at its capital from its stockpiles, as much as
      * they have; what it took goes to the world as a supply input (B2).
      */
-    STATION_SUPPLY;
+    STATION_SUPPLY,
+    /**
+     * SOS-234: an invasion's start for the stationed allies' divisions that fight it in the host's city, right after its
+     * {@link #INVADE}: their people, made in the world part, wait in the city for the invaders to deploy.
+     */
+    STATION_DIVS;
 
     /**
      * Whether a follower's city applies it (SOS-38: its world reads another PC's city). Not the ones that carry the

@@ -352,6 +352,10 @@ public final class Hooks {
             s.part = StepParts.CITY; // the city tail: the assault's invasion starts or ends here (SOS-92 B)
             s.assaultStep(step);
         }
+        if ((s.battle == null || s.battle.awaiting) && s.plans().inGame() && !sosdet.game.GameStationedDivs.get().idle()) {
+            s.part = StepParts.CITY; // a stationed ally's soldiers come into the fight, stay in it and leave it (SOS-234)
+            sosdet.game.GameStationedDivs.get().cityStep(s.cityHuman());
+        }
         if (s.hashes.due(step)) {
             // an own city's draws are its own: the world part's alone are counted (ADR 0005 §1); in a battle every PC
             // runs the same game, its draws counted from the battle's load (plan 0006)
@@ -2071,7 +2075,74 @@ public final class Hooks {
      * ally's soldiers, which takes no recruits from the city. Per recruit search: no allocation.
      */
     public static boolean stationedDiv(game.battle.div.Div div) {
-        return Engine.session() != null && sosdet.game.GameHumans.get().stationedDivs().divs().stationed(div.index());
+        Session s = Engine.session();
+        return s != null && (s.battle == null || s.battle.awaiting)
+                && sosdet.game.GameHumans.get().stationedDivs().divs().stationed(div.index());
+    }
+
+    /**
+     * In the city tail (SOS-234): a stationed ally's division's survivors of a fight in the host's city reach the world
+     * in the city's next report ({@code StationedDivs.Resolve}'s bytes).
+     */
+    public static void stationResolve(int owner, byte[] data) {
+        Session s = inCityPart();
+        if (s == null) {
+            throw new IllegalStateException("SOSDET: a stationed division's survivors outside the city part");
+        }
+        s.cityInputs.add(new sosdet.report.Input(sosdet.report.InputKind.STATION_RESOLVE, owner, data));
+    }
+
+    /**
+     * Whether a player's order from PC {@code pc} for division {@code div} of the city this PC runs applies here (-1 for
+     * an order that names no division, such as artillery's). The general's, a battle's and a tape's always, as before.
+     * A player's otherwise in the city they command in, on every PC that runs it alike (SOS-209):
+     * <ul>
+     * <li>in an assault, the defender's, and a viewer's the commanders table gave a division to (AiLog checked it);
+     * <li>a stationed ally's division in the host's city (SOS-234): its player's while their view of the city runs,
+     * else the host's;
+     * <li>any other division: the city's own player's.
+     * </ul>
+     */
+    public static boolean divOrderHere(int pc, int div) {
+        Session s = Engine.session();
+        if (s == null || !s.ownCity || pc == sosdet.ai.AiEntry.AI || s.battle != null && !s.battle.awaiting
+                || s.ai().applyingTaped()) {
+            return true;
+        }
+        if (s.assault != null && s.assault.started() && s.cityHuman() == s.assault.defender) {
+            return pc == s.cityPc() || s.viewsCityHere(pc);
+        }
+        int owner = div < 0 || !s.plans().inGame() ? -1 : sosdet.game.GameStationedDivs.get().divs().owner(div);
+        if (owner >= 0 && s.viewsCityHere(s.pcOf(owner))) {
+            return pc == s.pcOf(owner);
+        }
+        return pc == s.cityPc();
+    }
+
+    /**
+     * The UI, outside the step (SOS-234): whether this PC's player may select division {@code div} of the city on screen
+     * as far as stationed allies go: a stationed ally's division only by its player while they view the city, else by
+     * the host; every other division as before.
+     */
+    public static boolean stationSelectable(int div) {
+        Session s = Engine.session();
+        if (s == null || !s.ownCity || s.battle != null || !s.plans().inGame()) {
+            return true;
+        }
+        int owner = sosdet.game.GameStationedDivs.get().divs().owner(div);
+        if (owner < 0 || s.assault != null && s.assault.started()) {
+            return true; // an assault's commanders table decides: the defender's
+        }
+        return owner == s.localHuman || s.viewing() == null && !s.viewsCityHere(s.pcOf(owner));
+    }
+
+    /**
+     * Outside the step (SOS-234): whether this PC's order for division {@code div} is a stationed ally's for its own
+     * soldiers in the host's city it views, which goes to the log although the view only watches otherwise.
+     */
+    private static boolean stationOrder(Session s, int kind, int div) {
+        return kind < sosdet.ai.AiEntry.SPEED && div >= 0 && s.ownCity && s.viewing() != null && s.battle == null
+                && s.plans().inGame() && sosdet.game.GameStationedDivs.get().divs().owner(div) == s.localHuman;
     }
 
     /**
@@ -2166,6 +2237,12 @@ public final class Hooks {
         int fi = ((settlement.battle.invasion.InvasionSpec) spec).fi;
         if (s.invasionNotices.size() < Session.NOTICES_MAX) { // every PC learns it at this step: the mod tells every player (SOS-92 F)
             s.invasionNotices.add(new long[] {s.clock.step(), x.human, fi >= 0 ? fi : army == null ? Engine.RAIDERS : -1});
+        }
+        sosdet.game.GameStations.Fighters f = sosdet.game.GameStations.get().fighters(x.human, fi); // SOS-234
+        if (f != null) {
+            Txn y = toCity(TxnKind.STATION_DIVS); // after the invasion's own: the city knows its ref by then
+            y.a = spec;
+            y.b = f;
         }
         return true;
     }
@@ -2586,7 +2663,7 @@ public final class Hooks {
             s.ai().captureOrder(sosdet.ai.AiEntry.COMMAND, -1, sosdet.game.cmd.MapBattles.localOrderCommand(kind, div, payload));
             return;
         }
-        s.ai().captureOrder(kind, div, payload);
+        s.ai().captureOrder(kind, div, payload, stationOrder(s, kind, div));
     }
 
     /** Who commands each battle division (SOS-15); null without a session, and then nothing is restricted. */

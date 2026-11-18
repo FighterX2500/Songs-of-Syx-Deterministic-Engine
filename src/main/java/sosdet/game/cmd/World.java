@@ -266,6 +266,9 @@ public final class World {
                 boolean toArmy = r.b();
                 WArmy a = Args.ownArmy(r);
                 Div div = Args.div(r);
+                if (sosdet.Hooks.stationedDiv(div)) {
+                    return false; // a stationed ally's soldiers stay in the host's city (SOS-234)
+                }
                 if (toArmy) {
                     if (a == null || !a.divs().canAdd() || AD.cityDivs().attachedArmy(div) != null) {
                         return false;

@@ -36,7 +36,7 @@ public final class OwnArmy {
     /** Whether this PC's player may select the division: all of them without a table, as in vanilla. */
     public static boolean selectable(Div d) {
         Commanders c = Hooks.commanders();
-        return c == null || c.commandsHere(d.index());
+        return (c == null || c.commandsHere(d.index())) && Hooks.stationSelectable(d.index());
     }
 
     public static boolean selectable(ArtilleryInstance a) {

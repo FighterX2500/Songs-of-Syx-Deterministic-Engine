@@ -1850,6 +1850,26 @@ public final class Engine {
         return sosdet.game.GameStations.get().book().host(i);
     }
 
+    /**
+     * Between steps (SOS-234): whether an army of the human in {@code owner} stationed at the capital of the human in
+     * {@code host} fights an invasion of it by {@code invader}, as an invasion notice names it ({@link #invasionNoticeTake}:
+     * a faction's index, {@link #RAIDERS} or -1). Its soldiers then come into the host's city as the invaders deploy, and
+     * its player commands them from a view of the city.
+     */
+    public static boolean stationFights(int owner, int host, int invader) {
+        required();
+        return sosdet.game.GameStations.get().fights(owner, host, invader);
+    }
+
+    /**
+     * Between steps (SOS-234): the human whose stationed army's soldiers division {@code div} of army 0 holds in the city
+     * this PC runs (its own, or the one it views), or -1 for one of the city's own.
+     */
+    public static int stationedDivOwner(int div) {
+        required();
+        return sosdet.game.GameStationedDivs.get().divs().owner(div);
+    }
+
     /** Between steps: why this PC's player can't declare war on the human in {@code slot} now, or null. */
     public static String warRefusal(int slot) {
         required();

@@ -1,6 +1,7 @@
 package sosdet.game.station;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.Arrays;
 
 /**
@@ -96,6 +97,36 @@ public final class StationedDivs {
             throw new IllegalArgumentException("SOSDET: division " + div + " holds no stationed soldiers");
         }
         return div;
+    }
+
+    /**
+     * The men a world division keeps after a fight in the host's city: those it has now less the {@code dead}, never
+     * fewer than none. Men who joined it during the fight stay.
+     */
+    public static int survivors(int menNow, int dead) {
+        return Math.max(0, menNow - Math.max(0, dead));
+    }
+
+    /** A stationed division's fight as its {@code STATION_RESOLVE} input carries it. */
+    public record Resolve(int army, int iteration, int place, int dead, double experience) {
+
+        /** The input's bytes. */
+        public byte[] toBytes() {
+            return ByteBuffer.allocate(BYTES).putInt(army).putInt(iteration).putInt(place).putInt(dead)
+                    .putDouble(experience).array();
+        }
+
+        /** From {@link #toBytes}. */
+        public static Resolve of(byte[] data) {
+            if (data.length != BYTES) {
+                throw new IllegalArgumentException("SOSDET: a stationed division's fight of " + data.length + " bytes, not "
+                        + BYTES);
+            }
+            ByteBuffer b = ByteBuffer.wrap(data);
+            return new Resolve(b.getInt(), b.getInt(), b.getInt(), b.getInt(), b.getDouble());
+        }
+
+        private static final int BYTES = 24;
     }
 
     /** The registry as ints, its version and size first, then each stationed division in index order. */

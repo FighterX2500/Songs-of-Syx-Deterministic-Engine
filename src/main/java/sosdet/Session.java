@@ -1205,6 +1205,9 @@ final class Session {
         }
         long freeze = nextReportStep(step);
         assault = new Assault(step, attacker, defender, freeze, spec, armies, men, divOwners, attackers, attackerMen);
+        if (plans().inGame()) { // unit tests have no game
+            assault.fighters = sosdet.game.GameStations.get().fighters(defender, attacker); // SOS-234
+        }
         for (int h : humans()) {
             if (h != defender && (!retired(h) || watching(h))) {
                 views[h] = new View(h, pcOf(h), defender, pcOf(defender), freeze);
@@ -1252,6 +1255,7 @@ final class Session {
                 assaultStarting = true;
                 try {
                     a.invasionRef = sosdet.game.GameAssault.invade(a.spec);
+                    sosdet.game.GameStationedDivs.get().arrive(a.spec, a.fighters); // SOS-234
                 } finally {
                     assaultStarting = false;
                 }
@@ -2153,6 +2157,19 @@ final class Session {
     int afterEngageSeed(long step) {
         long h = HashLog.mix(HashLog.mix(HashLog.mix(HashLog.start(), seed), step), BATTLE_STREAM + 1);
         return (int) (h ^ (h >>> 32));
+    }
+
+    /**
+     * Every PC alike, in the step: whether the player at {@code pc} views the city this PC runs now, their view running
+     * as an assault's commanders read it ({@link #commands}). SOS-234.
+     */
+    boolean viewsCityHere(int pc) {
+        if (pc < 0 || pc >= pcHumans.length || pcHumans[pc] < 0 || pcHumans[pc] >= views.length) {
+            return false;
+        }
+        View v = views[pcHumans[pc]];
+        return v != null && v.owner == cityHuman() && clock.step() > v.freeze && v.thaw < 0 && v.state != View.CANCELLED
+                && v.state != View.ENDED;
     }
 
     /** The PC whose human is {@code slot} (ADR 0004); the host (0) when no PC has it, as with one human. */

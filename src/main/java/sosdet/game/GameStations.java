@@ -215,6 +215,117 @@ public final class GameStations extends Savable {
         book.end(i);
     }
 
+    // ---------------------------------------------------------------- a fight in the host's city (SOS-234)
+
+    /**
+     * The stationed divisions that enter a fight in the host's city: each one's player, its world army (index and
+     * iteration), its place in that army, and its people as the fight's soldiers. Built in the world part, the same on
+     * every PC; carried to the host's city by a transaction or with the assault.
+     */
+    public static final class Fighters {
+        public final int[] owners;
+        public final int[] armies;
+        public final int[] iterations;
+        public final int[] places;
+        public final java.util.List<game.battle.util.DivGeneration> divs;
+
+        Fighters(int[] owners, int[] armies, int[] iterations, int[] places, java.util.List<game.battle.util.DivGeneration> divs) {
+            this.owners = owners;
+            this.armies = armies;
+            this.iterations = iterations;
+            this.places = places;
+            this.divs = divs;
+        }
+
+        public int size() {
+            return divs.size();
+        }
+    }
+
+    /**
+     * In the world part, on every PC: the divisions of the armies stationed at {@code host}'s capital whose players are
+     * at war with {@code enemy} (a faction's index; -1 for raiders and rebels, at war with everyone), up to the city's
+     * free army slots as the world reads them; null when none (mod spec §9, ADR 0011). A removed or frozen player's stay
+     * out; so does the army of a player at peace with the enemy ("someone else's war").
+     */
+    public Fighters fighters(int host, int enemy) {
+        Faction h = FACTIONS.getByIndex(host);
+        if (book.count(host) == 0 || h.capitolRegion() == null) {
+            return null;
+        }
+        int free = Config.battle().DIVISIONS_PER_ARMY - hostDivisions(h);
+        java.util.List<game.battle.util.DivGeneration> divs = new java.util.ArrayList<>();
+        int[] owners = new int[Math.max(free, 0)];
+        int[] armies = new int[owners.length];
+        int[] iterations = new int[owners.length];
+        int[] places = new int[owners.length];
+        for (int i = 0; i < book.size() && divs.size() < owners.length; i++) {
+            int owner = book.owner(i);
+            WArmy a = entryFights(i, host, enemy) ? Args.army(book.army(i), book.iteration(i)) : null;
+            if (a == null) {
+                continue;
+            }
+            for (int di = 0; di < a.divs().size() && divs.size() < owners.length; di++) {
+                if (a.divs().get(di).men() <= 0) {
+                    continue;
+                }
+                int n = divs.size();
+                owners[n] = owner;
+                armies[n] = a.armyIndex();
+                iterations[n] = a.iteration();
+                places[n] = di;
+                divs.add(a.divs().get(di).generate());
+            }
+        }
+        int n = divs.size();
+        return n == 0 ? null : new Fighters(java.util.Arrays.copyOf(owners, n), java.util.Arrays.copyOf(armies, n),
+                java.util.Arrays.copyOf(iterations, n), java.util.Arrays.copyOf(places, n), divs);
+    }
+
+    /**
+     * Between steps or in the world part: whether an army of {@code owner}'s stationed at {@code host}'s capital fights
+     * for it against {@code enemy} (a faction's index; below 0 for raiders and rebels), by {@link #fighters}' rule.
+     */
+    public boolean fights(int owner, int host, int enemy) {
+        for (int i = 0; i < book.size(); i++) {
+            if (book.owner(i) == owner && entryFights(i, host, enemy)
+                    && Args.army(book.army(i), book.iteration(i)) != null) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean entryFights(int i, int host, int enemy) {
+        int owner = book.owner(i);
+        return book.host(i) == host && !Hooks.dormant(owner)
+                && (enemy < 0 || DIP.WAR().is(FACTIONS.getByIndex(owner), FACTIONS.getByIndex(enemy)));
+    }
+
+    /**
+     * The men a stationed division has now, as the world holds them: 0 when its army no longer stands at {@code host}'s
+     * capital or the division is gone. Read in the host's city tail, the same on every PC that runs it.
+     */
+    public static int men(int army, int iteration, int place, int host) {
+        WArmy a = Args.army(army, iteration);
+        if (a == null || !get().book.stationedAt(army, iteration, host) || place < 0 || place >= a.divs().size()) {
+            return 0;
+        }
+        return a.divs().get(place).men();
+    }
+
+    /**
+     * {@code InputKind.STATION_RESOLVE} in the world part: a stationed division's world division loses the men who died
+     * in a fight in the host's city and takes its survivors' experience, as a local battle's does. Men who joined it since
+     * the fight began stay. An army or a division gone since has nothing to lose.
+     */
+    public static void resolve(int army, int iteration, int place, int dead, double experience) {
+        WArmy a = Args.army(army, iteration);
+        if (a != null && place >= 0 && place < a.divs().size()) {
+            a.divs().get(place).resolve(sosdet.game.station.StationedDivs.survivors(a.divs().get(place).men(), dead), experience);
+        }
+    }
+
     // ---------------------------------------------------------------- the host's city tail
 
     /**

@@ -66,4 +66,21 @@ class StationedDivsTest {
                 "one division twice");
         assertThrows(IOException.class, () -> StationedDivs.fromInts(new int[] {1, 0, 0}), "an army of no divisions");
     }
+
+    /** A fight's dead come off the world division as it stands then: men who joined it meanwhile stay. */
+    @Test
+    void theDeadComeOffTheWorldDivision() {
+        assertEquals(30, StationedDivs.survivors(50, 20));
+        assertEquals(35, StationedDivs.survivors(55, 20), "five joined during the fight");
+        assertEquals(50, StationedDivs.survivors(50, 0), "nobody died");
+        assertEquals(0, StationedDivs.survivors(10, 20), "never fewer than none");
+        assertEquals(50, StationedDivs.survivors(50, -3), "a negative count kills nobody");
+    }
+
+    @Test
+    void aFightsResolveSurvivesItsBytes() {
+        StationedDivs.Resolve r = new StationedDivs.Resolve(7, 3, 2, 14, 0.375);
+        assertEquals(r, StationedDivs.Resolve.of(r.toBytes()));
+        assertThrows(IllegalArgumentException.class, () -> StationedDivs.Resolve.of(new byte[20]), "cut short");
+    }
 }
