@@ -2,6 +2,7 @@ package sosdet.game.station;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -66,6 +67,23 @@ class StationBookTest {
         assertEquals(StationBook.AGREEMENT_ENDED, StationBook.endReason(true, false, true, true, true, true),
                 "a war ends it, and the army stays where it stands");
         assertEquals(StationBook.MOVED, StationBook.endReason(true, false, true, true, false, false));
+    }
+
+    @Test
+    void anAlliesOrAStationedArmyJoinsTheAttackAndNoOtherOne() {
+        assertTrue(StationBook.joinsAttack(true, false), "an ally's army near the capital");
+        assertTrue(StationBook.joinsAttack(false, true), "a colleague's, overlord's or vassal's army stationed there");
+        assertTrue(StationBook.joinsAttack(true, true));
+        assertFalse(StationBook.joinsAttack(false, false), "a colleague's army near the capital, not stationed");
+    }
+
+    @Test
+    void stationedAtNamesTheHostAndTheIteration() {
+        StationBook b = new StationBook();
+        b.station(4, 2, 1, 0, 0, 0, 0);
+        assertTrue(b.stationedAt(4, 2, 0));
+        assertFalse(b.stationedAt(4, 2, 3), "another capital");
+        assertFalse(b.stationedAt(4, 3, 0), "another army in the same slot");
     }
 
     @Test

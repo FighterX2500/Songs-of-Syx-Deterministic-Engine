@@ -497,8 +497,8 @@ public final class Hooks {
      * defender already fights, views or is viewed in a battle, a battle between humans runs, or the allies of an earlier
      * Attack are being asked. {@code invader} is the invader's faction, -1 for raiders and rebels.
      *
-     * <p>Every allied human with an army within 4 tiles of the capital, at war with the invader, is asked Join or Stay
-     * out first, as a battle's prompt asks (mod spec §9, SOS-232); the sally engages once each answered or after 30 s.
+     * <p>Every allied human with an army within 4 tiles of the capital, and every human with an army stationed at it
+     * (SOS-233), at war with the invader, is asked Join or Stay out first, as a battle's prompt asks (mod spec §9, SOS-232); the sally engages once each answered or after 30 s.
      * While another world prompt is open, nobody is asked, as before (the prompt is one at a time).
      */
     public static boolean invasionSallyEngage(int ref, int invader) {
@@ -510,7 +510,7 @@ public final class Hooks {
         }
         sosdet.game.GameSally.Near near = s.worldPrompt != null ? null : sosdet.game.GameSally.near(SallyLayout.REACH_TILES);
         int[] asked = near == null ? Session.NO_ARMIES : SallyLayout.asked(human, near.owners, near.distances,
-                h -> sosdet.game.GameSally.allied(human, h) && sosdet.game.GameSally.atWar(h, invader) && !s.localBusy(h)
+                h -> sosdet.game.GameSally.atWar(h, invader) && !s.localBusy(h) // near holds only allies' and stationed armies
                         && s.locals[h] == null && !s.retired(h) && !s.iced(h));
         s.alliesSeen = "step " + s.clock.step() + ": sally of human " + human + " against " + invader + ", armies near "
                 + (near == null ? "not looked for (a prompt is open)" : java.util.Arrays.toString(near.owners) + " at "
@@ -2064,6 +2064,14 @@ public final class Hooks {
         x.a = a;
         x.i = div;
         return true;
+    }
+
+    /**
+     * {@code ArmyTrainingInfo.RaceDiv.getNext} (SOS-234): true for a division of the city's army 0 that holds a stationed
+     * ally's soldiers, which takes no recruits from the city. Per recruit search: no allocation.
+     */
+    public static boolean stationedDiv(game.battle.div.Div div) {
+        return Engine.session() != null && sosdet.game.GameHumans.get().stationedDivs().divs().stationed(div.index());
     }
 
     /**

@@ -13,6 +13,7 @@ import init.trade.TRADE_TYPE;
 import snake2d.PathTile;
 import snake2d.util.datatypes.DIR;
 import sosdet.game.cmd.Args;
+import sosdet.game.station.StationBook;
 import util.GUTIL;
 import world.WORLD;
 import world.army.AD;
@@ -65,7 +66,8 @@ public final class GameSally {
 
     /**
      * In the world part, as the defender, on every PC: every other human's army with men within {@code reach} of the
-     * defender's capital along the map, found as vanilla's Attack finds the defender's own ({@code Attack.armies}).
+     * defender's capital along the map, found as vanilla's Attack finds the defender's own ({@code Attack.armies}), that
+     * may join: an ally's, or one stationed at this capital whatever the agreement (owner, 2026-11-18; SOS-233).
      */
     public static Near near(double reach) {
         Faction d = FACTIONS.player();
@@ -84,7 +86,8 @@ public final class GameSally {
             }
             for (WArmy a : WORLD.ENTITIES().armies.fillTile(t.x(), t.y())) {
                 if (a == null || seen[a.armyIndex()] || AD.men(null).get(a) == 0 || !(a.faction() instanceof Player)
-                        || a.faction() == d) {
+                        || a.faction() == d || !StationBook.joinsAttack(allied(d.index(), a.faction().index()),
+                                GameStations.get().book().stationedAt(a.armyIndex(), a.iteration(), d.index()))) {
                     continue;
                 }
                 seen[a.armyIndex()] = true;

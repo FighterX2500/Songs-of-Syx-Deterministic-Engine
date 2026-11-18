@@ -90,6 +90,12 @@ public final class StationBook {
         return -1;
     }
 
+    /** True when the army at {@code army} with {@code iteration} is stationed at {@code host}'s capital. No allocation. */
+    public boolean stationedAt(int army, int iteration, int host) {
+        int i = find(army, iteration);
+        return i >= 0 && host(i) == host;
+    }
+
     /** Records an army stationed at {@code host}'s capital; fails for one already stationed or a slot out of range. */
     public void station(int army, int iteration, int owner, int host, int x, int y, int step) {
         check(owner);
@@ -221,6 +227,15 @@ public final class StationBook {
             return AGREEMENT_ENDED;
         }
         return onTile ? -1 : MOVED;
+    }
+
+    /**
+     * Whether another human's army near a capital may join its Attack against an invasion (mod spec §9): an ally's, or
+     * any army stationed at that capital, whatever the agreement (owner, 2026-11-18). The war with the invader is the
+     * caller's check.
+     */
+    public static boolean joinsAttack(boolean allied, boolean stationedHere) {
+        return allied || stationedHere;
     }
 
     // ---------------------------------------------------------------- save and hash
