@@ -13,8 +13,10 @@ import game.faction.diplomacy.DipStance;
 import game.faction.npc.FactionNPC;
 import game.faction.player.Player;
 import game.time.TIME;
+import init.resources.RESOURCE;
 import init.trade.TR;
 import init.trade.TRADABLE;
+import init.trade.TRADABLEO;
 import init.trade.TRADE_TYPE;
 import sosdet.Engine;
 import sosdet.Hooks;
@@ -31,6 +33,7 @@ import sosdet.game.deal.TariffBook;
 import sosdet.game.deal.TradeTally;
 import sosdet.game.siege.AssaultTerms;
 import sosdet.report.Field;
+import settlement.main.SETT;
 import snake2d.util.sets.LIST;
 import world.WORLD;
 import world.army.AD;
@@ -509,7 +512,7 @@ public final class HumanDeals {
             int[] all = new int[TR.RES().size() * 2];
             int n = 0;
             for (TRADABLE t : TR.RES()) { // not TR.ALL: slaves are people, the attacker's choice of them is separate
-                int amount = AssaultTerms.share(d.res().getAvailable(t), percent);
+                int amount = AssaultTerms.share(spare(d, t, Hooks.reportRead()), percent);
                 if (amount > 0) {
                     all[n++] = t.index();
                     all[n++] = amount;
@@ -845,7 +848,7 @@ public final class HumanDeals {
                     return "No such goods.";
                 }
                 TRADABLE res = TR.ALL().get(goods[i]);
-                if (goods[i + 1] > f.res().getAvailable(res)) {
+                if (goods[i + 1] > spare(f, res, inStep)) {
                     return f.name + " doesn't have " + goods[i + 1] + " " + res.name + " to trade.";
                 }
             }
@@ -855,6 +858,25 @@ public final class HumanDeals {
                 Hooks.currentHumanSwap(before);
             }
         }
+    }
+
+    /**
+     * What {@code f} can give of {@code res} now, read as {@code f} ({@link DealBook#spare}): in the world part from its
+     * city's report, elsewhere from this PC's live city.
+     */
+    private static int spare(Faction f, TRADABLE res, boolean inStep) {
+        int i = res.index();
+        int outgoing = inStep ? Hooks.reportI(f.index(), Field.OUTGOING, i, 0) : res.ps().attempting(null);
+        int exported = inStep ? Hooks.reportI(f.index(), Field.EXPORT_AMOUNT, i) : exported(res);
+        return DealBook.spare(f.res().getAvailable(res), outgoing, exported);
+    }
+
+    /** This PC's live export depots' stock of {@code res}; slaves have none. */
+    private static int exported(TRADABLE res) {
+        if (res instanceof TRADABLEO<?> && ((TRADABLEO<?>) res).t instanceof RESOURCE) {
+            return SETT.ROOMS().EXPORT.tally.amount.get((RESOURCE) ((TRADABLEO<?>) res).t);
+        }
+        return 0;
     }
 
     private static DipStance stance(int treaty) {
