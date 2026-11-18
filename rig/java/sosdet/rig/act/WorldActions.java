@@ -299,7 +299,7 @@ public final class WorldActions {
         case "wrelations": { // wrelations [npc slot]: notes the NPC's king, and its stance, stored opinion (each entry), dealings, opinion and trust toward
             // each human, read as that human between steps (the NPC by default: the one wgift gives to; SOS-46 M3)
             int slot = a.length > 1 ? Integer.parseInt(a[1]) : -1;
-            Rig.later(() -> Rig.note(relations(slot < 0 ? npc() : npcAt(slot))));
+            Rig.later(() -> Rig.note(relations(npcArg(slot)))); // -N: the N-th active NPC (SOS-227)
             return true;
         }
         case "wwar": // wwar: notes each human's cached potential enemies (DipWarPlayer, as the next war timer reads them), each
@@ -1060,6 +1060,39 @@ public final class WorldActions {
             Rig.later(() -> sosdet.game.cmd.Sieges.npcVassalForTest(FACTIONS.player().index(), npc));
             return true;
         }
+        case "wnpcstance": { // wnpcstance <slot> neutral|trade|pact|ally human|npc: this player and the NPC in <slot> (-N: the
+            // N-th active NPC, -1 the one wgift gives to) get that stance, made by the human (as its accepted deal, with vanilla's betrayal) or by
+            // the NPC (as its court cancels a treaty) (test tooling, SOS-227)
+            int slot = Integer.parseInt(a[1]);
+            int stance = java.util.Arrays.asList("neutral", "trade", "pact", "ally").indexOf(a[2]);
+            if (stance < 0 || !(a[3].equals("human") || a[3].equals("npc"))) {
+                throw new IllegalArgumentException("wnpcstance <slot> neutral|trade|pact|ally human|npc");
+            }
+            boolean byHuman = a[3].equals("human");
+            Rig.later(() -> Diplomacy.npcStanceForTest(npcArg(slot), stance, byHuman));
+            return true;
+        }
+        case "wdealnpc": { // wdealnpc <slot> war|cancel: the faction screen's deal with the NPC in <slot> (-N: the N-th active
+            // NPC), Declare war or Cancel all agreements, accepted: the player's own command (SOS-227)
+            int slot = Integer.parseInt(a[1]);
+            boolean war = a[2].equals("war");
+            if (!war && !a[2].equals("cancel")) {
+                throw new IllegalArgumentException("wdealnpc <slot> war|cancel");
+            }
+            Rig.later(() -> {
+                FactionNPC f = npcArg(slot);
+                Deal d = new Deal();
+                d.setFactionAndClear(f);
+                (war ? d.bools.WAR : d.bools.CANCEL_ALL).set(true);
+                if (!d.canBeAccepted()) {
+                    throw new IllegalStateException("faction " + f.index() + " refuses the deal: " + a[2]);
+                }
+                if (!Diplomacy.dealAccept(d)) {
+                    throw new IllegalStateException("no session");
+                }
+            });
+            return true;
+        }
         case "wtonpc": { // wtonpc <army> <slot> <dx> <dy>: the army stands that far from the first army of the NPC in <slot> (SOS-119)
             int army = Integer.parseInt(a[1]);
             int slot = Integer.parseInt(a[2]);
@@ -1588,6 +1621,20 @@ public final class WorldActions {
             throw new IllegalArgumentException("slot " + slot + " is no NPC");
         }
         return (FactionNPC) FACTIONS.getByIndex(slot);
+    }
+
+    /** The NPC in {@code slot}, or for -N the N-th active NPC (-1: {@link #npc()}'s). */
+    private static FactionNPC npcArg(int slot) {
+        if (slot >= 0) {
+            return npcAt(slot);
+        }
+        int n = -slot;
+        for (FactionNPC f : FACTIONS.NPCs()) {
+            if (f.isActive() && --n == 0) {
+                return f;
+            }
+        }
+        throw new IllegalStateException("fewer than " + -slot + " active NPC factions");
     }
 
     private static FactionNPC npc() {
