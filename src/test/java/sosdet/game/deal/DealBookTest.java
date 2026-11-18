@@ -190,18 +190,28 @@ class DealBookTest {
     @Test
     void goodsOnTheirWayOutAreNotGivenAgain() {
         int held = 1260;
-        int exported = 1131;
         // the promise still stands: the stock less it is all he has, as before
-        assertEquals(234, DealBook.spare(available(held, 1000), 0, exported));
+        assertEquals(234, DealBook.spare(available(held, 1000), 0));
         // fetchers took the promise over and picked nothing up yet: vanilla's stock shows the 1000 as his again
         assertTrue(1000 <= available(held, 0), "the old check let deal 67 through");
-        assertEquals(134, DealBook.spare(available(held, 0), 1000, exported));
+        assertEquals(134, DealBook.spare(available(held, 0), 1000));
         // the fetchers left with the goods: the stock is what stays
-        assertEquals(234, DealBook.spare(available(held - 1000, 0), 0, exported - 1000));
-        // fetchers that reserved in the stockpiles: the stock already left those out, only the export depot's count
-        assertEquals(1134 - 200, DealBook.spare(available(held, 0), 1000, 200));
-        assertEquals(0, DealBook.spare(10, 500, 500), "never below 0");
-        assertEquals(10, DealBook.spare(10, -1, 500), "a bad count takes nothing");
+        assertEquals(234, DealBook.spare(available(held - 1000, 0), 0));
+        assertEquals(0, DealBook.spare(10, 500), "never below 0");
+        assertEquals(10, DealBook.spare(10, -1), "a bad count takes nothing");
+    }
+
+    /**
+     * SOS-224, battles3 T1 on 2026-11-18: H's Coal just after vanilla's extract turned deal 29's promise into fetchers.
+     * The export depot was empty and the stock still counted most of the 1201 on their way out (owner, 2026-11-18).
+     */
+    @Test
+    void goodsFetchersHaveNotReservedYetAreNotGivenAgain() {
+        int owned = 1361;
+        assertEquals(1225, available(owned, 0));
+        assertEquals(24, DealBook.spare(available(owned, 0), 1201));
+        // the caravans left the city: their goods are out of the stock and out of the count
+        assertEquals(available(owned - 1201, 0), DealBook.spare(available(owned - 1201, 0), 0));
     }
 
     /** Vanilla's {@code Player.getAvailable} over the world part's {@code RESOURCE.owned}: 90% of held less promised. */

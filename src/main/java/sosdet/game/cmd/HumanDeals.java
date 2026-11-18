@@ -13,10 +13,8 @@ import game.faction.diplomacy.DipStance;
 import game.faction.npc.FactionNPC;
 import game.faction.player.Player;
 import game.time.TIME;
-import init.resources.RESOURCE;
 import init.trade.TR;
 import init.trade.TRADABLE;
-import init.trade.TRADABLEO;
 import init.trade.TRADE_TYPE;
 import sosdet.Engine;
 import sosdet.Hooks;
@@ -33,7 +31,6 @@ import sosdet.game.deal.TariffBook;
 import sosdet.game.deal.TradeTally;
 import sosdet.game.siege.AssaultTerms;
 import sosdet.report.Field;
-import settlement.main.SETT;
 import snake2d.util.sets.LIST;
 import world.WORLD;
 import world.army.AD;
@@ -867,21 +864,12 @@ public final class HumanDeals {
     private static int spare(Faction f, TRADABLE res, boolean inStep) {
         int i = res.index();
         int outgoing = inStep ? Hooks.reportI(f.index(), Field.OUTGOING, i, 0) : res.ps().attempting(null);
-        int exported = inStep ? Hooks.reportI(f.index(), Field.EXPORT_AMOUNT, i) : exported(res);
-        return DealBook.spare(f.res().getAvailable(res), outgoing, exported);
+        return DealBook.spare(f.res().getAvailable(res), outgoing);
     }
 
     /** Outside the step: what this PC's player can give of the tradable with index {@code tradable} ({@link DealBook#spare}). */
     public static int spare(int tradable) {
         return spare(FACTIONS.player(), TR.ALL().get(tradable), false);
-    }
-
-    /** This PC's live export depots' stock of {@code res}; slaves have none. */
-    private static int exported(TRADABLE res) {
-        if (res instanceof TRADABLEO<?> && ((TRADABLEO<?>) res).t instanceof RESOURCE) {
-            return SETT.ROOMS().EXPORT.tally.amount.get((RESOURCE) ((TRADABLEO<?>) res).t);
-        }
-        return 0;
     }
 
     private static DipStance stance(int treaty) {
