@@ -30,6 +30,11 @@ import sosdet.game.cmd.MapBattles;
  */
 public final class GameAi implements AiApplier {
 
+    @Override
+    public boolean stationedOrder(int pc, int div) {
+        return Hooks.stationedOrderHere(pc, div);
+    }
+
     private final GameCodec reader = new GameCodec();
     private final GameCodec generalWriter = new GameCodec();
     private final GameCodec orderWriter = new GameCodec();

@@ -2097,11 +2097,12 @@ public final class Hooks {
      * an order that names no division, such as artillery's). The general's, a battle's and a tape's always, as before.
      * A player's otherwise in the city they command in, on every PC that runs it alike (SOS-209):
      * <ul>
-     * <li>in an assault, the defender's, and a viewer's the commanders table gave a division to (AiLog checked it);
      * <li>a stationed ally's division in the host's city (SOS-234): its player's while their view of the city runs,
-     * else the host's;
+     * else the host's, in an assault too;
+     * <li>in an assault, the defender's, and a viewer's the commanders table gave a division to (AiLog checked it);
      * <li>any other division: the city's own player's.
      * </ul>
+     * The rule itself is {@link sosdet.game.station.StationOrders#applies}.
      */
     public static boolean divOrderHere(int pc, int div) {
         Session s = Engine.session();
@@ -2109,14 +2110,32 @@ public final class Hooks {
                 || s.ai().applyingTaped()) {
             return true;
         }
-        if (s.assault != null && s.assault.started() && s.cityHuman() == s.assault.defender) {
-            return pc == s.cityPc() || s.viewsCityHere(pc);
+        int owner = stationOwner(s, div);
+        int ownerPc = owner < 0 ? -1 : s.pcOf(owner);
+        boolean assault = s.assault != null && s.assault.started() && s.cityHuman() == s.assault.defender;
+        return sosdet.game.station.StationOrders.applies(pc, s.cityPc(), ownerPc, ownerPc >= 0 && s.viewsCityHere(ownerPc),
+                assault, assault && s.viewsCityHere(pc));
+    }
+
+    /**
+     * Inside the step, before the commanders table skips it (SOS-234): whether an order from {@code pc} for division
+     * {@code div} is a stationed player's for its own soldiers in the city this PC runs, while their view of it runs.
+     * Only the PCs that run that city can tell; elsewhere the order is skipped, which applies nowhere anyway, and the
+     * table, the same everywhere, stays as it is.
+     */
+    public static boolean stationedOrderHere(int pc, int div) {
+        Session s = Engine.session();
+        if (s == null || !s.ownCity || s.battle != null && !s.battle.awaiting) {
+            return false;
         }
-        int owner = div < 0 || !s.plans().inGame() ? -1 : sosdet.game.GameStationedDivs.get().divs().owner(div);
-        if (owner >= 0 && s.viewsCityHere(s.pcOf(owner))) {
-            return pc == s.pcOf(owner);
-        }
-        return pc == s.cityPc();
+        int owner = stationOwner(s, div);
+        int ownerPc = owner < 0 ? -1 : s.pcOf(owner);
+        return sosdet.game.station.StationOrders.passesTable(false, pc, ownerPc, ownerPc >= 0 && s.viewsCityHere(ownerPc));
+    }
+
+    /** The stationed player whose soldiers division {@code div} of the city this PC runs holds, or -1. No allocation. */
+    private static int stationOwner(Session s, int div) {
+        return div < 0 || !s.plans().inGame() ? -1 : sosdet.game.GameStationedDivs.get().divs().owner(div);
     }
 
     /**
@@ -2126,14 +2145,18 @@ public final class Hooks {
      */
     public static boolean stationSelectable(int div) {
         Session s = Engine.session();
-        if (s == null || !s.ownCity || s.battle != null || !s.plans().inGame()) {
+        if (s == null || !s.ownCity || s.battle != null) {
             return true;
         }
-        int owner = sosdet.game.GameStationedDivs.get().divs().owner(div);
-        if (owner < 0 || s.assault != null && s.assault.started()) {
-            return true; // an assault's commanders table decides: the defender's
-        }
-        return owner == s.localHuman || s.viewing() == null && !s.viewsCityHere(s.pcOf(owner));
+        int owner = stationOwner(s, div);
+        return owner < 0 || sosdet.game.station.StationOrders.selectable(s.localHuman, owner, s.viewing() != null,
+                s.viewsCityHere(s.pcOf(owner)));
+    }
+
+    /** The UI (SOS-234): whether division {@code div} of the city on screen holds a stationed ally's soldiers. */
+    public static boolean stationedOnScreen(int div) {
+        Session s = Engine.session();
+        return s != null && s.ownCity && s.battle == null && stationOwner(s, div) >= 0;
     }
 
     /**
