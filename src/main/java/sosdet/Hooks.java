@@ -1154,6 +1154,9 @@ public final class Hooks {
             }
             s.currentHuman = s.living;
             s.ai().worldPart();
+            if (!battleRuns && s.plans().inGame()) { // unit tests have no game
+                sosdet.game.GameStations.get().endDue(); // after the commands: the armies stationed no more (SOS-233)
+            }
             if (s.pvpEngageAt == step && s.worldPrompt instanceof SallyLayout.Ask) { // the allies answered, or time ran out (SOS-232)
                 sallyAskEngage(s);
             } else if (s.pvpEngageAt == step && s.worldPrompt != null) { // both humans answered, or time ran out (SOS-83)
@@ -2060,6 +2063,19 @@ public final class Hooks {
         }
         x.a = a;
         x.i = div;
+        return true;
+    }
+
+    /**
+     * A world command (SOS-233): the host's city tail fills a stationed army's supplies from its stockpiles, and its next
+     * report gives them to the army (B2), as {@link #armySupplies(WArmy, int)}; true when queued.
+     */
+    public static boolean stationSupply(WArmy a) {
+        Txn x = toCity(TxnKind.STATION_SUPPLY);
+        if (x == null) {
+            return false;
+        }
+        x.a = a;
         return true;
     }
 

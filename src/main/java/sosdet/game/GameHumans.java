@@ -78,6 +78,7 @@ public final class GameHumans extends Savable {
     private final GamePassed passed = new GamePassed();
     private final GameCarves carves = new GameCarves();
     private final GameFrozen frozen = new GameFrozen();
+    private final GameStations stations = new GameStations();
     /** Setup by carving: NPC slots 1 to this - 1 wait for the humans ({@link #reserve}); 0 when none do. */
     private int reservedTo;
     /** Hot-join: the slot a new human takes, out of {@link #freeNpc}'s reach while its city-state is carved; -1: none. */
@@ -102,6 +103,7 @@ public final class GameHumans extends Savable {
         world(passed); // the stances passed to the humans' vassals (SOS-140)
         world(carves); // the carved city-states' undo log (SOS-186)
         world(frozen); // the frozen humans, their last reports and what waits for them (SOS-193)
+        world(stations); // the armies stationed at another human's capital (SOS-233)
     }
 
     /**
@@ -206,6 +208,11 @@ public final class GameHumans extends Savable {
 
     public boolean retired(int slot) {
         return retired[slot];
+    }
+
+    /** The armies stationed at another human's capital (SOS-233). */
+    public GameStations stations() {
+        return stations;
     }
 
     /** The frozen humans (SOS-193). */

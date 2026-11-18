@@ -41,4 +41,13 @@ public record Notice(long step, int kind, int first, int second, int value) {
     public static final int STANCE_PASSED = 11;
     /** The human {@code first} sallied out with no men in or beside their capital: nobody sallies (SOS-170). */
     public static final int SALLY_EMPTY = 12;
+    /** The human {@code first} stationed an army at the capital of the human {@code second} (SOS-233). */
+    public static final int STATIONED = 13;
+    /**
+     * An army of the human {@code first} stationed at the capital of {@code second} is stationed no more; the value says
+     * why ({@code GameStations.SENT_AWAY} and the others) (SOS-233).
+     */
+    public static final int STATION_ENDED = 14;
+    /** The human {@code first} supplied the army of {@code second} stationed at its capital (SOS-233). */
+    public static final int STATION_SUPPLIED = 15;
 }
