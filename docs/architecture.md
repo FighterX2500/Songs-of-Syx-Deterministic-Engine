@@ -112,6 +112,7 @@ Each line is a class of cause found in practice. The patch named holds the fix; 
 | | Static initializers drawing whenever their class happens to load | `40`, `50` |
 | | Start-up tables from an unseeded stream | `50` |
 | | Draws while loading a save | `70` |
+| | A message's window built inside the step on one PC only (since SOS-89 a message shows on its player's PC alone): the random text picked when raiders destroy a helping NPC split the world draws by one (SOS-223) | `16` |
 | **This PC's settings or view read by the simulation** | Whether the battle view is open; the placement being previewed; the weather-effects setting; where the camera looks (the serial killer) | `60`, `65` |
 | | The developer flag; titles from this PC's profile | `98` |
 | | Whether this PC shows a world-battle prompt (`UIWBattlePrompt.isBusty`), which held world battles on that PC only (SOS-46 PT2) | `99` |
