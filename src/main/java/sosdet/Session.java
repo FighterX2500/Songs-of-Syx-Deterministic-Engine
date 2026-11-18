@@ -1607,6 +1607,12 @@ final class Session {
         if (k.kind == BattleKey.ASSAULT && a != null && a.endLogged) {
             return "The assault is ending.";
         }
+        LocalBattle b = k.kind == BattleKey.LOCAL ? locals[k.human] : null;
+        if (b != null && b.away) {
+            // its PC hasn't caught up since generating it: a battle it couldn't make (a sally called off) sends its
+            // result from there, and that comes first, so the restart is refused in its step on every PC alike
+            return "That battle is being set up.";
+        }
         return restartRefusal(k);
     }
 
@@ -1765,7 +1771,10 @@ final class Session {
      */
     private void localRestartLoad(LocalBattle b) {
         if (b.start == null) {
-            return; // no battle was generated here (a sally called off): its watchers load the game as it stands
+            // no battle was generated here (a sally called off): the host logs no restart until this PC caught up after
+            // generating ({@link #restartRefusalHost}), and the called-off result it sent first makes every PC refuse it
+            throw new IllegalStateException("SOSDET: the restart at step " + clock.step() + " of human " + b.human
+                    + "'s battle against NPCs, which generated none on this PC");
         }
         try {
             restartWorld = java.nio.file.Files.createTempFile("sosdet-restartworld", ".save");

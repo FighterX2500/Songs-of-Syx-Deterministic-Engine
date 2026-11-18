@@ -190,6 +190,29 @@ class BattleRestartTest {
         assertThrows(IllegalStateException.class, () -> Engine.restartBattle(k.toLong()), "only the host logs one");
     }
 
+    /**
+     * The host logs no restart of a battle against NPCs while its PC is still generating it: a battle it couldn't make
+     * (a sally called off) sends a result from there, which the host must have logged before the restart, so that the
+     * restart is refused in its step on every PC alike and no PC loads a battle that doesn't exist (SOS-231).
+     */
+    @Test
+    void theHostLogsNoRestartOfABattleItsPcIsStillGenerating() {
+        Session s = session(0);
+        LocalBattle b = watchedLocal(s);
+        BattleKey k = new BattleKey(BattleKey.LOCAL, 3, 1234);
+        s.clock.resetTo(1400);
+        b.away = true;
+        assertEquals("That battle is being set up.", s.restartRefusalHost(k));
+        assertNull(s.restartRefusal(k), "the other PCs don't know: only the host logs it");
+        b.away = false;
+        assertNull(s.restartRefusalHost(k));
+        assertTrue(s.localResult(1401, 3, new Object[] {-1}), "the called-off result, logged first");
+        s.clock.resetTo(1401);
+        s.battleRestart(1401, k);
+        assertEquals(-1, b.restartAt, "refused in its step on every PC alike");
+        assertEquals(-1, s.views[0].rejoinAt(), "no watcher waits for a battle that doesn't exist");
+    }
+
     @Test
     void theBattleThisPcSeesIsItsOwnLocalBattleOrTheOneItWatches() {
         Session fighter = session(3);
