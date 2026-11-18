@@ -48,6 +48,9 @@ public final class WorldActions {
     /** sallyother: waiting for a world prompt that asks another human (test tooling: one rig process, one run). */
     private static boolean sallyAwaiting;
 
+    /** -N in wrelations, wnpcstance and wdealnpc: the N-th free NPC, picked once (test tooling: one rig process, one run). */
+    private static final java.util.Map<Integer, FactionNPC> freePicks = new java.util.HashMap<>();
+
     /** whover: the capital the map shows as hovered, every frame (test tooling: one rig process, one run). */
     private static Region hovering;
     /** Copy 1's last carved city-state's region, to un-carve (SOS-184); -1 for none. Rig tooling only. */
@@ -298,8 +301,8 @@ public final class WorldActions {
             return true;
         case "wrelations": { // wrelations [npc slot]: notes the NPC's king, and its stance, stored opinion (each entry), dealings, opinion and trust toward
             // each human, read as that human between steps (the NPC by default: the one wgift gives to; SOS-46 M3)
-            int slot = a.length > 1 ? Integer.parseInt(a[1]) : -1;
-            Rig.later(() -> Rig.note(relations(npcArg(slot)))); // -N: the N-th active NPC (SOS-227)
+            int slot = a.length > 1 ? Integer.parseInt(a[1]) : Integer.MIN_VALUE;
+            Rig.later(() -> Rig.note(relations(slot == Integer.MIN_VALUE ? npc() : npcArg(slot)))); // -N: the N-th free NPC (SOS-227)
             return true;
         }
         case "wwar": // wwar: notes each human's cached potential enemies (DipWarPlayer, as the next war timer reads them), each
@@ -1061,7 +1064,7 @@ public final class WorldActions {
             return true;
         }
         case "wnpcstance": { // wnpcstance <slot> neutral|trade|pact|ally human|npc: this player and the NPC in <slot> (-N: the
-            // N-th active NPC, -1 the one wgift gives to) get that stance, made by the human (as its accepted deal, with vanilla's betrayal) or by
+            // N-th free NPC, see npcArg) get that stance, made by the human (as its accepted deal, with vanilla's betrayal) or by
             // the NPC (as its court cancels a treaty) (test tooling, SOS-227)
             int slot = Integer.parseInt(a[1]);
             int stance = java.util.Arrays.asList("neutral", "trade", "pact", "ally").indexOf(a[2]);
@@ -1072,8 +1075,8 @@ public final class WorldActions {
             Rig.later(() -> Diplomacy.npcStanceForTest(npcArg(slot), stance, byHuman));
             return true;
         }
-        case "wdealnpc": { // wdealnpc <slot> war|cancel: the faction screen's deal with the NPC in <slot> (-N: the N-th active
-            // NPC), Declare war or Cancel all agreements, accepted: the player's own command (SOS-227)
+        case "wdealnpc": { // wdealnpc <slot> war|cancel: the faction screen's deal with the NPC in <slot> (-N: the N-th free
+            // NPC, see npcArg), Declare war or Cancel all agreements, accepted: the player's own command (SOS-227)
             int slot = Integer.parseInt(a[1]);
             boolean war = a[2].equals("war");
             if (!war && !a[2].equals("cancel")) {
@@ -1623,18 +1626,35 @@ public final class WorldActions {
         return (FactionNPC) FACTIONS.getByIndex(slot);
     }
 
-    /** The NPC in {@code slot}, or for -N the N-th active NPC (-1: {@link #npc()}'s). */
+    /**
+     * The NPC in {@code slot}, or for -N the N-th free NPC: active, nobody's vassal or overlord, and neutral to every
+     * human when first asked. Each -N is picked once and kept, so a script's later steps reach the same NPC; a script asks
+     * for every -N it uses first, while they are all still free (SOS-227).
+     */
     private static FactionNPC npcArg(int slot) {
         if (slot >= 0) {
             return npcAt(slot);
         }
+        FactionNPC kept = freePicks.get(slot);
+        if (kept != null) {
+            return kept;
+        }
         int n = -slot;
-        for (FactionNPC f : FACTIONS.NPCs()) {
-            if (f.isActive() && --n == 0) {
+        for (int i = 0; i < FACTIONS.NPCs().size(); i++) { // by index: no shared iterator under DIP's lists (SOS-46 PT1)
+            FactionNPC f = FACTIONS.NPCs().get(i);
+            if (!f.isActive() || DIP.overlord(f) != null || !DIP.VASSAL().all(f).isEmpty()) {
+                continue;
+            }
+            boolean neutral = true;
+            for (int h : Hooks.humanSlots()) {
+                neutral &= DIP.get(f, FACTIONS.getByIndex(h)) == DIP.NEUTRAL();
+            }
+            if (neutral && --n == 0) {
+                freePicks.put(slot, f);
                 return f;
             }
         }
-        throw new IllegalStateException("fewer than " + -slot + " active NPC factions");
+        throw new IllegalStateException("fewer than " + -slot + " free NPC factions");
     }
 
     private static FactionNPC npc() {
