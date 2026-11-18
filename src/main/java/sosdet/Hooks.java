@@ -2793,6 +2793,25 @@ public final class Hooks {
         return false;
     }
 
+    /**
+     * Patch 15, a real-time battle's result accepted, and the assault's outcome: {@code lost} of the army's men died, and
+     * their gear goes with them, as vanilla's auto-resolve takes it. Vanilla's real-time result resolves only the men, so
+     * a beaten army kept every dead man's gear, and once it was removed with no men, a caravan shipped it all home as
+     * spoils (owner, 2026-11-18; SOS-225). In a session only; inside the step, alike on every PC.
+     */
+    public static void deadGear(WArmy a, int lost) {
+        if (Engine.session() == null || a == null || !a.added()) {
+            return;
+        }
+        int men = world.army.AD.men(null).get(a);
+        for (world.army.ADSupply su : world.army.AD.supplies().all) {
+            int am = BattleRules.deadGear(su.current().get(a), lost, men);
+            if (am > 0) {
+                su.current().inc(a, -am);
+            }
+        }
+    }
+
     /** Patches 14 and 15: true for a human fighting as an ally in the battle running now. */
     public static boolean battleAlly(game.faction.Faction f) {
         Session s = Engine.session();
