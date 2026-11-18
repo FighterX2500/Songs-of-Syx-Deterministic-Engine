@@ -107,6 +107,8 @@ When they come up:
 
 A resync carries a save file as well as the returned bytes, so send both. The engine never resyncs on its own: `desyncHold()` says when every PC has held, and your mod shows the choice.
 
+For a desync hunt, put both PCs' lines side by side: `desyncReport()` (the world's), `viewDesyncReport()` (the viewer's copy of a viewed city), `hashedDivisions(step)` with `hashInterval()` (the divisions this PC hashed at a step, owner and viewer alike), and `traceDraws(steps)` with `drawTrace(from, to)` (the code behind every world draw).
+
 ## Rules for a mod
 
 - Never change simulation state on one PC. A player's action reaches the game's own UI call, where a hook turns it into a command. The rig's scripted player does that through `Engine.betweenSteps`.

@@ -815,6 +815,29 @@ public final class Engine {
         return h == null ? null : h.desync();
     }
 
+    /**
+     * The viewer's PC: the report of {@link #viewDesync}, with the divisions this PC hashed at that step, for the log;
+     * null while the copy matches. Its clock line is the world's, not the view's (SOS-222).
+     */
+    public static String viewDesyncReport() {
+        Session s = required();
+        Desync d = viewDesync();
+        return d == null ? null : d.report(s.source(), List.of(), List.of());
+    }
+
+    /**
+     * Debugging (SOS-222): the divisions' fields this PC hashed at {@code step}, one division a line, or "(not kept)"
+     * once newer hashes took its place. The same lines from a view's owner and viewer show what differs.
+     */
+    public static String hashedDivisions(long step) {
+        return required().source().describeDivisions(step);
+    }
+
+    /** The steps between two state hashes, and between two view hashes. */
+    public static int hashInterval() {
+        return required().hashes.interval();
+    }
+
     /** The viewer's PC: the view hashes compared so far with the owner's. */
     public static long viewHashesCompared() {
         Session s = required();
