@@ -36,7 +36,7 @@ War, regions and vassalage are SOS-73 and SOS-74. War is not offered against a h
     - the money: `credits().inc(±x, CTYPE.DIPLOMACY)`;
     - the goods: `seller(t).remove(...)` and a `TRADE_TYPE.diplomacy` caravan to the receiver's capital, as `DealParty.execute` does.
 
-    The goods check takes each side's vanilla available stock less the goods on their way out of its city that the stock still counts (`DealBook.spare`, SOS-224): vanilla's seller turns goods promised into fetchers, and an export depot counts what a fetcher reserved until it picks it up, so for minutes the same goods would pass the check again. The deal's own goods are promised at once through the report's ledger, so a second deal in the same report's time sees them too.
+    The goods check takes each side's vanilla available stock less every good on its way out of its city (`DealBook.spare`, SOS-224): vanilla's seller turns goods promised into fetchers, and until a fetcher has picked its load up the stock still counts what it hasn't reserved yet and what it reserved in an export depot, so for minutes the same goods would pass the check again. Taking the fetchers' whole loads off is stricter than needed by what they already carry or reserved in stockpiles, until their caravans leave the city, about ten game minutes after a delivery leaves (owner, 2026-11-18). A throne's sack takes its share of the same figure. The deal's own goods are promised at once through the report's ledger, so a second deal in the same report's time sees them too.
 
     Each side applies with its giver as the current human, so its transactions reach its own city.
   - **Expiry** runs at the start of each world part, before the commands.
