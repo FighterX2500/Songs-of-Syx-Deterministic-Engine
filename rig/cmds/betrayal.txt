@@ -1,0 +1,23 @@
+# SOS-227: a war on an NPC that broke its treaties with the player costs no betrayal; a treaty the player broke first,
+# then a war, costs betrayal as in vanilla. wrelations notes each human's stored opinion entries: BETRAYAL is the one.
+# Run it with --humans 2 so the second human's row shows the first human's breaks are not its own.
+wrelations -1
+wrelations -2
+# 1. the first NPC: a trade treaty the player made, the NPC's court cancels it, the player declares war at once:
+#    no BETRAYAL entry for human 0 after the war (WAR_DECLARATION and AGRESSION are vanilla's, as before)
+wnpcstance -1 trade human
+wait 5
+wnpcstance -1 neutral npc
+wait 5
+wdealnpc -1 war
+wait 5
+wrelations -1
+# 2. the second NPC: a trade treaty the player made, the player cancels it, then declares war at once: BETRAYAL for
+#    human 0 as vanilla gives it (the cancel and the war, both fresh)
+wnpcstance -2 trade human
+wait 5
+wdealnpc -2 cancel
+wait 5
+wdealnpc -2 war
+wait 5
+wrelations -2

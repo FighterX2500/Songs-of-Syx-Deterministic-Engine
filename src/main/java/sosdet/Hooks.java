@@ -1630,6 +1630,24 @@ public final class Hooks {
     }
 
     /**
+     * {@code OpsStance.setNewStance}, after it sets the stance: the change between {@code FACTIONS.player()} (the current
+     * human in the world part) and {@code npc} is the human's own, so it is no break by the NPC (SOS-227).
+     */
+    public static void stanceMadeByHuman(game.faction.npc.FactionNPC npc) {
+        sosdet.game.GameHumans.get().breaks().book().madeByHuman(FACTIONS.player().index(), npc.index());
+    }
+
+    /**
+     * {@code OpsStance.betrayalD}: true when a war {@code FACTIONS.player()} declares on {@code npc} costs no betrayal:
+     * the NPC lowered their stance last, and left them {@code neutral}. A war on an NPC that broke its treaties with this
+     * human costs none; a treaty the human broke first costs vanilla's (owner, 2026-11-18; SOS-227). Every game, single
+     * player too. World state: the same on every PC.
+     */
+    public static boolean warIsFree(game.faction.npc.FactionNPC npc, boolean neutral) {
+        return sosdet.game.GameHumans.get().breaks().book().warIsFree(FACTIONS.player().index(), npc.index(), neutral);
+    }
+
+    /**
      * {@code DipWarPlayer.validEnemy} and {@code validProxy}, in the slice of {@code human}: true when {@code f} is the
      * vassal of another human who is {@code human}'s trade partner, colleague or ally. It then demands nothing, starts
      * no war and works no harm against {@code human} (owner, 2026-11-05; SOS-146).
