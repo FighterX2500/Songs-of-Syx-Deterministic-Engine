@@ -627,12 +627,16 @@ public final class Engine {
      * for the mod to send to the {@link #viewIn} of every viewer who freezes at this step, as all of an assault's do, and
      * to the {@link #viewRejoin} of every viewer of this city whose {@link View#rejoinAt} is this step; then this PC runs
      * on. One save and one load for them all: a viewer that didn't load it would run another city (SOS-151). Null when
-     * no view waits for its save.
+     * no view waits for its save. After a restart the players voted for, the same goes to every viewer whose
+     * {@link View#rejoinAt} is the restart's step, once this PC has loaded the battle's start (SOS-231).
      */
     public static byte[] viewOut() {
         Session s = required();
         if (s.streams.inStep()) {
             return null;
+        }
+        if (s.restartOut >= 0) {
+            return s.restartViewOut();
         }
         for (View v : s.views) {
             if (v == null || !v.frozen() || v.owner != s.localHuman || v.sent || s.clock.step() != v.freeze) {
@@ -2132,6 +2136,61 @@ public final class Engine {
      */
     public static double takeSpeedAsked() {
         return required().takeSpeedAsked();
+    }
+
+    // ------------------------------------------------------------ a battle's restart by vote (mod spec §8, SOS-231)
+
+    /**
+     * Outside the step: the battle this PC's player sees now, which a vote can restart, as a {@link BattleKey#toLong}:
+     * the battle on the battle map every PC runs, this PC's own battle against NPCs or the one it watches, or the assault
+     * on the city it runs. {@link BattleKey#NONE} for none. No allocation.
+     */
+    public static long battleHere() {
+        return required().battleHere();
+    }
+
+    /**
+     * Outside the step: true once after this PC's player pressed the battle's own Restart (its panel's, or its victory or
+     * defeat panel's). In a session that press restarts nothing; the mod asks every player ({@link #restartBattle}).
+     */
+    public static boolean takeRestartAsked() {
+        return required().takeRestartAsked();
+    }
+
+    /**
+     * Why the battle {@code key} ({@link BattleKey#toLong}) can't be restarted now; null when it can. On the host it also
+     * says when a restart is in the log already, or the assault's end.
+     */
+    public static String restartRefusal(long key) {
+        Session s = required();
+        BattleKey k = BattleKey.of(key);
+        return s.ai().mode() == AiMode.HOST ? s.restartRefusalHost(k) : s.restartRefusal(k);
+    }
+
+    /**
+     * Host, own-city mode, between steps: the players voted to restart the battle {@code key} (mod spec §8). A restart
+     * entry in the log applies at its stamped step on every PC; there every PC skips it alike when the battle can't
+     * restart then ({@link Notice#RESTART} says which). A battle every PC runs loads its start at that step on every PC.
+     * A local battle's PC loads its battle as generated with the world it ran, and the assault's defender its city as
+     * the invasion started; their watchers and viewers load the owner's save from there ({@link View#rejoinAt},
+     * {@link #viewOut}, {@link #viewRejoin}), and every other PC reloads its own world. Throws when
+     * {@link #restartRefusal} has a reason.
+     */
+    public static void restartBattle(long key) {
+        Session s = required();
+        if (!s.ownCity || s.ai().mode() != AiMode.HOST) {
+            throw new IllegalStateException("SOSDET: the host restarts a battle, in own-city mode (mode " + s.ai().mode() + ")");
+        }
+        if (s.streams.inStep()) {
+            throw new IllegalStateException("SOSDET: a battle is restarted between steps, not inside one");
+        }
+        BattleKey k = BattleKey.of(key);
+        String why = s.restartRefusalHost(k);
+        if (why != null) {
+            throw new IllegalStateException("SOSDET: the " + k + " can't restart now: " + why);
+        }
+        s.restartLogged = k;
+        s.ai().captureRestart(AiEntry.ints(k.ints()));
     }
 
     /** Host: frames the slowest PC held it in, their seconds, and the longest hold in seconds (SOS-42). */

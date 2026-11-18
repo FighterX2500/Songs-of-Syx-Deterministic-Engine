@@ -239,6 +239,7 @@ public final class Hooks {
         s.viewBackStart(); // a viewer before its thaw step loads its own city back (SOS-82)
         s.viewWorldReloads(); // every other PC reloads its world where the owner and the viewer load
         s.localBacks(); // after a local battle's result: its PC loads its city back, every other PC its world (SOS-93)
+        s.restarts(); // after a restart's step: the battle's PC loads its start, every PC outside it its world (SOS-231)
         boolean battleAwaited = s.battle != null && s.battle.awaiting; // the battle PC's battle isn't loaded yet
         boolean waits = !s.ai().mayRun(s.clock.step() + 1) || !s.worldMayRun(s.clock.step() + 1)
                 || !s.watchMayRun(s.clock.step() + 1);
@@ -450,6 +451,9 @@ public final class Hooks {
             sosdet.game.GameWorldLoad.fboostMuls(boosts);
             s.streams.reseed(s.worldSeed(step));
             s.streams.worldDraws(worldDraws);
+        }
+        if (VIEW.b().state() != null) {
+            b.start = sosdet.game.GameResync.captureLocal(); // what its save leaves out, for a restart (SOS-231)
         }
     }
 
@@ -799,6 +803,21 @@ public final class Hooks {
     /** The host's {@link sosdet.ai.AiEntry#ASSAULT_END} at its step, every PC. */
     public static void assaultEnded(long step, int outcome, int survivors) {
         Engine.session().assaultEnded(step, outcome, survivors);
+    }
+
+    // ------------------------------------------------------------ a battle's restart by vote (mod spec §8, SOS-231)
+
+    /** The host's {@link sosdet.ai.AiEntry#RESTART} at its step, every PC: the battle's kind, human and start step. */
+    public static void battleRestart(long step, int kind, int human, int stepHigh, int stepLow) {
+        Engine.session().battleRestart(step, BattleKey.ofInts(kind, human, stepHigh, stepLow));
+    }
+
+    /** This PC's player pressed the battle's own Restart, outside the step: the mod asks every player (SOS-231). */
+    public static void restartAsked() {
+        Session s = Engine.session();
+        if (s != null) {
+            s.restartAsked = true;
+        }
     }
 
     /**
@@ -2410,6 +2429,9 @@ public final class Hooks {
             if (s.localBackLoading) {
                 s.localBackWorld(); // a local battle's PC: its city is back, the world it ran goes in (SOS-93)
                 GAME.SPEED.speedSet(s.seenSpeed); // the save's speed isn't the player's: no change to send
+            }
+            if (s.localRestartLoading) {
+                s.localRestartWorld(); // a local battle's restart: the battle as generated, the world it ran goes in (SOS-231)
             }
             if (s.plans().inGame()) {
                 // a map battle's end or a resync: the session goes on at this step, with no "click to continue" (SOS-41)

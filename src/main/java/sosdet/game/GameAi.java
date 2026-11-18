@@ -136,6 +136,9 @@ public final class GameAi implements AiApplier {
         case AiEntry.ASSAULT_END:
             Hooks.assaultEnded(e.step, e.intAt(0), e.intAt(1)); // SOS-92
             return;
+        case AiEntry.RESTART:
+            Hooks.battleRestart(e.step, e.intAt(0), e.intAt(1), e.intAt(2), e.intAt(3)); // SOS-231
+            return;
         case AiEntry.TELEPORT:
             if (!Hooks.cityOrderHere(e.pc)) {
                 return; // own-city mode: another PC's own city (SOS-209)

@@ -104,8 +104,9 @@ When they come up:
 | A world resync | host: `worldResyncSave(file)` | every PC, the host too: `worldResyncLoad(file, state)` |
 | A battle resync | host: `battleResyncSave(file)` | every PC, the host too: `battleResyncLoad(file, state)` |
 | A resync with no own cities | host: `resyncSave(file)` | every PC, the host too: `resyncLoad(file, state, afterSet)` |
+| A battle's restart (SOS-231) | the battle's PC or the defender: `viewOut()` | every watcher or viewer whose `View.rejoinAt` is the restart's step: `viewRejoin(bytes)` |
 
-A resync carries a save file as well as the returned bytes, so send both. The engine never resyncs on its own: `desyncHold()` says when every PC has held, and your mod shows the choice.
+A resync carries a save file as well as the returned bytes, so send both. A restart by vote is the mod's to ask: `battleHere()` names the battle this PC's player sees, `takeRestartAsked()` says when they pressed the battle's own Restart, and the host checks `restartRefusal(key)` and calls `restartBattle(key)` once the players agree. Every PC hears the result as a `Notice.RESTART`. The engine never resyncs on its own: `desyncHold()` says when every PC has held, and your mod shows the choice.
 
 ## Rules for a mod
 

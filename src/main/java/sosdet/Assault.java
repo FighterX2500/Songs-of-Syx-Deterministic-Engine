@@ -56,6 +56,10 @@ public final class Assault {
     volatile String cancelled;
     /** The invasion's reference in the defender's city, once it runs there. */
     volatile int invasionRef = -1;
+    /** The step the invasion started at in the defender's city, the same on every PC; -1 before. */
+    volatile long startedAt = -1;
+    /** The last step a restart the players voted for applied at, the same on every PC; -1 for none (SOS-231). */
+    volatile long restartAt = -1;
     /** The attackers' retreat, or in a rig test the outcome asked for: the host logs it next; -1 when none. */
     volatile int forced = -1;
     /** After {@link #TAKEN}: the step the attacker's choice is due by; then the default applies (SOS-92 D). */

@@ -249,6 +249,17 @@ public final class AiLog {
     }
 
     /**
+     * Host: a battle's restart the players voted for ({@link AiEntry#RESTART}), applied at the step it stamps on every
+     * PC. It comes from the mod, not a player, so watch-only never drops it (SOS-231).
+     */
+    public void captureRestart(byte[] payload) {
+        if (mode != AiMode.HOST) {
+            throw new IllegalStateException("SOSDET: only the host restarts a battle (mode " + mode + ")");
+        }
+        captured.add(new AiEntry(-1, -1, AiEntry.RESTART, -1, 0, payload.clone()));
+    }
+
+    /**
      * Host: a city view's start or end ({@link AiEntry#VIEW}) into the log, applied at the step it stamps on every PC.
      * It comes from the mod, not a player, so watch-only never drops it (SOS-82).
      */
@@ -444,7 +455,7 @@ public final class AiLog {
             appliedByKind[due.kind]++;
             if (due.pc != AiEntry.AI && !skipped && due.kind != AiEntry.COMMANDERS && due.kind != AiEntry.HOLD
                     && due.kind != AiEntry.REMOVE && due.kind != AiEntry.VIEW
-                    && due.kind != AiEntry.ASSAULT_END) { // the mod's or the engine's, no order
+                    && due.kind != AiEntry.ASSAULT_END && due.kind != AiEntry.RESTART) { // the mod's or the engine's, no order
                 appliedOrders++;
             }
             if (mode == AiMode.PEER) {

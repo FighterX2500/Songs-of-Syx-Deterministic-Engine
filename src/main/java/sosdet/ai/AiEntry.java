@@ -48,14 +48,20 @@ public final class AiEntry {
      * PC ends it at this entry's step, also a PC whose view ended and that no longer runs the city; not a battle change.
      */
     public static final int ASSAULT_END = 21;
-    static final int KINDS = 22;
+    /**
+     * The players voted to restart a running battle (mod spec §8, SOS-231): the payload is the battle's kind, its human
+     * and its start step as two ints (high, low) ({@code BattleKey}). Every PC running it loads its start at this entry's
+     * step; not a battle change.
+     */
+    public static final int RESTART = 22;
+    static final int KINDS = 23;
     public static String kindName(int kind) {
         return KIND_NAMES[kind];
     }
 
     private static final String[] KIND_NAMES = {"path", "dest", "task", "guard", "running", "fireAtWill", "formation",
         "artillery", "holdFire", "ammo", "muster", "mopUp", "artilleryMuster", "artilleryFire", "teleport", "speed",
-        "command", "commanders", "hold", "remove", "view", "assaultEnd"};
+        "command", "commanders", "hold", "remove", "view", "assaultEnd", "restart"};
 
     /** The general, as opposed to a player's PC. */
     public static final int AI = -1;

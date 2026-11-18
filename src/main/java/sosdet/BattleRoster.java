@@ -63,6 +63,19 @@ final class BattleRoster {
         return commanders.length > leads;
     }
 
+    /**
+     * The battle restarted from its start (SOS-231): every army is on the field again, so none has left, none is leaving
+     * and no survivors of one are kept; the commanders vote on the speed again, their last votes standing.
+     */
+    void restart() {
+        leaving = -1;
+        java.util.Arrays.fill(gone, false);
+        if (left != null) {
+            java.util.Arrays.fill(left, null);
+        }
+        speedVote.allBack();
+    }
+
     /** The army {@code h}'s divisions stand in; a commander with none stays on the side the battle gave them. */
     int sideIn(int[] byDivision, int h, int perArmy) {
         for (int i = 0; i < byDivision.length; i++) {

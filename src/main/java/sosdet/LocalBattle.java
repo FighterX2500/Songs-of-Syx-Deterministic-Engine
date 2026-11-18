@@ -45,6 +45,10 @@ public final class LocalBattle {
     boolean back;
     /** The step the human thaws at: the first report step after the result applies; -1 until then. */
     long thaw = -1;
+    /** The last step a restart the players voted for applied at, the same on every PC; -1 for none (SOS-231). */
+    long restartAt = -1;
+    /** The battle PC: what the save leaves out of the battle as generated ({@code GameResync.captureLocal}). */
+    byte[] start;
     volatile int state = ENGAGED;
 
     LocalBattle(long engage, int human, int pc, long freeze, int[] armies, Runnable generate) {

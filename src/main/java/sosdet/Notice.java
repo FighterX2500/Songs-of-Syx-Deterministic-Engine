@@ -41,4 +41,9 @@ public record Notice(long step, int kind, int first, int second, int value) {
     public static final int STANCE_PASSED = 11;
     /** The human {@code first} sallied out with no men in or beside their capital: nobody sallies (SOS-170). */
     public static final int SALLY_EMPTY = 12;
+    /**
+     * The players' vote restarted the battle of the human {@code first}, of {@code BattleKey} kind {@code second}: with
+     * {@code value} 1 it restarts now, with 0 it couldn't any more (it ended, or a player joins or leaves it) (SOS-231).
+     */
+    public static final int RESTART = 13;
 }
