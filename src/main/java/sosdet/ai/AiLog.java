@@ -184,9 +184,17 @@ public final class AiLog {
      * to the host through {@link #ordersOut}. Either way it is applied at the step the host stamps.
      */
     public void captureOrder(int kind, int div, byte[] payload) {
+        captureOrder(kind, div, payload, false);
+    }
+
+    /**
+     * As {@link #captureOrder(int, int, byte[])}; {@code stationed}: a stationed ally's order for its own soldiers in the
+     * host's city it views (SOS-234), which watch-only lets through as it does an assault commander's.
+     */
+    public void captureOrder(int kind, int div, byte[] payload, boolean stationed) {
         int id = kind == AiEntry.COMMAND ? CmdReader.idOf(payload) : -1;
         boolean worldAnswer = id == WORLD_ANSWER || id == LOCAL_ORDER || id == LOCAL_VOTE;
-        if (watchOnly && !worldAnswer && !(commanding && kind < AiEntry.SPEED)) {
+        if (watchOnly && !worldAnswer && !((commanding || stationed) && kind < AiEntry.SPEED)) {
             watchedDropped++;
             return;
         }
@@ -432,8 +440,10 @@ public final class AiLog {
             boolean skipped = false;
             if (due.kind == AiEntry.COMMANDERS) {
                 commanders.apply(due);
-            } else if (due.div >= 0 && !commanders.allows(due.pc, due.div)) {
-                commanders.skip(); // its source doesn't command that division, on every PC alike
+            } else if (due.div >= 0 && !commanders.allows(due.pc, due.div) && !applier.stationedOrder(due.pc, due.div)) {
+                // its source doesn't command that division, on every PC alike; a stationed player's own division only
+                // where its city runs (SOS-234): the count, which no hash holds, may differ there
+                commanders.skip();
                 skipped = true;
             } else {
                 if (due.div >= 0) {

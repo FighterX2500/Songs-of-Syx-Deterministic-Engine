@@ -285,6 +285,12 @@ public final class GameInputs implements Consumer<CityReport> {
             case DIV_RESOLVE_COUNT:
                 divResolveCount(in.data());
                 break;
+            case SALLY_SPOILS:
+                Hooks.sallySpoilsArrive(in.arg, in.data());
+                break;
+            case STATION_RESOLVE:
+                GameStationedDivs.applyResolve(in.data());
+                break;
             case EVENT_MARK:
                 ByteBuffer m = ByteBuffer.wrap(in.data());
                 applyEventMark(in.arg / EventMarks.KINDS, in.arg % EventMarks.KINDS, m.getInt(), m.getInt());

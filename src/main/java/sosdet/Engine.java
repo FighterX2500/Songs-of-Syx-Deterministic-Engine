@@ -1779,6 +1779,101 @@ public final class Engine {
         Sieges.sally();
     }
 
+    // ---------------------------------------------------------------- armies stationed at a capital (SOS-233)
+
+    /** Between steps: why this PC's player can't station {@code army} at the capital of the human in {@code host}, or null. */
+    public static String stationRefusal(world.entity.army.WArmy army, int host) {
+        required();
+        return sosdet.game.GameStations.get().refusal(army, host);
+    }
+
+    /**
+     * Between steps: this PC's player stations {@code army} at the capital of the human in {@code host}, at its step on
+     * every PC (mod spec §9, ADR 0011). Check {@link #stationRefusal} first.
+     */
+    public static void station(world.entity.army.WArmy army, int host) {
+        String why = stationRefusal(army, host);
+        if (why != null) {
+            throw new IllegalStateException("SOSDET: stationing refused: " + why);
+        }
+        sosdet.game.cmd.Stations.station(army, host);
+    }
+
+    /** Between steps: why this PC's player can't send {@code army} away (the host) or call it back (its player), or null. */
+    public static String stationEndRefusal(world.entity.army.WArmy army) {
+        required();
+        return sosdet.game.GameStations.get().endRefusal(army);
+    }
+
+    /** Between steps: the host sends {@code army} away, or its player calls it back. Check {@link #stationEndRefusal} first. */
+    public static void stationEnd(world.entity.army.WArmy army) {
+        String why = stationEndRefusal(army);
+        if (why != null) {
+            throw new IllegalStateException("SOSDET: ending a stationing refused: " + why);
+        }
+        sosdet.game.cmd.Stations.end(army);
+    }
+
+    /** Between steps: why this PC's player can't supply {@code army}, stationed at its capital, or null. */
+    public static String stationSupplyRefusal(world.entity.army.WArmy army) {
+        required();
+        return sosdet.game.GameStations.get().supplyRefusal(army);
+    }
+
+    /**
+     * Between steps: this PC's player, the host, fills the supplies of {@code army}, stationed at its capital, from its
+     * own stockpiles, as much as they have. Check {@link #stationSupplyRefusal} first.
+     */
+    public static void stationSupply(world.entity.army.WArmy army) {
+        String why = stationSupplyRefusal(army);
+        if (why != null) {
+            throw new IllegalStateException("SOSDET: supplying refused: " + why);
+        }
+        sosdet.game.cmd.Stations.supply(army);
+    }
+
+    /** Between steps: the number of stationed armies; read each with {@link #stationedArmy} and the others. */
+    public static int stationedCount() {
+        required();
+        return sosdet.game.GameStations.get().book().size();
+    }
+
+    /** Between steps: the {@code i}th stationed army, or null when it is gone since the world part's last check. */
+    public static world.entity.army.WArmy stationedArmy(int i) {
+        sosdet.game.station.StationBook b = sosdet.game.GameStations.get().book();
+        return sosdet.game.cmd.Args.army(b.army(i), b.iteration(i));
+    }
+
+    /** Between steps: the human whose {@code i}th stationed army it is. */
+    public static int stationedOwner(int i) {
+        return sosdet.game.GameStations.get().book().owner(i);
+    }
+
+    /** Between steps: the human at whose capital the {@code i}th stationed army stands. */
+    public static int stationedHost(int i) {
+        return sosdet.game.GameStations.get().book().host(i);
+    }
+
+    /**
+     * Between steps (SOS-234): whether an army of the human in {@code owner} stationed at the capital of the human in
+     * {@code host} fights an invasion of it by {@code invader}, as an invasion notice names it ({@link #invasionNoticeTake}:
+     * a faction's index, {@link #RAIDERS} or -1). Its soldiers then come into the host's city as the invaders deploy, and
+     * its player commands them from a view of the city.
+     */
+    public static boolean stationFights(int owner, int host, int invader) {
+        required();
+        return sosdet.game.GameStations.get().fights(owner, host, invader);
+    }
+
+    /**
+     * Between steps (SOS-234): the human whose stationed army's soldiers division {@code div} of army 0 holds in the city
+     * this PC runs (its own, or the one it views), or -1 for one of the city's own.
+     */
+    public static int stationedDivOwner(int div) {
+        required();
+        return sosdet.game.GameStationedDivs.get().divs().owner(div);
+    }
+
     /** Between steps: why this PC's player can't declare war on the human in {@code slot} now, or null. */
     public static String warRefusal(int slot) {
         required();

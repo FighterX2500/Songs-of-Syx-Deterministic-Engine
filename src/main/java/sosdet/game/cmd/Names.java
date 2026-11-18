@@ -71,7 +71,11 @@ public final class Names {
     static final List<Command> ALL = List.of(
             new Command(DIVISION_NAME, "divisionName", r -> {
                 Div d = Args.div(r);
-                d.info.name().clear().add(r.s());
+                String name = r.s();
+                if (sosdet.Hooks.stationedDiv(d)) {
+                    return false; // a stationed ally's soldiers: the host edits its own divisions only (SOS-234)
+                }
+                d.info.name().clear().add(name);
                 return true;
             }),
             new Command(ROOM_NAME, "roomName", r -> {

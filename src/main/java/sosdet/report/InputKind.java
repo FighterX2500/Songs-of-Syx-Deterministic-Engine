@@ -27,5 +27,15 @@ public enum InputKind {
      * SOS-145: as {@link #DIV_RESOLVE}, for a local battle's survivors: the bytes name the division and hold the count
      * and their mean experience.
      */
-    DIV_RESOLVE_COUNT
+    DIV_RESOLVE_COUNT,
+    /**
+     * SOS-232: an ally's share of a won sally's spoils and captives, which the world part ships to the ally's capital;
+     * the number is the ally's slot, the bytes each tradable's index and amount.
+     */
+    SALLY_SPOILS,
+    /**
+     * SOS-234: a stationed ally's division after a fight in the host's city; the number is the ally's slot, the bytes
+     * name its world division and hold the survivors and their mean experience.
+     */
+    STATION_RESOLVE
 }

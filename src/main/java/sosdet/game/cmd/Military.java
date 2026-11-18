@@ -37,13 +37,16 @@ public final class Military {
     static final List<Command> ALL = List.of(
             new Command(MEN, "divisionMen", r -> {
                 Div d = GAME.ARMIES().division((short) r.i());
+                if (sosdet.Hooks.stationedDiv(d)) {
+                    return false; // a stationed ally's soldiers: the host edits its own divisions only (SOS-234)
+                }
                 d.info.menSet(r.i());
                 return true;
             }),
             new Command(RACE, "divisionRace", r -> {
                 Div d = Args.div(r);
                 Race race = Args.race(r);
-                if (race == null) {
+                if (race == null || sosdet.Hooks.stationedDiv(d)) {
                     return false;
                 }
                 d.info.raceSet(race);
@@ -52,24 +55,37 @@ public final class Military {
             new Command(TRAINING, "divisionTraining", r -> {
                 Div d = Args.div(r);
                 StatTraining t = STATS.BATTLE().TRAINING_ALL.get(r.i());
-                d.info.trainingSet(t, r.d());
+                double value = r.d();
+                if (sosdet.Hooks.stationedDiv(d)) {
+                    return false; // a stationed ally's soldiers: the host edits its own divisions only (SOS-234)
+                }
+                d.info.trainingSet(t, value);
                 return true;
             }),
             new Command(EQUIPMENT, "divisionEquipment", r -> {
                 EquipBattle e = STATS.EQUIP().BATTLE_ALL().get(r.i());
                 Div d = Args.div(r);
-                e.targetSet(d, r.i());
+                int target = r.i();
+                if (sosdet.Hooks.stationedDiv(d)) {
+                    return false; // a stationed ally's soldiers: the host edits its own divisions only (SOS-234)
+                }
+                e.targetSet(d, target);
                 return true;
             }),
             new Command(BANNER, "divisionBanner", r -> {
                 Div d = Args.div(r);
-                d.info.bannerISet(r.i());
+                int banner = r.i();
+                if (sosdet.Hooks.stationedDiv(d)) {
+                    return false; // a stationed ally's soldiers: the host edits its own divisions only (SOS-234)
+                }
+                d.info.bannerISet(banner);
                 return true;
             }),
             new Command(ORDER, "divisionOrder", r -> {
                 Div replaced = Args.div(r);
                 Div replacer = Args.div(r);
-                if (replaced == replacer || replaced.army() != replacer.army()) {
+                if (replaced == replacer || replaced.army() != replacer.army() || sosdet.Hooks.stationedDiv(replaced)
+                        || sosdet.Hooks.stationedDiv(replacer)) {
                     return false;
                 }
                 replaced.army().setDivAtOrderedIndex(replaced, replacer);

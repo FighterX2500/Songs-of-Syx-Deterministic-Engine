@@ -30,6 +30,11 @@ import sosdet.game.cmd.MapBattles;
  */
 public final class GameAi implements AiApplier {
 
+    @Override
+    public boolean stationedOrder(int pc, int div) {
+        return Hooks.stationedOrderHere(pc, div);
+    }
+
     private final GameCodec reader = new GameCodec();
     private final GameCodec generalWriter = new GameCodec();
     private final GameCodec orderWriter = new GameCodec();
@@ -120,7 +125,7 @@ public final class GameAi implements AiApplier {
         case AiEntry.ARTILLERY:
         case AiEntry.ARTILLERY_MUSTER:
         case AiEntry.ARTILLERY_FIRE:
-            if (Hooks.cityOrderHere(e.pc)) {
+            if (Hooks.divOrderHere(e.pc, -1)) {
                 artillery(e);
             }
             return;
@@ -155,7 +160,7 @@ public final class GameAi implements AiApplier {
             GAME.ARMIES().initAndTeleport(divs);
             return;
         default:
-            if (Hooks.cityOrderHere(e.pc)) {
+            if (Hooks.divOrderHere(e.pc, e.div)) {
                 division(GAME.ARMIES().division((short) e.div), e);
             }
         }

@@ -42,7 +42,17 @@ public enum TxnKind {
     /** After a taken throne (SOS-92): people leave the city, moved, killed or freed; the city picks which of them. */
     REMOVE_PEOPLE,
     /** After a sally against an invasion (SOS-145): the battle PC's result reaches the defender's city, for vanilla's after-battle. */
-    SALLY_RESULT;
+    SALLY_RESULT,
+    /**
+     * C1 two-phase (SOS-233): the host supplies an ally's army stationed at its capital from its stockpiles, as much as
+     * they have; what it took goes to the world as a supply input (B2).
+     */
+    STATION_SUPPLY,
+    /**
+     * SOS-234: an invasion's start for the stationed allies' divisions that fight it in the host's city, right after its
+     * {@link #INVADE}: their people, made in the world part, wait in the city for the invaders to deploy.
+     */
+    STATION_DIVS;
 
     /**
      * Whether a follower's city applies it (SOS-38: its world reads another PC's city). Not the ones that carry the
@@ -63,6 +73,7 @@ public enum TxnKind {
         case GARRISON_RESOLVE_PEOPLE:
         case REMOVE_PEOPLE:
         case SALLY_RESULT:
+        case STATION_SUPPLY:
             return false;
         default:
             return true;

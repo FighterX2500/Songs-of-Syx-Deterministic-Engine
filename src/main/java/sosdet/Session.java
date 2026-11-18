@@ -74,6 +74,8 @@ final class Session {
     int worldPromptSallyNext = -1;
     /** Test tooling: the last ally question, for a test's log (never in the hash or the state). */
     String alliesSeen = "";
+    /** Test tooling: the last sally with allies, its layout and the shares shipped (SOS-232; never in the hash or the state). */
+    String sallySeen = "";
     /** The last battle between two humans' outcome, until the mod takes it (SOS-83). */
     BattleOutcome battleOutcome;
     int worldPromptReady;
@@ -381,12 +383,18 @@ final class Session {
     }
 
     /**
-     * Every PC, at the step a sally against an invasion of {@code human}'s capital applies (SOS-145): a local battle with
-     * {@code armies} waiting, no prompt and no ally, as vanilla's sally asks none.
+     * Every PC, at the step a sally against an invasion of {@code human}'s capital engages (SOS-145): a local battle with
+     * {@code armies} waiting and the {@code allies} who joined it (SOS-232), with no prompt of its own.
      */
-    LocalBattle localSally(long step, int human, int[] armies) {
-        return localStart(step, human, armies, NO_ARMIES);
+    LocalBattle localSally(long step, int human, int[] armies, int[] allies) {
+        return localStart(step, human, armies, allies);
     }
+
+    /** The battle PC, while the sally's Engage of vanilla's Attack runs at the freeze step: that battle (SOS-232). */
+    LocalBattle sallyGenerating;
+    /** The defender's city tail, while vanilla's after-battle of a sally with allies runs: who shares, and who left. */
+    SallyLayout sallySharing;
+    boolean[] sallyGone;
 
     private LocalBattle localStart(long step, int human, int[] armies, int[] allies) {
         LocalBattle b = new LocalBattle(step, human, pcOf(human), nextReportStep(step), armies, null, allies);
@@ -1197,6 +1205,9 @@ final class Session {
         }
         long freeze = nextReportStep(step);
         assault = new Assault(step, attacker, defender, freeze, spec, armies, men, divOwners, attackers, attackerMen);
+        if (plans().inGame()) { // unit tests have no game
+            assault.fighters = sosdet.game.GameStations.get().fighters(defender, attacker); // SOS-234
+        }
         for (int h : humans()) {
             if (h != defender && (!retired(h) || watching(h))) {
                 views[h] = new View(h, pcOf(h), defender, pcOf(defender), freeze);
@@ -1244,6 +1255,7 @@ final class Session {
                 assaultStarting = true;
                 try {
                     a.invasionRef = sosdet.game.GameAssault.invade(a.spec);
+                    sosdet.game.GameStationedDivs.get().arrive(a.spec, a.fighters); // SOS-234
                 } finally {
                     assaultStarting = false;
                 }
@@ -2483,6 +2495,19 @@ final class Session {
     int afterEngageSeed(long step) {
         long h = HashLog.mix(HashLog.mix(HashLog.mix(HashLog.start(), seed), step), BATTLE_STREAM + 1);
         return (int) (h ^ (h >>> 32));
+    }
+
+    /**
+     * Every PC alike, in the step: whether the player at {@code pc} views the city this PC runs now, their view running
+     * as an assault's commanders read it ({@link #commands}). SOS-234.
+     */
+    boolean viewsCityHere(int pc) {
+        if (pc < 0 || pc >= pcHumans.length || pcHumans[pc] < 0 || pcHumans[pc] >= views.length) {
+            return false;
+        }
+        View v = views[pcHumans[pc]];
+        return v != null && v.owner == cityHuman() && clock.step() > v.freeze && v.thaw < 0 && v.state != View.CANCELLED
+                && v.state != View.ENDED;
     }
 
     /** The PC whose human is {@code slot} (ADR 0004); the host (0) when no PC has it, as with one human. */

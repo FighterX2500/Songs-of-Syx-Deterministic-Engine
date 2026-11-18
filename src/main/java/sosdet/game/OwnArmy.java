@@ -35,6 +35,9 @@ public final class OwnArmy {
 
     /** Whether this PC's player may select the division: all of them without a table, as in vanilla. */
     public static boolean selectable(Div d) {
+        if (Hooks.stationedOnScreen(d.index())) {
+            return Hooks.stationSelectable(d.index()); // a stationed ally's: not in any table (SOS-234)
+        }
         Commanders c = Hooks.commanders();
         return c == null || c.commandsHere(d.index());
     }
