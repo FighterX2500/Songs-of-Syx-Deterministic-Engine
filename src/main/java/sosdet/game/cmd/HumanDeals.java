@@ -377,9 +377,10 @@ public final class HumanDeals {
 
     /**
      * Start of each world part, after {@link #expire}: the stances that pass to the humans' NPC vassals (SOS-140). While
-     * humans A and B are trade partners or colleagues, B has at least that stance with each NPC vassal of A, both ways;
-     * {@link StanceBook} decides each pair. First the pairs the book holds (a source may have ended), then each NPC
-     * vassal of a human with every other human. Every PC alike: faction order, world state only. Allocates nothing.
+     * humans A and B are trade partners or colleagues, B has at least that stance with each NPC vassal of A, both ways,
+     * and Colleagues while they are allies (SOS-226); {@link StanceBook} decides each pair. First the pairs the book
+     * holds (a source may have ended), then each NPC vassal of a human with every other human. Every PC alike: faction
+     * order, world state only. Allocates nothing.
      */
     public static void passStances() {
         StanceBook b = GameHumans.get().passed().book();
@@ -447,6 +448,9 @@ public final class HumanDeals {
         }
         if (s == DIP.NEUTRAL()) {
             return StanceBook.NEUTRAL;
+        }
+        if (s == DIP.ALLY()) {
+            return StanceBook.ALLY;
         }
         return s == DIP.TRADE() ? StanceBook.TRADE : s == DIP.PACT() ? StanceBook.PACT : StanceBook.ABOVE;
     }

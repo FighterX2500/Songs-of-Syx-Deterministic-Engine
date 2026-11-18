@@ -1632,7 +1632,8 @@ public final class Hooks {
     /**
      * {@code DipWarPlayer.validEnemy} and {@code validProxy}, in the slice of {@code human}: true when {@code f} is the
      * vassal of another human who is {@code human}'s trade partner, colleague or ally. It then demands nothing, starts
-     * no war and works no harm against {@code human} (owner, 2026-11-05; SOS-146).
+     * no war and works no harm against {@code human} (owner, 2026-11-05; SOS-146). Also {@code Stance.messDown}: its
+     * court asks {@code human} no money to keep their stance and cancels none (owner, 2026-11-18; SOS-226).
      */
     public static boolean friendOfOverlord(Faction f, Faction human) {
         return Engine.session() != null && HumanDeals.friendOfOverlord(f, human);
