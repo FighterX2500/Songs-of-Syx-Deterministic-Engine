@@ -494,23 +494,171 @@ public final class Hooks {
     /**
      * The sally command, in the world part on every PC, as the defender: a local battle whose armies are those vanilla's
      * Attack takes, generated on the defender's PC at the freeze step. Skipped (false) on every PC alike when the
-     * defender already fights, views or is viewed in a battle, or a battle between humans runs.
+     * defender already fights, views or is viewed in a battle, a battle between humans runs, or the allies of an earlier
+     * Attack are being asked. {@code invader} is the invader's faction, -1 for raiders and rebels.
+     *
+     * <p>Every allied human with an army within 4 tiles of the capital, at war with the invader, is asked Join or Stay
+     * out first, as a battle's prompt asks (mod spec §9, SOS-232); the sally engages once each answered or after 30 s.
+     * While another world prompt is open, nobody is asked, as before (the prompt is one at a time).
      */
-    public static boolean invasionSallyEngage(int ref) {
+    public static boolean invasionSallyEngage(int ref, int invader) {
         Session s = Engine.session();
         int human = s.currentHuman;
-        if (!s.localBattles || s.locals[human] != null || s.battle != null || s.frozen(human)) {
+        if (!s.localBattles || s.locals[human] != null || s.battle != null || s.frozen(human)
+                || s.worldPrompt instanceof SallyLayout.Ask) {
             return false;
         }
-        LocalBattle b = s.localSally(s.clock.step(), human, sosdet.game.GameSally.armies());
+        sosdet.game.GameSally.Near near = s.worldPrompt != null ? null : sosdet.game.GameSally.near(SallyLayout.REACH_TILES);
+        int[] asked = near == null ? Session.NO_ARMIES : SallyLayout.asked(human, near.owners, near.distances,
+                h -> sosdet.game.GameSally.allied(human, h) && sosdet.game.GameSally.atWar(h, invader) && !s.localBusy(h)
+                        && s.locals[h] == null && !s.retired(h) && !s.iced(h));
+        s.alliesSeen = "step " + s.clock.step() + ": sally of human " + human + " against " + invader + ", armies near "
+                + (near == null ? "not looked for (a prompt is open)" : java.util.Arrays.toString(near.owners) + " at "
+                + java.util.Arrays.toString(near.distances)) + ", asked " + java.util.Arrays.toString(asked);
+        if (asked.length == 0) {
+            sallyEngage(s, human, ref, Session.NO_ARMIES);
+            return true;
+        }
+        int[] own = sosdet.game.GameSally.armies();
+        int[] held = java.util.Arrays.copyOf(own, own.length + near.armies.length);
+        int n = own.length;
+        for (int k = 0; k < near.armies.length; k++) {
+            if (contains(asked, near.owners[k])) {
+                held[n++] = near.armies[k];
+            }
+        }
+        s.worldPrompt = new SallyLayout.Ask(human, ref, invader);
+        s.worldPromptClose = () -> {
+        };
+        s.worldPromptTimeout = Hooks::worldPromptEngageNext; // allies who didn't answer stay out
+        s.worldPromptArmies = java.util.Arrays.copyOf(held, n); // they wait in place while the allies answer
+        s.worldPromptHuman = human;
+        s.allies = asked;
+        s.allyAnswers = new int[asked.length];
+        s.worldPromptReady = 3; // the defender has chosen to fight: it engages once the allies answered
+        s.pvpEngageAt = -1;
+        s.promptTimer.open();
+        return true;
+    }
+
+    /** True while the open world prompt asks allies to join a sally (SOS-232). */
+    public static boolean sallyAsking() {
+        Session s = Engine.session();
+        return s != null && s.worldPrompt instanceof SallyLayout.Ask;
+    }
+
+    /**
+     * In the world part, at the step set when every ally answered or the time ran out: the sally engages with the allies
+     * who joined, as the defender, unless the defender began another battle since.
+     */
+    private static void sallyAskEngage(Session s) {
+        SallyLayout.Ask a = (SallyLayout.Ask) s.worldPrompt;
+        int[] joined = s.alliesJoined(a.human); // the chat hears who joined and who stayed out
+        worldPromptClose();
+        s.closedPromptArmies = Session.NO_ARMIES;
+        if (!s.localBattles || s.locals[a.human] != null || s.battle != null || s.frozen(a.human) || s.retired(a.human)) {
+            return;
+        }
+        int[] free = new int[joined.length];
+        int n = 0;
+        for (int h : joined) {
+            if (!s.localBusy(h) && s.locals[h] == null && !s.retired(h) && !s.iced(h)) {
+                free[n++] = h; // one who began another battle meanwhile stays out of this one
+            }
+        }
+        int was = currentHumanSwap(a.human);
+        try {
+            sallyEngage(s, a.human, a.ref, java.util.Arrays.copyOf(free, n));
+        } finally {
+            currentHumanSwap(was);
+        }
+    }
+
+    /** In the world part, as the defender: the sally's local battle, with the {@code allies} who joined it. */
+    private static void sallyEngage(Session s, int human, int ref, int[] allies) {
+        long step = s.clock.step();
+        int[] own = sosdet.game.GameSally.armies();
+        SallyLayout layout = allies.length == 0 ? null : sallyLayout(human, own, allies);
+        LocalBattle b = s.localSally(step, human, layout == null ? own : layout.allArmies(),
+                layout == null ? Session.NO_ARMIES : layout.allyHumans());
         for (int c = 0; c < b.roster.commanders.length; c++) {
             b.roster.reports[c] = s.reports(b.roster.commanders[c]).current();
+        }
+        if (layout != null) {
+            s.sallySeen = "step " + step + ": sally of human " + human + ", commanders "
+                    + java.util.Arrays.toString(layout.commanders) + ", divisions " + java.util.Arrays.toString(layout.divisions)
+                    + ", power " + java.util.Arrays.toString(layout.power);
+            b.sally = layout;
+            BattleAllies.owners(b.roster, layout.owners(init.constant.Config.battle().DIVISIONS_PER_ARMY), Session.NO_ARMIES);
+            // the battle PC builds the allies' divisions now, where the world reads every human's alike, on a stream
+            // of its own; the world stream goes on alike on every PC after it, as after a local battle's Engage
+            long worldDraws = s.streams.worldDraws();
+            s.streams.reseed(s.battleSeed(step));
+            try {
+                if (human == s.localHuman) {
+                    java.util.List<game.battle.util.DivGeneration> divs = new java.util.ArrayList<>();
+                    for (int c = 1; c < layout.commanders.length; c++) {
+                        divs.addAll(sosdet.game.GameSally.generate(layout.armies[c], layout.iterations[c], layout.divisions[c]));
+                    }
+                    b.sallyAllyDivs = divs;
+                }
+            } finally {
+                s.streams.reseed(s.afterEngageSeed(step));
+                s.streams.worldDraws(worldDraws);
+            }
         }
         if (human == s.localHuman) {
             b.generate = () -> sallyGenerate(b, ref);
         }
-        b.after = r -> sallyResult(human, ref, (Object[]) r);
-        return true;
+        b.after = r -> sallyResult(human, ref, b, (Object[]) r);
+    }
+
+    /**
+     * In the world part, as the defender, on every PC: who brings what into a sally with {@code allies}: each one's armies
+     * near the capital, their divisions within the side's slots, and their strength now. An ally with no army near any
+     * more stays out. Null when no ally is left.
+     */
+    private static SallyLayout sallyLayout(int human, int[] own, int[] allies) {
+        sosdet.game.GameSally.Near near = sosdet.game.GameSally.near(SallyLayout.REACH_TILES);
+        int[] commanders = new int[allies.length + 1];
+        int[][] armies = new int[commanders.length][];
+        commanders[0] = human;
+        armies[0] = own;
+        int n = 1;
+        for (int ally : allies) {
+            int[] mine = new int[near.armies.length];
+            int k = 0;
+            for (int i = 0; i < near.armies.length; i++) {
+                if (near.owners[i] == ally && near.distances[i] <= SallyLayout.REACH_TILES) {
+                    mine[k++] = near.armies[i];
+                }
+            }
+            if (k > 0) {
+                commanders[n] = ally;
+                armies[n++] = java.util.Arrays.copyOf(mine, k);
+            }
+        }
+        if (n == 1) {
+            return null;
+        }
+        commanders = java.util.Arrays.copyOf(commanders, n);
+        armies = java.util.Arrays.copyOf(armies, n);
+        int[][] iterations = new int[n][];
+        int[] wanted = new int[n];
+        int[] power = new int[n];
+        int garrison = sosdet.game.GameSally.garrison();
+        wanted[0] = garrison;
+        power[0] = sosdet.game.GameSally.garrisonPower();
+        for (int c = 0; c < n; c++) {
+            iterations[c] = new int[armies[c].length];
+            for (int k = 0; k < armies[c].length; k++) {
+                iterations[c][k] = sosdet.game.GameSally.iteration(armies[c][k]);
+                wanted[c] += sosdet.game.GameSally.divisions(armies[c][k]);
+                power[c] += sosdet.game.GameSally.power(armies[c][k]);
+            }
+        }
+        int[] divisions = SallyLayout.slots(garrison, wanted, init.constant.Config.battle().DIVISIONS_PER_ARMY);
+        return new SallyLayout(commanders, armies, iterations, divisions, power);
     }
 
     /**
@@ -518,11 +666,15 @@ public final class Hooks {
      * began their assault since the click, there is no battle: the local battle ends with no result on every PC.
      */
     private static void sallyGenerate(LocalBattle b, int ref) {
+        Session s = Engine.session();
         int was = currentHumanSwap(b.human);
         boolean made;
+        s.sallyGenerating = b;
         try {
             made = sosdet.game.GameSally.generate(ref);
         } finally {
+            s.sallyGenerating = null;
+            b.sallyAllyDivs = null;
             currentHumanSwap(was);
         }
         if (!made) {
@@ -532,10 +684,37 @@ public final class Hooks {
     }
 
     /**
-     * Every PC, the sally's after-battle in the world part ({@code Session.localAfter}): the result goes to the defender's
-     * city, where vanilla's after-battle runs; its world effects come back through that city's report (B4).
+     * Patch 99, vanilla's Attack as it builds the sally's battle: how many divisions the defender's side gives the
+     * defender, its garrison and then its own armies near (SOS-232). No limit but vanilla's without allies.
      */
-    private static void sallyResult(int human, int ref, Object[] result) {
+    public static int sallyOwnDivisions() {
+        Session s = Engine.session();
+        LocalBattle b = s == null ? null : s.sallyGenerating;
+        return b == null || b.sally == null ? Integer.MAX_VALUE : b.sally.divisions[0];
+    }
+
+    /** Patch 99, right after: the allies' divisions, which the world part built at Engage, after the defender's (SOS-232). */
+    public static void sallyAllies(snake2d.util.sets.ArrayList<game.battle.util.DivGeneration> divs) {
+        Session s = Engine.session();
+        LocalBattle b = s == null ? null : s.sallyGenerating;
+        if (b == null || b.sallyAllyDivs == null) {
+            return;
+        }
+        for (game.battle.util.DivGeneration d : b.sallyAllyDivs) {
+            if (divs.hasRoom()) {
+                divs.add(d);
+            }
+        }
+        b.sallyAllyDivs = null;
+    }
+
+    /**
+     * Every PC, the sally's after-battle in the world part ({@code Session.localAfter}): the result goes to the defender's
+     * city, where vanilla's after-battle runs; its world effects come back through that city's report (B4). With allies
+     * (SOS-232), each ally's divisions get their survivors here, in the world, and only the defender's go to its city;
+     * a victory's spoils and captives are shared there by power.
+     */
+    private static void sallyResult(int human, int ref, LocalBattle b, Object[] result) {
         if ((Integer) result[0] < 0) {
             return; // called off: no battle was fought
         }
@@ -543,6 +722,90 @@ public final class Hooks {
         x.human = human;
         x.i = ref;
         x.b = result;
+        SallyLayout l = b.sally;
+        if (l == null) {
+            return;
+        }
+        int[] survivors = (int[]) result[4];
+        double[] experience = (double[]) result[5];
+        for (int c = 1; c < l.commanders.length; c++) {
+            int first = l.first(c);
+            for (int k = 0; k < l.divisions[c] && first + k < survivors.length; k++) {
+                sosdet.game.GameSally.resolve(l.armies[c], l.iterations[c], k, survivors[first + k], experience[first + k]);
+            }
+        }
+        Object[] own = result.clone();
+        own[4] = SallyLayout.head(survivors, l.divisions[0]);
+        own[5] = SallyLayout.head(experience, l.divisions[0]);
+        x.b = own;
+        if ((Integer) result[0] == world.battle.spec.BATTLE_RESULT.VICTORY.ordinal()) {
+            boolean[] gone = new boolean[l.commanders.length];
+            for (int c = 0; c < gone.length; c++) {
+                int rc = b.roster.commander(l.commanders[c]);
+                gone[c] = rc >= 0 && b.roster.gone[rc];
+            }
+            x.c = new Object[] {l, gone};
+        }
+    }
+
+    /**
+     * The defender's city tail, a sally's result ({@code TxnKind.SALLY_RESULT}): vanilla's after-battle, with the
+     * allies' shares of a victory at hand for {@link #sallySpoils} (SOS-232).
+     */
+    public static void sallyAfter(int ref, Object[] result, Object shares) {
+        Session s = Engine.session();
+        Object[] sh = (Object[]) shares;
+        s.sallySharing = sh == null ? null : (SallyLayout) sh[0];
+        s.sallyGone = sh == null ? null : (boolean[]) sh[1];
+        try {
+            sosdet.game.GameSally.after(ref, result);
+        } finally {
+            s.sallySharing = null;
+            s.sallyGone = null;
+        }
+    }
+
+    /**
+     * Patch 99, vanilla's after-battle of a won sally, before its spoils window: with allies, {@code spoils} (goods and
+     * captives by tradable) keeps the defender's share by power, and each ally's share goes in the city's report, for
+     * the world part to ship to that ally's capital (mod spec §9, SOS-232).
+     */
+    public static void sallySpoils(int[] spoils) {
+        Session s = inCityPart();
+        if (s == null || s.sallySharing == null) {
+            return;
+        }
+        SallyLayout l = s.sallySharing;
+        int[][] parts = l.shares(spoils, s.sallyGone);
+        System.arraycopy(parts[0], 0, spoils, 0, spoils.length);
+        s.sallySeen += "; the defender keeps " + java.util.Arrays.stream(spoils).sum() + " of "
+                + java.util.Arrays.stream(parts).mapToInt(x -> java.util.Arrays.stream(x).sum()).sum(); // its own PC only
+        for (int c = 1; c < parts.length; c++) {
+            if (java.util.Arrays.stream(parts[c]).anyMatch(v -> v > 0)) {
+                s.cityInputs.add(new sosdet.report.Input(sosdet.report.InputKind.SALLY_SPOILS, l.commanders[c],
+                        SallyLayout.encode(parts[c])));
+            }
+        }
+    }
+
+    /** The world part, the defender's report applying ({@code GameInputs}): an ally's share of a sally leaves by caravan. */
+    public static void sallySpoilsArrive(int ally, byte[] share) {
+        Session s = Engine.session();
+        int[] parts = SallyLayout.decode(share, init.trade.TR.ALL().size());
+        StringBuilder t = new StringBuilder();
+        for (int i = 0; i < parts.length; i++) {
+            if (parts[i] > 0) {
+                t.append(' ').append(init.trade.TR.ALL().get(i).key()).append('=').append(parts[i]);
+            }
+        }
+        s.sallySeen += "; step " + s.clock.step() + ": human " + ally + "'s share from human " + s.currentHuman + ":" + t;
+        sosdet.game.GameSally.ship(s.currentHuman, ally, parts);
+    }
+
+    /** Test tooling: the last sally with allies, as {@link #sallySpoilsArrive} and the Engage saw it; empty before any. */
+    public static String sallySeen() {
+        Session s = Engine.session();
+        return s == null ? "" : s.sallySeen;
     }
 
     /**
@@ -891,7 +1154,9 @@ public final class Hooks {
             }
             s.currentHuman = s.living;
             s.ai().worldPart();
-            if (s.pvpEngageAt == step && s.worldPrompt != null) { // both humans answered, or time ran out (SOS-83)
+            if (s.pvpEngageAt == step && s.worldPrompt instanceof SallyLayout.Ask) { // the allies answered, or time ran out (SOS-232)
+                sallyAskEngage(s);
+            } else if (s.pvpEngageAt == step && s.worldPrompt != null) { // both humans answered, or time ran out (SOS-83)
                 sosdet.game.cmd.WorldBattles.pvpEngage();
             }
             // after the world's commands: an answer given at this step comes first (SOS-45)

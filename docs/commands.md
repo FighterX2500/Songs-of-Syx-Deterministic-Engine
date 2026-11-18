@@ -12,7 +12,7 @@ Status: **done** (hooked, with its command id), **to do**, or why it needs no co
 - A human's sally from its besieged capital: 7970 (`Sieges`; SOS-92, plan 0014), from the mod's siege popup and region row (`Engine.sallyOut`).
 - The attacker's terms after a taken throne: 7973 (`Sieges`; SOS-92), from the mod's terms window (`Engine.assaultTerms`).
 - Test tooling, never a player's (SOS-162; the mod's autopilot and the rig only): 7969 battleMoraleForTest (`MapBattles.moraleForTest`: one army's morale held below zero until the battle ends, as a battle order on every PC that runs the battle), 4009 divisionRecruitForTest (`Military.recruitForTest`: citizens drafted into an empty division at once, trained, in the sender's city), 7979 regionGiveForTest (`Sieges.regionGiveForTest`: an NPC region becomes a human's, a world command); the older 7971, 7972, 7974 to 7978 (`Sieges`).
-- An ally's answer to a battle prompt: 7903 (`WorldBattles`). A local battle's result, 7964; a battle's speed vote, 7965; an ally's order and vote in a local battle, 7966 and 7967 (`MapBattles`).
+- An ally's answer to a battle prompt: 7903 (`WorldBattles`). A local battle's result, 7964; a battle's speed vote, 7965; an ally's order and vote in a local battle, 7966 and 7967 (`MapBattles`). The sally against an invasion of a human's capital, 7968 (`MapBattles`; SOS-145): the invasion's ref and the invader's faction, -1 for raiders and rebels (SOS-232: the allies near are asked first).
 
 ## Method hooks (the competitor's entry hooks)
 

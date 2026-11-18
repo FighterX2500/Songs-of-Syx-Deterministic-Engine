@@ -100,7 +100,10 @@ public final class MapBattles {
                 return true;
             }),
             new Command(LOCAL_RESULT, "battleLocalResult", MapBattles::applyLocalResult),
-            new Command(INVASION_SALLY, "invasionSally", r -> Hooks.invasionSallyEngage(r.i())),
+            new Command(INVASION_SALLY, "invasionSally", r -> {
+                int ref = r.i();
+                return Hooks.invasionSallyEngage(ref, r.i()); // the invader's faction, for the allies asked (SOS-232)
+            }),
             new Command(SPEED_VOTE, "battleSpeedVote", r -> Hooks.battleSpeedVote(r.d())),
             new Command(LOCAL_ORDER, "battleLocalOrder", r -> {
                 int kind = r.i();
@@ -307,7 +310,8 @@ public final class MapBattles {
      */
     public static void invasionSally(int ref) {
         if (Commands.capturing()) {
-            Commands.capture(new CmdWriter(INVASION_SALLY).i(ref));
+            settlement.battle.invasion.InvasionSpec sp = settlement.main.SETT.INVADOR().spec(ref);
+            Commands.capture(new CmdWriter(INVASION_SALLY).i(ref).i(sp == null ? -1 : sp.fi)); // the invader, read in this city (SOS-232)
         }
     }
 

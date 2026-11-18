@@ -131,7 +131,7 @@ public final class GameTxns implements Consumer<Txn> {
             removePeople((int[]) t.a);
             break;
         case SALLY_RESULT:
-            GameSally.after(t.i, (Object[]) t.b);
+            sosdet.Hooks.sallyAfter(t.i, (Object[]) t.b, t.c); // with the allies' shares of a victory (SOS-232)
             break;
         default:
             throw new IllegalStateException("SOSDET: no applier for transaction kind " + t.kind);

@@ -74,6 +74,8 @@ final class Session {
     int worldPromptSallyNext = -1;
     /** Test tooling: the last ally question, for a test's log (never in the hash or the state). */
     String alliesSeen = "";
+    /** Test tooling: the last sally with allies, its layout and the shares shipped (SOS-232; never in the hash or the state). */
+    String sallySeen = "";
     /** The last battle between two humans' outcome, until the mod takes it (SOS-83). */
     BattleOutcome battleOutcome;
     int worldPromptReady;
@@ -381,12 +383,18 @@ final class Session {
     }
 
     /**
-     * Every PC, at the step a sally against an invasion of {@code human}'s capital applies (SOS-145): a local battle with
-     * {@code armies} waiting, no prompt and no ally, as vanilla's sally asks none.
+     * Every PC, at the step a sally against an invasion of {@code human}'s capital engages (SOS-145): a local battle with
+     * {@code armies} waiting and the {@code allies} who joined it (SOS-232), with no prompt of its own.
      */
-    LocalBattle localSally(long step, int human, int[] armies) {
-        return localStart(step, human, armies, NO_ARMIES);
+    LocalBattle localSally(long step, int human, int[] armies, int[] allies) {
+        return localStart(step, human, armies, allies);
     }
+
+    /** The battle PC, while the sally's Engage of vanilla's Attack runs at the freeze step: that battle (SOS-232). */
+    LocalBattle sallyGenerating;
+    /** The defender's city tail, while vanilla's after-battle of a sally with allies runs: who shares, and who left. */
+    SallyLayout sallySharing;
+    boolean[] sallyGone;
 
     private LocalBattle localStart(long step, int human, int[] armies, int[] allies) {
         LocalBattle b = new LocalBattle(step, human, pcOf(human), nextReportStep(step), armies, null, allies);
