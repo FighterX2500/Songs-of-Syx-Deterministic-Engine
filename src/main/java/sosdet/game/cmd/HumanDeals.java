@@ -871,6 +871,11 @@ public final class HumanDeals {
         return DealBook.spare(f.res().getAvailable(res), outgoing, exported);
     }
 
+    /** Outside the step: what this PC's player can give of the tradable with index {@code tradable} ({@link DealBook#spare}). */
+    public static int spare(int tradable) {
+        return spare(FACTIONS.player(), TR.ALL().get(tradable), false);
+    }
+
     /** This PC's live export depots' stock of {@code res}; slaves have none. */
     private static int exported(TRADABLE res) {
         if (res instanceof TRADABLEO<?> && ((TRADABLEO<?>) res).t instanceof RESOURCE) {
