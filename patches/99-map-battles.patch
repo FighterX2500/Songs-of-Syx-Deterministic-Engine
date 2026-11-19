@@ -1,6 +1,6 @@
 diff -ru -U2 a/game/battle/state/BattleState.java b/game/battle/state/BattleState.java
 --- a/game/battle/state/BattleState.java	2026-01-31 08:38:56.000000000 +0500
-+++ b/game/battle/state/BattleState.java	2026-11-06 20:34:47.489639300 +0500
++++ b/game/battle/state/BattleState.java	2026-11-19 18:15:32.479834000 +0500
 @@ -54,9 +54,9 @@
  	public static void setGenerate(BattleStateExiter resolve, BattleStateSpec spec) {
  		
@@ -95,7 +95,7 @@ diff -ru -U2 a/game/battle/state/BattleState.java b/game/battle/state/BattleStat
  //			if (timer >= 10) {
 diff -ru -U2 a/game/battle/state/BattleStateExiter.java b/game/battle/state/BattleStateExiter.java
 --- a/game/battle/state/BattleStateExiter.java	2025-08-29 11:08:26.000000000 +0500
-+++ b/game/battle/state/BattleStateExiter.java	2026-11-06 20:34:47.489639300 +0500
++++ b/game/battle/state/BattleStateExiter.java	2026-11-19 18:15:32.479834000 +0500
 @@ -10,12 +10,15 @@
  	
  	public void exit(BATTLE_RESULT res, int plosses, int elosses) {
@@ -116,7 +116,7 @@ diff -ru -U2 a/game/battle/state/BattleStateExiter.java b/game/battle/state/Batt
  			
 diff -ru -U2 a/game/battle/state/BattleStateResult.java b/game/battle/state/BattleStateResult.java
 --- a/game/battle/state/BattleStateResult.java	2026-06-17 10:48:06.000000000 +0500
-+++ b/game/battle/state/BattleStateResult.java	2026-11-06 20:34:47.486646500 +0500
++++ b/game/battle/state/BattleStateResult.java	2026-11-19 18:15:32.480830900 +0500
 @@ -24,6 +24,33 @@
  	public final BATTLE_RESULT result;
  	public final int playerLosses;
@@ -195,24 +195,38 @@ diff -ru -U2 a/game/battle/state/BattleStateResult.java b/game/battle/state/Batt
  	
 diff -ru -U2 a/view/battle/IDeploy.java b/view/battle/IDeploy.java
 --- a/view/battle/IDeploy.java	2025-09-12 16:12:40.000000000 +0500
-+++ b/view/battle/IDeploy.java	2026-11-06 20:34:47.486646500 +0500
-@@ -17,7 +17,8 @@
++++ b/view/battle/IDeploy.java	2026-11-19 18:15:32.484820500 +0500
+@@ -17,10 +17,13 @@
  	private final GButt.ButtPanel butt = new GButt.ButtPanel(Dic.¤¤Start) {
  		@Override
  		protected void clickA() {
 -			VIEW.b().state().deploy();
+-			hide();
 +			if (!sosdet.game.cmd.MapBattles.deploy()) // SOSDET: a command in a session; the panel goes on every PC once it applies (SOS-32)
 +				VIEW.b().state().deploy();
- 			hide();
++			if (sosdet.Hooks.deployLabel() == null) // SOSDET: with several commanders it stays, Waiting, until the battle starts (owner, 2026-11-19)
++				hide();
  		};
  	};
-@@ -55,6 +56,11 @@
++	private String sosdetLabel; // SOSDET: the button's text as last set, Ready or Waiting (owner, 2026-11-19)
+ 	
+ 	public IDeploy(InterManager m) {
+ 		butt.pad(50, 5);
+@@ -55,6 +58,19 @@
  
  	@Override
  	protected boolean update(float ds) {
 +		if (!sosdet.game.cmd.MapBattles.setsSpeed()) { // SOSDET: no pause in a session; the battle holds still until Start (SOS-32)
 +			if (!VIEW.b().state().deploying())
 +				hide();
++			String l = sosdet.Hooks.deployLabel(); // SOSDET: Ready, then Waiting once pressed (owner, 2026-11-19)
++			if (l != null && !l.equals(sosdetLabel)) {
++				sosdetLabel = l;
++				snake2d.util.sprite.SPRITE t = init.sprite.UI.UI.FONT().H2.getText(l);
++				butt.replaceLabel(t, snake2d.util.datatypes.DIR.C);
++				butt.body.setWidth(t.width() + 140);
++				butt.body.centerX(C.DIM());
++			}
 +			return true;
 +		}
  		GAME.SPEED.tmpPause();

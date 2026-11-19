@@ -293,13 +293,23 @@ public final class MapBattles {
 
     // ------------------------------------------------------------------ hooks (this PC's player, outside the step)
 
-    /** Hook in the deploy panel's Start: in a session (true) a command; the panel hides once it applies. */
+    /**
+     * Hook in the deploy panel's Start: in a session (true) a command; the panel hides once it applies. A press while
+     * this PC can't give one (loading, in a step) does nothing: vanilla's Start would start the battle on this PC alone
+     * (owner's session, 2026-11-19: an ally's Start started it).
+     */
     public static boolean deploy() {
         if (!Commands.capturing()) {
-            return false;
+            return Engine.active();
         }
         Commands.capture(new CmdWriter(DEPLOY));
+        Hooks.deployPressed();
         return true;
+    }
+
+    /** Whether a command's payload is the deploy panel's Start, read without applying it (owner, 2026-11-19). */
+    public static boolean isDeploy(byte[] payload) {
+        return sosdet.ai.CmdReader.idOf(payload) == DEPLOY;
     }
 
     /**

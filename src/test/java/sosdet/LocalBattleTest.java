@@ -270,11 +270,20 @@ class LocalBattleTest {
         assertFalse(s.localBusy(1));
     }
 
-    /** Mod spec section 8: each commander gives orders only to their own divisions; NPCs on the side go to the fighter. */
+    /**
+     * Mod spec section 8: each commander gives orders only to their own divisions; NPCs on the side go to the fighter.
+     * An ally whose view of the battle doesn't run leaves theirs to the fighter (owner, 2026-11-19).
+     */
     @Test
     void theTwoPcsOfABattleWithAnAllyEachCommandTheirOwnDivisions() {
         Session s = session(3);
         withAlly(s);
+        assertTrue(s.ai().commanders().allows(1, 1), "the ally's view still to run: the fighter orders their division");
+        assertFalse(s.ai().commanders().allows(0, 1), "and the ally, not watching, doesn't");
+        View v = s.views[0];
+        s.localsAt(v.freeze);
+        s.viewsAt(v.freeze);
+        s.localsAt(v.freeze + 1);
         assertTrue(s.ai().commanders().allows(1, 0), "the fighter's own");
         assertFalse(s.ai().commanders().allows(0, 0), "not the ally's to order");
         assertTrue(s.ai().commanders().allows(0, 1), "the ally's own");

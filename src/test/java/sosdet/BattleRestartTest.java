@@ -102,11 +102,44 @@ class BattleRestartTest {
         r.speedVote.vote(1, 2);
         r.speedVote.leave(2);
         assertEquals(2, r.speedVote.commanders());
+        r.ready = 3;
         r.restart();
         assertEquals(-1, r.leaving);
         assertFalse(r.gone[2]);
         assertEquals(3, r.speedVote.commanders(), "the ally votes again");
-        assertEquals(2, r.speedVote.count(2), "the last votes stand");
+        assertEquals(0, r.speedVote.count(2), "it starts again at 1x, with no votes (owner, 2026-11-19)");
+        assertEquals(0, r.ready, "and deploys again, nobody ready");
+    }
+
+    /**
+     * Owner's session, 2026-11-19: in a local battle with an ally, each commander's Start is their Ready; the battle
+     * starts once every commander still in it is ready. An ally with no view of the battle isn't waited for.
+     */
+    @Test
+    void aLocalBattleWithAnAllyStartsOnceBothAreReady() {
+        Session s = session(3);
+        LocalBattle b = s.localSally(1234, 3, new int[0], new int[] {0});
+        s.localsAt(b.freeze);
+        View v = s.views[0];
+        assertNotNull(v, "the ally's view of the battle, made as it runs");
+        assertEquals("Ready", s.deployLabel());
+        s.deployPressed();
+        assertEquals("Waiting", s.deployLabel(), "this PC's player pressed it");
+        assertFalse(s.localReady(2), "a watcher's press doesn't count");
+        assertFalse(s.localReady(1), "the fighter is ready; the ally's view is still to load");
+        assertFalse(b.roster.in[1], "until the ally's view runs, the fighter commands their divisions");
+        s.localsAt(v.freeze);
+        s.viewsAt(v.freeze);
+        s.localsAt(v.freeze + 1);
+        assertTrue(b.roster.in[1], "the ally's view runs: their divisions are theirs");
+        assertTrue(s.localReady(0), "both are ready");
+        assertTrue(s.deployReady(0), "the last Start went on the tape: it starts the battle on every PC that applies it");
+        b.roster.ready = 0;
+        b.roster.gone[1] = true;
+        assertTrue(s.localReady(1), "an ally who left the field isn't waited for");
+        s.battleRestart(1500, new BattleKey(BattleKey.LOCAL, 3, 1234));
+        assertEquals("Ready", s.deployLabel(), "a restart deploys again: Ready again");
+        Engine.end();
     }
 
     // ------------------------------------------------------------ a local battle

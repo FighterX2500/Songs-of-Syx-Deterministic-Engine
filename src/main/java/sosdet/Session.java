@@ -416,6 +416,7 @@ final class Session {
             LocalBattle b = locals[slot];
             if (b != null && b.state == LocalBattle.ENGAGED && b.freeze == step) {
                 b.state = LocalBattle.RUNNING;
+                alliesIn(b);
                 localCommanders(b.roster);
                 if (ai().mode() == AiMode.HOST && b.pc != ai().localPc()) {
                     b.away = true; // it generates the battle, seconds in one step: the others don't wait
@@ -424,6 +425,9 @@ final class Session {
             }
             if (b != null) {
                 allyWatches(step, b);
+            }
+            if (b != null && b.state == LocalBattle.RUNNING && b.roster.allies() && b.resultStep < 0 && alliesIn(b)) {
+                localCommanders(b.roster); // an ally's view ended or began: their divisions change hands (owner, 2026-11-19)
             }
             if (b != null && b.thaw == step && b.after != null) {
                 b.thaw = nextReportStep(step + 1); // its after-battle waits for another human's prompt: it comes first
@@ -464,7 +468,27 @@ final class Session {
         }
     }
 
-    /** The two PCs running a battle with an ally: who commands what, from the battle's start to its end (SOS-119). */
+    /**
+     * Every PC, each step of a local battle with allies: which allies' views of it run ({@link BattleRoster#in}), the
+     * same on every PC as views are. True when that changed.
+     */
+    private boolean alliesIn(LocalBattle b) {
+        boolean changed = false;
+        BattleRoster r = b.roster;
+        for (int c = r.leads; c < r.commanders.length; c++) {
+            View v = views[r.commanders[c]];
+            boolean in = v != null && v.owner == b.human && v.frozen();
+            changed |= in != r.in[c];
+            r.in[c] = in;
+        }
+        return changed;
+    }
+
+    /**
+     * The two PCs running a battle with an ally: who commands what, from the battle's start to its end (SOS-119). An
+     * ally whose view of the battle doesn't run leaves their divisions to the battle's human until it runs again (owner,
+     * 2026-11-19): nobody else could order them.
+     */
     private void localCommanders(BattleRoster r) {
         if (!r.allies() || r.owners == null || r.commander(localHuman) < 0) {
             return;
@@ -472,7 +496,9 @@ final class Session {
         int fighter = pcOf(r.commanders[0]);
         int[] byDivision = new int[r.owners.length];
         for (int i = 0; i < byDivision.length; i++) {
-            byDivision[i] = r.owners[i] >= 0 ? pcOf(r.owners[i]) : i < byDivision.length / 2 ? fighter : sosdet.ai.AiEntry.AI;
+            int c = r.owners[i] >= 0 ? r.commander(r.owners[i]) : -1;
+            byDivision[i] = r.owners[i] < 0 ? (i < byDivision.length / 2 ? fighter : sosdet.ai.AiEntry.AI)
+                    : c >= 0 && !r.in[c] ? fighter : pcOf(r.owners[i]);
         }
         ai().localCommanders(byDivision, new int[] {fighter, sosdet.ai.AiEntry.AI});
     }
@@ -760,6 +786,8 @@ final class Session {
             for (int i = orders.size() - 1; i >= 0; i--) {
                 if (!ai().allowsTaped(orders.get(i))) {
                     orders.remove(i); // the tape holds what runs here: a watcher has no commanders table (SOS-160)
+                } else if (!startPasses(orders.get(i))) {
+                    orders.remove(i); // a Ready before the last: the battle PC alone counts them (owner, 2026-11-19)
                 }
             }
             tape.record(step, localPaused ? 0 : localRounds);
@@ -1651,6 +1679,7 @@ final class Session {
      */
     void battleRestart(long step, BattleKey k) {
         restartLogged = null;
+        deployPressed = null; // it deploys again: every commander presses Ready again (owner, 2026-11-19)
         String why = restartRefusal(k);
         notice(Notice.RESTART, k.human, k.kind, why == null ? 1 : 0);
         if (why != null) {
@@ -1665,6 +1694,12 @@ final class Session {
             LocalBattle b = locals[k.human];
             b.restartAt = step;
             b.roster.restart();
+            b.votedSpeed = 1; // it starts again at 1x (owner, 2026-11-19)
+            b.paused = false;
+            b.seenSpeed = -1;
+            if (localHere() == b || watchingBattle() != null && watchingBattle().owner == b.human) {
+                speedShown = 1; // the frame sets this PC's game speed to it: the fighter's own, alone in it
+            }
             owner = b.human;
         } else {
             Assault a = assault;
@@ -1689,6 +1724,7 @@ final class Session {
         o.closeAt = -1;
         o.restarting = true;
         o.roster.restart();
+        battleSpeed(1); // it starts again at 1x, as at Engage (owner, 2026-11-19)
         battleConclude = null;
         deployTimer.close();
         battleLoading = true;
@@ -2712,7 +2748,7 @@ final class Session {
      */
     boolean deployReady(int fromPc) {
         if (battle == null) {
-            return roster() == null || !roster().allies() || fromPc == pcOf(roster().commanders[0]); // the fighter's Start
+            return true; // a local battle's Start passed its battle PC's count before the tape (localOrders)
         }
         if (battle.other < 0) {
             return true;
@@ -2725,6 +2761,64 @@ final class Session {
         }
         deployTimer.close();
         return true;
+    }
+
+    /** The battle PC, before the tape: whether a taped entry goes on: any but a Start, and a Start that is the last Ready. */
+    private boolean startPasses(sosdet.ai.AiEntry e) {
+        return e.kind != sosdet.ai.AiEntry.COMMAND || !sosdet.game.cmd.MapBattles.isDeploy(e.payload()) || localReady(e.pc);
+    }
+
+    /**
+     * The battle PC, before the tape: a local battle's Start from {@code fromPc}. With allies it is that commander's
+     * Ready, and the battle starts once every commander still in it is ready (owner, 2026-11-19): only that last Start
+     * goes on the tape, which every PC that runs the battle applies alike. The battle PC alone counts the Readys: a
+     * watcher's copy starts from the battle PC's save and would miss the presses before it. An ally whose view of the
+     * battle ended, or who left the field, isn't waited for; one whose view is still to load is.
+     */
+    boolean localReady(int fromPc) {
+        BattleRoster r = roster();
+        if (r == null || !r.allies()) {
+            return true;
+        }
+        int c = commander(fromPc);
+        if (c < 0) {
+            return false; // a watcher's press
+        }
+        r.ready |= 1 << c;
+        LocalBattle b = locals[r.commanders[0]];
+        for (int k = 0; k < r.commanders.length; k++) {
+            if ((r.ready & 1 << k) == 0 && !r.gone[k] && (k < r.leads || b == null || allyComing(b, k))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** Whether ally {@code c} of local battle {@code b} views it, or is about to: its view of the battle is open. */
+    private boolean allyComing(LocalBattle b, int c) {
+        View v = views[b.roster.commanders[c]];
+        return v != null && v.owner == b.human && v.state <= View.RUNNING;
+    }
+
+    /** The battle whose Start this PC's player pressed, until it restarts; null for none (owner, 2026-11-19). */
+    private BattleRoster deployPressed;
+
+    /** This PC's player pressed the deploy panel's Start, between steps. */
+    void deployPressed() {
+        deployPressed = roster();
+    }
+
+    /**
+     * The deploy panel, outside the step (owner, 2026-11-19): its button's text in a battle with several commanders,
+     * Ready, then Waiting once this PC's player pressed it, until the battle starts; null for one commander, where it is
+     * Start. Only the battle PC counts the Readys, so the button shows no count.
+     */
+    String deployLabel() {
+        BattleRoster r = roster();
+        if (r == null || r.commanders.length < 2 || r.commander(localHuman) < 0) {
+            return null;
+        }
+        return deployPressed == r ? "Waiting" : "Ready";
     }
 
     /**

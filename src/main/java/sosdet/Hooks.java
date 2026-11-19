@@ -2120,7 +2120,18 @@ public final class Hooks {
      */
     public static boolean stationedDiv(game.battle.div.Div div) {
         Session s = Engine.session();
-        return s != null && (s.battle == null || s.battle.awaiting)
+        return s != null && (s.battle == null || s.battle.awaiting) && !s.localRuns()
+                && sosdet.game.GameHumans.get().stationedDivs().divs().stationed(div.index());
+    }
+
+    /**
+     * Patch 98, the capitol's garrison ({@code RDMilitaryGar.WDivsCapitol}): a stationed ally's division in the host's
+     * city isn't garrison (owner's session, 2026-11-19). The garrison sallies out with the host and the world counts it
+     * as the host's; the ally's soldiers are their world army's, which joins the sally itself. The registry only, the
+     * same through one loaded game. Per division: no allocation.
+     */
+    public static boolean stationedGarrison(game.battle.div.Div div) {
+        return Engine.session() != null && div.army() == GAME.ARMIES().player()
                 && sosdet.game.GameHumans.get().stationedDivs().divs().stationed(div.index());
     }
 
@@ -2151,8 +2162,8 @@ public final class Hooks {
     public static boolean divOrderHere(int pc, int div) {
         Session s = Engine.session();
         if (s == null || !s.ownCity || pc == sosdet.ai.AiEntry.AI || s.battle != null && !s.battle.awaiting
-                || s.ai().applyingTaped()) {
-            return true;
+                || s.ai().applyingTaped() || s.localRuns()) {
+            return true; // a local battle's divisions are the battle's, never the city's registry (owner, 2026-11-19)
         }
         int owner = stationOwner(s, div);
         int ownerPc = owner < 0 ? -1 : s.pcOf(owner);
@@ -2169,7 +2180,7 @@ public final class Hooks {
      */
     public static boolean stationedOrderHere(int pc, int div) {
         Session s = Engine.session();
-        if (s == null || !s.ownCity || s.battle != null && !s.battle.awaiting) {
+        if (s == null || !s.ownCity || s.battle != null && !s.battle.awaiting || s.localRuns()) {
             return false;
         }
         int owner = stationOwner(s, div);
@@ -2195,7 +2206,7 @@ public final class Hooks {
      */
     public static boolean stationSelectable(int div) {
         Session s = Engine.session();
-        if (s == null || !s.ownCity || s.battle != null) {
+        if (s == null || !s.ownCity || s.battle != null || s.localRuns()) {
             return true;
         }
         int owner = stationOwner(s, div);
@@ -2279,7 +2290,7 @@ public final class Hooks {
     /** The UI (SOS-234): whether division {@code div} of the city on screen holds a stationed ally's soldiers. */
     public static boolean stationedOnScreen(int div) {
         Session s = Engine.session();
-        return s != null && s.ownCity && s.battle == null && stationOwner(s, div) >= 0;
+        return s != null && s.ownCity && s.battle == null && !s.localRuns() && stationOwner(s, div) >= 0;
     }
 
     /**
@@ -2288,7 +2299,7 @@ public final class Hooks {
      */
     private static boolean stationOrder(Session s, int kind, int div) {
         return kind < sosdet.ai.AiEntry.SPEED && div >= 0 && s.ownCity && s.viewing() != null && s.battle == null
-                && s.plans().inGame() && sosdet.game.GameStationedDivs.get().divs().owner(div) == s.localHuman;
+                && !s.localRuns() && s.plans().inGame() && sosdet.game.GameStationedDivs.get().divs().owner(div) == s.localHuman;
     }
 
     /**
@@ -3416,6 +3427,23 @@ public final class Hooks {
     public static int worldPromptSally() {
         Session s = Engine.session();
         return s == null || s.worldPrompt == null ? -1 : s.worldPromptSally;
+    }
+
+    /**
+     * Patch 99, the deploy panel (owner, 2026-11-19): in a battle with several commanders its button reads Ready, then
+     * Waiting once this PC's player pressed it, and stays until the battle starts; null keeps Start.
+     */
+    public static String deployLabel() {
+        Session s = Engine.session();
+        return s == null ? null : s.deployLabel();
+    }
+
+    /** The deploy panel's Start, pressed on this PC and sent (owner, 2026-11-19): its button waits from now. */
+    public static void deployPressed() {
+        Session s = Engine.session();
+        if (s != null) {
+            s.deployPressed();
+        }
     }
 
     /** Inside the Start command: true when the battle may start; between two humans once both pressed it (SOS-83). */

@@ -27,6 +27,13 @@ final class BattleRoster {
     Induvidual[][] left;
     /** The commanders' speed vote: commander numbers as in {@link #commanders}. */
     final BattleSpeedVote speedVote;
+    /** A local battle's Ready (owner, 2026-11-19): a bit per commander who pressed it at deployment. */
+    int ready;
+    /**
+     * A local battle's allies whose view of it runs, as the table last gave them their divisions; an ally out of it
+     * leaves them to the battle's human (owner, 2026-11-19). The leads are always in.
+     */
+    final boolean[] in;
 
     BattleRoster(int human, int other, int[] allies) {
         leads = other >= 0 ? 2 : 1;
@@ -41,6 +48,8 @@ final class BattleRoster {
         reports = new CityReport[commanders.length];
         gone = new boolean[commanders.length];
         speedVote = new BattleSpeedVote(commanders.length);
+        in = new boolean[commanders.length];
+        java.util.Arrays.fill(in, 0, leads, true);
     }
 
     /** Commander number of {@code h}, or -1. */
@@ -65,15 +74,17 @@ final class BattleRoster {
 
     /**
      * The battle restarted from its start (SOS-231): every army is on the field again, so none has left, none is leaving
-     * and no survivors of one are kept; the commanders vote on the speed again, their last votes standing.
+     * and no survivors of one are kept; it deploys again, nobody ready, and the commanders vote on the speed again from
+     * 1x (owner, 2026-11-19).
      */
     void restart() {
         leaving = -1;
+        ready = 0;
         java.util.Arrays.fill(gone, false);
         if (left != null) {
             java.util.Arrays.fill(left, null);
         }
-        speedVote.allBack();
+        speedVote.restart();
     }
 
     /** The army {@code h}'s divisions stand in; a commander with none stays on the side the battle gave them. */

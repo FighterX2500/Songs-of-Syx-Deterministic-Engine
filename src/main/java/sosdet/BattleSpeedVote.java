@@ -27,9 +27,13 @@ final class BattleSpeedVote {
         return majority();
     }
 
-    /** The battle restarted (SOS-231): every commander is in it again, and their last votes stand. */
-    void allBack() {
+    /**
+     * The battle restarted (SOS-231): every commander is in it again, and the battle starts again at 1x with no votes
+     * (owner, 2026-11-19).
+     */
+    void restart() {
         java.util.Arrays.fill(gone, false);
+        java.util.Arrays.fill(votes, 0);
     }
 
     /** How many commanders still in the battle picked {@code speed}. */
