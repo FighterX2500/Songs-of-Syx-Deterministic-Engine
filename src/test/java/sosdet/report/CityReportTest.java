@@ -90,7 +90,8 @@ class CityReportTest {
         assertEquals(V71.slot(Field.BOOST, 0), V71.slot(Field.INVASION_REF, 0) + 1);
         assertEquals(V71.slot(Field.INVASION_REF, 0), V71.slot(Field.INVADING_POWER, 0) + 1);
         assertEquals(V71.slot(Field.VALUE, 199) + 1, V71.slot(Field.UNLOCK, 0));
-        assertEquals(V71.size() - 1, V71.slot(Field.UNLOCK, 299));
+        assertEquals(V71.slot(Field.UNLOCK, 299) + 1, V71.slot(Field.CAPITAL_WALLS, 0));
+        assertEquals(V71.size() - 1, V71.slot(Field.CAPITAL_WALLS, 0));
         assertThrows(IllegalArgumentException.class, () -> V71.slot(Field.HELD, 50));
         assertThrows(IllegalArgumentException.class, () -> V71.slot(Field.PHYSICAL, 3));
         assertThrows(IllegalArgumentException.class, () -> V71.slot(Field.INCOMING, 0, 5));
@@ -112,6 +113,36 @@ class CityReportTest {
         assertThrows(IllegalArgumentException.class,
                 () -> CityReport.fromBytes(Arrays.copyOf(bytes, bytes.length + 1), V71));
         assertThrows(IllegalArgumentException.class, () -> new CityReport(V71, 0, 0, 30, new double[3]));
+    }
+
+    /**
+     * Batch 13 item 16: a report saved before the capital's walls came (a frozen human's, in a campaign save) still
+     * reads, the walls 0; a report lacking any other field is refused.
+     */
+    @Test
+    void aReportFromBeforeTheWallsReadsThemAsZero() {
+        double[] v = values(V71);
+        v[V71.slot(Field.CAPITAL_WALLS, 0)] = 0; // the last value: one varint byte, 0
+        byte[] now = new CityReport(V71, 2, 10, 30, v).toBytes();
+        int fieldsAt = 4 + 4 + 4 + 8 + 8 + 8;
+        int sizes = java.nio.ByteBuffer.wrap(now).getInt(fieldsAt + 4);
+        int valuesAt = fieldsAt + 8 + 4 * sizes;
+        java.nio.ByteBuffer old = java.nio.ByteBuffer.allocate(now.length - 1);
+        old.put(now, 0, now.length - 2).put(now[now.length - 1]); // the walls' byte out; no inputs follow
+        old.putInt(fieldsAt, Field.values().length - 1).putInt(valuesAt, V71.size() - 1);
+        CityReport back = CityReport.fromBytes(old.array(), V71);
+        assertEquals(0, back.get(Field.CAPITAL_WALLS, 0));
+        assertEquals(123_456.789, back.get(Field.CREDITS, 0));
+        assertEquals(-1, CityReport.trailingOnes(Field.values().length - 2), "a report lacking more than the new fields");
+        assertEquals(0, CityReport.trailingOnes(Field.values().length));
+        assertEquals(-1, CityReport.trailingOnes(Field.values().length + 1));
+    }
+
+    @Test
+    void wallsAreKeptInHundredths() {
+        assertEquals(0.37, CityReport.hundredths(0.3712));
+        assertEquals(1.0, CityReport.hundredths(4.2));
+        assertEquals(0.0, CityReport.hundredths(-1));
     }
 
     /** SOS-159: a report from a PC with other game data names the first size that differs, its and this game's. */

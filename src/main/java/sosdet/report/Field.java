@@ -115,7 +115,14 @@ public enum Field {
      * Each unlock of a tech, level or title ({@code Lockers}) on the player, or on a player region: what a region
      * building's requirements and the like read. They read the city's tech, level and titles (SOS-32).
      */
-    UNLOCK(Shape.UNLOCK);
+    UNLOCK(Shape.UNLOCK),
+    /**
+     * The capital's walls on the world map, 0 to 1 in hundredths: its fortification tiles over four times the city's
+     * width, as vanilla's {@code RDBuildings.levelWall} counts its own player's (owner, 2026-11-19, batch 13 item 16).
+     * Every PC draws every human's capital from it, its own included. A field of one value at the end: a report saved
+     * before it (a frozen human's) reads 0 ({@link CityReport#fromBytes}).
+     */
+    CAPITAL_WALLS(Shape.ONE);
 
     public final Shape shape;
 

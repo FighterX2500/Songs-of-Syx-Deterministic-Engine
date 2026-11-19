@@ -134,7 +134,8 @@ public final class CityReport {
             for (int i = 0; i < sizes.length; i++) {
                 sizes[i] = b.getInt();
             }
-            if (fields != Field.values().length || !layout.sameSizes(sizes)) {
+            int missing = trailingOnes(fields);
+            if (missing < 0 || !layout.sameSizes(sizes)) {
                 throw mismatch(fields, sizes, layout.sizes());
             }
             double[] values = new double[b.getInt()];
@@ -163,10 +164,38 @@ public final class CityReport {
             if (b.hasRemaining()) {
                 throw new IllegalArgumentException("SOSDET: " + b.remaining() + " bytes after the city report");
             }
+            if (missing > 0 && values.length + missing == layout.size()) {
+                values = Arrays.copyOf(values, layout.size()); // a report from before the last fields: they read 0
+            }
             return new CityReport(layout, faction, takenAt, appliesAt, nextAt, values, inputs);
         } catch (BufferUnderflowException | NegativeArraySizeException e) {
             throw new IllegalArgumentException("SOSDET: city report cut short (" + bytes.length + " bytes)", e);
         }
+    }
+
+    /**
+     * How many fields a report of {@code fields} lacks, when every one it lacks is of one value at the end of
+     * {@link Field} (a report saved before they came, such as a frozen human's: they read 0); -1 when it can't be read.
+     */
+    static int trailingOnes(int fields) {
+        Field[] all = Field.values();
+        if (fields < 0 || fields > all.length) {
+            return -1;
+        }
+        for (int i = fields; i < all.length; i++) {
+            if (all[i].shape != Shape.ONE || i < TRAILING_FROM) {
+                return -1;
+            }
+        }
+        return all.length - fields;
+    }
+
+    /** The first field a report may lack: those from it on were added after reports were first saved (SOS-193). */
+    private static final int TRAILING_FROM = Field.CAPITAL_WALLS.ordinal();
+
+    /** {@code d} in [0, 1] rounded to hundredths, so a value read and drawn alike everywhere stays one of 101. */
+    public static double hundredths(double d) {
+        return Math.round(Math.max(0, Math.min(1, d)) * 100) / 100.0;
     }
 
     /** A report of other sizes than {@code ours}: the first that differs names the mismatch (SOS-159). */

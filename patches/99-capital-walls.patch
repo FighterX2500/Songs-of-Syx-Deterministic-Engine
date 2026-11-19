@@ -1,0 +1,13 @@
+diff -ru -U2 a/world/region/building/RDBuildings.java b/world/region/building/RDBuildings.java
+--- a/world/region/building/RDBuildings.java	2026-06-08 10:14:32.000000000 +0500
++++ b/world/region/building/RDBuildings.java	2026-11-19 15:45:53.877007400 +0500
+@@ -49,6 +49,9 @@
+ 		levelWall = new RDBoostCache(init, "VISUAL_WALL", "", "", null) {
+ 			@Override
+ 			protected double pget(Region reg) {
++				double walls = sosdet.Hooks.capitalWalls(reg); // SOSDET: a human's capital looks the same on every PC (batch 13 item 16)
++				if (walls >= 0)
++					return walls;
+ 				if (reg == FACTIONS.player().capitolRegion()) {
+ 					double am = 0;
+ 					for (TFortification f : SETT.TERRAIN().FORTIFICATIONS.all()) {

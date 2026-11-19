@@ -2224,6 +2224,26 @@ public final class Hooks {
         return true;
     }
 
+    /**
+     * Patch 99-capital-walls, {@code RDBuildings.levelWall} (owner, 2026-11-19, batch 13 item 16): the world map draws
+     * a human's capital with the walls its city last reported, on every PC alike, its own human's included; -1 for any
+     * other region, or before the human's first report, where vanilla's value stays. Drawing only.
+     */
+    public static double capitalWalls(world.map.regions.Region reg) {
+        Session s = Engine.session();
+        if (s == null || reg == null) {
+            return -1;
+        }
+        for (int h : s.humans()) {
+            game.faction.Faction f = FACTIONS.getByIndex(h);
+            if (f != null && f.capitolRegion() == reg) {
+                sosdet.report.CityReport r = s.reports(h).current();
+                return r == null ? -1 : r.get(sosdet.report.Field.CAPITAL_WALLS, 0);
+            }
+        }
+        return -1;
+    }
+
     /** The battle panel's Restart prompt in a session (owner, 2026-11-19): the press calls the players' vote. */
     private static final String RESTART_ASK = "Ask the players to restart the battle? Majority decides.";
 

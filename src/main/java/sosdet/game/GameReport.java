@@ -314,6 +314,7 @@ public final class GameReport implements CitySource {
         v[l.slot(Field.RAID_SECURITY, 0)] = BOOSTABLES.CIVICS().RAID_SECURITY.get(HCLASS_RACE.clP());
         v[l.slot(Field.BARRACKS_UNLOCKED, 0)] = bool(SETT.ROOMS().BARRACKS.get(0).reqs.passes(player));
         v[l.slot(Field.PROXIMITY_TOLL, 0)] = RD.DIST().bProximityToll.get(HCLASSES.CITIZEN().get(null));
+        v[l.slot(Field.CAPITAL_WALLS, 0)] = capitalWalls();
         for (int i = 0; i < values.size(); i++) {
             v[l.slot(Field.VALUE, i)] = values.get(i).d.getD(player);
         }
@@ -353,6 +354,15 @@ public final class GameReport implements CitySource {
             }
         }
         throw new IllegalStateException("SOSDET: garrison division " + w.name() + " is not one of the city's");
+    }
+
+    /** The city's walls on the world map, as vanilla counts its own player's, in hundredths (batch 13 item 16). */
+    static double capitalWalls() {
+        double am = 0;
+        for (settlement.tilemap.terrain.TFortification f : SETT.TERRAIN().FORTIFICATIONS.all()) {
+            am += f.tile.count();
+        }
+        return sosdet.report.CityReport.hundredths(am / (SETT.TWIDTH * 4.0));
     }
 
     private static double bool(boolean b) {
