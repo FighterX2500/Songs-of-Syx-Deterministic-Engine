@@ -19,6 +19,7 @@ class CommandPartsTest {
         assertTrue(CommandParts.world(Diplomacy.EMISSARIES));
         assertTrue(CommandParts.world(Events.RAIDER_PAY));
         assertTrue(CommandParts.world(Events.RAIDER_ALLY_HELP));
+        assertTrue(CommandParts.world(Events.RAID_ALLY_TEST));
         assertTrue(CommandParts.world(WorldBattles.DECIDE));
         assertTrue(CommandParts.world(WorldBattles.SIEGE_RESULT));
         assertTrue(CommandParts.world(StepPrompts.WORLD_ANSWER));

@@ -256,6 +256,32 @@ class EngineTest {
     }
 
     /**
+     * SOS-234 (and SOS-209's assault): a division order acts on every PC running the city the giver commands in. In an
+     * assault an attacker's order for its invaders acts in the defender's city while its view of it runs; elsewhere a
+     * player's order acts in their own city only, as before.
+     */
+    @Test
+    void aDivisionOrderActsInTheCityItsGiverCommandsIn() {
+        Session s = ownCity(0);
+        s.city = humans(0, 3);
+        Engine.pcHuman(0, 0);
+        Engine.pcHuman(1, 3);
+        assertTrue(Hooks.divOrderHere(0, 5), "the city's own player");
+        assertFalse(Hooks.divOrderHere(1, 5), "another PC's order, for its own city");
+        assertFalse(Hooks.divOrderHere(1, -1), "another PC's artillery order");
+        assertTrue(Hooks.divOrderHere(sosdet.ai.AiEntry.AI, 5), "the general's change");
+        s.assault = new Assault(0, 3, 0, -1, null, new int[0], 0, new int[0], new int[] {3}, new int[] {10});
+        s.assault.started = true;
+        assertFalse(Hooks.divOrderHere(1, 5), "the attacker without a view of the city");
+        s.views[3] = new View(3, 1, 0, 0, -1);
+        assertTrue(Hooks.divOrderHere(1, 5), "the attacker viewing the defender's city: its invaders (AiLog checks which)");
+        assertTrue(Hooks.divOrderHere(1, -1), "and its artillery");
+        assertTrue(Hooks.divOrderHere(0, 5), "the defender");
+        s.views[3].thaw = 10;
+        assertFalse(Hooks.divOrderHere(1, 5), "the attacker's view ended");
+    }
+
+    /**
      * Plan 0006: a battle holds every PC at its Engage step until the battle PC's battle is loaded; while it runs, every
      * PC draws the step's seed, acts as the battle's human, takes no reports and keeps the others' for after it.
      */

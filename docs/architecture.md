@@ -42,6 +42,7 @@ A short map for an AI agent (or a person) about to change SOSDET. Read it first,
 - **A local battle** (`LocalBattle`, `Engine.localBattles`): a human's battle against an NPC army runs on that human's PC only. Every PC's world keeps stepping, at 1x while one runs, with that human frozen from the freeze step. The result is a command (7964). Another human can watch the battle.
 - **A city view** (`View`, `ViewCity`): the viewer's PC freezes at the next report step, takes the owner's city through `viewOut` and `viewIn`, and runs it in lockstep with the owner's. View hashes compare the two. When another viewer joins, every viewer already there loads the owner's new save at that step (`View.rejoinAt`, `viewRejoin`, SOS-151).
 - **An assault** (`Assault`): the besieger's Storm starts it. Every other human views the defender's city, so every PC runs that city, and the world is held from the views' freeze to their thaw. It ends held, taken or in retreat. After a taken throne the attacker sets the terms (7973).
+- **A restart by vote** (`BattleKey`, `Engine.restartBattle`, SOS-231): the mod runs the vote; the host logs a restart entry (AI log kind 22), which every PC applies at one step or skips alike. A battle every PC runs loads its `__battle` save there, as at Engage. A local battle's PC loads its battle as generated and puts the world it ran into it; the assault's defender loads its city as saved the step the invasion started (`__assaultStart`). Their watchers and viewers load the owner's save from there, as when a viewer joins (`View.rejoinAt`), and every other PC reloads its own world.
 
 ## Player input: commands
 
@@ -112,6 +113,7 @@ Each line is a class of cause found in practice. The patch named holds the fix; 
 | | Static initializers drawing whenever their class happens to load | `40`, `50` |
 | | Start-up tables from an unseeded stream | `50` |
 | | Draws while loading a save | `70` |
+| | A message's window built inside the step on one PC only (since SOS-89 a message shows on its player's PC alone): the random text picked when raiders destroy a helping NPC split the world draws by one (SOS-223) | `16` |
 | **This PC's settings or view read by the simulation** | Whether the battle view is open; the placement being previewed; the weather-effects setting; where the camera looks (the serial killer) | `60`, `65` |
 | | The developer flag; titles from this PC's profile | `98` |
 | | Whether this PC shows a world-battle prompt (`UIWBattlePrompt.isBusty`), which held world battles on that PC only (SOS-46 PT2) | `99` |

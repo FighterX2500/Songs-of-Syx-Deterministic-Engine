@@ -20,6 +20,8 @@ public final class GameView {
     static final String OWN_SAVE = "__beforeView";
     /** Any other PC's own game, saved and loaded back as a view opens and closes. */
     static final String RELOAD_SAVE = "__viewReload";
+    /** The defender's city as an assault's invasion started, which a restart loads (SOS-231). */
+    static final String ASSAULT_START = "__assaultStart";
 
     private GameView() {
     }
@@ -87,6 +89,29 @@ public final class GameView {
     /** A local battle's PC at its end: its own game as the battle's generation saved it at the freeze (SOS-93). */
     public static void loadBeforeBattle() {
         load(file("__beforeBattle"));
+    }
+
+    /**
+     * A local battle's PC at a restart (SOS-231): the battle as its generation saved it at the freeze, reopened with
+     * {@code state} ({@code GameResync.captureLocal} right after the generation) and the running battle's exit.
+     */
+    public static void loadBattleStart(Object exiter, byte[] state) {
+        GameResync.loadLocal(file("__battle"), exiter, state);
+    }
+
+    /** The defender's PC, between steps as the assault's invasion has started: its city, for a restart (SOS-231). */
+    public static void saveAssaultStart() {
+        GameResync.save(file(ASSAULT_START));
+    }
+
+    /** The bytes {@link #saveAssaultStart} wrote. */
+    public static byte[] assaultStart() {
+        Path file = file(ASSAULT_START);
+        try {
+            return Files.readAllBytes(file);
+        } catch (IOException e) {
+            throw new IllegalStateException("SOSDET: the assault's start save " + file + " can't be read", e);
+        }
     }
 
     /** A file in the mod's working saves' folder (SOS-155), or the saves folder; the game's own lookup wants it to exist already. */

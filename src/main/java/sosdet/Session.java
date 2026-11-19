@@ -74,6 +74,8 @@ final class Session {
     int worldPromptSallyNext = -1;
     /** Test tooling: the last ally question, for a test's log (never in the hash or the state). */
     String alliesSeen = "";
+    /** Test tooling: the last sally with allies, its layout and the shares shipped (SOS-232; never in the hash or the state). */
+    String sallySeen = "";
     /** The last battle between two humans' outcome, until the mod takes it (SOS-83). */
     BattleOutcome battleOutcome;
     int worldPromptReady;
@@ -381,12 +383,18 @@ final class Session {
     }
 
     /**
-     * Every PC, at the step a sally against an invasion of {@code human}'s capital applies (SOS-145): a local battle with
-     * {@code armies} waiting, no prompt and no ally, as vanilla's sally asks none.
+     * Every PC, at the step a sally against an invasion of {@code human}'s capital engages (SOS-145): a local battle with
+     * {@code armies} waiting and the {@code allies} who joined it (SOS-232), with no prompt of its own.
      */
-    LocalBattle localSally(long step, int human, int[] armies) {
-        return localStart(step, human, armies, NO_ARMIES);
+    LocalBattle localSally(long step, int human, int[] armies, int[] allies) {
+        return localStart(step, human, armies, allies);
     }
+
+    /** The battle PC, while the sally's Engage of vanilla's Attack runs at the freeze step: that battle (SOS-232). */
+    LocalBattle sallyGenerating;
+    /** The defender's city tail, while vanilla's after-battle of a sally with allies runs: who shares, and who left. */
+    SallyLayout sallySharing;
+    boolean[] sallyGone;
 
     private LocalBattle localStart(long step, int human, int[] armies, int[] allies) {
         LocalBattle b = new LocalBattle(step, human, pcOf(human), nextReportStep(step), armies, null, allies);
@@ -408,6 +416,7 @@ final class Session {
             LocalBattle b = locals[slot];
             if (b != null && b.state == LocalBattle.ENGAGED && b.freeze == step) {
                 b.state = LocalBattle.RUNNING;
+                alliesIn(b);
                 localCommanders(b.roster);
                 if (ai().mode() == AiMode.HOST && b.pc != ai().localPc()) {
                     b.away = true; // it generates the battle, seconds in one step: the others don't wait
@@ -416,6 +425,9 @@ final class Session {
             }
             if (b != null) {
                 allyWatches(step, b);
+            }
+            if (b != null && b.state == LocalBattle.RUNNING && b.roster.allies() && b.resultStep < 0 && alliesIn(b)) {
+                localCommanders(b.roster); // an ally's view ended or began: their divisions change hands (owner, 2026-11-19)
             }
             if (b != null && b.thaw == step && b.after != null) {
                 b.thaw = nextReportStep(step + 1); // its after-battle waits for another human's prompt: it comes first
@@ -456,7 +468,27 @@ final class Session {
         }
     }
 
-    /** The two PCs running a battle with an ally: who commands what, from the battle's start to its end (SOS-119). */
+    /**
+     * Every PC, each step of a local battle with allies: which allies' views of it run ({@link BattleRoster#in}), the
+     * same on every PC as views are. True when that changed.
+     */
+    private boolean alliesIn(LocalBattle b) {
+        boolean changed = false;
+        BattleRoster r = b.roster;
+        for (int c = r.leads; c < r.commanders.length; c++) {
+            View v = views[r.commanders[c]];
+            boolean in = v != null && v.owner == b.human && v.frozen();
+            changed |= in != r.in[c];
+            r.in[c] = in;
+        }
+        return changed;
+    }
+
+    /**
+     * The two PCs running a battle with an ally: who commands what, from the battle's start to its end (SOS-119). An
+     * ally whose view of the battle doesn't run leaves their divisions to the battle's human until it runs again (owner,
+     * 2026-11-19): nobody else could order them.
+     */
     private void localCommanders(BattleRoster r) {
         if (!r.allies() || r.owners == null || r.commander(localHuman) < 0) {
             return;
@@ -464,7 +496,9 @@ final class Session {
         int fighter = pcOf(r.commanders[0]);
         int[] byDivision = new int[r.owners.length];
         for (int i = 0; i < byDivision.length; i++) {
-            byDivision[i] = r.owners[i] >= 0 ? pcOf(r.owners[i]) : i < byDivision.length / 2 ? fighter : sosdet.ai.AiEntry.AI;
+            int c = r.owners[i] >= 0 ? r.commander(r.owners[i]) : -1;
+            byDivision[i] = r.owners[i] < 0 ? (i < byDivision.length / 2 ? fighter : sosdet.ai.AiEntry.AI)
+                    : c >= 0 && !r.in[c] ? fighter : pcOf(r.owners[i]);
         }
         ai().localCommanders(byDivision, new int[] {fighter, sosdet.ai.AiEntry.AI});
     }
@@ -752,6 +786,8 @@ final class Session {
             for (int i = orders.size() - 1; i >= 0; i--) {
                 if (!ai().allowsTaped(orders.get(i))) {
                     orders.remove(i); // the tape holds what runs here: a watcher has no commanders table (SOS-160)
+                } else if (!startPasses(orders.get(i))) {
+                    orders.remove(i); // a Ready before the last: the battle PC alone counts them (owner, 2026-11-19)
                 }
             }
             tape.record(step, localPaused ? 0 : localRounds);
@@ -1243,12 +1279,13 @@ final class Session {
             if (cityHuman() == a.defender) {
                 assaultStarting = true;
                 try {
-                    a.invasionRef = sosdet.game.GameAssault.invade(a.spec);
+                    a.invasionRef = sosdet.game.GameAssault.invade(a.spec); // stationed soldiers are in the city already
                 } finally {
                     assaultStarting = false;
                 }
             }
             a.started = true;
+            a.startedAt = step;
             commandAssault(a);
             return;
         }
@@ -1500,6 +1537,351 @@ final class Session {
         return (int) Math.max(AiLog.DELAY_STEPS, Math.min(AiLog.MAX_DELAY_STEPS, steps));
     }
 
+    // ------------------------------------------------------------ a battle's restart by vote (mod spec §8, SOS-231)
+
+    /** Host: the restart in the log, until it applies; no other is logged before. */
+    BattleKey restartLogged;
+    /** This PC's player pressed the battle's own Restart, for the mod to take once. */
+    boolean restartAsked;
+    /** The battle PC of a local battle: its battle as generated is loading; the world it ran goes in once it is set. */
+    boolean localRestartLoading;
+    /** The battle PC: the world it ran up to the restart, and the move remainders no save holds. */
+    private java.nio.file.Path restartWorld;
+    private double[] restartMoves;
+    /** The battle PC or the defender: the restart step whose save the watchers or viewers still wait for; -1 for none. */
+    long restartOut = -1;
+    /** The last step this PC did its part of a restart at, between steps; -1 before any. */
+    private long restartHandled = -1;
+    /** The defender's PC: its city as the assault's invasion started, which a restart loads, and the state no save holds. */
+    private Assault assaultStartOf;
+    private byte[] assaultStartState;
+    private double[] assaultStartMoves;
+    /** The defender's PC: the start save loaded for a restart, until it goes out to the viewers. */
+    private byte[] restartSave;
+
+    /** This PC's player pressed Restart: true once. */
+    boolean takeRestartAsked() {
+        boolean asked = restartAsked;
+        restartAsked = false;
+        return asked;
+    }
+
+    /**
+     * The battle this PC's player sees, as a {@link BattleKey#toLong}: the one on the battle map every PC runs, its own
+     * local battle or the one it watches, or the assault on the city it runs. {@link BattleKey#NONE} for none.
+     */
+    long battleHere() {
+        OwnBattle o = battle;
+        if (o != null && !o.awaiting) {
+            return BattleKey.pack(BattleKey.BATTLE, o.human, o.step);
+        }
+        LocalBattle b = localHere();
+        View w = watchingBattle();
+        if (b == null && w != null) {
+            b = locals[w.owner];
+        }
+        if (b != null) {
+            return BattleKey.pack(BattleKey.LOCAL, b.human, b.engage);
+        }
+        Assault a = assault;
+        if (a != null && a.started && a.endStep < 0 && cityHuman() == a.defender) {
+            return BattleKey.pack(BattleKey.ASSAULT, a.defender, a.step);
+        }
+        return BattleKey.NONE;
+    }
+
+    /**
+     * Why the battle {@code k} can't restart now; null when it can. Inside the step every PC reads it alike; between
+     * steps the host also asks {@link #restartRefusalHost} first.
+     */
+    String restartRefusal(BattleKey k) {
+        switch (k.kind) {
+        case BattleKey.BATTLE:
+            OwnBattle o = battle;
+            if (o == null || o.awaiting || o.human != k.human || o.step != k.step || battleLeaving) {
+                return "That battle is over.";
+            }
+            if (removeDue[o.human] || o.other >= 0 && removeDue[o.other]) {
+                return "A player in it is leaving the game.";
+            }
+            return null;
+        case BattleKey.LOCAL:
+            LocalBattle b = locals[k.human];
+            if (b == null || b.engage != k.step || b.state != LocalBattle.RUNNING || b.resultStep >= 0 || b.back) {
+                return "That battle is over.";
+            }
+            if (clock.step() <= b.freeze) {
+                return "That battle is starting.";
+            }
+            if (removing[b.human] || retired(b.human)) {
+                return "Its player is leaving the game.";
+            }
+            return rejoinRefusal(b.human);
+        case BattleKey.ASSAULT:
+            Assault a = assault;
+            if (a == null || a.defender != k.human || a.step != k.step || a.endStep >= 0) {
+                return "That assault is over.";
+            }
+            if (!a.started || a.reopen || clock.step() <= a.startedAt) {
+                return "The assault is starting or reloading.";
+            }
+            if (anyGone(a)) {
+                return "A player in it is leaving the game.";
+            }
+            return rejoinRefusal(a.defender);
+        default:
+            throw new IllegalArgumentException("SOSDET: a battle of kind " + k.kind);
+        }
+    }
+
+    /** {@link #restartRefusal}, and what only the host knows: a restart already in the log, an assault's end logged. */
+    String restartRefusalHost(BattleKey k) {
+        if (restartLogged != null) {
+            return "A restart is on its way.";
+        }
+        Assault a = assault;
+        if (k.kind == BattleKey.ASSAULT && a != null && a.endLogged) {
+            return "The assault is ending.";
+        }
+        LocalBattle b = k.kind == BattleKey.LOCAL ? locals[k.human] : null;
+        if (b != null && b.away) {
+            // its PC hasn't caught up since generating it: a battle it couldn't make (a sally called off) sends its
+            // result from there, and that comes first, so the restart is refused in its step on every PC alike
+            return "That battle is being set up.";
+        }
+        return restartRefusal(k);
+    }
+
+    /**
+     * Why every view of {@code owner}'s city or battle can't load it again now, the same on every PC: one is about to
+     * open or is closing, or a world prompt or question is open, which the owner's load would drop on its PC only.
+     */
+    private String rejoinRefusal(int owner) {
+        for (View v : views) {
+            if (v == null || v.owner != owner) {
+                continue;
+            }
+            if (v.state == View.SCHEDULED) {
+                return "A player is joining it.";
+            }
+            if (v.frozen() && v.thaw >= 0) {
+                return "A player is leaving it.";
+            }
+        }
+        return worldPromptOrQuestion();
+    }
+
+    /**
+     * Every PC, inside the step at {@code step}: the restart the players voted for applies, or on every PC alike nothing
+     * when the battle can't restart now. A battle on every PC loads its start here; a local battle's PC and the defender
+     * load theirs between steps ({@link #restarts}), and their watchers and viewers load it from them, as when another
+     * viewer joins (SOS-151).
+     */
+    void battleRestart(long step, BattleKey k) {
+        restartLogged = null;
+        deployPressed = null; // it deploys again: every commander presses Ready again (owner, 2026-11-19)
+        String why = restartRefusal(k);
+        notice(Notice.RESTART, k.human, k.kind, why == null ? 1 : 0);
+        if (why != null) {
+            return;
+        }
+        if (k.kind == BattleKey.BATTLE) {
+            restartOwnBattle();
+            return;
+        }
+        int owner;
+        if (k.kind == BattleKey.LOCAL) {
+            LocalBattle b = locals[k.human];
+            b.restartAt = step;
+            b.roster.restart();
+            b.votedSpeed = 1; // it starts again at 1x (owner, 2026-11-19)
+            b.paused = false;
+            b.seenSpeed = -1;
+            if (localHere() == b || watchingBattle() != null && watchingBattle().owner == b.human) {
+                speedShown = 1; // the frame sets this PC's game speed to it: the fighter's own, alone in it
+            }
+            owner = b.human;
+        } else {
+            Assault a = assault;
+            a.restartAt = step;
+            a.detected = -1;
+            a.forced = -1;
+            a.survivors = -1;
+            owner = a.defender;
+        }
+        for (View v : views) {
+            if (v != null && v.owner == owner && v.frozen() && !v.loadSkipped) {
+                v.rejoinAt = step; // its PC loads the owner's save from the restart
+            }
+        }
+    }
+
+    /** A battle every PC runs: each loads it as at Engage, now, and it deploys again (SOS-41's restart). */
+    private void restartOwnBattle() {
+        OwnBattle o = battle;
+        o.deployReady = 0;
+        o.army1Retreat = false;
+        o.closeAt = -1;
+        o.restarting = true;
+        o.roster.restart();
+        battleSpeed(1); // it starts again at 1x, as at Engage (owner, 2026-11-19)
+        battleConclude = null;
+        deployTimer.close();
+        battleLoading = true;
+        try {
+            sosdet.game.cmd.MapBattles.restartForAll();
+        } finally {
+            battleLoading = false;
+        }
+    }
+
+    /**
+     * Between steps, before each step: the defender saves its city once the assault's invasion started; after a restart's
+     * step, the local battle's PC or the defender loads the battle's start, and every PC that neither runs that battle
+     * nor watches or views it reloads its own world, as for a view, so what a load resets is reset alike everywhere.
+     */
+    void restarts() {
+        long step = clock.step();
+        Assault a = assault;
+        if (a != null && a.defender == localHuman && a.startedAt == step && assaultStartOf != a && !viewLoading) {
+            assaultStartOf = a;
+            sosdet.game.GameView.saveAssaultStart();
+            assaultStartState = ViewCity.cityState(this);
+            assaultStartMoves = sosdet.game.GameWorldLoad.unsaved();
+        }
+        if (restartHandled == step) {
+            return;
+        }
+        int owner = -1;
+        for (LocalBattle b : locals) {
+            if (b != null && b.restartAt == step) {
+                owner = b.human;
+            }
+        }
+        if (a != null && a.restartAt == step) {
+            owner = a.defender;
+        }
+        if (owner < 0) {
+            return;
+        }
+        restartHandled = step;
+        View mine = views[localHuman];
+        if (owner == localHuman) {
+            restartOut = firstRejoiner(step) >= 0 ? step : -1;
+            if (a != null && a.restartAt == step) {
+                assaultRestartLoad(step);
+            } else {
+                localRestartLoad(locals[owner]);
+            }
+        } else if (mine == null || mine.owner != owner || mine.rejoinAt != step || mine.back) {
+            if (!viewBackLoading) {
+                reloadOwnWorld();
+            }
+        } // a watcher or viewer of it loads the owner's save from the restart (Engine.viewRejoin)
+    }
+
+    /** The first viewer of this PC's city or battle that loads it again at {@code step}; -1 for none. */
+    private int firstRejoiner(long step) {
+        for (View v : views) {
+            if (v != null && v.owner == localHuman && v.frozen() && v.rejoinAt == step) {
+                return v.viewer;
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * The defender, between steps at the restart: loads its city as the invasion started, with that city's engine state,
+     * as the viewers load it; the world stood still meanwhile, all but the battle held (mod spec §9).
+     */
+    private void assaultRestartLoad(long step) {
+        if (assaultStartOf != assault) {
+            throw new IllegalStateException("SOSDET: the assault's restart at step " + step + " on the defender's PC, which"
+                    + " saved no city as it started");
+        }
+        restartSave = sosdet.game.GameView.assaultStart();
+        int first = firstRejoiner(step);
+        viewLoadStart(assaultStartState, assaultStartMoves, first);
+        viewRejoining = first >= 0;
+        sosdet.game.GameView.loadView(restartSave);
+        if (first < 0) {
+            restartSave = null;
+        }
+    }
+
+    /**
+     * The local battle's PC, between steps at the restart: saves the world it ran and loads its battle as generated,
+     * then the world goes into it ({@link #localRestartWorld}), as at the battle's end with its own city.
+     */
+    private void localRestartLoad(LocalBattle b) {
+        if (b.start == null) {
+            // no battle was generated here (a sally called off): the host logs no restart until this PC caught up after
+            // generating ({@link #restartRefusalHost}), and the called-off result it sent first makes every PC refuse it
+            throw new IllegalStateException("SOSDET: the restart at step " + clock.step() + " of human " + b.human
+                    + "'s battle against NPCs, which generated none on this PC");
+        }
+        try {
+            restartWorld = java.nio.file.Files.createTempFile("sosdet-restartworld", ".save");
+        } catch (java.io.IOException e) {
+            throw new IllegalStateException("SOSDET: no file for the world a local battle's restart keeps", e);
+        }
+        sosdet.game.GameWorldLoad.save(restartWorld);
+        restartMoves = sosdet.game.GameWorldLoad.unsaved();
+        rememberRetired();
+        localRestartLoading = true;
+        sosdet.game.GameView.loadBattleStart(sosdet.game.GameResync.exiter(), b.start);
+    }
+
+    /** The load of the battle as generated: the session goes on at this step, as after a view load. */
+    private void localRestartLoaded() {
+        viewHuman = -1;
+        humans = null;
+        currentHuman = living;
+        battleConclude = null;
+        resyncDraws = streams.drawsSinceLoad(); // the load's own draws don't count, as in a resync
+    }
+
+    /** The battle as generated is set: the world this PC ran goes into it. */
+    void localRestartWorld() {
+        localRestartLoading = false;
+        loadWorld(restartWorld, restartMoves);
+        restoreRetired();
+        restartWorld = null;
+        restartMoves = null;
+    }
+
+    /** Before the next step: this PC's part of a restart isn't done yet (SOS-231). */
+    private boolean restartHolds() {
+        return localRestartLoading || restartOut >= 0;
+    }
+
+    /**
+     * The owner's PC between steps at a restart ({@link Engine#viewOut}): the save its watchers or viewers load, once its
+     * own load is done; null until then. A local battle's PC saves its game and loads it again, as for a joining viewer;
+     * the defender hands out the save it loaded.
+     */
+    byte[] restartViewOut() {
+        long step = clock.step();
+        if (localRestartLoading || viewLoading || restartOut != step) {
+            return null;
+        }
+        restartOut = -1;
+        Assault a = assault;
+        if (a != null && a.restartAt == step && a.defender == localHuman) {
+            byte[] save = restartSave;
+            restartSave = null;
+            return ViewCity.toBytes(step, assaultStartState, assaultStartMoves, new byte[0], save);
+        }
+        byte[] save = sosdet.game.GameView.saveForView();
+        byte[] state = ViewCity.cityState(this);
+        double[] moves = sosdet.game.GameWorldLoad.unsaved();
+        byte[] battleState = sosdet.game.GameResync.captureLocal();
+        viewLoadStart(state, moves, firstRejoiner(step));
+        viewRejoining = true;
+        sosdet.game.GameView.loadSavedBattle(sosdet.game.GameResync.exiter(), battleState);
+        return ViewCity.toBytes(step, state, moves, battleState, save);
+    }
+
     /** The first report step after {@code step}: where a view freezes or thaws its viewer. */
     private static long nextReportStep(long step) {
         return (step / Reports.EVERY + 1) * Reports.EVERY;
@@ -1715,8 +2097,8 @@ final class Session {
 
     /** Before step {@code step}: true while this PC, the viewer or the owner of a view, holds at its freeze step. */
     boolean viewHolds(long step) {
-        if (viewLoading || localBackLoading) {
-            return true; // a view load runs: the owner's, the viewer's or another PC's own
+        if (viewLoading || localBackLoading || restartHolds()) {
+            return true; // a view load runs: the owner's, the viewer's or another PC's own; or a restart's (SOS-231)
         }
         for (View v : views) {
             if (v == null || step <= v.freeze) {
@@ -2147,6 +2529,19 @@ final class Session {
         return (int) (h ^ (h >>> 32));
     }
 
+    /**
+     * Every PC alike, in the step: whether the player at {@code pc} views the city this PC runs now, their view running
+     * as an assault's commanders read it ({@link #commands}). SOS-234.
+     */
+    boolean viewsCityHere(int pc) {
+        if (pc < 0 || pc >= pcHumans.length || pcHumans[pc] < 0 || pcHumans[pc] >= views.length) {
+            return false;
+        }
+        View v = views[pcHumans[pc]];
+        return v != null && v.owner == cityHuman() && clock.step() > v.freeze && v.thaw < 0 && v.state != View.CANCELLED
+                && v.state != View.ENDED;
+    }
+
     /** The PC whose human is {@code slot} (ADR 0004); the host (0) when no PC has it, as with one human. */
     int pcOf(int slot) {
         for (int pc = 0; pc < pcHumans.length; pc++) {
@@ -2174,6 +2569,10 @@ final class Session {
         }
         if (viewBackLoading || localBackLoading) {
             ownCityBack(); // a local battle's PC too: its city as at the freeze (SOS-93)
+            return;
+        }
+        if (localRestartLoading) {
+            localRestartLoaded(); // the battle as generated, then the world it ran goes into it (SOS-231)
             return;
         }
         if (resync != null && battle != null && !battle.awaiting) {
@@ -2306,6 +2705,12 @@ final class Session {
             if (battle.other >= 0) {
                 deployTimer.open();
             }
+        } else if (battle.restarting) {
+            battle.restarting = false; // loaded again as at Engage: it deploys again, the same commanders (SOS-231)
+            commandBattle();
+            if (battle.other >= 0) {
+                deployTimer.open();
+            }
         } else {
             deployTimer.close();
             hashes.worldOnly(true);
@@ -2343,7 +2748,7 @@ final class Session {
      */
     boolean deployReady(int fromPc) {
         if (battle == null) {
-            return roster() == null || !roster().allies() || fromPc == pcOf(roster().commanders[0]); // the fighter's Start
+            return true; // a local battle's Start passed its battle PC's count before the tape (localOrders)
         }
         if (battle.other < 0) {
             return true;
@@ -2356,6 +2761,64 @@ final class Session {
         }
         deployTimer.close();
         return true;
+    }
+
+    /** The battle PC, before the tape: whether a taped entry goes on: any but a Start, and a Start that is the last Ready. */
+    private boolean startPasses(sosdet.ai.AiEntry e) {
+        return e.kind != sosdet.ai.AiEntry.COMMAND || !sosdet.game.cmd.MapBattles.isDeploy(e.payload()) || localReady(e.pc);
+    }
+
+    /**
+     * The battle PC, before the tape: a local battle's Start from {@code fromPc}. With allies it is that commander's
+     * Ready, and the battle starts once every commander still in it is ready (owner, 2026-11-19): only that last Start
+     * goes on the tape, which every PC that runs the battle applies alike. The battle PC alone counts the Readys: a
+     * watcher's copy starts from the battle PC's save and would miss the presses before it. An ally whose view of the
+     * battle ended, or who left the field, isn't waited for; one whose view is still to load is.
+     */
+    boolean localReady(int fromPc) {
+        BattleRoster r = roster();
+        if (r == null || !r.allies()) {
+            return true;
+        }
+        int c = commander(fromPc);
+        if (c < 0) {
+            return false; // a watcher's press
+        }
+        r.ready |= 1 << c;
+        LocalBattle b = locals[r.commanders[0]];
+        for (int k = 0; k < r.commanders.length; k++) {
+            if ((r.ready & 1 << k) == 0 && !r.gone[k] && (k < r.leads || b == null || allyComing(b, k))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** Whether ally {@code c} of local battle {@code b} views it, or is about to: its view of the battle is open. */
+    private boolean allyComing(LocalBattle b, int c) {
+        View v = views[b.roster.commanders[c]];
+        return v != null && v.owner == b.human && v.state <= View.RUNNING;
+    }
+
+    /** The battle whose Start this PC's player pressed, until it restarts; null for none (owner, 2026-11-19). */
+    private BattleRoster deployPressed;
+
+    /** This PC's player pressed the deploy panel's Start, between steps. */
+    void deployPressed() {
+        deployPressed = roster();
+    }
+
+    /**
+     * The deploy panel, outside the step (owner, 2026-11-19): its button's text in a battle with several commanders,
+     * Ready, then Waiting once this PC's player pressed it, until the battle starts; null for one commander, where it is
+     * Start. Only the battle PC counts the Readys, so the button shows no count.
+     */
+    String deployLabel() {
+        BattleRoster r = roster();
+        if (r == null || r.commanders.length < 2 || r.commander(localHuman) < 0) {
+            return null;
+        }
+        return deployPressed == r ? "Waiting" : "Ready";
     }
 
     /**

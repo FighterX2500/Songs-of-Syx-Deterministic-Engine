@@ -1,0 +1,21 @@
+diff -ru -U2 a/settlement/stats/colls/StatsPopulation.java b/settlement/stats/colls/StatsPopulation.java
+--- a/settlement/stats/colls/StatsPopulation.java	2026-06-24 12:03:38.000000000 +0500
++++ b/settlement/stats/colls/StatsPopulation.java	2026-11-19 15:43:25.270206900 +0500
+@@ -242,6 +242,8 @@
+ 			
+ 			@Override
+ 			public void removePrivate(Induvidual i) {
++				if (sosdet.Hooks.uncountedPerson(i)) // SOSDET: a stationed ally's soldier isn't the host's people (owner, 2026-11-19)
++					return;
+ 				pPOP.inc(i, -1);
+ 				pops[i.hType().index()].incrFull(i, -1);
+ 				Div d = STATS.BATTLE().DIV.get(i);
+@@ -255,6 +257,8 @@
+ 			
+ 			@Override
+ 			public void addPrivate(Induvidual i) {
++				if (sosdet.Hooks.uncountedPerson(i)) // SOSDET: as removePrivate: the count stays balanced
++					return;
+ 				pPOP.inc(i, 1);
+ 				pops[i.hType().index()].incrFull(i, 1);
+ 				Div d = STATS.BATTLE().DIV.get(i);

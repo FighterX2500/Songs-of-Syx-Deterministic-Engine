@@ -77,6 +77,22 @@ final class BattleRules {
         return part;
     }
 
+    /**
+     * The part of an army's {@code current} supply its dead lose, {@code lost} of its {@code men}: what vanilla's
+     * auto-resolve counts and takes ({@code ResolverUnit.count}), 1.1 times the share dead. The survivors keep the rest;
+     * an army with no men left keeps none (owner, 2026-11-18; SOS-225).
+     */
+    static int deadGear(int current, int lost, int men) {
+        if (current <= 0) {
+            return 0;
+        }
+        if (men <= 0) {
+            return current;
+        }
+        double d = Math.max(0, Math.min(1.1 * ((double) lost / men), 1));
+        return (int) (current * d);
+    }
+
     /** Vanilla places a side's line within this many tiles of its middle (BattleStateGenArmy). */
     static final int HALF_LINE = 220;
 

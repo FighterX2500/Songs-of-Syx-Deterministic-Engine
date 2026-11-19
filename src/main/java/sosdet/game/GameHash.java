@@ -209,7 +209,7 @@ public final class GameHash implements StateSource {
         if (Engine.active()) { // no save holds them: a world before its session has a load's, each copy's
             h = GameWorldLoad.hashPeaceTimes(h); // the half-day peace event acts on them (SOS-183)
         }
-        h = part(w, 3, h);
+        h = part(w, 3, GameBreaks.hash(h)); // with the stances: who made each human's last change with an NPC (SOS-227)
         h = part(w, 4, GameRelations.hash(h));
         LIST<Raider> raiders = GAME.raiders().ALL();
         for (int i = 0; i < raiders.size(); i++) {
@@ -224,7 +224,7 @@ public final class GameHash implements StateSource {
         if (w != null) {
             w.eventHumans = GameEvents.keep(w.events);
         }
-        h = part(w, 7, GameFrozen.hash(GameCarves.hash(GamePassed.hash(GameTraded.hash(GameSieges.hash(GameTariffs.hash(GameDeals.hash(h)))))))); // the frozen humans (SOS-193), the carves (SOS-186), the tariffs, sieges, trade and passed stances with the deals: between humans
+        h = part(w, 7, GameStations.hash(GameFrozen.hash(GameCarves.hash(GamePassed.hash(GameTraded.hash(GameSieges.hash(GameTariffs.hash(GameDeals.hash(h))))))))); // the stationed armies (SOS-233), the frozen humans (SOS-193), the carves (SOS-186), the tariffs, sieges, trade and passed stances with the deals: between humans
         h = part(w, 8, Engine.active() ? GameWorldLoad.hashFboosts(h) : h); // a world before its session: a load's draws, each copy's
         h = part(w, 9, npcStocks(h));
         h = part(w, 10, regionPopulations(h));

@@ -95,6 +95,8 @@ public final class AiLog {
     /** An ally's order and a commander's vote in a local battle: a watching PC's, but these go through (SOS-119). */
     public static final int LOCAL_ORDER = 7966;
     public static final int LOCAL_VOTE = 7967;
+    /** An ally's Join or Stay out, asked while its game may view a city (SOS-232): a watching PC's too (owner's session, R3). */
+    public static final int ALLY_ANSWER = 7903;
     private long appliedOrders;
     private final long[] appliedByKind = new long[AiEntry.KINDS];
     private final Recent recentAi = new Recent();
@@ -184,9 +186,17 @@ public final class AiLog {
      * to the host through {@link #ordersOut}. Either way it is applied at the step the host stamps.
      */
     public void captureOrder(int kind, int div, byte[] payload) {
+        captureOrder(kind, div, payload, false);
+    }
+
+    /**
+     * As {@link #captureOrder(int, int, byte[])}; {@code stationed}: a stationed ally's order for its own soldiers in the
+     * host's city it views (SOS-234), which watch-only lets through as it does an assault commander's.
+     */
+    public void captureOrder(int kind, int div, byte[] payload, boolean stationed) {
         int id = kind == AiEntry.COMMAND ? CmdReader.idOf(payload) : -1;
-        boolean worldAnswer = id == WORLD_ANSWER || id == LOCAL_ORDER || id == LOCAL_VOTE;
-        if (watchOnly && !worldAnswer && !(commanding && kind < AiEntry.SPEED)) {
+        boolean worldAnswer = id == WORLD_ANSWER || id == LOCAL_ORDER || id == LOCAL_VOTE || id == ALLY_ANSWER;
+        if (watchOnly && !worldAnswer && !((commanding || stationed) && kind < AiEntry.SPEED)) {
             watchedDropped++;
             return;
         }
@@ -246,6 +256,17 @@ public final class AiLog {
             throw new IllegalStateException("SOSDET: only the host ends an assault (mode " + mode + ")");
         }
         captured.add(new AiEntry(-1, -1, AiEntry.ASSAULT_END, -1, 0, payload.clone()));
+    }
+
+    /**
+     * Host: a battle's restart the players voted for ({@link AiEntry#RESTART}), applied at the step it stamps on every
+     * PC. It comes from the mod, not a player, so watch-only never drops it (SOS-231).
+     */
+    public void captureRestart(byte[] payload) {
+        if (mode != AiMode.HOST) {
+            throw new IllegalStateException("SOSDET: only the host restarts a battle (mode " + mode + ")");
+        }
+        captured.add(new AiEntry(-1, -1, AiEntry.RESTART, -1, 0, payload.clone()));
     }
 
     /**
@@ -421,8 +442,10 @@ public final class AiLog {
             boolean skipped = false;
             if (due.kind == AiEntry.COMMANDERS) {
                 commanders.apply(due);
-            } else if (due.div >= 0 && !commanders.allows(due.pc, due.div)) {
-                commanders.skip(); // its source doesn't command that division, on every PC alike
+            } else if (due.div >= 0 && !commanders.allows(due.pc, due.div) && !applier.stationedOrder(due.pc, due.div)) {
+                // its source doesn't command that division, on every PC alike; a stationed player's own division only
+                // where its city runs (SOS-234): the count, which no hash holds, may differ there
+                commanders.skip();
                 skipped = true;
             } else {
                 if (due.div >= 0) {
@@ -444,7 +467,7 @@ public final class AiLog {
             appliedByKind[due.kind]++;
             if (due.pc != AiEntry.AI && !skipped && due.kind != AiEntry.COMMANDERS && due.kind != AiEntry.HOLD
                     && due.kind != AiEntry.REMOVE && due.kind != AiEntry.VIEW
-                    && due.kind != AiEntry.ASSAULT_END) { // the mod's or the engine's, no order
+                    && due.kind != AiEntry.ASSAULT_END && due.kind != AiEntry.RESTART) { // the mod's or the engine's, no order
                 appliedOrders++;
             }
             if (mode == AiMode.PEER) {

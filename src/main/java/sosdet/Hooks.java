@@ -239,6 +239,7 @@ public final class Hooks {
         s.viewBackStart(); // a viewer before its thaw step loads its own city back (SOS-82)
         s.viewWorldReloads(); // every other PC reloads its world where the owner and the viewer load
         s.localBacks(); // after a local battle's result: its PC loads its city back, every other PC its world (SOS-93)
+        s.restarts(); // after a restart's step: the battle's PC loads its start, every PC outside it its world (SOS-231)
         boolean battleAwaited = s.battle != null && s.battle.awaiting; // the battle PC's battle isn't loaded yet
         boolean waits = !s.ai().mayRun(s.clock.step() + 1) || !s.worldMayRun(s.clock.step() + 1)
                 || !s.watchMayRun(s.clock.step() + 1);
@@ -352,6 +353,10 @@ public final class Hooks {
             s.part = StepParts.CITY; // the city tail: the assault's invasion starts or ends here (SOS-92 B)
             s.assaultStep(step);
         }
+        if ((s.battle == null || s.battle.awaiting) && s.plans().inGame() && !sosdet.game.GameStationedDivs.get().idle()) {
+            s.part = StepParts.CITY; // a stationed ally's soldiers come into the fight, stay in it and leave it (SOS-234)
+            sosdet.game.GameStationedDivs.get().cityStep(s.cityHuman());
+        }
         if (s.hashes.due(step)) {
             // an own city's draws are its own: the world part's alone are counted (ADR 0005 §1); in a battle every PC
             // runs the same game, its draws counted from the battle's load (plan 0006)
@@ -451,6 +456,9 @@ public final class Hooks {
             s.streams.reseed(s.worldSeed(step));
             s.streams.worldDraws(worldDraws);
         }
+        if (VIEW.b().state() != null) {
+            b.start = sosdet.game.GameResync.captureLocal(); // what its save leaves out, for a restart (SOS-231)
+        }
     }
 
     /**
@@ -494,23 +502,171 @@ public final class Hooks {
     /**
      * The sally command, in the world part on every PC, as the defender: a local battle whose armies are those vanilla's
      * Attack takes, generated on the defender's PC at the freeze step. Skipped (false) on every PC alike when the
-     * defender already fights, views or is viewed in a battle, or a battle between humans runs.
+     * defender already fights, views or is viewed in a battle, a battle between humans runs, or the allies of an earlier
+     * Attack are being asked. {@code invader} is the invader's faction, -1 for raiders and rebels.
+     *
+     * <p>Every allied human with an army within 4 tiles of the capital, and every human with an army stationed at it
+     * (SOS-233), at war with the invader, is asked Join or Stay out first, as a battle's prompt asks (mod spec §9, SOS-232); the sally engages once each answered or after 30 s.
+     * While another world prompt is open, nobody is asked, as before (the prompt is one at a time).
      */
-    public static boolean invasionSallyEngage(int ref) {
+    public static boolean invasionSallyEngage(int ref, int invader) {
         Session s = Engine.session();
         int human = s.currentHuman;
-        if (!s.localBattles || s.locals[human] != null || s.battle != null || s.frozen(human)) {
+        if (!s.localBattles || s.locals[human] != null || s.battle != null || s.frozen(human)
+                || s.worldPrompt instanceof SallyLayout.Ask) {
             return false;
         }
-        LocalBattle b = s.localSally(s.clock.step(), human, sosdet.game.GameSally.armies());
+        sosdet.game.GameSally.Near near = s.worldPrompt != null ? null : sosdet.game.GameSally.near(SallyLayout.REACH_TILES);
+        int[] asked = near == null ? Session.NO_ARMIES : SallyLayout.asked(human, near.owners, near.distances,
+                h -> sosdet.game.GameSally.atWar(h, invader) && !s.localBusy(h) // near holds only allies' and stationed armies
+                        && s.locals[h] == null && !s.retired(h) && !s.iced(h));
+        s.alliesSeen = "step " + s.clock.step() + ": sally of human " + human + " against " + invader + ", armies near "
+                + (near == null ? "not looked for (a prompt is open)" : java.util.Arrays.toString(near.owners) + " at "
+                + java.util.Arrays.toString(near.distances)) + ", asked " + java.util.Arrays.toString(asked);
+        if (asked.length == 0) {
+            sallyEngage(s, human, ref, Session.NO_ARMIES);
+            return true;
+        }
+        int[] own = sosdet.game.GameSally.armies();
+        int[] held = java.util.Arrays.copyOf(own, own.length + near.armies.length);
+        int n = own.length;
+        for (int k = 0; k < near.armies.length; k++) {
+            if (contains(asked, near.owners[k])) {
+                held[n++] = near.armies[k];
+            }
+        }
+        s.worldPrompt = new SallyLayout.Ask(human, ref, invader);
+        s.worldPromptClose = () -> {
+        };
+        s.worldPromptTimeout = Hooks::worldPromptEngageNext; // allies who didn't answer stay out
+        s.worldPromptArmies = java.util.Arrays.copyOf(held, n); // they wait in place while the allies answer
+        s.worldPromptHuman = human;
+        s.allies = asked;
+        s.allyAnswers = new int[asked.length];
+        s.worldPromptReady = 3; // the defender has chosen to fight: it engages once the allies answered
+        s.pvpEngageAt = -1;
+        s.promptTimer.open();
+        return true;
+    }
+
+    /** True while the open world prompt asks allies to join a sally (SOS-232). */
+    public static boolean sallyAsking() {
+        Session s = Engine.session();
+        return s != null && s.worldPrompt instanceof SallyLayout.Ask;
+    }
+
+    /**
+     * In the world part, at the step set when every ally answered or the time ran out: the sally engages with the allies
+     * who joined, as the defender, unless the defender began another battle since.
+     */
+    private static void sallyAskEngage(Session s) {
+        SallyLayout.Ask a = (SallyLayout.Ask) s.worldPrompt;
+        int[] joined = s.alliesJoined(a.human); // the chat hears who joined and who stayed out
+        worldPromptClose();
+        s.closedPromptArmies = Session.NO_ARMIES;
+        if (!s.localBattles || s.locals[a.human] != null || s.battle != null || s.frozen(a.human) || s.retired(a.human)) {
+            return;
+        }
+        int[] free = new int[joined.length];
+        int n = 0;
+        for (int h : joined) {
+            if (!s.localBusy(h) && s.locals[h] == null && !s.retired(h) && !s.iced(h)) {
+                free[n++] = h; // one who began another battle meanwhile stays out of this one
+            }
+        }
+        int was = currentHumanSwap(a.human);
+        try {
+            sallyEngage(s, a.human, a.ref, java.util.Arrays.copyOf(free, n));
+        } finally {
+            currentHumanSwap(was);
+        }
+    }
+
+    /** In the world part, as the defender: the sally's local battle, with the {@code allies} who joined it. */
+    private static void sallyEngage(Session s, int human, int ref, int[] allies) {
+        long step = s.clock.step();
+        int[] own = sosdet.game.GameSally.armies();
+        SallyLayout layout = allies.length == 0 ? null : sallyLayout(human, own, allies);
+        LocalBattle b = s.localSally(step, human, layout == null ? own : layout.allArmies(),
+                layout == null ? Session.NO_ARMIES : layout.allyHumans());
         for (int c = 0; c < b.roster.commanders.length; c++) {
             b.roster.reports[c] = s.reports(b.roster.commanders[c]).current();
+        }
+        if (layout != null) {
+            s.sallySeen = "step " + step + ": sally of human " + human + ", commanders "
+                    + java.util.Arrays.toString(layout.commanders) + ", divisions " + java.util.Arrays.toString(layout.divisions)
+                    + ", power " + java.util.Arrays.toString(layout.power);
+            b.sally = layout;
+            BattleAllies.owners(b.roster, layout.owners(init.constant.Config.battle().DIVISIONS_PER_ARMY), Session.NO_ARMIES);
+            // the battle PC builds the allies' divisions now, where the world reads every human's alike, on a stream
+            // of its own; the world stream goes on alike on every PC after it, as after a local battle's Engage
+            long worldDraws = s.streams.worldDraws();
+            s.streams.reseed(s.battleSeed(step));
+            try {
+                if (human == s.localHuman) {
+                    java.util.List<game.battle.util.DivGeneration> divs = new java.util.ArrayList<>();
+                    for (int c = 1; c < layout.commanders.length; c++) {
+                        divs.addAll(sosdet.game.GameSally.generate(layout.armies[c], layout.iterations[c], layout.divisions[c]));
+                    }
+                    b.sallyAllyDivs = divs;
+                }
+            } finally {
+                s.streams.reseed(s.afterEngageSeed(step));
+                s.streams.worldDraws(worldDraws);
+            }
         }
         if (human == s.localHuman) {
             b.generate = () -> sallyGenerate(b, ref);
         }
-        b.after = r -> sallyResult(human, ref, (Object[]) r);
-        return true;
+        b.after = r -> sallyResult(human, ref, b, (Object[]) r);
+    }
+
+    /**
+     * In the world part, as the defender, on every PC: who brings what into a sally with {@code allies}: each one's armies
+     * near the capital, their divisions within the side's slots, and their strength now. An ally with no army near any
+     * more stays out. Null when no ally is left.
+     */
+    private static SallyLayout sallyLayout(int human, int[] own, int[] allies) {
+        sosdet.game.GameSally.Near near = sosdet.game.GameSally.near(SallyLayout.REACH_TILES);
+        int[] commanders = new int[allies.length + 1];
+        int[][] armies = new int[commanders.length][];
+        commanders[0] = human;
+        armies[0] = own;
+        int n = 1;
+        for (int ally : allies) {
+            int[] mine = new int[near.armies.length];
+            int k = 0;
+            for (int i = 0; i < near.armies.length; i++) {
+                if (near.owners[i] == ally && near.distances[i] <= SallyLayout.REACH_TILES) {
+                    mine[k++] = near.armies[i];
+                }
+            }
+            if (k > 0) {
+                commanders[n] = ally;
+                armies[n++] = java.util.Arrays.copyOf(mine, k);
+            }
+        }
+        if (n == 1) {
+            return null;
+        }
+        commanders = java.util.Arrays.copyOf(commanders, n);
+        armies = java.util.Arrays.copyOf(armies, n);
+        int[][] iterations = new int[n][];
+        int[] wanted = new int[n];
+        int[] power = new int[n];
+        int garrison = sosdet.game.GameSally.garrison();
+        wanted[0] = garrison;
+        power[0] = sosdet.game.GameSally.garrisonPower();
+        for (int c = 0; c < n; c++) {
+            iterations[c] = new int[armies[c].length];
+            for (int k = 0; k < armies[c].length; k++) {
+                iterations[c][k] = sosdet.game.GameSally.iteration(armies[c][k]);
+                wanted[c] += sosdet.game.GameSally.divisions(armies[c][k]);
+                power[c] += sosdet.game.GameSally.power(armies[c][k]);
+            }
+        }
+        int[] divisions = SallyLayout.slots(garrison, wanted, init.constant.Config.battle().DIVISIONS_PER_ARMY);
+        return new SallyLayout(commanders, armies, iterations, divisions, power);
     }
 
     /**
@@ -518,11 +674,15 @@ public final class Hooks {
      * began their assault since the click, there is no battle: the local battle ends with no result on every PC.
      */
     private static void sallyGenerate(LocalBattle b, int ref) {
+        Session s = Engine.session();
         int was = currentHumanSwap(b.human);
         boolean made;
+        s.sallyGenerating = b;
         try {
             made = sosdet.game.GameSally.generate(ref);
         } finally {
+            s.sallyGenerating = null;
+            b.sallyAllyDivs = null;
             currentHumanSwap(was);
         }
         if (!made) {
@@ -532,10 +692,37 @@ public final class Hooks {
     }
 
     /**
-     * Every PC, the sally's after-battle in the world part ({@code Session.localAfter}): the result goes to the defender's
-     * city, where vanilla's after-battle runs; its world effects come back through that city's report (B4).
+     * Patch 99, vanilla's Attack as it builds the sally's battle: how many divisions the defender's side gives the
+     * defender, its garrison and then its own armies near (SOS-232). No limit but vanilla's without allies.
      */
-    private static void sallyResult(int human, int ref, Object[] result) {
+    public static int sallyOwnDivisions() {
+        Session s = Engine.session();
+        LocalBattle b = s == null ? null : s.sallyGenerating;
+        return b == null || b.sally == null ? Integer.MAX_VALUE : b.sally.divisions[0];
+    }
+
+    /** Patch 99, right after: the allies' divisions, which the world part built at Engage, after the defender's (SOS-232). */
+    public static void sallyAllies(snake2d.util.sets.ArrayList<game.battle.util.DivGeneration> divs) {
+        Session s = Engine.session();
+        LocalBattle b = s == null ? null : s.sallyGenerating;
+        if (b == null || b.sallyAllyDivs == null) {
+            return;
+        }
+        for (game.battle.util.DivGeneration d : b.sallyAllyDivs) {
+            if (divs.hasRoom()) {
+                divs.add(d);
+            }
+        }
+        b.sallyAllyDivs = null;
+    }
+
+    /**
+     * Every PC, the sally's after-battle in the world part ({@code Session.localAfter}): the result goes to the defender's
+     * city, where vanilla's after-battle runs; its world effects come back through that city's report (B4). With allies
+     * (SOS-232), each ally's divisions get their survivors here, in the world, and only the defender's go to its city;
+     * a victory's spoils and captives are shared there by power.
+     */
+    private static void sallyResult(int human, int ref, LocalBattle b, Object[] result) {
         if ((Integer) result[0] < 0) {
             return; // called off: no battle was fought
         }
@@ -543,6 +730,90 @@ public final class Hooks {
         x.human = human;
         x.i = ref;
         x.b = result;
+        SallyLayout l = b.sally;
+        if (l == null) {
+            return;
+        }
+        int[] survivors = (int[]) result[4];
+        double[] experience = (double[]) result[5];
+        for (int c = 1; c < l.commanders.length; c++) {
+            int first = l.first(c);
+            for (int k = 0; k < l.divisions[c] && first + k < survivors.length; k++) {
+                sosdet.game.GameSally.resolve(l.armies[c], l.iterations[c], k, survivors[first + k], experience[first + k]);
+            }
+        }
+        Object[] own = result.clone();
+        own[4] = SallyLayout.head(survivors, l.divisions[0]);
+        own[5] = SallyLayout.head(experience, l.divisions[0]);
+        x.b = own;
+        if ((Integer) result[0] == world.battle.spec.BATTLE_RESULT.VICTORY.ordinal()) {
+            boolean[] gone = new boolean[l.commanders.length];
+            for (int c = 0; c < gone.length; c++) {
+                int rc = b.roster.commander(l.commanders[c]);
+                gone[c] = rc >= 0 && b.roster.gone[rc];
+            }
+            x.c = new Object[] {l, gone};
+        }
+    }
+
+    /**
+     * The defender's city tail, a sally's result ({@code TxnKind.SALLY_RESULT}): vanilla's after-battle, with the
+     * allies' shares of a victory at hand for {@link #sallySpoils} (SOS-232).
+     */
+    public static void sallyAfter(int ref, Object[] result, Object shares) {
+        Session s = Engine.session();
+        Object[] sh = (Object[]) shares;
+        s.sallySharing = sh == null ? null : (SallyLayout) sh[0];
+        s.sallyGone = sh == null ? null : (boolean[]) sh[1];
+        try {
+            sosdet.game.GameSally.after(ref, result);
+        } finally {
+            s.sallySharing = null;
+            s.sallyGone = null;
+        }
+    }
+
+    /**
+     * Patch 99, vanilla's after-battle of a won sally, before its spoils window: with allies, {@code spoils} (goods and
+     * captives by tradable) keeps the defender's share by power, and each ally's share goes in the city's report, for
+     * the world part to ship to that ally's capital (mod spec §9, SOS-232).
+     */
+    public static void sallySpoils(int[] spoils) {
+        Session s = inCityPart();
+        if (s == null || s.sallySharing == null) {
+            return;
+        }
+        SallyLayout l = s.sallySharing;
+        int[][] parts = l.shares(spoils, s.sallyGone);
+        System.arraycopy(parts[0], 0, spoils, 0, spoils.length);
+        s.sallySeen += "; the defender keeps " + java.util.Arrays.stream(spoils).sum() + " of "
+                + java.util.Arrays.stream(parts).mapToInt(x -> java.util.Arrays.stream(x).sum()).sum(); // its own PC only
+        for (int c = 1; c < parts.length; c++) {
+            if (java.util.Arrays.stream(parts[c]).anyMatch(v -> v > 0)) {
+                s.cityInputs.add(new sosdet.report.Input(sosdet.report.InputKind.SALLY_SPOILS, l.commanders[c],
+                        SallyLayout.encode(parts[c])));
+            }
+        }
+    }
+
+    /** The world part, the defender's report applying ({@code GameInputs}): an ally's share of a sally leaves by caravan. */
+    public static void sallySpoilsArrive(int ally, byte[] share) {
+        Session s = Engine.session();
+        int[] parts = SallyLayout.decode(share, init.trade.TR.ALL().size());
+        StringBuilder t = new StringBuilder();
+        for (int i = 0; i < parts.length; i++) {
+            if (parts[i] > 0) {
+                t.append(' ').append(init.trade.TR.ALL().get(i).key()).append('=').append(parts[i]);
+            }
+        }
+        s.sallySeen += "; step " + s.clock.step() + ": human " + ally + "'s share from human " + s.currentHuman + ":" + t;
+        sosdet.game.GameSally.ship(s.currentHuman, ally, parts);
+    }
+
+    /** Test tooling: the last sally with allies, as {@link #sallySpoilsArrive} and the Engage saw it; empty before any. */
+    public static String sallySeen() {
+        Session s = Engine.session();
+        return s == null ? "" : s.sallySeen;
     }
 
     /**
@@ -801,6 +1072,21 @@ public final class Hooks {
         Engine.session().assaultEnded(step, outcome, survivors);
     }
 
+    // ------------------------------------------------------------ a battle's restart by vote (mod spec §8, SOS-231)
+
+    /** The host's {@link sosdet.ai.AiEntry#RESTART} at its step, every PC: the battle's kind, human and start step. */
+    public static void battleRestart(long step, int kind, int human, int stepHigh, int stepLow) {
+        Engine.session().battleRestart(step, BattleKey.ofInts(kind, human, stepHigh, stepLow));
+    }
+
+    /** This PC's player pressed the battle's own Restart, outside the step: the mod asks every player (SOS-231). */
+    public static void restartAsked() {
+        Session s = Engine.session();
+        if (s != null) {
+            s.restartAsked = true;
+        }
+    }
+
     /**
      * True for an army in the open world-battle prompt, either side: it waits in place until the prompt is answered or
      * its time runs out (spec §16, owner 2026-10-25, SOS-45). The prompt opens and closes inside the step on every PC
@@ -891,7 +1177,12 @@ public final class Hooks {
             }
             s.currentHuman = s.living;
             s.ai().worldPart();
-            if (s.pvpEngageAt == step && s.worldPrompt != null) { // both humans answered, or time ran out (SOS-83)
+            if (!battleRuns && s.plans().inGame()) { // unit tests have no game
+                sosdet.game.GameStations.get().endDue(); // after the commands: the armies stationed no more (SOS-233)
+            }
+            if (s.pvpEngageAt == step && s.worldPrompt instanceof SallyLayout.Ask) { // the allies answered, or time ran out (SOS-232)
+                sallyAskEngage(s);
+            } else if (s.pvpEngageAt == step && s.worldPrompt != null) { // both humans answered, or time ran out (SOS-83)
                 sosdet.game.cmd.WorldBattles.pvpEngage();
             }
             // after the world's commands: an answer given at this step comes first (SOS-45)
@@ -1536,12 +1827,18 @@ public final class Hooks {
      */
     private static Txn toCity(TxnKind kind) {
         Session s = Engine.session();
+        return s == null ? null : toCity(kind, s.currentHuman);
+    }
+
+    /** In the world part: a transaction for the city of the human in {@code human}; null elsewhere. */
+    private static Txn toCity(TxnKind kind, int human) {
+        Session s = Engine.session();
         if (s == null || s.part != StepParts.WORLD_PART) {
             return null;
         }
         Txn t = s.txns.add(s.clock.step());
         t.kind = kind;
-        t.human = s.currentHuman;
+        t.human = human;
         return t;
     }
 
@@ -1630,9 +1927,28 @@ public final class Hooks {
     }
 
     /**
+     * {@code OpsStance.setNewStance}, after it sets the stance: the change between {@code FACTIONS.player()} (the current
+     * human in the world part) and {@code npc} is the human's own, so it is no break by the NPC (SOS-227).
+     */
+    public static void stanceMadeByHuman(game.faction.npc.FactionNPC npc) {
+        sosdet.game.GameHumans.get().breaks().book().madeByHuman(FACTIONS.player().index(), npc.index());
+    }
+
+    /**
+     * {@code OpsStance.betrayalD}: true when a war {@code FACTIONS.player()} declares on {@code npc} costs no betrayal:
+     * the NPC lowered their stance last, and left them {@code neutral}. A war on an NPC that broke its treaties with this
+     * human costs none; a treaty the human broke first costs vanilla's (owner, 2026-11-18; SOS-227). Every game, single
+     * player too. World state: the same on every PC.
+     */
+    public static boolean warIsFree(game.faction.npc.FactionNPC npc, boolean neutral) {
+        return sosdet.game.GameHumans.get().breaks().book().warIsFree(FACTIONS.player().index(), npc.index(), neutral);
+    }
+
+    /**
      * {@code DipWarPlayer.validEnemy} and {@code validProxy}, in the slice of {@code human}: true when {@code f} is the
      * vassal of another human who is {@code human}'s trade partner, colleague or ally. It then demands nothing, starts
-     * no war and works no harm against {@code human} (owner, 2026-11-05; SOS-146).
+     * no war and works no harm against {@code human} (owner, 2026-11-05; SOS-146). Also {@code Stance.messDown}: its
+     * court asks {@code human} no money to keep their stance and cancels none (owner, 2026-11-18; SOS-226).
      */
     public static boolean friendOfOverlord(Faction f, Faction human) {
         return Engine.session() != null && HumanDeals.friendOfOverlord(f, human);
@@ -1796,6 +2112,370 @@ public final class Hooks {
         x.a = a;
         x.i = div;
         return true;
+    }
+
+    /**
+     * {@code ArmyTrainingInfo.RaceDiv.getNext} (SOS-234): true for a division of the city's army 0 that holds a stationed
+     * ally's soldiers, which takes no recruits from the city. Per recruit search: no allocation.
+     */
+    public static boolean stationedDiv(game.battle.div.Div div) {
+        Session s = Engine.session();
+        return s != null && (s.battle == null || s.battle.awaiting) && !s.localRuns()
+                && sosdet.game.GameHumans.get().stationedDivs().divs().stationed(div.index());
+    }
+
+    /**
+     * Patch 98, the capitol's garrison ({@code RDMilitaryGar.WDivsCapitol}): a stationed ally's division in the host's
+     * city isn't garrison (owner's session, 2026-11-19). The garrison sallies out with the host and the world counts it
+     * as the host's; the ally's soldiers are their world army's, which joins the sally itself. The registry only, the
+     * same through one loaded game. Per division: no allocation.
+     */
+    public static boolean stationedGarrison(game.battle.div.Div div) {
+        return Engine.session() != null && div.army() == GAME.ARMIES().player()
+                && sosdet.game.GameHumans.get().stationedDivs().divs().stationed(div.index());
+    }
+
+    /**
+     * In the city tail (SOS-234): a stationed ally's division's dead and its soldiers' experience in the host's city reach
+     * the world in the city's next report ({@code StationedDivs.Resolve}'s bytes).
+     */
+    public static void stationResolve(int owner, byte[] data) {
+        Session s = inCityPart();
+        if (s == null) {
+            throw new IllegalStateException("SOSDET: a stationed division's survivors outside the city part");
+        }
+        s.cityInputs.add(new sosdet.report.Input(sosdet.report.InputKind.STATION_RESOLVE, owner, data));
+    }
+
+    /**
+     * Whether a player's order from PC {@code pc} for division {@code div} of the city this PC runs applies here (-1 for
+     * an order that names no division, such as artillery's). The general's, a battle's and a tape's always, as before.
+     * A player's otherwise in the city they command in, on every PC that runs it alike (SOS-209):
+     * <ul>
+     * <li>a stationed ally's division in the host's city (SOS-234): its player's while their view of the city runs, and
+     * the host's while that player gives them command (owner, 2026-11-19), in an assault too;
+     * <li>in an assault, the defender's, and a viewer's the commanders table gave a division to (AiLog checked it);
+     * <li>any other division: the city's own player's.
+     * </ul>
+     * The rule itself is {@link sosdet.game.station.StationOrders#applies}.
+     */
+    public static boolean divOrderHere(int pc, int div) {
+        Session s = Engine.session();
+        if (s == null || !s.ownCity || pc == sosdet.ai.AiEntry.AI || s.battle != null && !s.battle.awaiting
+                || s.ai().applyingTaped() || s.localRuns()) {
+            return true; // a local battle's divisions are the battle's, never the city's registry (owner, 2026-11-19)
+        }
+        int owner = stationOwner(s, div);
+        int ownerPc = owner < 0 ? -1 : s.pcOf(owner);
+        boolean assault = s.assault != null && s.assault.started() && s.cityHuman() == s.assault.defender;
+        return sosdet.game.station.StationOrders.applies(pc, s.cityPc(), ownerPc, ownerPc >= 0 && s.viewsCityHere(ownerPc),
+                owner >= 0 && stationGranted(div), assault, assault && s.viewsCityHere(pc));
+    }
+
+    /**
+     * Inside the step, before the commanders table skips it (SOS-234): whether an order from {@code pc} for division
+     * {@code div} is a stationed player's for its own soldiers in the city this PC runs, while their view of it runs.
+     * Only the PCs that run that city can tell; elsewhere the order is skipped, which applies nowhere anyway, and the
+     * table, the same everywhere, stays as it is.
+     */
+    public static boolean stationedOrderHere(int pc, int div) {
+        Session s = Engine.session();
+        if (s == null || !s.ownCity || s.battle != null && !s.battle.awaiting || s.localRuns()) {
+            return false;
+        }
+        int owner = stationOwner(s, div);
+        int ownerPc = owner < 0 ? -1 : s.pcOf(owner);
+        return sosdet.game.station.StationOrders.passesTable(false, pc, ownerPc, ownerPc >= 0 && s.viewsCityHere(ownerPc));
+    }
+
+    /** The stationed player whose soldiers division {@code div} of the city this PC runs holds, or -1. No allocation. */
+    private static int stationOwner(Session s, int div) {
+        return div < 0 || !s.plans().inGame() ? -1 : sosdet.game.GameStationedDivs.get().divs().owner(div);
+    }
+
+    /** Whether the player of stationed division {@code div} gives the host command of it, as the world holds it now. */
+    private static boolean stationGranted(int div) {
+        sosdet.game.station.StationedDivs d = sosdet.game.GameStationedDivs.get().divs();
+        return sosdet.game.GameStations.get().granted(d.army(div), d.iteration(div));
+    }
+
+    /**
+     * The UI, outside the step (SOS-234): whether this PC's player may select division {@code div} of the city on screen
+     * as far as stationed allies go: a stationed ally's division by its player, who views the city, and by the host
+     * while that player gives them command (owner, 2026-11-19); every other division as before.
+     */
+    public static boolean stationSelectable(int div) {
+        Session s = Engine.session();
+        if (s == null || !s.ownCity || s.battle != null || s.localRuns()) {
+            return true;
+        }
+        int owner = stationOwner(s, div);
+        return owner < 0 || sosdet.game.station.StationOrders.selectable(s.localHuman, owner, s.viewing() != null,
+                stationGranted(div));
+    }
+
+    /**
+     * Patch 95, the division cards (owner, 2026-11-19): the banner of the player division {@code d} belongs to, drawn in
+     * the card's top right corner, when that player isn't this PC's; null for this PC's own divisions, an NPC's, and
+     * without a session. The zoomed-out map, the battle panel and the conscripts window draw it. UI thread, outside the
+     * step, never hashed. No allocation.
+     */
+    public static snake2d.util.sprite.SPRITE divBanner(game.battle.div.Div d) {
+        Session s = Engine.session();
+        if (s == null || d == null || s.loading) {
+            return null;
+        }
+        int owner = divHuman(s, d);
+        if (owner < 0 || owner == s.localHuman) {
+            return null;
+        }
+        Faction f = FACTIONS.getByIndex(owner);
+        return f instanceof Player ? f.banner().MEDIUM : null;
+    }
+
+    /**
+     * The human division {@code d} belongs to, or -1 for an NPC's: in a battle by its roster; in the city on screen a
+     * stationed ally's by the registry, the city's own by the city's player (in a view, its owner: SOS-82).
+     */
+    private static int divHuman(Session s, game.battle.div.Div d) {
+        BattleRoster r = s.roster();
+        if (r != null && r.owners != null) {
+            return d.index() < r.owners.length ? r.owners[d.index()] : -1;
+        }
+        if (d.army() != GAME.ARMIES().player()) {
+            return -1;
+        }
+        int stationed = s.ownCity ? stationOwner(s, d.index()) : -1;
+        return stationed >= 0 ? stationed : FACTIONS.player().index();
+    }
+
+    /**
+     * {@code AiHooks.muster} and the selection panel's Muster button (owner, 2026-11-19): a stationed ally's division
+     * stays mustered in the host's city, so nobody demusters it.
+     */
+    public static boolean musterLocked(game.battle.div.Div div) {
+        return stationedDiv(div);
+    }
+
+    /** Patch 95, the selection panel's Muster button (owner, 2026-11-19): greyed while every division selected stays mustered. */
+    public static boolean musterLocked(snake2d.util.sets.LIST<game.battle.div.Div> selected) {
+        if (selected.size() == 0) {
+            return false;
+        }
+        for (int i = 0; i < selected.size(); i++) {
+            if (!stationedDiv(selected.get(i))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Patch 99-capital-walls, {@code RDBuildings.levelWall} (owner, 2026-11-19, batch 13 item 16): the world map draws
+     * a human's capital with the walls its city last reported, on every PC alike, its own human's included; -1 for any
+     * other region, or before the human's first report, where vanilla's value stays. Drawing only.
+     */
+    public static double capitalWalls(world.map.regions.Region reg) {
+        Session s = Engine.session();
+        if (s == null || reg == null) {
+            return -1;
+        }
+        for (int h : s.humans()) {
+            game.faction.Faction f = FACTIONS.getByIndex(h);
+            if (f != null && f.capitolRegion() == reg) {
+                sosdet.report.CityReport r = s.reports(h).current();
+                return r == null ? -1 : r.get(sosdet.report.Field.CAPITAL_WALLS, 0);
+            }
+        }
+        return -1;
+    }
+
+    /** The battle panel's Restart prompt in a session (owner, 2026-11-19): the press calls the players' vote. */
+    private static final String RESTART_ASK = "Ask the players to restart the battle? Majority decides.";
+
+    /**
+     * Patch 95, the battle panel's Restart (SOS-231, owner 2026-11-19): in a session it asks whether to call the players'
+     * vote, with Ok and Cancel; Ok runs {@code yes}, the restart, which calls the vote. True when it asked.
+     */
+    public static boolean restartPrompt(snake2d.util.misc.ACTION yes) {
+        if (Engine.session() == null) {
+            return false;
+        }
+        view.main.VIEW.inters().yesNo.activate(RESTART_ASK, yes, snake2d.util.misc.ACTION.NOP, true);
+        return true;
+    }
+
+    /**
+     * {@code StatsPopulation}'s count, as a person is added or removed (owner, 2026-11-19, 10b point A): a stationed
+     * ally's soldier isn't counted in the host's population. The count runs again whenever the person's division changes
+     * and at every load, so it stays balanced: the registry of stationed divisions loads ahead of the city's people.
+     * Per person added or removed: no allocation.
+     */
+    public static boolean uncountedPerson(settlement.stats.Induvidual i) {
+        if (Engine.session() == null) {
+            return false;
+        }
+        game.battle.div.Div d = i.division();
+        // the registry only, never the battle's state: it is the same all through one loaded game, so every add
+        // and remove agrees
+        return d != null && d.army() == game.GAME.ARMIES().player()
+                && sosdet.game.GameHumans.get().stationedDivs().divs().stationed(d.index());
+    }
+
+    /** The UI (SOS-234): whether division {@code div} of the city on screen holds a stationed ally's soldiers. */
+    public static boolean stationedOnScreen(int div) {
+        Session s = Engine.session();
+        return s != null && s.ownCity && s.battle == null && !s.localRuns() && stationOwner(s, div) >= 0;
+    }
+
+    /**
+     * Outside the step (SOS-234): whether this PC's order for division {@code div} is a stationed ally's for its own
+     * soldiers in the host's city it views, which goes to the log although the view only watches otherwise.
+     */
+    private static boolean stationOrder(Session s, int kind, int div) {
+        return kind < sosdet.ai.AiEntry.SPEED && div >= 0 && s.ownCity && s.viewing() != null && s.battle == null
+                && !s.localRuns() && s.plans().inGame() && sosdet.game.GameStationedDivs.get().divs().owner(div) == s.localHuman;
+    }
+
+    /**
+     * A world command (SOS-233): the host's city tail fills a stationed army's supplies from its stockpiles, and its next
+     * report gives them to the army (B2), as {@link #armySupplies(WArmy, int)}; true when queued.
+     */
+    public static boolean stationSupply(WArmy a) {
+        Txn x = toCity(TxnKind.STATION_SUPPLY);
+        if (x == null) {
+            return false;
+        }
+        x.a = a;
+        return true;
+    }
+
+    /**
+     * In the world part (owner, 2026-11-19): a stationed army's divisions {@code f} reach the city of the human in
+     * {@code host}: they come in, or their soldiers there take their men, equipment and training again
+     * ({@code TxnKind.STATION_DIVS}).
+     */
+    public static void stationDivs(int host, sosdet.game.GameStations.Fighters f) {
+        Txn x = toCity(TxnKind.STATION_DIVS, host);
+        if (x != null) {
+            x.b = f;
+        }
+    }
+
+    /**
+     * In the world part (owner, 2026-11-19, stationing's third version): the division of {@code key} of the army at
+     * {@code army} with {@code iteration} leaves the city of the human in {@code host} for the camp
+     * ({@code TxnKind.STATION_CAMP}).
+     */
+    public static void stationCamp(int host, int army, int iteration, int key) {
+        Txn x = toCity(TxnKind.STATION_CAMP, host);
+        if (x != null) {
+            x.i = army;
+            x.j = iteration;
+            x.d = key;
+        }
+    }
+
+    /**
+     * Patches 15-humans ({@code PFieldBattle}, {@code PRegAttack}) and 99-world-battles ({@code Defender}), in the world
+     * part, the same on every PC (owner, 2026-11-19): a stationed army is never a battle's target nor starts one; it
+     * still helps in one nearby ({@code Util.fill}). No allocation.
+     */
+    public static boolean stationedArmy(WArmy a) {
+        Session s = Engine.session();
+        return s != null && a != null && sosdet.game.GameStations.get().stationed(a);
+    }
+
+    /**
+     * Patch 96-cmd-world and the mod's move tool (owner, 2026-11-19): why the player can't attack {@code a} directly,
+     * or null.
+     */
+    public static String stationedAttackRefusal(WArmy a) {
+        if (!stationedArmy(a)) {
+            return null;
+        }
+        int i = sosdet.game.GameStations.get().book().find(a.armyIndex(), a.iteration());
+        return "Stationed at " + FACTIONS.getByIndex(sosdet.game.GameStations.get().book().host(i)).name
+                + "'s capital: it can't be attacked.";
+    }
+
+    /** The mod's move tool and the move commands (owner, 2026-11-19): why {@code a} can't move now, or null. */
+    public static String stationMoveRefusal(WArmy a) {
+        return Engine.session() == null || a == null ? null : sosdet.game.GameStations.get().moveRefusal(a);
+    }
+
+    /** Patch 96-cmd-world (owner, 2026-11-19): why world division {@code d} can't be recalled or reassigned, or null. */
+    public static String stationRecallRefusal(world.army.ADDiv d) {
+        return Engine.session() == null ? null : sosdet.game.GameStations.get().recallRefusal(d);
+    }
+
+    /** Patch 96-cmd-world, the conscripts window's Recall (owner, 2026-11-19): as above, for city division {@code div}. */
+    public static String stationRecallRefusal(game.battle.div.Div div) {
+        if (Engine.session() == null || div == null) {
+            return null;
+        }
+        world.army.WDIV w = world.army.AD.cityDivs().get(div);
+        return w instanceof world.army.ADDiv ? stationRecallRefusal((world.army.ADDiv) w) : null;
+    }
+
+    /** Patch 96-cmd-world, the army window (owner, 2026-11-19): world division {@code d} is in a host's city. */
+    public static boolean stationedInCity(world.army.ADDiv d) {
+        return Engine.session() != null && sosdet.game.GameStations.get().inCity(d);
+    }
+
+    /** The division popup's Leave for the camp (owner, 2026-11-19): its hover. */
+    public static final String CAMP_TITLE = "Leave for the camp";
+    public static final String CAMP_TEXT = "This stationed division leaves the city by the entry point and waits in its "
+            + "army's camp beside the city. The army can move once every division is in the camp; Station again brings "
+            + "them back in.";
+
+    /**
+     * Patch 95-player-orders, the division popup's Leave for the camp (owner, 2026-11-19), between steps: for the one
+     * selected division {@code div} of army 0, null when it isn't a stationed division this PC's player commands (the
+     * button hides), "" when it may leave now, or why not.
+     */
+    public static String campState(game.battle.div.Div div) {
+        Session s = Engine.session();
+        if (s == null || div == null || s.localRuns() || s.battle != null) {
+            return null;
+        }
+        sosdet.game.GameStationedDivs c = sosdet.game.GameStationedDivs.get();
+        int d = div.index();
+        if (div.army() != GAME.ARMIES().player() || !c.divs().stationed(d)) {
+            return null;
+        }
+        WArmy a = sosdet.game.cmd.Args.army(c.divs().army(d), c.divs().iteration(d));
+        if (a == null || !sosdet.game.GameStations.get().commandsCamp(a)) {
+            return null;
+        }
+        String why = sosdet.game.GameStations.get().campRefusal(a, c.divs().key(d));
+        if (why != null) {
+            return why;
+        }
+        return c.nearEntry(d) ? "" : "Bring a soldier of this division within " + sosdet.game.GameStationedDivs.CAMP_TILES
+                + " tiles of an entry point of the city.";
+    }
+
+    /** The division popup's Leave for the camp pressed for army 0's division {@code div}: a command, applied at its step. */
+    public static void campPressed(game.battle.div.Div div) {
+        if (!"".equals(campState(div))) {
+            return;
+        }
+        sosdet.game.GameStationedDivs c = sosdet.game.GameStationedDivs.get();
+        WArmy a = sosdet.game.cmd.Args.army(c.divs().army(div.index()), c.divs().iteration(div.index()));
+        sosdet.game.cmd.Stations.camp(a, c.divs().key(div.index()));
+    }
+
+    /**
+     * In the world part (owner, 2026-11-19): the stationing of the army at {@code army} with {@code iteration} ended: its
+     * soldiers leave the city of the human in {@code host} ({@code TxnKind.STATION_LEAVE}).
+     */
+    public static void stationLeave(int host, int army, int iteration) {
+        Txn x = toCity(TxnKind.STATION_LEAVE, host);
+        if (x != null) {
+            x.i = army;
+            x.j = iteration;
+        }
     }
 
     /** As {@link #armySupplies(WArmy, int)}, for {@code men} recruited of a race (the recruit command). */
@@ -2297,7 +2977,7 @@ public final class Hooks {
             s.ai().captureOrder(sosdet.ai.AiEntry.COMMAND, -1, sosdet.game.cmd.MapBattles.localOrderCommand(kind, div, payload));
             return;
         }
-        s.ai().captureOrder(kind, div, payload);
+        s.ai().captureOrder(kind, div, payload, stationOrder(s, kind, div));
     }
 
     /** Who commands each battle division (SOS-15); null without a session, and then nothing is restricted. */
@@ -2410,6 +3090,9 @@ public final class Hooks {
             if (s.localBackLoading) {
                 s.localBackWorld(); // a local battle's PC: its city is back, the world it ran goes in (SOS-93)
                 GAME.SPEED.speedSet(s.seenSpeed); // the save's speed isn't the player's: no change to send
+            }
+            if (s.localRestartLoading) {
+                s.localRestartWorld(); // a local battle's restart: the battle as generated, the world it ran goes in (SOS-231)
             }
             if (s.plans().inGame()) {
                 // a map battle's end or a resync: the session goes on at this step, with no "click to continue" (SOS-41)
@@ -2793,6 +3476,25 @@ public final class Hooks {
         return false;
     }
 
+    /**
+     * Patch 15, a real-time battle's result accepted, and the assault's outcome: {@code lost} of the army's men died, and
+     * their gear goes with them, as vanilla's auto-resolve takes it. Vanilla's real-time result resolves only the men, so
+     * a beaten army kept every dead man's gear, and once it was removed with no men, a caravan shipped it all home as
+     * spoils (owner, 2026-11-18; SOS-225). In a session only; inside the step, alike on every PC.
+     */
+    public static void deadGear(WArmy a, int lost) {
+        if (Engine.session() == null || a == null || !a.added()) {
+            return;
+        }
+        int men = world.army.AD.men(null).get(a);
+        for (world.army.ADSupply su : world.army.AD.supplies().all) {
+            int am = BattleRules.deadGear(su.current().get(a), lost, men);
+            if (am > 0) {
+                su.current().inc(a, -am);
+            }
+        }
+    }
+
     /** Patches 14 and 15: true for a human fighting as an ally in the battle running now. */
     public static boolean battleAlly(game.faction.Faction f) {
         Session s = Engine.session();
@@ -2864,6 +3566,23 @@ public final class Hooks {
     public static int worldPromptSally() {
         Session s = Engine.session();
         return s == null || s.worldPrompt == null ? -1 : s.worldPromptSally;
+    }
+
+    /**
+     * Patch 99, the deploy panel (owner, 2026-11-19): in a battle with several commanders its button reads Ready, then
+     * Waiting once this PC's player pressed it, and stays until the battle starts; null keeps Start.
+     */
+    public static String deployLabel() {
+        Session s = Engine.session();
+        return s == null ? null : s.deployLabel();
+    }
+
+    /** The deploy panel's Start, pressed on this PC and sent (owner, 2026-11-19): its button waits from now. */
+    public static void deployPressed() {
+        Session s = Engine.session();
+        if (s != null) {
+            s.deployPressed();
+        }
     }
 
     /** Inside the Start command: true when the battle may start; between two humans once both pressed it (SOS-83). */
@@ -2947,6 +3666,20 @@ public final class Hooks {
     public static boolean battleBetweenHumans() {
         Session s = Engine.session();
         return s != null && s.battle != null && s.battle.other >= 0;
+    }
+
+    /**
+     * Patch 99-allies, {@code BattleStateGenArmy.placeThrone} and {@code BattleStateGenerator} (owner, 2026-11-19): a battle
+     * between two players has no throne; a player's throne matters only in an assault on their capital. Nothing is built,
+     * but the throne's spot is set to tile {@code tx, ty}, where vanilla would build it, so the camera and the battle AI
+     * that read {@code THRONE.coo()} see what they did. World state, the same on every PC. True when the throne is left out.
+     */
+    public static boolean battleThroneOff(int tx, int ty) {
+        if (!battleBetweenHumans()) {
+            return false;
+        }
+        sosdet.game.GameThrone.spot(tx, ty);
+        return true;
     }
 
     /**

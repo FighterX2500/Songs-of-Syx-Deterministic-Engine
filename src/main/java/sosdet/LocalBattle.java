@@ -29,6 +29,10 @@ public final class LocalBattle {
     double seenSpeed = -1;
     /** The battle's armies, which wait in place until the battle's result applies. */
     int[] armies;
+    /** A sally with allies (SOS-232): who brings what, the same on every PC; null for any other local battle. */
+    SallyLayout sally;
+    /** The battle PC: the allies' divisions for that sally, built at Engage in the world part; null once used. */
+    java.util.List<game.battle.util.DivGeneration> sallyAllyDivs;
     /** The battle PC: vanilla's Engage, run at {@link #freeze}; null once run. */
     Runnable generate;
     /** Every PC: vanilla's after-battle, kept at Engage with the two sides it copied; it takes the result's arrays. */
@@ -45,6 +49,10 @@ public final class LocalBattle {
     boolean back;
     /** The step the human thaws at: the first report step after the result applies; -1 until then. */
     long thaw = -1;
+    /** The last step a restart the players voted for applied at, the same on every PC; -1 for none (SOS-231). */
+    long restartAt = -1;
+    /** The battle PC: what the save leaves out of the battle as generated ({@code GameResync.captureLocal}). */
+    byte[] start;
     volatile int state = ENGAGED;
 
     LocalBattle(long engage, int human, int pc, long freeze, int[] armies, Runnable generate) {

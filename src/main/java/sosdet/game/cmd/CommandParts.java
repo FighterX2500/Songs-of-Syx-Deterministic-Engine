@@ -35,6 +35,7 @@ public final class CommandParts {
         return (id >= 7000 && id < StepPrompts.ANSWER) || id == StepPrompts.WORLD_ANSWER || (id >= Sieges.SALLY && id < 8000)
                 || (id >= 8000 && id < 9000)
                 || id == Events.RAIDER_PAY || id == Events.RAIDER_ALLY_HELP || id == Events.RAID_CAPITAL_TEST
+                || id == Events.RAID_ALLY_TEST
                 || id == MapBattles.LOCAL_RESULT || id == MapBattles.INVASION_SALLY
                 || id == MapBattles.LOCAL_ORDER || id == MapBattles.LOCAL_VOTE || playerIdentity(id);
     }

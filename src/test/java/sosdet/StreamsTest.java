@@ -54,6 +54,44 @@ class StreamsTest {
         assertThrows(IllegalStateException.class, streams::cosmeticEnd);
     }
 
+    /**
+     * SOS-223: a message's window is built only on the PC whose player the message is for (SOS-89). A random text
+     * picked while it was built was a world draw there alone, so the clock split by one draw (248018 against 248017
+     * in the 2026-11-17 playtest, after an NPC's help against raiders). Built inside cosmetic, every PC counts alike
+     * and the step's next draw matches.
+     */
+    @Test
+    void aMessageWindowBuiltOnOnePcOnlyDrawsNothingFromTheWorld() {
+        Random simA = new Random(7);
+        Random simB = new Random(7);
+        Streams a = new Streams();
+        Streams b = new Streams();
+        a.enter();
+        a.worldPart(true);
+        b.enter();
+        b.worldPart(true);
+        a.pick(simA).nextFloat(); // the fight's own draw, on both
+        b.pick(simB).nextFloat();
+        a.pick(simA).nextInt(3); // the window's text, on A only, as before the fix
+        assertEquals(b.worldDraws() + 1, a.worldDraws());
+
+        Random simC = new Random(7);
+        Random simD = new Random(7);
+        Streams c = new Streams();
+        Streams d = new Streams();
+        c.enter();
+        c.worldPart(true);
+        d.enter();
+        d.worldPart(true);
+        c.pick(simC).nextFloat();
+        d.pick(simD).nextFloat();
+        c.cosmeticBegin(); // Message.send around Messages.add (patch 16)
+        c.pick(simC).nextInt(3);
+        c.cosmeticEnd();
+        assertEquals(d.worldDraws(), c.worldDraws());
+        assertEquals(d.pick(simD).nextInt(), c.pick(simC).nextInt());
+    }
+
     @Test
     void aJobHandedToAnotherThreadDrawsFromTheSimulationUntilGivenBack() throws InterruptedException {
         streams.enter();

@@ -1,6 +1,6 @@
 diff -ru -U2 a/game/battle/state/BattleStateGenArmy.java b/game/battle/state/BattleStateGenArmy.java
 --- a/game/battle/state/BattleStateGenArmy.java	2026-01-09 09:08:36.000000000 +0500
-+++ b/game/battle/state/BattleStateGenArmy.java	2026-10-31 17:59:59.571693300 +0500
++++ b/game/battle/state/BattleStateGenArmy.java	2026-11-19 22:28:50.573574800 +0500
 @@ -42,17 +42,29 @@
  		
  		ArmyFormation ff = player ? GAME.battle().formations.player : GAME.battle().formations.all.rnd();
@@ -50,9 +50,31 @@ diff -ru -U2 a/game/battle/state/BattleStateGenArmy.java b/game/battle/state/Bat
  		depth += BattleStateArt.placeArt(cx, cy, depth, d, art, artrace, player);
  		
  		
+@@ -104,6 +121,8 @@
+ 			dd++;
+ 		}
+ 		
++		if (sosdet.Hooks.battleThroneOff(x1, y1)) // SOSDET: no throne in a battle between players (owner, 2026-11-19)
++			return;
+ 		SETT.ROOMS().THRONE.init.place(x1, y1, dd);
+ 	}
+ 	
+diff -ru -U2 a/game/battle/state/BattleStateGenerator.java b/game/battle/state/BattleStateGenerator.java
+--- a/game/battle/state/BattleStateGenerator.java	2026-06-17 10:48:04.000000000 +0500
++++ b/game/battle/state/BattleStateGenerator.java	2026-11-19 22:28:50.573574800 +0500
+@@ -47,7 +47,8 @@
+ 			d = d.next(1);
+ 		
+ 		genMap(spec.player.wCoo.x(), spec.player.wCoo.y(), d);
+-		SETT.ROOMS().THRONE.init.place(SETT.TILE_BOUNDS.cX(), SETT.TILE_BOUNDS.cY(), 0);
++		if (!sosdet.Hooks.battleThroneOff(SETT.TILE_BOUNDS.cX(), SETT.TILE_BOUNDS.cY())) // SOSDET: no throne in a battle between players (owner, 2026-11-19)
++			SETT.ROOMS().THRONE.init.place(SETT.TILE_BOUNDS.cX(), SETT.TILE_BOUNDS.cY(), 0);
+ 		GAME.BATTLE_THREADS().pause();
+ 		genArmies(s, spec.player, spec.enemy, deploymentTiles, d);
+ 		SETT.init();
 diff -ru -U2 a/game/boosting/tmp/TBooster.java b/game/boosting/tmp/TBooster.java
 --- a/game/boosting/tmp/TBooster.java	2026-06-22 09:58:06.000000000 +0500
-+++ b/game/boosting/tmp/TBooster.java	2026-10-31 17:59:59.570696600 +0500
++++ b/game/boosting/tmp/TBooster.java	2026-11-19 22:28:50.570583800 +0500
 @@ -86,6 +86,8 @@
  		
  		@Override

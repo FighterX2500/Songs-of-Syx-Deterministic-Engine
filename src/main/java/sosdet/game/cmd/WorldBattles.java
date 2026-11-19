@@ -36,7 +36,7 @@ public final class WorldBattles {
     static final int DECIDE = 7900;
     static final int RESULT_ACCEPT = 7901;
     static final int SIEGE_RESULT = 7902;
-    static final int ALLY_ANSWER = 7903;
+    static final int ALLY_ANSWER = sosdet.ai.AiLog.ALLY_ANSWER;
 
     /** {@link #decide} choices. */
     public static final int AUTO = 1;

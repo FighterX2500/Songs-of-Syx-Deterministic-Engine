@@ -79,4 +79,27 @@ class BattleRulesTest {
         }
         assertEquals(97, BattleRules.groupHalf(97, 2, 20), "two groups of 15 divisions keep their width");
     }
+
+    /**
+     * SOS-225: an army beaten in a real-time battle kept all its gear, and once removed with no men it shipped it home as
+     * spoils. The dead lose their gear as vanilla's auto-resolve counts it, so a beaten army has nothing left to ship.
+     */
+    @Test
+    void anArmyWipedOutKeepsNoGear() {
+        assertEquals(1000, BattleRules.deadGear(1000, 250, 250));
+        assertEquals(1000, BattleRules.deadGear(1000, 0, 0), "an army with no men left keeps none");
+    }
+
+    @Test
+    void survivorsKeepTheirGear() {
+        assertEquals(0, BattleRules.deadGear(1000, 0, 250), "no dead, nothing lost");
+        assertEquals(440, BattleRules.deadGear(1000, 100, 250), "as vanilla's auto-resolve counts it: 1.1 times the share dead");
+        assertEquals(1000, BattleRules.deadGear(1000, 240, 250), "1.1 times past the whole is the whole");
+    }
+
+    @Test
+    void noGearNothingLost() {
+        assertEquals(0, BattleRules.deadGear(0, 250, 250));
+        assertEquals(0, BattleRules.deadGear(-5, 250, 250), "a supply below zero loses nothing more");
+    }
 }

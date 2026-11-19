@@ -371,6 +371,15 @@ class AiLogTest {
         assertEquals(1, peer.watchedDropped(), "any other command is dropped");
     }
 
+    /** The owner's session (R3): an ally viewing a city still answers Join or Stay out to a sally's ask (SOS-232). */
+    @Test
+    void aWatchingPlayerStillAnswersAnAllysAsk() {
+        AiLog peer = AiLog.peer(START, new ByPc());
+        peer.watchOnly(true);
+        peer.captureOrder(AiEntry.COMMAND, -1, new byte[] {(byte) (AiLog.ALLY_ANSWER >> 8), (byte) AiLog.ALLY_ANSWER, 1});
+        assertEquals(0, peer.watchedDropped(), "the Join goes to the host while the city is viewed");
+    }
+
     @Test
     void aWatchingPlayersOrdersAreDroppedBeforeAnyLog() {
         ByPc hr = new ByPc();
@@ -429,6 +438,49 @@ class AiLogTest {
         assertTrue(peer.commanders().commandsHere(2));
         assertFalse(peer.commanders().commandsHere(0));
         assertTrue(peer.commanders().commandsArtilleryHere(1));
+        assertEquals(host.commanders().hash(), peer.commanders().hash());
+    }
+
+    /**
+     * SOS-234: in an assault the table gives army 0 to the defender (PC 0) on every PC. The stationed player at PC 1
+     * orders its own division 1 in the defender's city: the host, which runs that city and finds division 1 in its
+     * registry, applies it; a PC that doesn't run that city skips it. The table stays the same on both.
+     */
+    @Test
+    void aStationedPlayersOrderPassesTheTableOnlyWhereItsCityRuns() {
+        ByPc hr = new ByPc();
+        AiLog host = AiLog.host(START, new AiApplier() {
+            @Override
+            public void apply(AiEntry e) {
+                hr.apply(e);
+            }
+
+            @Override
+            public boolean stationedOrder(int pc, int div) {
+                return pc == 1 && div == 1; // its registry: division 1 holds PC 1's player's soldiers
+            }
+        });
+        ByPc pr = new ByPc();
+        AiLog peer = AiLog.peer(START, pr); // runs another city: no stationed division there
+        peer.localPc(2);
+        host.captureCommanders(TABLE);
+        host.stepBegin(1); // stamped 31
+        AiLog stationed = AiLog.peer(START, new ByPc());
+        stationed.captureOrder(AiEntry.MUSTER, 1, AiEntry.ints(1)); // its own division
+        stationed.captureOrder(AiEntry.MUSTER, 0, AiEntry.ints(1)); // the host's division: skipped everywhere
+        host.ordersIn(1, stationed.ordersOut());
+        for (long s = 2; s <= 61; s++) {
+            host.stepBegin(s);
+        }
+        peer.logIn(host.logOut());
+        for (long s = 1; s <= 61; s++) {
+            peer.stepBegin(s);
+        }
+        assertEquals(List.of("32:1:10:1:1"), hr.applied);
+        assertTrue(pr.applied.isEmpty(), "the PC that doesn't run the city applies neither");
+        assertEquals(1, host.commanders().skipped());
+        assertEquals(2, peer.commanders().skipped(), "a count no hash holds");
+        assertEquals(0, host.commanders().of(1), "the table still gives division 1 to the defender");
         assertEquals(host.commanders().hash(), peer.commanders().hash());
     }
 

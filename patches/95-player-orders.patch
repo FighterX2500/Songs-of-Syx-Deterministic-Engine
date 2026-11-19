@@ -1,6 +1,6 @@
 diff -ru -U2 a/view/battle/BattlePanel.java b/view/battle/BattlePanel.java
 --- a/view/battle/BattlePanel.java	2026-01-07 09:44:06.000000000 +0500
-+++ b/view/battle/BattlePanel.java	2026-10-31 06:45:14.047003300 +0500
++++ b/view/battle/BattlePanel.java	2026-11-19 22:29:38.743896900 +0500
 @@ -78,15 +78,22 @@
  		b = new UIPanelTop.Butt(SPRITES.icons().m.sword, 8) {
  			@Override
@@ -63,7 +63,17 @@ diff -ru -U2 a/view/battle/BattlePanel.java b/view/battle/BattlePanel.java
  						}
  					}
  					selectedSet(!shouldmuster); 
-@@ -381,7 +388,8 @@
+@@ -365,7 +372,8 @@
+ 				
+ 				@Override
+ 				protected void clickA() {
+-					VIEW.inters().yesNo.activate(¤¤restartD, a, null, true);
++					if (!sosdet.Hooks.restartPrompt(a)) // SOSDET: in a session the players vote (SOS-231, owner 2026-11-19)
++						VIEW.inters().yesNo.activate(¤¤restartD, a, null, true);
+ 				}
+ 				
+ 				@Override
+@@ -381,7 +389,8 @@
  					
  					@Override
  					public void exe() {
@@ -73,9 +83,27 @@ diff -ru -U2 a/view/battle/BattlePanel.java b/view/battle/BattlePanel.java
  					}
  				};
  				
+@@ -403,7 +412,7 @@
+ 			};
+ 			r.addRightC(0, bb);
+ 			
+-			r.addRightC(8, new GStat() {
++			r.addRightC(8, sosdet.game.GameThrone.unlessBetweenHumans(new GStat() { // SOSDET: no throne in a battle between players (owner, 2026-11-19)
+ 				
+ 				@Override
+ 				public void update(GText text) {
+@@ -427,7 +436,7 @@
+ 					// TODO Auto-generated method stub
+ 					super.hoverInfoGet(b);
+ 				}
+-			}.hh(SPRITES.icons().m.noble).hoverInfoSet(¤¤throne));
++			}.hh(SPRITES.icons().m.noble).hoverInfoSet(¤¤throne)));
+ 			
+ 			if (S.get().developer) {
+ 				
 diff -ru -U2 a/view/battle/BattlePlacerAttack.java b/view/battle/BattlePlacerAttack.java
 --- a/view/battle/BattlePlacerAttack.java	2026-04-15 11:52:00.000000000 +0500
-+++ b/view/battle/BattlePlacerAttack.java	2026-10-31 06:45:14.043012300 +0500
++++ b/view/battle/BattlePlacerAttack.java	2026-11-19 22:29:38.738909400 +0500
 @@ -168,7 +168,7 @@
  			ENTITY e = ENTITIES().getArroundPoint(w.pixel().x(), w.pixel().y());
  			if (e instanceof Humanoid) {
@@ -123,7 +151,7 @@ diff -ru -U2 a/view/battle/BattlePlacerAttack.java b/view/battle/BattlePlacerAtt
  
 diff -ru -U2 a/view/battle/BattlePlacerPlace.java b/view/battle/BattlePlacerPlace.java
 --- a/view/battle/BattlePlacerPlace.java	2025-11-24 10:07:00.000000000 +0500
-+++ b/view/battle/BattlePlacerPlace.java	2026-10-31 06:45:14.044009200 +0500
++++ b/view/battle/BattlePlacerPlace.java	2026-11-19 22:29:38.739906700 +0500
 @@ -48,7 +48,7 @@
  			GAME.ARMIES().placer.deploy(s.selection(), a.start.x(), w.pixel().x(), a.start.y(), w.pixel().y());
  			if (VIEW.b().state() != null && VIEW.b().state().deploying()) {
@@ -135,7 +163,7 @@ diff -ru -U2 a/view/battle/BattlePlacerPlace.java b/view/battle/BattlePlacerPlac
  			}
 diff -ru -U2 a/view/battle/BattlePlacerSpin.java b/view/battle/BattlePlacerSpin.java
 --- a/view/battle/BattlePlacerSpin.java	2025-11-19 14:20:18.000000000 +0500
-+++ b/view/battle/BattlePlacerSpin.java	2026-10-31 06:45:14.044009200 +0500
++++ b/view/battle/BattlePlacerSpin.java	2026-11-19 22:29:38.739906700 +0500
 @@ -67,7 +67,7 @@
  			}
  			if (VIEW.b().state() != null && VIEW.b().state().deploying()) {
@@ -156,7 +184,7 @@ diff -ru -U2 a/view/battle/BattlePlacerSpin.java b/view/battle/BattlePlacerSpin.
  					GCOLOR.MAP().BATTLE_OK.bind();
 diff -ru -U2 a/view/battle/UISelection.java b/view/battle/UISelection.java
 --- a/view/battle/UISelection.java	2026-06-22 09:50:20.000000000 +0500
-+++ b/view/battle/UISelection.java	2026-10-31 06:45:14.044009200 +0500
++++ b/view/battle/UISelection.java	2026-11-19 22:29:38.739906700 +0500
 @@ -262,28 +262,28 @@
  	
  	private void loose() {
@@ -246,3 +274,88 @@ diff -ru -U2 a/view/battle/UISelection.java b/view/battle/UISelection.java
  						}
  					};
  					
+@@ -660,6 +660,8 @@
+ 						}else {
+ 							activeSet(true);
+ 						}
++						if (sosdet.Hooks.musterLocked(selection.selection())) // SOSDET: stationed allies stay mustered (owner, 2026-11-19)
++							activeSet(false);
+ 					}
+ 					
+ 					@Override
+@@ -694,6 +696,32 @@
+ 				
+ 				});
+ 			}
++			s.addRelBody(0, DIR.N, new BB(init.sprite.UI.UI.icons().m.exit) { // SOSDET: Leave for the camp: a stationed division leaves the city by an entry point (owner, 2026-11-19)
++				@Override
++				protected void clickA() {
++					if (selection.selection().size() == 1)
++						sosdet.Hooks.campPressed(selection.selection().get(0));
++				}
++				
++				@Override
++				protected void renAction() {
++					String st = selection.selection().size() == 1 ? sosdet.Hooks.campState(selection.selection().get(0)) : null;
++					visableSet(st != null);
++					activeSet("".equals(st));
++				}
++				
++				@Override
++				public void hoverInfoGet(GUI_BOX text) {
++					GBox b = (GBox) text;
++					b.title(sosdet.Hooks.CAMP_TITLE);
++					b.text(sosdet.Hooks.CAMP_TEXT);
++					String st = selection.selection().size() == 1 ? sosdet.Hooks.campState(selection.selection().get(0)) : null;
++					if (st != null && !st.isEmpty()) {
++						b.NL(8);
++						b.error(st);
++					}
++				}
++			});
+ 			g.section.addRelBody(8, DIR.W, s);
+ 		}
+ 		
+diff -ru -U2 a/view/ui/div/UIDivCardBattle.java b/view/ui/div/UIDivCardBattle.java
+--- a/view/ui/div/UIDivCardBattle.java	2025-12-09 11:08:06.000000000 +0500
++++ b/view/ui/div/UIDivCardBattle.java	2026-11-19 22:29:38.740904000 +0500
+@@ -150,6 +150,7 @@
+ 		OPACITY.unbind();
+ 		
+ 		GCOLOR.UI().border().renderFrame(r, body, 0, 1);
++		sosdetBanner(r, sosdet.Hooks.divBanner(div), body.x2() - init.sprite.UI.Icon.M - 2, body.y1() + 2); // SOSDET: another player's division shows its player's banner (owner, 2026-11-19)
+ 		
+ 		if (!div.settings().mustering() || div.position().deployed() == 0 || !isActive || div.menNrOf() <= 0) {
+ 			OPACITY.O50.bind();
+@@ -563,6 +564,12 @@
+ 	
+ 	private final MiniMap mini = new MiniMap();
+ 	
++	/** SOSDET: the banner of the player a division belongs to, null for this PC's own and NPCs' (owner, 2026-11-19). */
++	static void sosdetBanner(SPRITE_RENDERER r, SPRITE banner, int x1, int y1) {
++		if (banner != null)
++			banner.render(r, x1, y1);
++	}
++	
+ 	public SPRITE miniDiv(Div div, boolean hovered, boolean selected) {
+ 		mini.hovered = hovered;
+ 		mini.selected = selected;
+@@ -665,6 +672,7 @@
+ 			
+ 			
+ 			//GCOLOR.UI().border().renderFrame(r, body, 0, scale);
++			sosdetBanner(r, sosdet.Hooks.divBanner(miniDiv), body.x2() - init.sprite.UI.Icon.M / 2, body.y1() - init.sprite.UI.Icon.M / 2); // SOSDET: another player's division shows its player's banner (owner, 2026-11-19)
+ 			
+ 		}
+ 
+diff -ru -U2 a/view/ui/div/UIDivCardSett.java b/view/ui/div/UIDivCardSett.java
+--- a/view/ui/div/UIDivCardSett.java	2026-06-17 10:48:06.000000000 +0500
++++ b/view/ui/div/UIDivCardSett.java	2026-11-19 22:29:38.740904000 +0500
+@@ -218,6 +218,7 @@
+ 		
+ 		GCOLOR.UI().border().renderFrame(r, body, 0, 1);
+ 		
++		UIDivCardBattle.sosdetBanner(r, sosdet.Hooks.divBanner(d), body.x2() - init.sprite.UI.Icon.M - 2, body.y1() + 2); // SOSDET: another player's division shows its player's banner (owner, 2026-11-19)
+ 		if (SETT.ROOMS().GUARD.activeDuty.is(d)) {
+ 			GCOLOR.UI().GOOD.hovered.bind();
+ 			UI.icons().s.shield.render(r, body.x2()-20, body.y1()+4);

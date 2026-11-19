@@ -78,6 +78,9 @@ public final class GameHumans extends Savable {
     private final GamePassed passed = new GamePassed();
     private final GameCarves carves = new GameCarves();
     private final GameFrozen frozen = new GameFrozen();
+    private final GameBreaks breaks = new GameBreaks();
+    private final GameStations stations = new GameStations();
+    private final GameStationedDivs stationedDivs = new GameStationedDivs();
     /** Setup by carving: NPC slots 1 to this - 1 wait for the humans ({@link #reserve}); 0 when none do. */
     private int reservedTo;
     /** Hot-join: the slot a new human takes, out of {@link #freeNpc}'s reach while its city-state is carved; -1: none. */
@@ -102,6 +105,9 @@ public final class GameHumans extends Savable {
         world(passed); // the stances passed to the humans' vassals (SOS-140)
         world(carves); // the carved city-states' undo log (SOS-186)
         world(frozen); // the frozen humans, their last reports and what waits for them (SOS-193)
+        world(breaks); // who made the last stance change between each human and each NPC (SOS-227)
+        world(stations); // the armies stationed at another human's capital (SOS-233)
+        cityFirst(stationedDivs); // this city's divisions that hold a stationed ally's soldiers (SOS-234)
     }
 
     /**
@@ -114,6 +120,19 @@ public final class GameHumans extends Savable {
         }
         GAME.saver().add(s);
     }
+
+    /**
+     * Adds an engine section of the city only, in the "before" list: the world save leaves it out, so a world load or
+     * resync keeps it, and it loads ahead of the settlement, so the people's load reads it (the stationed soldiers'
+     * population count, owner 2026-11-19).
+     */
+    private static void cityFirst(Savable s) {
+        if (GameWorldLoad.KEYS.contains(s.key)) {
+            throw new IllegalStateException("SOSDET: save section " + s.key + " is the city's, not the world save's");
+        }
+        GAME.saver().addSpecialSaver(s);
+    }
+
 
     /** This game's humans: the {@code GameHumans} its {@code FACTIONS} holds. */
     public static GameHumans get() {
@@ -142,6 +161,11 @@ public final class GameHumans extends Savable {
     /** The stances passed to this game's humans' NPC vassals (SOS-140). */
     public GamePassed passed() {
         return passed;
+    }
+
+    /** Who made the last stance change between each human and each NPC (SOS-227). */
+    public GameBreaks breaks() {
+        return breaks;
     }
 
     /** The carved city-states' undo log (SOS-186). */
@@ -206,6 +230,16 @@ public final class GameHumans extends Savable {
 
     public boolean retired(int slot) {
         return retired[slot];
+    }
+
+    /** This city's divisions that hold a stationed ally's soldiers during a fight (SOS-234). */
+    public GameStationedDivs stationedDivs() {
+        return stationedDivs;
+    }
+
+    /** The armies stationed at another human's capital (SOS-233). */
+    public GameStations stations() {
+        return stations;
     }
 
     /** The frozen humans (SOS-193). */

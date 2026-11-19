@@ -108,6 +108,18 @@ public final class GameTxns implements Consumer<Txn> {
         case ARMY_SUPPLY_RECRUIT:
             armySupplies((WArmy) t.a, (Race) t.b, t.i, true);
             break;
+        case STATION_SUPPLY:
+            GameStations.supplyFromCity((WArmy) t.a);
+            break;
+        case STATION_DIVS:
+            GameStationedDivs.get().arrive((GameStations.Fighters) t.b);
+            break;
+        case STATION_LEAVE:
+            GameStationedDivs.get().leave(t.i, t.j);
+            break;
+        case STATION_CAMP:
+            GameStationedDivs.get().toCamp(t.i, t.j, (int) t.d);
+            break;
         case GARRISON_RESOLVE:
             ((WDIV) t.a).resolve(t.i, t.d);
             break;
@@ -131,7 +143,7 @@ public final class GameTxns implements Consumer<Txn> {
             removePeople((int[]) t.a);
             break;
         case SALLY_RESULT:
-            GameSally.after(t.i, (Object[]) t.b);
+            sosdet.Hooks.sallyAfter(t.i, (Object[]) t.b, t.c); // with the allies' shares of a victory (SOS-232)
             break;
         default:
             throw new IllegalStateException("SOSDET: no applier for transaction kind " + t.kind);

@@ -820,26 +820,30 @@ diff -ru -U2 a/game/raiding/UpdaterRegions.java b/game/raiding/UpdaterRegions.ja
  		
 diff -ru -U2 a/view/ui/message/Message.java b/view/ui/message/Message.java
 --- a/view/ui/message/Message.java	2026-06-22 10:59:28.000000000 +0500
-+++ b/view/ui/message/Message.java	2026-11-04 23:32:21.990125300 +0500
-@@ -62,10 +62,18 @@
++++ b/view/ui/message/Message.java	2026-11-18 13:39:44.254627100 +0500
+@@ -62,8 +62,21 @@
  	}
  	
  	public boolean send() {
 +		if (!sosdet.Hooks.messageHere()) // SOSDET: another PC's player's message, from the world part or a viewed city (SOS-89)
 +			return false;
  		currentSecond = TIME.currentSecond();
+-		return VIEW.messages().add(this);
 +		sosdet.Hooks.localMessage(this::sosdetBack); // SOSDET: its load back would lose a message of a local battle (SOS-93)
- 		return VIEW.messages().add(this);
- 	}
- 	
++		sosdet.Hooks.cosmeticBegin(); // SOSDET: add builds the message's window, on this PC only: the random texts it picks are cosmetic (SOS-223)
++		try {
++			return VIEW.messages().add(this);
++		} finally {
++			sosdet.Hooks.cosmeticEnd();
++		}
++	}
++	
 +	private void sosdetBack() { // SOSDET: into the list of the game loaded back (SOS-93)
 +		section = null;
 +		VIEW.messages().sosdetBack(this);
-+	}
-+	
- 	protected final String title() {
- 		return title;
  	}
+ 	
+ 	protected final String title() {
 diff -ru -U2 a/view/ui/message/Messages.java b/view/ui/message/Messages.java
 --- a/view/ui/message/Messages.java	2026-04-06 08:55:32.000000000 +0500
 +++ b/view/ui/message/Messages.java	2026-11-04 23:32:21.990125300 +0500

@@ -15,16 +15,24 @@ import game.event.engine.Event;
 import game.events.killer.EventKiller;
 import game.faction.FACTIONS;
 import game.faction.FCredits.CTYPE;
+import game.faction.npc.FactionNPC;
 import game.raiding.RAIDING;
 import game.raiding.Raider;
 import game.raiding.RaidingCurrent;
+import game.raiding.RaidingMap;
 import init.trade.TR;
 import init.trade.TRADABLE;
 import init.trade.TRADE_TYPE;
+import snake2d.util.datatypes.Coo;
 import snake2d.util.sets.LIST;
+import sosdet.Hooks;
 import sosdet.ai.CmdReader;
 import sosdet.ai.CmdWriter;
 import view.ui.message.MessageSection;
+import world.WORLD;
+import world.entity.army.WArmy;
+import world.map.regions.Region;
+import world.region.RD;
 
 /**
  * Events (ids 9000-9999): answers to the messages the simulation sends, an event's choice, a raider's demand, the
@@ -41,6 +49,7 @@ public final class Events {
     static final int RAIDER_ALLY_HELP = 9002;
     static final int KILLER_SUSPECT = 9003;
     static final int RAID_CAPITAL_TEST = 9004;
+    static final int RAID_ALLY_TEST = 9005;
 
     private static final Field ALL_EVENTS = field(Event.class, "all");
     private static final Field HANDLER_MESSAGE = field(EVENT_HANDLER.class, "mess");
@@ -51,7 +60,15 @@ public final class Events {
     private static final Method RAIDER_CAN_PAY = method(RaidingCurrent.class, "canPay", int.class);
     private static final Method RAIDER_SET_ALLY_FIGHT = method(RaidingCurrent.class, "setAllyFight");
     private static final Method RAIDS_CURRENT = method(RAIDING.class, "current"); // patch-added (SOS-46 M4)
+    private static final Method RAIDS_CURRENT_OF = method(RAIDING.class, "current", int.class); // patch-added too
     private static final Constructor<?> RAIDER_THANKS = constructor(type("game.raiding.MessDemandTY"), Raider.class);
+    // test tooling (SOS-223): a raid through an NPC neighbour, started as vanilla's RaidingCurrent.raid starts one
+    private static final Class<?> RAID_STATE = type("game.raiding.RaidingCurrent$STATE");
+    private static final Object RAID_ALLY_HELP = constant(RAID_STATE, "ALLY_HELP");
+    private static final Method RAID_SET = method(RaidingCurrent.class, "set", Raider.class, RAID_STATE, WArmy.class);
+    private static final Field RAID_APPEAR = field(RaidingCurrent.class, "appearCoo");
+    private static final Method ALLY_HELP_MESSAGE = method(type("game.raiding.MessAlly"), "help", Raider.class,
+            FactionNPC.class);
 
     static final List<Command> ALL = List.of(
             new Command(EVENT_CHOICE, "eventChoice", r -> {
@@ -99,6 +116,13 @@ public final class Events {
                 }
                 Raider raider = GAME.raiders().ALL().get(index); // vanilla's debug "RAIDER appear cap", for this human
                 return current().appear(raider, FACTIONS.player().cx(), FACTIONS.player().cy());
+            }),
+            new Command(RAID_ALLY_TEST, "raidAllyTest", r -> {
+                int index = r.i();
+                int tx = r.i();
+                int ty = r.i();
+                int npc = r.i();
+                return raidAlly(index, tx, ty, npc);
             }));
 
     private Events() {
@@ -210,14 +234,72 @@ public final class Events {
     }
 
     /**
-     * Test tooling, for the rig only (never the mod): the raider at {@code index} in the pool invades this PC's human's
-     * capital at once, as vanilla's debug "RAIDER appear cap" does, at the command's step on every PC alike (SOS-143).
+     * Test tooling, for the rig and the mod's autopilot only (never a player's; SOS-232): the raider at {@code index} in
+     * the pool invades this PC's human's capital at once, as vanilla's debug "RAIDER appear cap" does, at the command's step on every PC alike (SOS-143).
      */
     public static void raidCapitalForTest(int index) {
         if (!Commands.capturing()) {
             throw new IllegalStateException("SOSDET: a raid outside a session's play");
         }
         Commands.capture(new CmdWriter(RAID_CAPITAL_TEST).i(index));
+    }
+
+    /**
+     * Test tooling, for the rig and the mod's autopilot (SOS-223): the raider at {@code index} in the pool raids this
+     * PC's human through the NPC neighbour {@code npc}, entering at tile {@code tx, ty}, as vanilla's
+     * {@code RaidingCurrent.raid} starts such a raid: the neighbour's Help message offers to pay, or to ask its help.
+     * The raider is first made strong enough to destroy the neighbour when its help is asked, whatever
+     * {@code MessAlly.fight} draws. At the command's step on every PC alike; {@link #raidAllySpotForTest} finds the
+     * tile.
+     */
+    public static void raidAllyForTest(int index, int tx, int ty, int npc) {
+        if (!Commands.capturing()) {
+            throw new IllegalStateException("SOSDET: a raid outside a session's play");
+        }
+        Commands.capture(new CmdWriter(RAID_ALLY_TEST).i(index).i(tx).i(ty).i(npc));
+    }
+
+    /**
+     * Test tooling (SOS-223): a tile of this PC's human's land where a raid passes through an NPC neighbour that trades
+     * with it ({@code RaidingMap.passThroughFaction}), the weakest such neighbour's, as {x, y, npc}; null when there is
+     * none. It only reads, so the UI may call it.
+     */
+    public static int[] raidAllySpotForTest() {
+        int[] best = null;
+        double bestPower = 0;
+        Coo c = new Coo();
+        for (int ty = 0; ty < WORLD.THEIGHT(); ty++) {
+            for (int tx = 0; tx < WORLD.TWIDTH(); tx++) {
+                Region reg = WORLD.REGIONS().map.get(tx, ty);
+                if (reg == null || reg.faction() != FACTIONS.player()) {
+                    continue;
+                }
+                c.set(tx, ty);
+                FactionNPC f = RaidingMap.passThroughFaction(c);
+                if (f != null && (best == null || allyPower(f) < bestPower)) {
+                    best = new int[] {tx, ty, f.index()};
+                    bestPower = allyPower(f);
+                }
+            }
+        }
+        return best;
+    }
+
+    /** Test tooling (SOS-223): the pool's first raider that isn't defeated and that no human's raid holds, or -1. */
+    public static int raiderFreeForTest() {
+        for (int i = 0; i < GAME.raiders().ALL().size(); i++) {
+            Raider raider = GAME.raiders().ALL().get(i);
+            if (!raider.defeated && !raiding(raider)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /** Test tooling (SOS-223): the Help message's Request Assistance, on this PC's human's current raid. */
+    public static boolean allyHelpForTest() {
+        Raider raider = current().current();
+        return raider != null && raiderAllyHelp(raider);
     }
 
     /** Test tooling: the pool's raider whose army has the number of men nearest {@code men}, as its index. */
@@ -230,6 +312,43 @@ public final class Events {
             }
         }
         return best;
+    }
+
+    /** {@link #raidAllyForTest} inside the step, for the human who sent it: the checks again, then the raid. */
+    private static boolean raidAlly(int index, int tx, int ty, int npc) {
+        if (index < 0 || index >= GAME.raiders().ALL().size() || !WORLD.IN_BOUNDS(tx, ty)) {
+            return false;
+        }
+        Raider raider = GAME.raiders().ALL().get(index);
+        RaidingCurrent current = current();
+        Coo spot = new Coo(tx, ty);
+        FactionNPC f = RaidingMap.passThroughFaction(spot);
+        if (raider.defeated || current.current() != null || raiding(raider) || f == null || f.index() != npc) {
+            return false;
+        }
+        // MessAlly.fight: the ally falls when power * (1 + rFloat * 2) beats its own, so twice its own always does
+        raider.adjust(raider.worth, Math.max(raider.army.power, 2 * allyPower(f) + 100), 1.0);
+        raider.text.set(raider, raider.raids == 0);
+        invoke(RAID_SET, current, raider, RAID_ALLY_HELP, null);
+        ((Coo) get(RAID_APPEAR, current)).set(spot);
+        invoke(ALLY_HELP_MESSAGE, null, raider, f);
+        return true;
+    }
+
+    /** What {@code MessAlly.fight} weighs the raider's power against: the ally's armies and its capital's garrison. */
+    private static double allyPower(FactionNPC f) {
+        return f.offensivePower() + RD.MILITARY().power.getD(f.capitolRegion());
+    }
+
+    /** True while some human's raid holds {@code raider}: a raider raids one human at a time (SOS-46 M4). */
+    private static boolean raiding(Raider raider) {
+        RAIDING raids = GAME.raiders();
+        for (int k = 0; k < Hooks.humanSlots().length; k++) {
+            if (((RaidingCurrent) invoke(RAIDS_CURRENT_OF, raids, k)).current() == raider) {
+                return true;
+            }
+        }
+        return false;
     }
 
     // ---------------------------------------------------------------- arguments
@@ -306,6 +425,15 @@ public final class Events {
         } catch (NoSuchMethodException e) {
             throw new IllegalStateException("SOSDET: no method " + c.getName() + "." + name + " (V71.44 expected)", e);
         }
+    }
+
+    private static Object constant(Class<?> c, String name) {
+        for (Object o : c.getEnumConstants()) {
+            if (((Enum<?>) o).name().equals(name)) {
+                return o;
+            }
+        }
+        throw new IllegalStateException("SOSDET: no constant " + c.getName() + "." + name + " (V71.44 expected)");
     }
 
     private static Constructor<?> constructor(Class<?> c, Class<?>... params) {

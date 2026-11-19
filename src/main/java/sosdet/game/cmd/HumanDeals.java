@@ -377,9 +377,10 @@ public final class HumanDeals {
 
     /**
      * Start of each world part, after {@link #expire}: the stances that pass to the humans' NPC vassals (SOS-140). While
-     * humans A and B are trade partners or colleagues, B has at least that stance with each NPC vassal of A, both ways;
-     * {@link StanceBook} decides each pair. First the pairs the book holds (a source may have ended), then each NPC
-     * vassal of a human with every other human. Every PC alike: faction order, world state only. Allocates nothing.
+     * humans A and B are trade partners or colleagues, B has at least that stance with each NPC vassal of A, both ways,
+     * and Colleagues while they are allies (SOS-226); {@link StanceBook} decides each pair. First the pairs the book
+     * holds (a source may have ended), then each NPC vassal of a human with every other human. Every PC alike: faction
+     * order, world state only. Allocates nothing.
      */
     public static void passStances() {
         StanceBook b = GameHumans.get().passed().book();
@@ -448,6 +449,9 @@ public final class HumanDeals {
         if (s == DIP.NEUTRAL()) {
             return StanceBook.NEUTRAL;
         }
+        if (s == DIP.ALLY()) {
+            return StanceBook.ALLY;
+        }
         return s == DIP.TRADE() ? StanceBook.TRADE : s == DIP.PACT() ? StanceBook.PACT : StanceBook.ABOVE;
     }
 
@@ -509,7 +513,7 @@ public final class HumanDeals {
             int[] all = new int[TR.RES().size() * 2];
             int n = 0;
             for (TRADABLE t : TR.RES()) { // not TR.ALL: slaves are people, the attacker's choice of them is separate
-                int amount = AssaultTerms.share(d.res().getAvailable(t), percent);
+                int amount = AssaultTerms.share(spare(d, t, Hooks.reportRead()), percent);
                 if (amount > 0) {
                     all[n++] = t.index();
                     all[n++] = amount;
@@ -845,7 +849,7 @@ public final class HumanDeals {
                     return "No such goods.";
                 }
                 TRADABLE res = TR.ALL().get(goods[i]);
-                if (goods[i + 1] > f.res().getAvailable(res)) {
+                if (goods[i + 1] > spare(f, res, inStep)) {
                     return f.name + " doesn't have " + goods[i + 1] + " " + res.name + " to trade.";
                 }
             }
@@ -855,6 +859,21 @@ public final class HumanDeals {
                 Hooks.currentHumanSwap(before);
             }
         }
+    }
+
+    /**
+     * What {@code f} can give of {@code res} now, read as {@code f} ({@link DealBook#spare}): in the world part from its
+     * city's report, elsewhere from this PC's live city.
+     */
+    private static int spare(Faction f, TRADABLE res, boolean inStep) {
+        int i = res.index();
+        int outgoing = inStep ? Hooks.reportI(f.index(), Field.OUTGOING, i, 0) : res.ps().attempting(null);
+        return DealBook.spare(f.res().getAvailable(res), outgoing);
+    }
+
+    /** Outside the step: what this PC's player can give of the tradable with index {@code tradable} ({@link DealBook#spare}). */
+    public static int spare(int tradable) {
+        return spare(FACTIONS.player(), TR.ALL().get(tradable), false);
     }
 
     private static DipStance stance(int treaty) {

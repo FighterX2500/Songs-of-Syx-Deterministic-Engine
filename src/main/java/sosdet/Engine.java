@@ -627,12 +627,16 @@ public final class Engine {
      * for the mod to send to the {@link #viewIn} of every viewer who freezes at this step, as all of an assault's do, and
      * to the {@link #viewRejoin} of every viewer of this city whose {@link View#rejoinAt} is this step; then this PC runs
      * on. One save and one load for them all: a viewer that didn't load it would run another city (SOS-151). Null when
-     * no view waits for its save.
+     * no view waits for its save. After a restart the players voted for, the same goes to every viewer whose
+     * {@link View#rejoinAt} is the restart's step, once this PC has loaded the battle's start (SOS-231).
      */
     public static byte[] viewOut() {
         Session s = required();
         if (s.streams.inStep()) {
             return null;
+        }
+        if (s.restartOut >= 0) {
+            return s.restartViewOut();
         }
         for (View v : s.views) {
             if (v == null || !v.frozen() || v.owner != s.localHuman || v.sent || s.clock.step() != v.freeze) {
@@ -813,6 +817,29 @@ public final class Engine {
         Session s = required();
         HashLog h = s.viewHashes[s.localHuman];
         return h == null ? null : h.desync();
+    }
+
+    /**
+     * The viewer's PC: the report of {@link #viewDesync}, with the divisions this PC hashed at that step, for the log;
+     * null while the copy matches. Its clock line is the world's, not the view's (SOS-222).
+     */
+    public static String viewDesyncReport() {
+        Session s = required();
+        Desync d = viewDesync();
+        return d == null ? null : d.report(s.source(), List.of(), List.of());
+    }
+
+    /**
+     * Debugging (SOS-222): the divisions' fields this PC hashed at {@code step}, one division a line, or "(not kept)"
+     * once newer hashes took its place. The same lines from a view's owner and viewer show what differs.
+     */
+    public static String hashedDivisions(long step) {
+        return required().source().describeDivisions(step);
+    }
+
+    /** The steps between two state hashes, and between two view hashes. */
+    public static int hashInterval() {
+        return required().hashes.interval();
     }
 
     /** The viewer's PC: the view hashes compared so far with the owner's. */
@@ -1606,6 +1633,15 @@ public final class Engine {
         return HumanDeals.proposeRefusal(slot, terms);
     }
 
+    /**
+     * Between steps: what this PC's player can give of the tradable with index {@code tradable} in a deal, as the deal's
+     * check reads its own side (SOS-224): its available stock less the goods leaving its city that the stock still counts.
+     */
+    public static int dealSpare(int tradable) {
+        required();
+        return HumanDeals.spare(tradable);
+    }
+
     /** Between steps: this PC's player proposes {@code terms} to the human in {@code slot}. Check {@link #dealRefusal} first. */
     public static void dealPropose(int slot, DealBook.Terms terms) {
         required();
@@ -1773,6 +1809,176 @@ public final class Engine {
             throw new IllegalStateException("SOSDET: a sally refused: " + why);
         }
         Sieges.sally();
+    }
+
+    // ---------------------------------------------------------------- armies stationed at a capital (SOS-233)
+
+    /** Between steps: why this PC's player can't station {@code army} at the capital of the human in {@code host}, or null. */
+    public static String stationRefusal(world.entity.army.WArmy army, int host) {
+        required();
+        return sosdet.game.GameStations.get().refusal(army, host);
+    }
+
+    /**
+     * Between steps: this PC's player stations {@code army} at the capital of the human in {@code host}, at its step on
+     * every PC (mod spec §9, ADR 0011). Check {@link #stationRefusal} first.
+     */
+    public static void station(world.entity.army.WArmy army, int host) {
+        String why = stationRefusal(army, host);
+        if (why != null) {
+            throw new IllegalStateException("SOSDET: stationing refused: " + why);
+        }
+        sosdet.game.cmd.Stations.station(army, host);
+    }
+
+    /** Between steps: why this PC's player can't send {@code army} away (the host) or call it back (its player), or null. */
+    public static String stationEndRefusal(world.entity.army.WArmy army) {
+        required();
+        return sosdet.game.GameStations.get().endRefusal(army);
+    }
+
+    /** Between steps: the host sends {@code army} away, or its player calls it back. Check {@link #stationEndRefusal} first. */
+    public static void stationEnd(world.entity.army.WArmy army) {
+        String why = stationEndRefusal(army);
+        if (why != null) {
+            throw new IllegalStateException("SOSDET: ending a stationing refused: " + why);
+        }
+        sosdet.game.cmd.Stations.end(army);
+    }
+
+    /** Between steps: why this PC's player can't supply {@code army}, stationed at its capital, or null. */
+    public static String stationSupplyRefusal(world.entity.army.WArmy army) {
+        required();
+        return sosdet.game.GameStations.get().supplyRefusal(army);
+    }
+
+    /**
+     * Between steps: this PC's player, the host, fills the supplies of {@code army}, stationed at its capital, from its
+     * own stockpiles, as much as they have. Check {@link #stationSupplyRefusal} first.
+     */
+    public static void stationSupply(world.entity.army.WArmy army) {
+        String why = stationSupplyRefusal(army);
+        if (why != null) {
+            throw new IllegalStateException("SOSDET: supplying refused: " + why);
+        }
+        sosdet.game.cmd.Stations.supply(army);
+    }
+
+    /** Between steps: why this PC's player can't give or take back the host's command of {@code army}'s soldiers, or null. */
+    public static String stationGrantRefusal(world.entity.army.WArmy army) {
+        return sosdet.game.GameStations.get().grantRefusal(army);
+    }
+
+    /**
+     * Between steps (owner, 2026-11-19): this PC's player gives the host command of {@code army}'s soldiers in the host's
+     * city, or takes it back, at its step on every PC. Check {@link #stationGrantRefusal} first.
+     */
+    public static void stationGrant(world.entity.army.WArmy army, boolean granted) {
+        String why = stationGrantRefusal(army);
+        if (why != null) {
+            throw new IllegalStateException("SOSDET: the host's command refused: " + why);
+        }
+        sosdet.game.cmd.Stations.grant(army, granted);
+    }
+
+    /**
+     * Between steps (owner, 2026-11-19): why this PC's player can't move {@code army} now, or null: a stationed army moves
+     * once every division is out of the host's city, in the camp.
+     */
+    public static String stationMoveRefusal(world.entity.army.WArmy army) {
+        required();
+        return sosdet.game.GameStations.get().moveRefusal(army);
+    }
+
+    /** Between steps (owner, 2026-11-19): why {@code army} can't be attacked directly, or null: a stationed army can't. */
+    public static String stationAttackRefusal(world.entity.army.WArmy army) {
+        required();
+        return Hooks.stationedAttackRefusal(army);
+    }
+
+    /**
+     * Between steps (owner, 2026-11-19): how many divisions with men of {@code army}, stationed, are in the host's city
+     * ({@code inCity}) or in the camp beside it; 0 for an army not stationed.
+     */
+    public static int stationDivisions(world.entity.army.WArmy army, boolean inCity) {
+        required();
+        if (army == null || !sosdet.game.GameStations.get().stationed(army)) {
+            return 0;
+        }
+        int n = 0;
+        for (int di = 0; di < army.divs().size(); di++) {
+            world.army.ADDiv d = army.divs().get(di);
+            if (d.men() > 0 && sosdet.game.GameStations.get().inCity(d) == inCity) {
+                n++;
+            }
+        }
+        return n;
+    }
+
+    /**
+     * Between steps (owner, 2026-11-19): the division popup's Leave for the camp for the host city's division
+     * {@code div} of army 0: null when it isn't a stationed division this PC's player commands, "" when it may leave
+     * now, or why not.
+     */
+    public static String stationCampState(int div) {
+        required();
+        return Hooks.campState(game.GAME.ARMIES().player().divisions().get(div));
+    }
+
+    /** Between steps (owner, 2026-11-19): the host city's division {@code div} leaves for the camp, as its button does. */
+    public static void stationCamp(int div) {
+        String why = stationCampState(div);
+        if (!"".equals(why)) {
+            throw new IllegalStateException("SOSDET: Leave for the camp refused for division " + div + ": " + why);
+        }
+        Hooks.campPressed(game.GAME.ARMIES().player().divisions().get(div));
+    }
+
+    /** Between steps: whether the host commands the soldiers of the {@code i}th stationed army. */
+    public static boolean stationGranted(int i) {
+        return sosdet.game.GameStations.get().book().granted(i);
+    }
+
+    /** Between steps: the number of stationed armies; read each with {@link #stationedArmy} and the others. */
+    public static int stationedCount() {
+        required();
+        return sosdet.game.GameStations.get().book().size();
+    }
+
+    /** Between steps: the {@code i}th stationed army, or null when it is gone since the world part's last check. */
+    public static world.entity.army.WArmy stationedArmy(int i) {
+        sosdet.game.station.StationBook b = sosdet.game.GameStations.get().book();
+        return sosdet.game.cmd.Args.army(b.army(i), b.iteration(i));
+    }
+
+    /** Between steps: the human whose {@code i}th stationed army it is. */
+    public static int stationedOwner(int i) {
+        return sosdet.game.GameStations.get().book().owner(i);
+    }
+
+    /** Between steps: the human at whose capital the {@code i}th stationed army stands. */
+    public static int stationedHost(int i) {
+        return sosdet.game.GameStations.get().book().host(i);
+    }
+
+    /**
+     * Between steps (SOS-234): whether an army of the human in {@code owner} stationed at the capital of the human in
+     * {@code host} fights an invasion of it by {@code invader}, as an invasion notice names it ({@link #invasionNoticeTake}:
+     * a faction's index, {@link #RAIDERS} or -1). Its soldiers then come into the host's city as the invaders deploy, and
+     * its player commands them from a view of the city.
+     */
+    public static boolean stationFights(int owner, int host, int invader) {
+        required();
+        return sosdet.game.GameStations.get().fights(owner, host, invader);
+    }
+
+    /**
+     * Between steps (SOS-234): the human whose stationed army's soldiers division {@code div} of army 0 holds in the city
+     * this PC runs (its own, or the one it views), or -1 for one of the city's own.
+     */
+    public static int stationedDivOwner(int div) {
+        required();
+        return sosdet.game.GameStationedDivs.get().divs().owner(div);
     }
 
     /** Between steps: why this PC's player can't declare war on the human in {@code slot} now, or null. */
@@ -2132,6 +2338,61 @@ public final class Engine {
      */
     public static double takeSpeedAsked() {
         return required().takeSpeedAsked();
+    }
+
+    // ------------------------------------------------------------ a battle's restart by vote (mod spec §8, SOS-231)
+
+    /**
+     * Outside the step: the battle this PC's player sees now, which a vote can restart, as a {@link BattleKey#toLong}:
+     * the battle on the battle map every PC runs, this PC's own battle against NPCs or the one it watches, or the assault
+     * on the city it runs. {@link BattleKey#NONE} for none. No allocation.
+     */
+    public static long battleHere() {
+        return required().battleHere();
+    }
+
+    /**
+     * Outside the step: true once after this PC's player pressed the battle's own Restart (its panel's, or its victory or
+     * defeat panel's). In a session that press restarts nothing; the mod asks every player ({@link #restartBattle}).
+     */
+    public static boolean takeRestartAsked() {
+        return required().takeRestartAsked();
+    }
+
+    /**
+     * Why the battle {@code key} ({@link BattleKey#toLong}) can't be restarted now; null when it can. On the host it also
+     * says when a restart is in the log already, or the assault's end.
+     */
+    public static String restartRefusal(long key) {
+        Session s = required();
+        BattleKey k = BattleKey.of(key);
+        return s.ai().mode() == AiMode.HOST ? s.restartRefusalHost(k) : s.restartRefusal(k);
+    }
+
+    /**
+     * Host, own-city mode, between steps: the players voted to restart the battle {@code key} (mod spec §8). A restart
+     * entry in the log applies at its stamped step on every PC; there every PC skips it alike when the battle can't
+     * restart then ({@link Notice#RESTART} says which). A battle every PC runs loads its start at that step on every PC.
+     * A local battle's PC loads its battle as generated with the world it ran, and the assault's defender its city as
+     * the invasion started; their watchers and viewers load the owner's save from there ({@link View#rejoinAt},
+     * {@link #viewOut}, {@link #viewRejoin}), and every other PC reloads its own world. Throws when
+     * {@link #restartRefusal} has a reason.
+     */
+    public static void restartBattle(long key) {
+        Session s = required();
+        if (!s.ownCity || s.ai().mode() != AiMode.HOST) {
+            throw new IllegalStateException("SOSDET: the host restarts a battle, in own-city mode (mode " + s.ai().mode() + ")");
+        }
+        if (s.streams.inStep()) {
+            throw new IllegalStateException("SOSDET: a battle is restarted between steps, not inside one");
+        }
+        BattleKey k = BattleKey.of(key);
+        String why = s.restartRefusalHost(k);
+        if (why != null) {
+            throw new IllegalStateException("SOSDET: the " + k + " can't restart now: " + why);
+        }
+        s.restartLogged = k;
+        s.ai().captureRestart(AiEntry.ints(k.ints()));
     }
 
     /** Host: frames the slowest PC held it in, their seconds, and the longest hold in seconds (SOS-42). */

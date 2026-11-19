@@ -37,6 +37,18 @@ public final class DealBook {
         return treaty == TRADE || treaty == PACT || treaty == ALLY || treaty == PROTECTOR || treaty == VASSAL;
     }
 
+    /**
+     * What a human can give of one good in a deal (SOS-224): vanilla's {@code available} stock, less every good on its
+     * way out of the city ({@code outgoing}, vanilla's fetchers' loads). Vanilla's seller turns goods promised into
+     * fetchers; until a fetcher has picked its load up, the stock still counts what it hasn't reserved yet and what it
+     * reserved in an export depot, so for minutes the same goods show as promised to nobody. Taking the whole load off
+     * is stricter than needed by what the fetchers already carry or reserved in stockpiles, until their caravans leave
+     * the city (owner, 2026-11-18). Never below 0.
+     */
+    public static int spare(int available, int outgoing) {
+        return Math.max(0, available - Math.max(0, outgoing));
+    }
+
     /** A vassal's yearly tribute, in percent of its worth, unless the deal sets another (owner, 2026-10-27). */
     public static final int DEFAULT_TRIBUTE = 10;
     /** The regions one side may give in one deal. */

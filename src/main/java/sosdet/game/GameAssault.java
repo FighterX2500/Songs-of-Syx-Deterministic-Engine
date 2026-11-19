@@ -127,14 +127,25 @@ public final class GameAssault {
             if (a == null || !a.added()) {
                 continue;
             }
+            int lost = 0;
+            for (int d = 0; d < a.divs().size(); d++) {
+                int m = a.divs().get(d).men();
+                lost += m - kept(m, men, survivors);
+            }
+            Hooks.deadGear(a, lost); // the dead's gear goes with them; the survivors keep theirs (SOS-225)
             for (int d = a.divs().size() - 1; d >= 0; d--) {
                 ADDiv div = a.divs().get(d);
-                div.resolve((int) ((long) div.men() * survivors / men));
+                div.resolve(kept(div.men(), men, survivors));
             }
             if (AD.men(null).get(a) == 0) {
                 a.disband();
             }
         }
+    }
+
+    /** A division's survivors: the same share of its {@code divMen} as of the {@code men} sent. */
+    private static int kept(int divMen, int men, int survivors) {
+        return (int) ((long) divMen * survivors / men);
     }
 
     /** True while an invasion runs in this PC's city. */
@@ -147,7 +158,7 @@ public final class GameAssault {
      * step B; the outcome windows are steps C and D). The defender held: the besieging armies are lost, as in vanilla,
      * and the siege ends. The invaders withdrew: the armies stay at the siege, and its wait starts over. The throne
      * taken: the siege goes on until step D's choices exist. In both those cases the armies keep only the survivors of
-     * the {@code men} they sent, the same share of each division.
+     * the {@code men} they sent, the same share of each division, and the dead's gear is lost (SOS-225).
      */
     public static void resolve(int defender, int outcome, int[] armies, int men, int survivors) {
         if (outcome != Assault.HELD) {
@@ -157,6 +168,7 @@ public final class GameAssault {
             for (int i : armies) {
                 WArmy a = WORLD.ENTITIES().armies.get(i);
                 if (a != null && a.added()) {
+                    Hooks.deadGear(a, AD.men(null).get(a)); // lost with its gear: none ships home (SOS-225)
                     a.disband();
                 }
             }

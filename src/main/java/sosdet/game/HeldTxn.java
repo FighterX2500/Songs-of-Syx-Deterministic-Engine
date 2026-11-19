@@ -72,6 +72,7 @@ public final class HeldTxn {
             break;
         case ARMY_SUPPLY_DIV:
         case ARMY_SUPPLY_RECRUIT:
+        case STATION_SUPPLY:
             h.keyA = ((WArmy) x.a).armyIndex();
             t.a = null;
             break;
@@ -111,6 +112,8 @@ public final class HeldTxn {
         case WAR_ENDED:
         case INVASION_CANCEL:
         case IMMIGRANTS_HIGHER:
+        case STATION_LEAVE: // a frozen host's city lets the soldiers go when it thaws: two ints
+        case STATION_CAMP: // as STATION_LEAVE, for one division: two ints and the key
             return true;
         default:
             return false;
@@ -230,6 +233,7 @@ public final class HeldTxn {
             return t;
         case ARMY_SUPPLY_DIV:
         case ARMY_SUPPLY_RECRUIT:
+        case STATION_SUPPLY:
             t.a = WORLD.ENTITIES().armies.get(keyA);
             return t.a == null ? null : t; // the army is gone since
         case WAR_ENDED:
