@@ -54,7 +54,12 @@ public enum TxnKind {
      */
     STATION_DIVS,
     /** Owner 2026-11-19: a stationing ended: that army's soldiers leave the host's city; {@code i} army, {@code j} iteration. */
-    STATION_LEAVE;
+    STATION_LEAVE,
+    /**
+     * Owner 2026-11-19 (stationing's third version): one stationed division leaves the host's city for the camp; {@code i}
+     * army, {@code j} iteration, {@code d} the division's key.
+     */
+    STATION_CAMP;
 
     /**
      * Whether a follower's city applies it (SOS-38: its world reads another PC's city). Not the ones that carry the

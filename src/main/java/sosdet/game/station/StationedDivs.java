@@ -7,19 +7,20 @@ import java.util.Arrays;
 /**
  * The divisions of a host's city army (army 0) that hold a stationed ally's soldiers during a fight in that city (mod
  * spec §9, SOS-234, ADR 0011): for each, the ally's slot and the world division they came from (the army's index and
- * iteration, and the division's place in it), where the survivors go back. City state: saved with the host's city
+ * iteration, and the division's key, {@code StationBook.divKey}), where the survivors go back. City state: saved with the host's city
  * ({@code GameStationedDivs}), so a viewer's copy of the city has it too. Plain Java, no game classes.
  */
 public final class StationedDivs {
 
-    private static final int VERSION = 1;
+    /** Version 2 (stationing's third version): the division's key; version 1's place loads as 0, a key of none. */
+    private static final int VERSION = 2;
     private static final int FIELDS = 4;
 
     /** By the division's index in army 0: the ally's slot, -1 for a division of the host's own. */
     private final int[] owner;
     private final int[] army;
     private final int[] iteration;
-    private final int[] place;
+    private final int[] key;
     private int size;
 
     /** A registry for an army of {@code slots} divisions, none stationed. */
@@ -30,7 +31,7 @@ public final class StationedDivs {
         owner = new int[slots];
         army = new int[slots];
         iteration = new int[slots];
-        place = new int[slots];
+        key = new int[slots];
         Arrays.fill(owner, -1);
     }
 
@@ -56,16 +57,16 @@ public final class StationedDivs {
         return iteration[check(div)];
     }
 
-    /** The division's place in its world army. */
-    public int place(int div) {
-        return place[check(div)];
+    /** Its world division's key ({@code StationBook.divKey}); 0 for one loaded from version 1, which no world division has. */
+    public int key(int div) {
+        return key[check(div)];
     }
 
-    /** Division {@code div} holds the soldiers of the ally {@code ally}, from the world division at {@code place} of that army. */
-    public void put(int div, int ally, int armyIndex, int armyIteration, int divPlace) {
-        if (div < 0 || div >= owner.length || ally < 0 || armyIndex < 0 || divPlace < 0) {
+    /** Division {@code div} holds the soldiers of the ally {@code ally}, from the world division of {@code divKey} of that army. */
+    public void put(int div, int ally, int armyIndex, int armyIteration, int divKey) {
+        if (div < 0 || div >= owner.length || ally < 0 || armyIndex < 0 || divKey < 0) {
             throw new IllegalArgumentException("SOSDET: stationed division " + div + " of slot " + ally + ", army "
-                    + armyIndex + ", place " + divPlace);
+                    + armyIndex + ", key " + divKey);
         }
         if (owner[div] >= 0) {
             throw new IllegalStateException("SOSDET: division " + div + " holds stationed soldiers already");
@@ -73,7 +74,7 @@ public final class StationedDivs {
         owner[div] = ally;
         army[div] = armyIndex;
         iteration[div] = armyIteration;
-        place[div] = divPlace;
+        key[div] = divKey;
         size++;
     }
 
@@ -108,11 +109,11 @@ public final class StationedDivs {
     }
 
     /** A stationed division's fight as its {@code STATION_RESOLVE} input carries it. */
-    public record Resolve(int army, int iteration, int place, int dead, double experience) {
+    public record Resolve(int army, int iteration, int key, int dead, double experience) {
 
         /** The input's bytes. */
         public byte[] toBytes() {
-            return ByteBuffer.allocate(BYTES).putInt(army).putInt(iteration).putInt(place).putInt(dead)
+            return ByteBuffer.allocate(BYTES).putInt(army).putInt(iteration).putInt(key).putInt(dead)
                     .putDouble(experience).array();
         }
 
@@ -142,7 +143,7 @@ public final class StationedDivs {
                 v[n++] = owner[d];
                 v[n++] = army[d];
                 v[n++] = iteration[d];
-                v[n++] = place[d];
+                v[n++] = key[d];
             }
         }
         return v;
@@ -150,10 +151,11 @@ public final class StationedDivs {
 
     /** A registry from {@link #toInts}. */
     public static StationedDivs fromInts(int[] v) throws IOException {
-        if (v.length < 3 || v[0] != VERSION) {
+        if (v.length < 3 || v[0] != VERSION && v[0] != 1) {
             throw new IOException("SOSDET: stationed divisions of version " + (v.length == 0 ? "none" : v[0])
-                    + ", this engine reads " + VERSION);
+                    + ", this engine reads " + VERSION + " and 1");
         }
+        boolean old = v[0] == 1;
         int n = v[2];
         if (v[1] <= 0 || n < 0 || v.length != 3 + (FIELDS + 1) * n) {
             throw new IOException("SOSDET: stationed divisions of " + v.length + " ints for " + n + " of " + v[1]);
@@ -162,7 +164,7 @@ public final class StationedDivs {
         for (int i = 0; i < n; i++) {
             int at = 3 + (FIELDS + 1) * i;
             try {
-                s.put(v[at], v[at + 1], v[at + 2], v[at + 3], v[at + 4]);
+                s.put(v[at], v[at + 1], v[at + 2], v[at + 3], old ? 0 : v[at + 4]); // version 1's soldiers leave at the next refresh
             } catch (IllegalArgumentException | IllegalStateException e) {
                 throw new IOException("SOSDET: a stationed division " + Arrays.toString(Arrays.copyOfRange(v, at, at + 5)), e);
             }

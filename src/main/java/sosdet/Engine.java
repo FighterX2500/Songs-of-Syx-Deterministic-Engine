@@ -1881,6 +1881,59 @@ public final class Engine {
         sosdet.game.cmd.Stations.grant(army, granted);
     }
 
+    /**
+     * Between steps (owner, 2026-11-19): why this PC's player can't move {@code army} now, or null: a stationed army moves
+     * once every division is out of the host's city, in the camp.
+     */
+    public static String stationMoveRefusal(world.entity.army.WArmy army) {
+        required();
+        return sosdet.game.GameStations.get().moveRefusal(army);
+    }
+
+    /** Between steps (owner, 2026-11-19): why {@code army} can't be attacked directly, or null: a stationed army can't. */
+    public static String stationAttackRefusal(world.entity.army.WArmy army) {
+        required();
+        return Hooks.stationedAttackRefusal(army);
+    }
+
+    /**
+     * Between steps (owner, 2026-11-19): how many divisions with men of {@code army}, stationed, are in the host's city
+     * ({@code inCity}) or in the camp beside it; 0 for an army not stationed.
+     */
+    public static int stationDivisions(world.entity.army.WArmy army, boolean inCity) {
+        required();
+        if (army == null || !sosdet.game.GameStations.get().stationed(army)) {
+            return 0;
+        }
+        int n = 0;
+        for (int di = 0; di < army.divs().size(); di++) {
+            world.army.ADDiv d = army.divs().get(di);
+            if (d.men() > 0 && sosdet.game.GameStations.get().inCity(d) == inCity) {
+                n++;
+            }
+        }
+        return n;
+    }
+
+    /**
+     * Between steps (owner, 2026-11-19): the division popup's Leave for the camp for the host city's division
+     * {@code div} of army 0: null when it isn't a stationed division this PC's player commands, "" when it may leave
+     * now, or why not.
+     */
+    public static String stationCampState(int div) {
+        required();
+        return Hooks.campState(game.GAME.ARMIES().player().divisions().get(div));
+    }
+
+    /** Between steps (owner, 2026-11-19): the host city's division {@code div} leaves for the camp, as its button does. */
+    public static void stationCamp(int div) {
+        String why = stationCampState(div);
+        if (!"".equals(why)) {
+            throw new IllegalStateException("SOSDET: Leave for the camp refused for division " + div + ": " + why);
+        }
+        Hooks.campPressed(game.GAME.ARMIES().player().divisions().get(div));
+    }
+
     /** Between steps: whether the host commands the soldiers of the {@code i}th stationed army. */
     public static boolean stationGranted(int i) {
         return sosdet.game.GameStations.get().book().granted(i);

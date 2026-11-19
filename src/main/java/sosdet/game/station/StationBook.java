@@ -9,7 +9,10 @@ import sosdet.hash.HashLog;
  * The armies stationed at another human's capital (mod spec §9, SOS-233, ADR 0011): for each, the army (its index and
  * iteration), its human, the host whose capital it stands at, the tile it was stationed on, the step, and whether its
  * human gave the host command of its soldiers in the city (owner, 2026-11-19), and its men as last sent to the host's
- * city, so a change, after a battle above all, reaches the city at once (owner, 2026-11-19). Also the world's refresh period, which
+ * city, so a change, after a battle above all, reaches the city at once (owner, 2026-11-19), and which of its divisions
+ * are in the host's city; the others are in the camp, beside it on the world map (stationing's third version, owner
+ * 2026-11-19). A division is named by its key ({@link #divKey}), never its place in the army, which a recall shifts.
+ * Also the world's refresh period, which
  * sends the stationed armies' soldiers to their host's city again. A stationed army stays a world army; this book only
  * says it is stationed. Saved with the world ({@code GameStations}) and in the world hash. Plain Java, no game classes: the end rules and the refusals read the game in {@code GameStations}.
  *
@@ -21,7 +24,7 @@ public final class StationBook {
     /** The farthest tile, along either axis, from the host's capital centre an army may be stationed at (mod spec §9). */
     public static final int REACH_TILES = 3;
 
-    private static final int VERSION = 3;
+    private static final int VERSION = 4;
     private static final int SLOTS = 1024;
     private static final int FIELDS = 9;
     /** Version 1 (batch 13's first builds): no grant, no period. */
@@ -30,6 +33,8 @@ public final class StationBook {
     private static final int FIELDS_2 = 8;
 
     private int[] v = new int[FIELDS * 8];
+    /** By record: the keys of its divisions in the host's city; null for a book before version 4, every one there. */
+    private int[][] city = new int[8][];
     private int size;
     /** The world's refresh period last seen ({@code GameStations.endDue}); -1 before the first. */
     private int period = -1;
@@ -93,6 +98,67 @@ public final class StationBook {
         v[i * FIELDS + 8] = men;
     }
 
+    /**
+     * A world division's key (stationing's third version): its type, as vanilla numbers it ({@code WDivRegional} 0,
+     * {@code WDivStored} 1, {@code WDivMercenary} 2), and its index in that type's pool, both saved with the world. Never 0.
+     */
+    public static int divKey(int type, int index) {
+        if (type < 0 || type > 2 || index < 0 || index >= 1 << 28) {
+            throw new IllegalArgumentException("SOSDET: a world division of type " + type + ", index " + index);
+        }
+        return (type + 1) << 28 | index;
+    }
+
+    /** The keys of record {@code i}'s divisions in the host's city; null when every one is (a book before version 4). */
+    public int[] city(int i) {
+        get(i, 0);
+        return city[i];
+    }
+
+    /** Record {@code i}'s divisions in the host's city are those of {@code keys}, the others in the camp. */
+    public void citySet(int i, int[] keys) {
+        get(i, 0);
+        city[i] = keys.clone();
+    }
+
+    /** Whether the division of {@code key} of record {@code i} is in the host's city. No allocation. */
+    public boolean inCity(int i, int key) {
+        int[] c = city(i);
+        if (c == null) {
+            return true;
+        }
+        for (int k : c) {
+            if (k == key) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** How many of record {@code i}'s divisions are in the host's city; -1 when every one is (before version 4). */
+    public int cityCount(int i) {
+        int[] c = city(i);
+        return c == null ? -1 : c.length;
+    }
+
+    /** The division of {@code key} of record {@code i} leaves the host's city for the camp; false when it wasn't there. */
+    public boolean toCamp(int i, int key) {
+        int[] c = city(i);
+        if (c == null) {
+            throw new IllegalStateException("SOSDET: stationed army " + army(i) + " has no city list yet");
+        }
+        for (int k = 0; k < c.length; k++) {
+            if (c[k] == key) {
+                int[] out = new int[c.length - 1];
+                System.arraycopy(c, 0, out, 0, k);
+                System.arraycopy(c, k + 1, out, k, c.length - k - 1);
+                city[i] = out;
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** The world's refresh period last seen; -1 before the first. */
     public int period() {
         return period;
@@ -148,6 +214,10 @@ public final class StationBook {
         if ((size + 1) * FIELDS > v.length) {
             v = Arrays.copyOf(v, v.length * 2);
         }
+        if (size + 1 > city.length) {
+            city = Arrays.copyOf(city, city.length * 2);
+        }
+        city[size] = new int[0];
         int at = size * FIELDS;
         v[at] = army;
         v[at + 1] = iteration;
@@ -165,6 +235,8 @@ public final class StationBook {
     public void end(int i) {
         get(i, 0);
         System.arraycopy(v, (i + 1) * FIELDS, v, i * FIELDS, (size - i - 1) * FIELDS);
+        System.arraycopy(city, i + 1, city, i, size - i - 1);
+        city[size - 1] = null;
         size--;
     }
 
@@ -281,21 +353,43 @@ public final class StationBook {
 
     // ---------------------------------------------------------------- save and hash
 
-    /** The book as ints: its version, its size and the period first. */
+    /**
+     * The book as ints: its version, its size and the period first, then each record's fields, the number of its
+     * divisions in the city (-1 for every one) and their keys.
+     */
     public int[] toInts() {
-        int[] out = new int[3 + FIELDS * size];
+        int n = 3 + (FIELDS + 1) * size;
+        for (int i = 0; i < size; i++) {
+            n += city[i] == null ? 0 : city[i].length;
+        }
+        int[] out = new int[n];
         out[0] = VERSION;
         out[1] = size;
         out[2] = period;
-        System.arraycopy(v, 0, out, 3, FIELDS * size);
+        int at = 3;
+        for (int i = 0; i < size; i++) {
+            System.arraycopy(v, i * FIELDS, out, at, FIELDS);
+            at += FIELDS;
+            out[at++] = city[i] == null ? -1 : city[i].length;
+            if (city[i] != null) {
+                System.arraycopy(city[i], 0, out, at, city[i].length);
+                at += city[i].length;
+            }
+        }
         return out;
     }
 
-    /** A book from {@link #toInts}, this version's, version 2's (no men sent) or version 1's (no grant, no period). */
+    /**
+     * A book from {@link #toInts}: this version's; version 3's (no city list: every division in the city), version 2's
+     * (no men sent either) or version 1's (no grant, no period either).
+     */
     public static StationBook fromInts(int[] in) throws IOException {
         if (in.length < 2 || in[0] < 1 || in[0] > VERSION) {
             throw new IOException("SOSDET: a station book of version " + (in.length == 0 ? "none" : in[0])
                     + ", this engine reads 1 to " + VERSION);
+        }
+        if (in[0] == VERSION) {
+            return fromInts4(in);
         }
         boolean old = in[0] == 1;
         int fields = old ? FIELDS_1 : in[0] == 2 ? FIELDS_2 : FIELDS;
@@ -316,10 +410,44 @@ public final class StationBook {
                 if (fields == FIELDS) {
                     b.menSet(i, in[at + 8]); // an older book's -1 sends its soldiers again at the first world step
                 }
+                b.city[i] = null; // every division in the city, as before version 4
             } catch (IllegalArgumentException | IllegalStateException e) {
                 throw new IOException("SOSDET: a station book entry "
                         + Arrays.toString(Arrays.copyOfRange(in, at, at + fields)), e);
             }
+        }
+        return b;
+    }
+
+    private static StationBook fromInts4(int[] in) throws IOException {
+        int n = in[1];
+        if (n < 0 || in.length < 3) {
+            throw new IOException("SOSDET: a station book of " + in.length + " ints for " + n + " armies");
+        }
+        StationBook b = new StationBook();
+        b.period = in[2];
+        int at = 3;
+        for (int i = 0; i < n; i++) {
+            if (at + FIELDS + 1 > in.length) {
+                throw new IOException("SOSDET: a station book cut short at army " + i + " of " + n);
+            }
+            int c = in[at + FIELDS];
+            if (c < -1 || at + FIELDS + 1 + Math.max(c, 0) > in.length) {
+                throw new IOException("SOSDET: a station book entry with " + c + " divisions in the city");
+            }
+            try {
+                b.station(in[at], in[at + 1], in[at + 2], in[at + 3], in[at + 4], in[at + 5], in[at + 6]);
+                b.grantSet(i, in[at + 7] != 0);
+                b.menSet(i, in[at + 8]);
+                b.city[i] = c < 0 ? null : Arrays.copyOfRange(in, at + FIELDS + 1, at + FIELDS + 1 + c);
+            } catch (IllegalArgumentException | IllegalStateException e) {
+                throw new IOException("SOSDET: a station book entry "
+                        + Arrays.toString(Arrays.copyOfRange(in, at, at + FIELDS)), e);
+            }
+            at += FIELDS + 1 + Math.max(c, 0);
+        }
+        if (at != in.length) {
+            throw new IOException("SOSDET: a station book of " + in.length + " ints, " + (in.length - at) + " left over");
         }
         return b;
     }
@@ -331,6 +459,16 @@ public final class StationBook {
         h = HashLog.mix(h, period);
         for (int i = 0; i < FIELDS * size; i++) {
             h = HashLog.mix(h, v[i]);
+        }
+        for (int i = 0; i < size; i++) {
+            if (city[i] == null) {
+                h = HashLog.mix(h, -1);
+                continue;
+            }
+            h = HashLog.mix(h, city[i].length);
+            for (int k : city[i]) {
+                h = HashLog.mix(h, k);
+            }
         }
         return h;
     }

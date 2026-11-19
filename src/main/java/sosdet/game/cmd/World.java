@@ -77,8 +77,8 @@ public final class World {
                 WArmy a = Args.ownArmy(r);
                 int tx = r.i();
                 int ty = r.i();
-                if (a == null) {
-                    return false;
+                if (a == null || sosdet.Hooks.stationMoveRefusal(a) != null) {
+                    return false; // a stationed army moves once its divisions are in the camp (owner, 2026-11-19)
                 }
                 a.setDestination(tx, ty);
                 return true;
@@ -86,8 +86,9 @@ public final class World {
             new Command(ARMY_INTERCEPT, "armyIntercept", r -> {
                 WArmy a = Args.ownArmy(r);
                 WArmy other = Args.army(r);
-                if (a == null || other == null) {
-                    return false;
+                if (a == null || other == null || sosdet.Hooks.stationMoveRefusal(a) != null
+                        || sosdet.Hooks.stationedAttackRefusal(other) != null) {
+                    return false; // nor is a stationed army attacked directly (owner, 2026-11-19)
                 }
                 a.intercept(other);
                 return true;
@@ -95,7 +96,7 @@ public final class World {
             new Command(ARMY_BESIEGE, "armyBesiege", r -> {
                 WArmy a = Args.ownArmy(r);
                 Region reg = Args.region(r);
-                if (a == null || reg == null || otherHumanRefused(reg, a)) {
+                if (a == null || reg == null || otherHumanRefused(reg, a) || sosdet.Hooks.stationMoveRefusal(a) != null) {
                     return false;
                 }
                 a.besiege(reg);
@@ -120,8 +121,8 @@ public final class World {
             }),
             new Command(ARMY_DISBAND, "armyDisband", r -> {
                 WArmy a = Args.ownArmy(r);
-                if (a == null) {
-                    return false;
+                if (a == null || sosdet.Hooks.stationMoveRefusal(a) != null) {
+                    return false; // a stationed army's divisions in the host's city stay (owner, 2026-11-19)
                 }
                 a.disband();
                 return true;
@@ -145,8 +146,8 @@ public final class World {
                 boolean any = false;
                 for (ADDiv d : divs) {
                     WArmy from = d == null ? null : d.army();
-                    if (from == null || from == to) {
-                        continue;
+                    if (from == null || from == to || sosdet.Hooks.stationRecallRefusal(d) != null) {
+                        continue; // a division in a host's city stays (owner, 2026-11-19)
                     }
                     if (to != null && (!to.divs().canAdd() || !sameTile(from, to))) {
                         continue; // the army screen's pick: room in the target, on the same tile
@@ -273,8 +274,9 @@ public final class World {
                     if (a == null || !a.divs().canAdd() || AD.cityDivs().attachedArmy(div) != null) {
                         return false;
                     }
-                } else if (AD.cityDivs().attachedArmy(div) == null) {
-                    return false;
+                } else if (AD.cityDivs().attachedArmy(div) == null
+                        || sosdet.Hooks.stationRecallRefusal(cityWorldDiv(div)) != null) {
+                    return false; // a recall leaves a division in a host's city there (owner, 2026-11-19)
                 }
                 AD.cityDivs().attach(a, div);
                 return true;
@@ -376,6 +378,12 @@ public final class World {
     }
 
     // ---------------------------------------------------------------- capture (hooks)
+
+    /** City division {@code div}'s world division (its {@code WDivStored}), or null. */
+    private static world.army.ADDiv cityWorldDiv(Div div) {
+        world.army.WDIV w = AD.cityDivs().get(div);
+        return w instanceof world.army.ADDiv ? (world.army.ADDiv) w : null;
+    }
 
     /** Hook in {@code WArmy.setDestination}: the army tool's move order. */
     public static boolean armyMove(WArmy a, int tx, int ty) {

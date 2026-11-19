@@ -113,6 +113,7 @@ public final class HeldTxn {
         case INVASION_CANCEL:
         case IMMIGRANTS_HIGHER:
         case STATION_LEAVE: // a frozen host's city lets the soldiers go when it thaws: two ints
+        case STATION_CAMP: // as STATION_LEAVE, for one division: two ints and the key
             return true;
         default:
             return false;

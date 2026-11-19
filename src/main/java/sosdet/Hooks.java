@@ -2328,6 +2328,110 @@ public final class Hooks {
     }
 
     /**
+     * In the world part (owner, 2026-11-19, stationing's third version): the division of {@code key} of the army at
+     * {@code army} with {@code iteration} leaves the city of the human in {@code host} for the camp
+     * ({@code TxnKind.STATION_CAMP}).
+     */
+    public static void stationCamp(int host, int army, int iteration, int key) {
+        Txn x = toCity(TxnKind.STATION_CAMP, host);
+        if (x != null) {
+            x.i = army;
+            x.j = iteration;
+            x.d = key;
+        }
+    }
+
+    /**
+     * Patches 15-humans ({@code PFieldBattle}, {@code PRegAttack}) and 99-world-battles ({@code Defender}), in the world
+     * part, the same on every PC (owner, 2026-11-19): a stationed army is never a battle's target nor starts one; it
+     * still helps in one nearby ({@code Util.fill}). No allocation.
+     */
+    public static boolean stationedArmy(WArmy a) {
+        Session s = Engine.session();
+        return s != null && a != null && sosdet.game.GameStations.get().stationed(a);
+    }
+
+    /**
+     * Patch 96-cmd-world and the mod's move tool (owner, 2026-11-19): why the player can't attack {@code a} directly,
+     * or null.
+     */
+    public static String stationedAttackRefusal(WArmy a) {
+        if (!stationedArmy(a)) {
+            return null;
+        }
+        int i = sosdet.game.GameStations.get().book().find(a.armyIndex(), a.iteration());
+        return "Stationed at " + FACTIONS.getByIndex(sosdet.game.GameStations.get().book().host(i)).name
+                + "'s capital: it can't be attacked.";
+    }
+
+    /** The mod's move tool and the move commands (owner, 2026-11-19): why {@code a} can't move now, or null. */
+    public static String stationMoveRefusal(WArmy a) {
+        return Engine.session() == null || a == null ? null : sosdet.game.GameStations.get().moveRefusal(a);
+    }
+
+    /** Patch 96-cmd-world (owner, 2026-11-19): why world division {@code d} can't be recalled or reassigned, or null. */
+    public static String stationRecallRefusal(world.army.ADDiv d) {
+        return Engine.session() == null ? null : sosdet.game.GameStations.get().recallRefusal(d);
+    }
+
+    /** Patch 96-cmd-world, the conscripts window's Recall (owner, 2026-11-19): as above, for city division {@code div}. */
+    public static String stationRecallRefusal(game.battle.div.Div div) {
+        if (Engine.session() == null || div == null) {
+            return null;
+        }
+        world.army.WDIV w = world.army.AD.cityDivs().get(div);
+        return w instanceof world.army.ADDiv ? stationRecallRefusal((world.army.ADDiv) w) : null;
+    }
+
+    /** Patch 96-cmd-world, the army window (owner, 2026-11-19): world division {@code d} is in a host's city. */
+    public static boolean stationedInCity(world.army.ADDiv d) {
+        return Engine.session() != null && sosdet.game.GameStations.get().inCity(d);
+    }
+
+    /** The division popup's Leave for the camp (owner, 2026-11-19): its hover. */
+    public static final String CAMP_TITLE = "Leave for the camp";
+    public static final String CAMP_TEXT = "This stationed division leaves the city by the entry point and waits in its "
+            + "army's camp beside the city. The army can move once every division is in the camp; Station again brings "
+            + "them back in.";
+
+    /**
+     * Patch 95-player-orders, the division popup's Leave for the camp (owner, 2026-11-19), between steps: for the one
+     * selected division {@code div} of army 0, null when it isn't a stationed division this PC's player commands (the
+     * button hides), "" when it may leave now, or why not.
+     */
+    public static String campState(game.battle.div.Div div) {
+        Session s = Engine.session();
+        if (s == null || div == null || s.localRuns() || s.battle != null) {
+            return null;
+        }
+        sosdet.game.GameStationedDivs c = sosdet.game.GameStationedDivs.get();
+        int d = div.index();
+        if (div.army() != GAME.ARMIES().player() || !c.divs().stationed(d)) {
+            return null;
+        }
+        WArmy a = sosdet.game.cmd.Args.army(c.divs().army(d), c.divs().iteration(d));
+        if (a == null || !sosdet.game.GameStations.get().commandsCamp(a)) {
+            return null;
+        }
+        String why = sosdet.game.GameStations.get().campRefusal(a, c.divs().key(d));
+        if (why != null) {
+            return why;
+        }
+        return c.nearEntry(d) ? "" : "Bring a soldier of this division within " + sosdet.game.GameStationedDivs.CAMP_TILES
+                + " tiles of an entry point of the city.";
+    }
+
+    /** The division popup's Leave for the camp pressed for army 0's division {@code div}: a command, applied at its step. */
+    public static void campPressed(game.battle.div.Div div) {
+        if (!"".equals(campState(div))) {
+            return;
+        }
+        sosdet.game.GameStationedDivs c = sosdet.game.GameStationedDivs.get();
+        WArmy a = sosdet.game.cmd.Args.army(c.divs().army(div.index()), c.divs().iteration(div.index()));
+        sosdet.game.cmd.Stations.camp(a, c.divs().key(div.index()));
+    }
+
+    /**
      * In the world part (owner, 2026-11-19): the stationing of the army at {@code army} with {@code iteration} ended: its
      * soldiers leave the city of the human in {@code host} ({@code TxnKind.STATION_LEAVE}).
      */

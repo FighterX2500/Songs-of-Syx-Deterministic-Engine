@@ -19,6 +19,7 @@ import sosdet.Notice;
 import sosdet.game.cmd.Args;
 import sosdet.game.station.StationBook;
 import world.army.AD;
+import world.army.ADDiv;
 import world.army.ADSupply;
 import world.entity.army.WArmy;
 import world.entity.army.WArmyState;
@@ -96,6 +97,9 @@ public final class GameStations extends Savable {
      * {@code a} at the capital of the human in {@code host}, or null.
      */
     public String refusal(WArmy a, int host) {
+        if (a != null && book.find(a.armyIndex()) >= 0 && a.faction() == FACTIONS.player()) {
+            return enterRefusal(a, host);
+        }
         Faction me = FACTIONS.player();
         Faction h = host >= 0 && host < FACTIONS.MAX() ? FACTIONS.getByIndex(host) : null;
         boolean hostPlayer = h instanceof Player && h != me && h.isActive() && h.capitolRegion() != null
@@ -110,6 +114,103 @@ public final class GameStations extends Savable {
                 hostPlayer ? stationedDivisions(host) : 0, Config.battle().DIVISIONS_PER_ARMY);
     }
 
+    /**
+     * Station on an army stationed already (owner, 2026-11-19): why its divisions in the camp can't go into the host's
+     * city now, or null: they go in when it is stationed at that host and has a division with men in the camp.
+     */
+    private String enterRefusal(WArmy a, int host) {
+        int i = book.find(a.armyIndex(), a.iteration());
+        if (i < 0 || book.host(i) != host) {
+            return "This army is stationed elsewhere.";
+        }
+        if (Hooks.dormant(host)) {
+            return "That player is away or out of the game.";
+        }
+        for (int di = 0; di < a.divs().size(); di++) {
+            ADDiv d = a.divs().get(di);
+            if (d.men() > 0 && !book.inCity(i, key(d))) {
+                return null;
+            }
+        }
+        return "This army is stationed already: every division is in their city.";
+    }
+
+    /** A world division's key in the book ({@link StationBook#divKey}): its type and index. */
+    public static int key(ADDiv d) {
+        int type = d instanceof world.army.WDivRegional ? 0 : d instanceof world.army.WDivMercenary ? 2 : 1;
+        return StationBook.divKey(type, d.index);
+    }
+
+    /** The record of the stationed army {@code a}, or -1. No allocation. */
+    private int record(WArmy a) {
+        return a == null ? -1 : book.find(a.armyIndex(), a.iteration());
+    }
+
+    /**
+     * Whether {@code a} is stationed (owner, 2026-11-19): it can't be attacked directly on the world map, though it helps
+     * in battles nearby as any army does. World state, the same on every PC. No allocation.
+     */
+    public boolean stationed(WArmy a) {
+        return record(a) >= 0;
+    }
+
+    /** Whether world division {@code d} is in the host's city of its stationed army (owner, 2026-11-19). No allocation. */
+    public boolean inCity(ADDiv d) {
+        WArmy a = d == null ? null : d.army();
+        int i = record(a);
+        return i >= 0 && book.inCity(i, key(d));
+    }
+
+    /**
+     * Why {@code a} can't move now, or null (owner, 2026-11-19): a stationed army moves only once every division is out
+     * of the host's city, in the camp; the move then ends the stationing.
+     */
+    public String moveRefusal(WArmy a) {
+        int i = record(a);
+        if (i < 0 || book.cityCount(i) == 0) {
+            return null;
+        }
+        return "Stationed in " + FACTIONS.getByIndex(book.host(i)).name
+                + "'s city. Bring its divisions out to the camp first: Leave for the camp, near an entry point of the city.";
+    }
+
+    /** Why world division {@code d} can't be recalled or moved to another army now, or null (owner, 2026-11-19). */
+    public String recallRefusal(ADDiv d) {
+        if (!inCity(d)) {
+            return null;
+        }
+        return "Stationed in " + FACTIONS.getByIndex(book.host(record(d.army()))).name
+                + "'s city. Bring it out to the camp first: Leave for the camp, near an entry point of the city.";
+    }
+
+    /**
+     * Whether the current human commands the stationed army {@code a}'s divisions in the host's city: its player, and the
+     * host while given command (owner, 2026-11-19).
+     */
+    public boolean commandsCamp(WArmy a) {
+        int i = record(a);
+        int me = FACTIONS.player().index();
+        return i >= 0 && (me == book.owner(i) || me == book.host(i) && book.granted(i));
+    }
+
+    /**
+     * Why the current human can't send the division of {@code key} of {@code a} from the host's city to the camp, or
+     * null: its player may, and the host while given command; it must be in the city.
+     */
+    public String campRefusal(WArmy a, int key) {
+        int i = record(a);
+        if (i < 0) {
+            return "This army isn't stationed.";
+        }
+        if (!commandsCamp(a)) {
+            return "Only the army's player, or the host given command, can send it to the camp.";
+        }
+        if (Hooks.dormant(book.host(i))) {
+            return "That player is away or out of the game.";
+        }
+        return book.cityCount(i) != 0 && book.inCity(i, key) ? null : "That division isn't in the city.";
+    }
+
     /** Why the current human can't send away or call back {@code a}, or null: the host and the army's human may. */
     public String endRefusal(WArmy a) {
         int i = a == null ? -1 : book.find(a.armyIndex(), a.iteration());
@@ -117,6 +218,9 @@ public final class GameStations extends Savable {
             return "This army isn't stationed.";
         }
         int me = FACTIONS.player().index();
+        if (me == book.owner(i) && me != book.host(i) && book.cityCount(i) != 0) {
+            return moveRefusal(a); // its player brings the divisions out by an entry point first (owner, 2026-11-19)
+        }
         return me == book.host(i) || me == book.owner(i) ? null : "Only the host or the army's player can end it.";
     }
 
@@ -186,9 +290,43 @@ public final class GameStations extends Savable {
         if (refusal(a, host) != null) {
             return false;
         }
+        int i = book.find(a.armyIndex(), a.iteration());
+        if (i >= 0) {
+            book.citySet(i, keys(a)); // Station again: the camp's divisions go into the city (owner, 2026-11-19)
+            send(i, a);
+            return true;
+        }
         book.station(a.armyIndex(), a.iteration(), FACTIONS.player().index(), host, a.ctx(), a.cty(), (int) step);
+        book.citySet(book.size() - 1, keys(a));
         Hooks.notice(Notice.STATIONED, FACTIONS.player().index(), host, 0);
         send(book.size() - 1, a); // its soldiers come into the host's city now (owner, 2026-11-19)
+        return true;
+    }
+
+    /** The keys of {@code a}'s divisions with men. */
+    private static int[] keys(WArmy a) {
+        int[] k = new int[a.divs().size()];
+        int n = 0;
+        for (int di = 0; di < a.divs().size(); di++) {
+            if (a.divs().get(di).men() > 0) {
+                k[n++] = key(a.divs().get(di));
+            }
+        }
+        return java.util.Arrays.copyOf(k, n);
+    }
+
+    /**
+     * A world command (owner, 2026-11-19): the division of {@code key} of {@code a} leaves the host's city for the camp;
+     * its soldiers there go ({@code TxnKind.STATION_CAMP}). The player's button allows it only near an entry point.
+     */
+    public boolean toCamp(WArmy a, int key) {
+        if (campRefusal(a, key) != null) {
+            return false;
+        }
+        int i = record(a);
+        book.toCamp(i, key);
+        book.menSet(i, cityMen(i, a));
+        Hooks.stationCamp(book.host(i), a.armyIndex(), a.iteration(), key);
         return true;
     }
 
@@ -250,16 +388,34 @@ public final class GameStations extends Savable {
         book.periodSet(period);
         for (int i = 0; i < book.size(); i++) {
             WArmy a = Args.army(book.army(i), book.iteration(i));
-            if (a != null && (refresh || AD.men(null).get(a) != book.men(i))) {
+            if (a == null) {
+                continue;
+            }
+            if (book.city(i) == null) {
+                book.citySet(i, keys(a)); // a book before version 4: every division was in the city
+            }
+            if (refresh || cityMen(i, a) != book.men(i)) {
                 send(i, a);
             }
         }
     }
 
-    /** Record {@code i}'s army {@code a}: its soldiers go to the host's city as the world holds them now. */
+    /** The men of record {@code i}'s divisions in the host's city. No allocation. */
+    private int cityMen(int i, WArmy a) {
+        int men = 0;
+        for (int di = 0; di < a.divs().size(); di++) {
+            ADDiv d = a.divs().get(di);
+            if (book.inCity(i, key(d))) {
+                men += d.men();
+            }
+        }
+        return men;
+    }
+
+    /** Record {@code i}'s army {@code a}: its soldiers in the city go there again as the world holds them now. */
     private void send(int i, WArmy a) {
-        book.menSet(i, AD.men(null).get(a));
-        Hooks.stationDivs(book.host(i), divs(a));
+        book.menSet(i, cityMen(i, a));
+        Hooks.stationDivs(book.host(i), divs(a, i));
     }
 
     private int endReason(int i) {
@@ -289,15 +445,22 @@ public final class GameStations extends Savable {
         public final int[] owners;
         public final int[] armies;
         public final int[] iterations;
-        public final int[] places;
+        /** Each division's key ({@link StationBook#divKey}). */
+        public final int[] keys;
         public final java.util.List<game.battle.util.DivGeneration> divs;
+        /** The army's tile on the world map: its soldiers come in by the city's entry point nearest it. */
+        public final int wx;
+        public final int wy;
 
-        Fighters(int[] owners, int[] armies, int[] iterations, int[] places, java.util.List<game.battle.util.DivGeneration> divs) {
+        Fighters(int[] owners, int[] armies, int[] iterations, int[] keys, java.util.List<game.battle.util.DivGeneration> divs,
+                int wx, int wy) {
             this.owners = owners;
             this.armies = armies;
             this.iterations = iterations;
-            this.places = places;
+            this.keys = keys;
             this.divs = divs;
+            this.wx = wx;
+            this.wy = wy;
         }
 
         public int size() {
@@ -306,16 +469,17 @@ public final class GameStations extends Savable {
     }
 
     /**
-     * In the world part, on every PC: a stationed army's divisions with men, as the world holds them now (its men, their
-     * equipment and training, which its own supplies keep up), for the host's city (owner, 2026-11-19).
+     * In the world part, on every PC: a stationed army's divisions with men in the host's city, as the world holds them
+     * now (its men, their equipment and training, which its own supplies keep up), for that city (owner, 2026-11-19).
      */
-    private static Fighters divs(WArmy a) {
+    private Fighters divs(WArmy a, int i) {
         java.util.List<game.battle.util.DivGeneration> divs = new java.util.ArrayList<>();
-        int[] places = new int[a.divs().size()];
+        int[] keys = new int[a.divs().size()];
         for (int di = 0; di < a.divs().size(); di++) {
-            if (a.divs().get(di).men() > 0) {
-                places[divs.size()] = di;
-                divs.add(a.divs().get(di).generate());
+            ADDiv d = a.divs().get(di);
+            if (d.men() > 0 && book.inCity(i, key(d))) {
+                keys[divs.size()] = key(d);
+                divs.add(d.generate());
             }
         }
         int n = divs.size();
@@ -325,7 +489,7 @@ public final class GameStations extends Savable {
         java.util.Arrays.fill(owners, a.faction().index());
         java.util.Arrays.fill(armies, a.armyIndex());
         java.util.Arrays.fill(iterations, a.iteration());
-        return new Fighters(owners, armies, iterations, java.util.Arrays.copyOf(places, n), divs);
+        return new Fighters(owners, armies, iterations, java.util.Arrays.copyOf(keys, n), divs, a.ctx(), a.cty());
     }
 
     /**
@@ -354,10 +518,14 @@ public final class GameStations extends Savable {
      * in the host's city since the last report and takes its soldiers' experience, as a local battle's does. Men who
      * joined it since stay. An army or a division gone since has nothing to lose.
      */
-    public static void resolve(int army, int iteration, int place, int dead, double experience) {
+    public static void resolve(int army, int iteration, int key, int dead, double experience) {
         WArmy a = Args.army(army, iteration);
-        if (a != null && place >= 0 && place < a.divs().size()) {
-            a.divs().get(place).resolve(sosdet.game.station.StationedDivs.survivors(a.divs().get(place).men(), dead), experience);
+        for (int di = 0; a != null && di < a.divs().size(); di++) {
+            ADDiv d = a.divs().get(di);
+            if (key(d) == key) {
+                d.resolve(sosdet.game.station.StationedDivs.survivors(d.men(), dead), experience);
+                return;
+            }
         }
     }
 

@@ -136,26 +136,27 @@ public final class GameStationedDivs extends Savable {
     // ---------------------------------------------------------------- the city tail
 
     /**
-     * {@code TxnKind.STATION_DIVS}: one stationed army's divisions as the world holds them now. A division not in the
-     * city yet comes in, beside the throne, mustered; one already here reports its dead and its soldiers' experience,
-     * then takes the world's men (new soldiers come in beside the throne, or soldiers leave), equipment and training. A
-     * division of that army the world no longer has leaves. One with no free division left stays out until a refresh
-     * finds one.
+     * {@code TxnKind.STATION_DIVS}: one stationed army's divisions in the city as the world holds them now. A division
+     * not in the city yet comes in, mustered, at the city's entry point nearest the army (owner, 2026-11-19); one
+     * already here reports its dead and its soldiers' experience, then takes the world's men (new soldiers come in at
+     * that entry point, or soldiers leave), equipment and training. A division of that army the world no longer sends
+     * leaves. One with no free division left stays out until a refresh finds one.
      */
     public void arrive(GameStations.Fighters f) {
         if (f == null || f.size() == 0) {
-            return; // an army with no men left sends nothing: its soldiers here stay until it has men or leaves
+            return; // an army with no men in the city sends nothing: its soldiers here stay until it has men or leaves
         }
         for (int d = 0; d < divs.slots(); d++) {
             if (divs.stationed(d) && divs.army(d) == f.armies[0] && divs.iteration(d) == f.iterations[0]
-                    && !sent(f, divs.place(d))) {
+                    && !sent(f, divs.key(d))) {
                 leaveDiv(d);
             }
         }
+        COORDINATE entry = entry(f.wx, f.wy);
         for (int k = 0; k < f.size(); k++) {
-            int d = find(f.armies[k], f.iterations[k], f.places[k]);
+            int d = find(f.armies[k], f.iterations[k], f.keys[k]);
             if (d >= 0) {
-                refresh(d, f.divs.get(k));
+                refresh(d, f.divs.get(k), entry);
                 continue;
             }
             Div div = freeDiv();
@@ -163,10 +164,65 @@ public final class GameStationedDivs extends Savable {
                 break;
             }
             DivGeneration g = f.divs.get(k);
-            divs.put(div.index(), f.owners[k], f.armies[k], f.iterations[k], f.places[k]);
-            place(g, div);
+            divs.put(div.index(), f.owners[k], f.armies[k], f.iterations[k], f.keys[k]);
+            place(g, div, entry);
             spawned[div.index()] = div.menNrOf();
         }
+    }
+
+    /**
+     * {@code TxnKind.STATION_CAMP} (owner, 2026-11-19): the division of {@code key} of that army leaves the city for the
+     * camp: its dead reported, its soldiers gone, the division the host's again.
+     */
+    public void toCamp(int army, int iteration, int key) {
+        int d = find(army, iteration, key);
+        if (d >= 0) {
+            leaveDiv(d);
+        }
+    }
+
+    /** The farthest tile, along either axis, from an entry point a stationed division may leave the city by. */
+    public static final int CAMP_TILES = 3;
+
+    /**
+     * Between steps, for the division popup's Leave for the camp (owner, 2026-11-19): whether a soldier of army 0's
+     * division {@code d} stands within {@link #CAMP_TILES} of one of the city's active entry points. No allocation.
+     */
+    public boolean nearEntry(int d) {
+        if (!divs.stationed(d)) {
+            return false;
+        }
+        snake2d.util.sets.LIST<settlement.entry.EntryPoints.EntryPoint> points = SETT.ENTRY().points.active();
+        if (points.size() == 0) {
+            return false;
+        }
+        for (ENTITY e : SETT.ENTITIES().getAllEnts()) {
+            if (!(e instanceof Humanoid) || e.isRemoved() || ((Humanoid) e).division() == null
+                    || ((Humanoid) e).division().index() != d) {
+                continue;
+            }
+            Humanoid h = (Humanoid) e;
+            int tx = h.physics.tileC().x();
+            int ty = h.physics.tileC().y();
+            for (int p = 0; p < points.size(); p++) {
+                COORDINATE c = points.get(p).coo();
+                if (Math.abs(c.x() - tx) <= CAMP_TILES && Math.abs(c.y() - ty) <= CAMP_TILES) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * The city's reachable entry point nearest the world tile {@code wx}, {@code wy} (owner, 2026-11-19), the same on
+     * every PC that runs the city; the throne when the city has none.
+     */
+    private static COORDINATE entry(int wx, int wy) {
+        if (SETT.ENTRY().points.reachable().size() > 0) {
+            return SETT.ENTRY().points.reachable(wx, wy).coo();
+        }
+        return THRONE.coo();
     }
 
     /** {@code TxnKind.STATION_LEAVE}: the stationing of that army ended; its soldiers leave the city. */
@@ -201,18 +257,18 @@ public final class GameStationedDivs extends Savable {
         }
     }
 
-    private static boolean sent(GameStations.Fighters f, int place) {
+    private static boolean sent(GameStations.Fighters f, int key) {
         for (int k = 0; k < f.size(); k++) {
-            if (f.places[k] == place) {
+            if (f.keys[k] == key) {
                 return true;
             }
         }
         return false;
     }
 
-    private int find(int army, int iteration, int place) {
+    private int find(int army, int iteration, int key) {
         for (int d = 0; d < divs.slots(); d++) {
-            if (divs.stationed(d) && divs.army(d) == army && divs.iteration(d) == iteration && divs.place(d) == place) {
+            if (divs.stationed(d) && divs.army(d) == army && divs.iteration(d) == iteration && divs.key(d) == key) {
                 return d;
             }
         }
@@ -249,7 +305,7 @@ public final class GameStationedDivs extends Savable {
         }
         double mean = alive.isEmpty() ? 0 : experience / alive.size();
         sosdet.Hooks.stationResolve(divs.owner(d), new StationedDivs.Resolve(divs.army(d), divs.iteration(d),
-                divs.place(d), dead, mean).toBytes());
+                divs.key(d), dead, mean).toBytes());
         spawned[d] -= dead;
     }
 
@@ -257,7 +313,7 @@ public final class GameStationedDivs extends Savable {
      * Division {@code d} takes its world division's men, equipment and training ({@code g}, made before this city's
      * report of its dead reached the world): its men less the dead reported now.
      */
-    private void refresh(int d, DivGeneration g) {
+    private void refresh(int d, DivGeneration g, COORDINATE entry) {
         java.util.List<Humanoid> alive = soldiers(d);
         int unreported = Math.max(0, spawned[d] - alive.size());
         report(d, alive);
@@ -271,7 +327,7 @@ public final class GameStationedDivs extends Savable {
             equip(alive.get(k), g.indus[k]);
         }
         if (target > kept) {
-            int[] at = spot((int) Math.ceil((target - kept) / 5.0));
+            int[] at = spot(entry, (int) Math.ceil((target - kept) / 5.0));
             for (int k = kept; k < target && at != null; k++) {
                 int x = at[0] + (k - kept) / 5;
                 int y = at[1] + (k - kept) % 5;
@@ -332,12 +388,12 @@ public final class GameStationedDivs extends Savable {
     }
 
     /**
-     * As {@code DivDeployer.place} does for invaders: rows of five, near the throne, mustered. The host's division keeps
-     * its own name, banner, race and targets: the people bring their own training and equipment.
+     * As {@code DivDeployer.place} does for invaders: rows of five, near the entry point {@code entry}, mustered. The
+     * host's division keeps its own name, banner, race and targets: the people bring their own training and equipment.
      */
-    private static void place(DivGeneration g, Div div) {
+    private static void place(DivGeneration g, Div div, COORDINATE entry) {
         int w = (int) Math.ceil(g.indus.length / 5.0);
-        int[] at = spot(w);
+        int[] at = spot(entry, w);
         if (at == null) {
             return;
         }
@@ -373,13 +429,12 @@ public final class GameStationedDivs extends Savable {
         GAME.ARMIES().placer.deploy(div, x1, x2, y1, y1);
     }
 
-    /** The open block of {@code w} by 5 tiles nearest the throne, in rings, the same on every PC; null for none. */
-    private static int[] spot(int w) {
-        COORDINATE t = THRONE.coo();
+    /** The open block of {@code w} by 5 tiles nearest {@code t}, in rings, the same on every PC; null for none. */
+    private static int[] spot(COORDINATE t, int w) {
         if (t == null) {
             return null;
         }
-        for (int r = 3; r < 80; r++) {
+        for (int r = 0; r < 80; r++) {
             for (int dy = -r; dy <= r; dy++) {
                 for (int dx = -r; dx <= r; dx++) {
                     if (Math.max(Math.abs(dx), Math.abs(dy)) == r && open(t.x() + dx, t.y() + dy, w)) {
@@ -410,6 +465,6 @@ public final class GameStationedDivs extends Savable {
     /** Applies a {@code STATION_RESOLVE} input's bytes ({@link StationedDivs.Resolve}) in the world part. */
     public static void applyResolve(byte[] data) {
         StationedDivs.Resolve r = StationedDivs.Resolve.of(data);
-        GameStations.resolve(r.army(), r.iteration(), r.place(), r.dead(), r.experience());
+        GameStations.resolve(r.army(), r.iteration(), r.key(), r.dead(), r.experience());
     }
 }

@@ -117,6 +117,9 @@ public final class GameTxns implements Consumer<Txn> {
         case STATION_LEAVE:
             GameStationedDivs.get().leave(t.i, t.j);
             break;
+        case STATION_CAMP:
+            GameStationedDivs.get().toCamp(t.i, t.j, (int) t.d);
+            break;
         case GARRISON_RESOLVE:
             ((WDIV) t.a).resolve(t.i, t.d);
             break;

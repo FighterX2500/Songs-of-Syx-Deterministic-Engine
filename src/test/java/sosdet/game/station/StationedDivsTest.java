@@ -21,7 +21,7 @@ class StationedDivsTest {
         assertEquals(2, s.owner(7));
         assertEquals(31, s.army(7));
         assertEquals(4, s.iteration(7));
-        assertEquals(0, s.place(7));
+        assertEquals(0, s.key(7));
         assertEquals(1, s.size());
         s.clear(7);
         assertFalse(s.stationed(7));
@@ -54,17 +54,26 @@ class StationedDivsTest {
         StationedDivs back = StationedDivs.fromInts(s.toInts());
         assertArrayEquals(s.toInts(), back.toInts());
         assertEquals(120, back.slots());
-        assertEquals(5, back.place(90));
+        assertEquals(5, back.key(90));
         assertEquals(new StationedDivs(120).toInts().length, StationedDivs.fromInts(new StationedDivs(120).toInts()).toInts().length);
     }
 
     @Test
     void aBadRegistryIsRefused() {
-        assertThrows(IOException.class, () -> StationedDivs.fromInts(new int[] {2, 120, 0}), "another version");
+        assertThrows(IOException.class, () -> StationedDivs.fromInts(new int[] {3, 120, 0}), "another version");
         assertThrows(IOException.class, () -> StationedDivs.fromInts(new int[] {1, 120, 1, 3}), "cut short");
         assertThrows(IOException.class, () -> StationedDivs.fromInts(new int[] {1, 120, 2, 3, 1, 5, 0, 0, 3, 2, 6, 0, 0}),
                 "one division twice");
         assertThrows(IOException.class, () -> StationedDivs.fromInts(new int[] {1, 0, 0}), "an army of no divisions");
+    }
+
+    /** Version 1 kept the division's place in its army: it loads as key 0, which no world division has. */
+    @Test
+    void aVersionOneRegistryLoadsWithNoKeys() throws IOException {
+        StationedDivs s = StationedDivs.fromInts(new int[] {1, 120, 1, 40, 1, 12, 3, 2});
+        assertTrue(s.stationed(40));
+        assertEquals(0, s.key(40));
+        assertEquals(12, s.army(40));
     }
 
     /** A fight's dead come off the world division as it stands then: men who joined it meanwhile stay. */

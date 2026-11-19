@@ -165,6 +165,51 @@ class StationBookTest {
         assertEquals(b.hash(HashLog.start()), back.hash(HashLog.start()));
     }
 
+    /**
+     * Stationing's third version (owner, 2026-11-19): which divisions are in the host's city, by their keys, saves,
+     * loads and hashes; one leaves for the camp; the list moves up with its record.
+     */
+    @Test
+    void theDivisionsInTheCitySaveLoadAndLeaveForTheCamp() throws IOException {
+        StationBook b = new StationBook();
+        b.station(5, 3, 1, 0, 61, 92, 4000);
+        b.station(9, 1, 2, 0, 63, 90, 4100);
+        int k1 = StationBook.divKey(1, 40);
+        int k2 = StationBook.divKey(1, 41);
+        int k3 = StationBook.divKey(2, 7);
+        assertEquals(0, b.cityCount(0), "a new record has none in the city until GameStations sets them");
+        b.citySet(0, new int[] {k1, k2});
+        b.citySet(1, new int[] {k3});
+        assertTrue(b.inCity(0, k1));
+        assertFalse(b.inCity(0, k3));
+        long before = b.hash(HashLog.start());
+        StationBook back = StationBook.fromInts(b.toInts());
+        assertArrayEquals(b.toInts(), back.toInts());
+        assertEquals(b.hash(HashLog.start()), back.hash(HashLog.start()));
+        assertTrue(back.toCamp(0, k1));
+        assertFalse(back.toCamp(0, k1), "it is in the camp already");
+        assertEquals(1, back.cityCount(0));
+        assertFalse(back.inCity(0, k1));
+        assertTrue(back.inCity(0, k2));
+        assertNotEquals(before, back.hash(HashLog.start()));
+        back.end(0);
+        assertArrayEquals(new int[] {k3}, back.city(0), "the list moves up with its record");
+        assertNotEquals(StationBook.divKey(0, 5), StationBook.divKey(1, 5), "the type tells divisions of one index apart");
+        assertThrows(IllegalArgumentException.class, () -> StationBook.divKey(3, 0));
+    }
+
+    /** A book of version 3 (before the city list): every division counts as in the city until the world part sets it. */
+    @Test
+    void aVersionThreeBookLoadsWithEveryDivisionInTheCity() throws IOException {
+        StationBook b = StationBook.fromInts(new int[] {3, 1, 77, 5, 3, 1, 0, 61, 92, 4000, 0, 80});
+        assertEquals(80, b.men(0));
+        assertNull(b.city(0));
+        assertEquals(-1, b.cityCount(0));
+        assertTrue(b.inCity(0, StationBook.divKey(1, 3)));
+        StationBook back = StationBook.fromInts(b.toInts());
+        assertNull(back.city(0), "a version 4 save keeps it unknown until the world part sets it");
+    }
+
     /** A book of version 2 (before the men sent): its records load with -1, so the first world step sends them. */
     @Test
     void aVersionTwoBookLoads() throws IOException {
@@ -188,8 +233,10 @@ class StationBookTest {
 
     @Test
     void aBadBookIsRefused() {
-        assertThrows(IOException.class, () -> StationBook.fromInts(new int[] {4, 0}), "another version");
+        assertThrows(IOException.class, () -> StationBook.fromInts(new int[] {5, 0}), "another version");
         assertThrows(IOException.class, () -> StationBook.fromInts(new int[] {3, 0}), "version 3 without its period");
+        assertThrows(IOException.class, () -> StationBook.fromInts(new int[] {4, 1, 0, 5, 3, 1, 0, 61, 92, 4000, 0, 80, 2, 7}),
+                "version 4 cut short in its city list");
         assertThrows(IOException.class, () -> StationBook.fromInts(new int[] {2, 0}), "version 2 without its period");
         assertThrows(IOException.class, () -> StationBook.fromInts(new int[] {1, 1, 5}), "cut short");
         assertThrows(IOException.class, () -> StationBook.fromInts(new int[] {1, 2, 5, 0, 1, 0, 0, 0, 0, 5, 0, 2, 0, 0, 0, 0}),
