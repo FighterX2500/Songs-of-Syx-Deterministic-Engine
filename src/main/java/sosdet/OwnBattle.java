@@ -35,6 +35,8 @@ public final class OwnBattle {
     boolean sent;
     /** The step the first Close of its victory or defeat panel applies at, which ends it; -1 before one (SOS-169). */
     long closeAt = -1;
+    /** A restart the players voted for applied in this step: every PC loads the battle again (SOS-231). */
+    boolean restarting;
 
     OwnBattle(long step, int human, int pc, int other, long worldDraws) {
         this(step, human, pc, other, worldDraws, new int[0]);

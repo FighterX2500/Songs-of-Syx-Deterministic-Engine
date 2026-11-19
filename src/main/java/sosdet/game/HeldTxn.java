@@ -72,6 +72,7 @@ public final class HeldTxn {
             break;
         case ARMY_SUPPLY_DIV:
         case ARMY_SUPPLY_RECRUIT:
+        case STATION_SUPPLY:
             h.keyA = ((WArmy) x.a).armyIndex();
             t.a = null;
             break;
@@ -230,6 +231,7 @@ public final class HeldTxn {
             return t;
         case ARMY_SUPPLY_DIV:
         case ARMY_SUPPLY_RECRUIT:
+        case STATION_SUPPLY:
             t.a = WORLD.ENTITIES().armies.get(keyA);
             return t.a == null ? null : t; // the army is gone since
         case WAR_ENDED:

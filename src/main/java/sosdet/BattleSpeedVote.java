@@ -27,6 +27,11 @@ final class BattleSpeedVote {
         return majority();
     }
 
+    /** The battle restarted (SOS-231): every commander is in it again, and their last votes stand. */
+    void allBack() {
+        java.util.Arrays.fill(gone, false);
+    }
+
     /** How many commanders still in the battle picked {@code speed}. */
     int count(double speed) {
         int n = 0;

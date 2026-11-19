@@ -49,8 +49,6 @@ public final class MapBattles {
     /** The save the battle's generation writes ({@code BattleState.setGenerate}). */
     private static final String BATTLE_SAVE = "__battle";
 
-    static final String RESTART_NOTICE = "SOSDET: a battle can't be restarted in a multiplayer game.";
-
     static final String SALLY_OFF_NOTICE = "The invaders began their assault before our army could meet them. We fight"
             + " them in the city.";
 
@@ -100,7 +98,10 @@ public final class MapBattles {
                 return true;
             }),
             new Command(LOCAL_RESULT, "battleLocalResult", MapBattles::applyLocalResult),
-            new Command(INVASION_SALLY, "invasionSally", r -> Hooks.invasionSallyEngage(r.i())),
+            new Command(INVASION_SALLY, "invasionSally", r -> {
+                int ref = r.i();
+                return Hooks.invasionSallyEngage(ref, r.i()); // the invader's faction, for the allies asked (SOS-232)
+            }),
             new Command(SPEED_VOTE, "battleSpeedVote", r -> Hooks.battleSpeedVote(r.d())),
             new Command(LOCAL_ORDER, "battleLocalOrder", r -> {
                 int kind = r.i();
@@ -307,7 +308,8 @@ public final class MapBattles {
      */
     public static void invasionSally(int ref) {
         if (Commands.capturing()) {
-            Commands.capture(new CmdWriter(INVASION_SALLY).i(ref));
+            settlement.battle.invasion.InvasionSpec sp = settlement.main.SETT.INVADOR().spec(ref);
+            Commands.capture(new CmdWriter(INVASION_SALLY).i(ref).i(sp == null ? -1 : sp.fi)); // the invader, read in this city (SOS-232)
         }
     }
 
@@ -359,23 +361,39 @@ public final class MapBattles {
 
     /**
      * Hook in {@code BattleState.reloadBattle} (the battle panel's restart, once confirmed, and the result panel's): in
-     * a session (true) a command. Applied inside the step, it runs the reload. A local battle has none: vanilla's
-     * reload is a whole game's, so it would rewind the world on this PC alone (SOS-93).
+     * a session (true) a command. Applied inside the step, it runs the reload. With own cities the press asks the
+     * players instead, whose vote restarts it on every PC that runs it (mod spec §8, SOS-231): vanilla's reload of a
+     * local battle is a whole game's, which would rewind the world on this PC alone (SOS-93).
      */
     public static boolean restart() {
         if (Hooks.localBattleHere()) {
-            VIEW.inters().fullScreen.activate(RESTART_NOTICE, COLOR.WHITE100, null);
+            if (Commands.capturing()) {
+                Hooks.restartAsked();
+            }
             return true;
         }
         if (Hooks.battleLoadingNow() || !Commands.capturing()) {
             return false; // the engine's own load of the battle PC's battle runs as vanilla's restart (plan 0006)
         }
         if (Hooks.ownCityBattle()) {
-            VIEW.inters().fullScreen.activate(RESTART_NOTICE, COLOR.WHITE100, null);
+            Hooks.restartAsked();
             return true;
         }
         Commands.capture(new CmdWriter(RESTART));
         return true;
+    }
+
+    /**
+     * Every PC, inside the step a restart the players voted for applies at (SOS-231): the battle on the battle map loads
+     * as at Engage, as Restart reloads it (SOS-41); the steps hold until the load, which goes on at this step.
+     */
+    public static void restartForAll() {
+        BattleState b = VIEW.b().state();
+        if (b == null) {
+            throw new IllegalStateException("SOSDET: no battle open to restart");
+        }
+        Hooks.battleLeaving();
+        b.reloadBattle();
     }
 
     /** The battle PC's battle as generated at Engage: its {@code __battle} save's bytes (plan 0006). */

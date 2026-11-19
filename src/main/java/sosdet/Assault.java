@@ -48,6 +48,11 @@ public final class Assault {
     volatile boolean reopen;
     /** Those views opened: the players take their soldiers back as the new freeze passes. */
     volatile boolean recommand;
+    /**
+     * The defender's stationed allies' divisions that join the fight (SOS-234), made in the world part as it begins;
+     * null for none. The city tail hands them to the city as the invasion starts.
+     */
+    sosdet.game.GameStations.Fighters fighters;
     /** The invaders alive as the invasion ended; -1 until then (SOS-92 C). */
     volatile int survivors = -1;
     /** The step the invasion ended at; -1 while it runs. */
@@ -56,6 +61,10 @@ public final class Assault {
     volatile String cancelled;
     /** The invasion's reference in the defender's city, once it runs there. */
     volatile int invasionRef = -1;
+    /** The step the invasion started at in the defender's city, the same on every PC; -1 before. */
+    volatile long startedAt = -1;
+    /** The last step a restart the players voted for applied at, the same on every PC; -1 for none (SOS-231). */
+    volatile long restartAt = -1;
     /** The attackers' retreat, or in a rig test the outcome asked for: the host logs it next; -1 when none. */
     volatile int forced = -1;
     /** After {@link #TAKEN}: the step the attacker's choice is due by; then the default applies (SOS-92 D). */

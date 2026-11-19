@@ -1,0 +1,15 @@
+soldierprobe report
+soldierprobe spawn 200
+wait 20
+soldierprobe report
+wait 60
+soldierprobe report
+soldierprobe muster 1
+wait 30
+soldierprobe report
+soldierprobe muster 0
+wait 120
+soldierprobe report
+soldierprobe clear
+wait 5
+soldierprobe report

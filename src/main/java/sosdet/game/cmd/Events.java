@@ -234,8 +234,8 @@ public final class Events {
     }
 
     /**
-     * Test tooling, for the rig only (never the mod): the raider at {@code index} in the pool invades this PC's human's
-     * capital at once, as vanilla's debug "RAIDER appear cap" does, at the command's step on every PC alike (SOS-143).
+     * Test tooling, for the rig and the mod's autopilot only (never a player's; SOS-232): the raider at {@code index} in
+     * the pool invades this PC's human's capital at once, as vanilla's debug "RAIDER appear cap" does, at the command's step on every PC alike (SOS-143).
      */
     public static void raidCapitalForTest(int index) {
         if (!Commands.capturing()) {

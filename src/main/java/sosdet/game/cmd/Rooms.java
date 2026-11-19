@@ -365,7 +365,7 @@ public final class Rooms {
             new Command(GUARD_DUTY, "guardDuty", r -> {
                 Div d = Args.div(r);
                 boolean on = r.b();
-                if (d == null) {
+                if (d == null || sosdet.Hooks.stationedDiv(d)) {
                     return false;
                 }
                 SETT.ROOMS().GUARD.activeDuty.set(d, on);
