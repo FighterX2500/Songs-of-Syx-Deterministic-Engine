@@ -188,7 +188,7 @@ public final class GameStations extends Savable {
         }
         book.station(a.armyIndex(), a.iteration(), FACTIONS.player().index(), host, a.ctx(), a.cty(), (int) step);
         Hooks.notice(Notice.STATIONED, FACTIONS.player().index(), host, 0);
-        Hooks.stationDivs(host, divs(a)); // its soldiers come into the host's city now (owner, 2026-11-19)
+        send(book.size() - 1, a); // its soldiers come into the host's city now (owner, 2026-11-19)
         return true;
     }
 
@@ -233,9 +233,10 @@ public final class GameStations extends Savable {
     }
 
     /**
-     * The world part's end rules, every step outside a battle, on every PC alike; then, once every
-     * {@link #REFRESH_SECONDS} of game time, each stationed army's soldiers go to the host's city again as the world holds
-     * them. No allocation while nothing ends or refreshes.
+     * The world part's end rules, every step outside a battle, on every PC alike. Then a stationed army whose men
+     * changed since its soldiers last went to the host's city, after a battle above all, sends them again at once (owner,
+     * 2026-11-19); and once every {@link #REFRESH_SECONDS} of game time every stationed army does, for its equipment and
+     * training. No allocation while nothing ends or changes.
      */
     public void endDue() {
         for (int i = book.size() - 1; i >= 0; i--) {
@@ -245,17 +246,20 @@ public final class GameStations extends Savable {
             }
         }
         int period = (int) (TIME.currentSecond() / REFRESH_SECONDS);
-        if (period == book.period()) {
-            return;
-        }
-        boolean first = book.period() < 0;
+        boolean refresh = period != book.period() && book.period() >= 0;
         book.periodSet(period);
-        for (int i = 0; !first && i < book.size(); i++) {
+        for (int i = 0; i < book.size(); i++) {
             WArmy a = Args.army(book.army(i), book.iteration(i));
-            if (a != null) {
-                Hooks.stationDivs(book.host(i), divs(a));
+            if (a != null && (refresh || AD.men(null).get(a) != book.men(i))) {
+                send(i, a);
             }
         }
+    }
+
+    /** Record {@code i}'s army {@code a}: its soldiers go to the host's city as the world holds them now. */
+    private void send(int i, WArmy a) {
+        book.menSet(i, AD.men(null).get(a));
+        Hooks.stationDivs(book.host(i), divs(a));
     }
 
     private int endReason(int i) {

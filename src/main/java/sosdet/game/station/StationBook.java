@@ -8,7 +8,8 @@ import sosdet.hash.HashLog;
 /**
  * The armies stationed at another human's capital (mod spec §9, SOS-233, ADR 0011): for each, the army (its index and
  * iteration), its human, the host whose capital it stands at, the tile it was stationed on, the step, and whether its
- * human gave the host command of its soldiers in the city (owner, 2026-11-19). Also the world's refresh period, which
+ * human gave the host command of its soldiers in the city (owner, 2026-11-19), and its men as last sent to the host's
+ * city, so a change, after a battle above all, reaches the city at once (owner, 2026-11-19). Also the world's refresh period, which
  * sends the stationed armies' soldiers to their host's city again. A stationed army stays a world army; this book only
  * says it is stationed. Saved with the world ({@code GameStations}) and in the world hash. Plain Java, no game classes: the end rules and the refusals read the game in {@code GameStations}.
  *
@@ -20,11 +21,13 @@ public final class StationBook {
     /** The farthest tile, along either axis, from the host's capital centre an army may be stationed at (mod spec §9). */
     public static final int REACH_TILES = 3;
 
-    private static final int VERSION = 2;
+    private static final int VERSION = 3;
     private static final int SLOTS = 1024;
-    private static final int FIELDS = 8;
+    private static final int FIELDS = 9;
     /** Version 1 (batch 13's first builds): no grant, no period. */
     private static final int FIELDS_1 = 7;
+    /** Version 2: no men sent. */
+    private static final int FIELDS_2 = 8;
 
     private int[] v = new int[FIELDS * 8];
     private int size;
@@ -77,6 +80,17 @@ public final class StationBook {
     public void grantSet(int i, boolean granted) {
         get(i, 7);
         v[i * FIELDS + 7] = granted ? 1 : 0;
+    }
+
+    /** Its army's men as last sent to the host's city; -1 before the first send. */
+    public int men(int i) {
+        return get(i, 8);
+    }
+
+    /** Its army's soldiers went to the host's city with {@code men} men. */
+    public void menSet(int i, int men) {
+        get(i, 8);
+        v[i * FIELDS + 8] = men;
     }
 
     /** The world's refresh period last seen; -1 before the first. */
@@ -143,6 +157,7 @@ public final class StationBook {
         v[at + 5] = y;
         v[at + 6] = step;
         v[at + 7] = 0;
+        v[at + 8] = -1;
         size++;
     }
 
@@ -276,14 +291,14 @@ public final class StationBook {
         return out;
     }
 
-    /** A book from {@link #toInts}, this version's or version 1's (no grant, no period). */
+    /** A book from {@link #toInts}, this version's, version 2's (no men sent) or version 1's (no grant, no period). */
     public static StationBook fromInts(int[] in) throws IOException {
-        if (in.length < 2 || in[0] != VERSION && in[0] != 1) {
+        if (in.length < 2 || in[0] < 1 || in[0] > VERSION) {
             throw new IOException("SOSDET: a station book of version " + (in.length == 0 ? "none" : in[0])
-                    + ", this engine reads " + VERSION + " and 1");
+                    + ", this engine reads 1 to " + VERSION);
         }
         boolean old = in[0] == 1;
-        int fields = old ? FIELDS_1 : FIELDS;
+        int fields = old ? FIELDS_1 : in[0] == 2 ? FIELDS_2 : FIELDS;
         int head = old ? 2 : 3;
         int n = in[1];
         if (n < 0 || in.length != head + fields * n) {
@@ -297,6 +312,9 @@ public final class StationBook {
                 b.station(in[at], in[at + 1], in[at + 2], in[at + 3], in[at + 4], in[at + 5], in[at + 6]);
                 if (!old && in[at + 7] != 0) {
                     b.grantSet(i, true);
+                }
+                if (fields == FIELDS) {
+                    b.menSet(i, in[at + 8]); // an older book's -1 sends its soldiers again at the first world step
                 }
             } catch (IllegalArgumentException | IllegalStateException e) {
                 throw new IOException("SOSDET: a station book entry "

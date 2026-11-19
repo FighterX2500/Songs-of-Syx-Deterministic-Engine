@@ -151,6 +151,30 @@ class StationBookTest {
         assertEquals(-1, new StationBook().period());
     }
 
+    /** Owner, 2026-11-19: the men last sent to the host's city save, load and hash; a new record has sent none. */
+    @Test
+    void theMenSentSaveLoadAndHash() throws IOException {
+        StationBook b = new StationBook();
+        b.station(5, 3, 1, 0, 61, 92, 4000);
+        assertEquals(-1, b.men(0), "nothing sent yet");
+        long before = b.hash(HashLog.start());
+        b.menSet(0, 80);
+        assertNotEquals(before, b.hash(HashLog.start()));
+        StationBook back = StationBook.fromInts(b.toInts());
+        assertEquals(80, back.men(0));
+        assertEquals(b.hash(HashLog.start()), back.hash(HashLog.start()));
+    }
+
+    /** A book of version 2 (before the men sent): its records load with -1, so the first world step sends them. */
+    @Test
+    void aVersionTwoBookLoads() throws IOException {
+        StationBook b = StationBook.fromInts(new int[] {2, 1, 77, 5, 3, 1, 0, 61, 92, 4000, 1});
+        assertEquals(5, b.army(0));
+        assertTrue(b.granted(0));
+        assertEquals(77, b.period());
+        assertEquals(-1, b.men(0));
+    }
+
     /** A book from batch 13's first builds (version 1): no grant and no period yet. */
     @Test
     void aVersionOneBookLoads() throws IOException {
@@ -164,7 +188,8 @@ class StationBookTest {
 
     @Test
     void aBadBookIsRefused() {
-        assertThrows(IOException.class, () -> StationBook.fromInts(new int[] {3, 0}), "another version");
+        assertThrows(IOException.class, () -> StationBook.fromInts(new int[] {4, 0}), "another version");
+        assertThrows(IOException.class, () -> StationBook.fromInts(new int[] {3, 0}), "version 3 without its period");
         assertThrows(IOException.class, () -> StationBook.fromInts(new int[] {2, 0}), "version 2 without its period");
         assertThrows(IOException.class, () -> StationBook.fromInts(new int[] {1, 1, 5}), "cut short");
         assertThrows(IOException.class, () -> StationBook.fromInts(new int[] {1, 2, 5, 0, 1, 0, 0, 0, 0, 5, 0, 2, 0, 0, 0, 0}),
