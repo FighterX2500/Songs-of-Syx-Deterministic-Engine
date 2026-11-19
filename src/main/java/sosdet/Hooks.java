@@ -3669,6 +3669,20 @@ public final class Hooks {
     }
 
     /**
+     * Patch 99-allies, {@code BattleStateGenArmy.placeThrone} and {@code BattleStateGenerator} (owner, 2026-11-19): a battle
+     * between two players has no throne; a player's throne matters only in an assault on their capital. Nothing is built,
+     * but the throne's spot is set to tile {@code tx, ty}, where vanilla would build it, so the camera and the battle AI
+     * that read {@code THRONE.coo()} see what they did. World state, the same on every PC. True when the throne is left out.
+     */
+    public static boolean battleThroneOff(int tx, int ty) {
+        if (!battleBetweenHumans()) {
+            return false;
+        }
+        sosdet.game.GameThrone.spot(tx, ty);
+        return true;
+    }
+
+    /**
      * In a battle between two humans, loaded: when {@code f} is army 1's faction ({@code FACTIONS.otherFaction()}, an
      * NPC in vanilla), the other human, whose reported values army 1 fights with; otherwise null (SOS-83).
      */
