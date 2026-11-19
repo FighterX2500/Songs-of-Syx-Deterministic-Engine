@@ -1520,7 +1520,7 @@ diff -ru -U2 a/world/battle/Resolver.java b/world/battle/Resolver.java
  		
 diff -ru -U2 a/world/battle/ResolverPlayer.java b/world/battle/ResolverPlayer.java
 --- a/world/battle/ResolverPlayer.java	2026-06-17 10:48:06.000000000 +0500
-+++ b/world/battle/ResolverPlayer.java	2026-11-12 16:13:08.681729700 +0500
++++ b/world/battle/ResolverPlayer.java	2026-11-18 13:47:17.707015600 +0500
 @@ -96,7 +96,9 @@
  			
  			@Override
@@ -1670,7 +1670,7 @@ diff -ru -U2 a/world/battle/ResolverPlayer.java b/world/battle/ResolverPlayer.ja
  		void afterBattle(BattleStateResult res) {
  			
  			RCount ecount = new RCount();
-@@ -389,22 +476,22 @@
+@@ -389,40 +476,60 @@
  			
  			int[] losses = Alloc.ii(Config.battle().DIVISIONS_PER_ARMY);
  			for (int i = 0; i < savedEnemy.divs(); i++) {
@@ -1684,6 +1684,7 @@ diff -ru -U2 a/world/battle/ResolverPlayer.java b/world/battle/ResolverPlayer.ja
  			}
  			
  			
++			final int[] sosdetLostE = losses.clone(); // SOSDET: each army's dead, for their gear (SOS-225)
  			Arrays.fill(losses, 0);
  			for (int di = 0; di < savedPlayer.divs(); di++) {
 -				if (savedPlayer.div(di) != null)
@@ -1696,9 +1697,10 @@ diff -ru -U2 a/world/battle/ResolverPlayer.java b/world/battle/ResolverPlayer.ja
 -				pp.us.get(ui).count(pcount, losses[ui], false);
 +				sosdetCount(pp.us.get(ui), savedPlayer, sosdetPlayer, ui, pcount, losses[ui]);
  			}
++			final int[] sosdetLostP = losses.clone(); // SOSDET: each army's dead, for their gear (SOS-225)
  			
  			
-@@ -412,17 +499,30 @@
+ 			WBattleResult rr = new Res(pp, ee, res.result, res.result == BATTLE_RESULT.VICTORY ? ecount : pcount) {
  				
  				@Override
  				public void accept(int[] enslave, int[] resources) {
@@ -1715,6 +1717,11 @@ diff -ru -U2 a/world/battle/ResolverPlayer.java b/world/battle/ResolverPlayer.ja
  					BattleListener.notify(res.result == BATTLE_RESULT.VICTORY ? pp : ee, res.result == BATTLE_RESULT.VICTORY ? ee : pp);
  					shipRetreat(enslave, resources);			
  					
++					for (int ui = 0; ui < savedEnemy.us.size(); ui++) // SOSDET: the dead lose their gear, as an auto-resolve takes it; a beaten army ships none home (SOS-225)
++						sosdet.Hooks.deadGear(savedEnemy.us.get(ui).a(), sosdetLostE[ui]);
++					for (int ui = 0; ui < savedPlayer.us.size(); ui++)
++						sosdet.Hooks.deadGear(savedPlayer.us.get(ui).a(), sosdetLostP[ui]);
++					
  					for (int i = 0; i < savedEnemy.divs(); i++) {
  						WDIV d = savedEnemy.div(i);
 -						d.resolve(res.enemySurvivors[i]);
@@ -1731,7 +1738,7 @@ diff -ru -U2 a/world/battle/ResolverPlayer.java b/world/battle/ResolverPlayer.ja
  							d.resolve(res.playerSurvivors[i]);
  					}
  					
-@@ -431,6 +531,7 @@
+@@ -431,6 +538,7 @@
  			
  			
  			
@@ -1739,7 +1746,7 @@ diff -ru -U2 a/world/battle/ResolverPlayer.java b/world/battle/ResolverPlayer.ja
  			VIEW.world().UI.battle.result(rr, false);
  		}
  		
-@@ -467,9 +568,10 @@
+@@ -467,9 +575,10 @@
  		
  		private final ResolverSide pp;
  		private final ResolverSide ee;
@@ -1752,7 +1759,7 @@ diff -ru -U2 a/world/battle/ResolverPlayer.java b/world/battle/ResolverPlayer.ja
  		}
  		
  		Res(ResolverSide pp, ResolverSide ee, BATTLE_RESULT res, RCount ecount, double spoilV){
-@@ -492,11 +594,15 @@
+@@ -492,11 +601,15 @@
  			ResolverSide looser = ee;
  			
  			if (result == BATTLE_RESULT.VICTORY) {
@@ -1770,7 +1777,7 @@ diff -ru -U2 a/world/battle/ResolverPlayer.java b/world/battle/ResolverPlayer.ja
  			
  			if (looser.retreatCoo.x() >= 0) {
  				looser.us.get(0).unit.a().teleport(looser.retreatCoo.x(), looser.retreatCoo.y());
-@@ -507,6 +613,16 @@
+@@ -507,6 +620,16 @@
  			
  		}
  

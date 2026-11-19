@@ -1,0 +1,27 @@
+# SOS-227: a war on an NPC that broke its treaties with the player costs no betrayal; a treaty the player broke first,
+# then a war, costs betrayal as in vanilla. wrelations notes each human's stored opinion entries: BETRAYAL is the one.
+# Run it with --humans 2 so the second human's row shows the first human's breaks are not its own, and with --steps
+# 12000 or more: the actions take about 75 s of wall time after the copies are up, and one sent after copy 1's last
+# step never applies.
+# -1 and -2 are the first two free NPCs (nobody's vassal or overlord, neutral to both humans), picked by these first
+# two notes and kept for the rest of the script.
+wrelations -1
+wrelations -2
+# 1. the first NPC: a trade treaty the player made, the NPC's court cancels it, the player declares war at once:
+#    human 0's BETRAYAL for it stays as the first note had it (none); WAR_DECLARATION is vanilla's, as before
+wnpcstance -1 trade human
+wait 5
+wnpcstance -1 neutral npc
+wait 5
+wdealnpc -1 war
+wait 5
+wrelations -1
+# 2. the second NPC: a trade treaty the player made, the player cancels it, then declares war at once: BETRAYAL for
+#    human 0 as vanilla gives it (the cancel and the war, both fresh: about 1)
+wnpcstance -2 trade human
+wait 5
+wdealnpc -2 cancel
+wait 5
+wdealnpc -2 war
+wait 5
+wrelations -2

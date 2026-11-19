@@ -5,6 +5,7 @@ import java.util.List;
 import game.faction.FACTIONS;
 import game.faction.FCredits.CTYPE;
 import game.faction.diplomacy.DIP;
+import game.faction.diplomacy.DipStance;
 import game.faction.diplomacy.deal.Deal;
 import game.faction.diplomacy.deal.DealParty;
 import game.faction.diplomacy.deal.DealRegs.DealReg;
@@ -37,6 +38,7 @@ public final class Diplomacy {
     static final int VASSAL_RELEASE = 8003;
     static final int EMISSARIES = 8004;
     static final int TRIBUTE_ACCEPT = 8005;
+    static final int NPC_STANCE_FOR_TEST = 8006;
 
     /** The only {@code UIDipMessAction} in V71.44: a vassal asking for its freedom. */
     private static final String VASSAL_REQUEST = "game.events.faction.player.WarMessages$VassalRequest";
@@ -128,12 +130,55 @@ public final class Diplomacy {
                     any = true;
                 }
                 return any;
+            }),
+            new Command(NPC_STANCE_FOR_TEST, "npcStanceForTest", r -> {
+                FactionNPC f = Args.npc(r);
+                DipStance s = testStance(r.i());
+                boolean byHuman = r.b();
+                if (f == null || DIP.get(f) == s) {
+                    return false;
+                }
+                if (byHuman) {
+                    ROPINION.STANCE().setNewStance(f, s, true); // as a deal the human made
+                } else {
+                    s.set(f); // as the NPC's court cancels a treaty (Stance.messDown) or an NPC proposes one
+                }
+                return true;
             }));
 
     private Diplomacy() {
     }
 
     // ---------------------------------------------------------------- capture (hooks)
+
+    /**
+     * Test tooling, never a player's: this PC's human and {@code f} get the stance {@code stance} (0 neutral, 1 trade,
+     * 2 colleagues, 3 allies) at the command's step on every PC alike. {@code byHuman}: as a deal the human made
+     * ({@code OpsStance.setNewStance}, with vanilla's betrayal); otherwise as the NPC changes it, as its court cancels a
+     * treaty, with no opinion change (SOS-227).
+     */
+    public static void npcStanceForTest(FactionNPC f, int stance, boolean byHuman) {
+        if (!Commands.capturing()) {
+            throw new IllegalStateException("SOSDET: a stance change outside a session's play");
+        }
+        testStance(stance);
+        Commands.capture(Args.faction(new CmdWriter(NPC_STANCE_FOR_TEST), f).i(stance).b(byHuman));
+    }
+
+    private static DipStance testStance(int stance) {
+        switch (stance) {
+        case 0:
+            return DIP.NEUTRAL();
+        case 1:
+            return DIP.TRADE();
+        case 2:
+            return DIP.PACT();
+        case 3:
+            return DIP.ALLY();
+        default:
+            throw new IllegalArgumentException("SOSDET: no test stance " + stance);
+        }
+    }
 
     /** Call site in the faction screen's deal ({@code UIDiplomacy}): the player's own offer, accepted. */
     public static boolean dealAccept(Deal deal) {

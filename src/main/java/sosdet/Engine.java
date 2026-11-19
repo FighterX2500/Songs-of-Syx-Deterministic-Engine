@@ -1629,6 +1629,15 @@ public final class Engine {
         return HumanDeals.proposeRefusal(slot, terms);
     }
 
+    /**
+     * Between steps: what this PC's player can give of the tradable with index {@code tradable} in a deal, as the deal's
+     * check reads its own side (SOS-224): its available stock less the goods leaving its city that the stock still counts.
+     */
+    public static int dealSpare(int tradable) {
+        required();
+        return HumanDeals.spare(tradable);
+    }
+
     /** Between steps: this PC's player proposes {@code terms} to the human in {@code slot}. Check {@link #dealRefusal} first. */
     public static void dealPropose(int slot, DealBook.Terms terms) {
         required();

@@ -108,6 +108,18 @@ diff -ru -U2 a/game/event/engine/EVENT_HANDLER.java b/game/event/engine/EVENT_HA
  			set(e, false, false, true, true);
  			double m = 0;
  			for (Data d : datas) {
+diff -ru -U2 a/game/events/faction/player/Stance.java b/game/events/faction/player/Stance.java
+--- a/game/events/faction/player/Stance.java	2026-05-23 07:44:20.000000000 +0500
++++ b/game/events/faction/player/Stance.java	2026-11-18 13:40:34.971830300 +0500
+@@ -149,6 +149,8 @@
+ 	private static boolean messDown(FactionNPC fa, DipStance downTo, DipStance current, EData data) {
+ 		if (fa.request.has())
+ 			return false;
++		if (sosdet.Hooks.friendOfOverlord(fa, FACTIONS.player())) // SOSDET: a vassal of this human's friend asks no money and cancels nothing (SOS-226)
++			return false;
+ 		KingMessages m = fa.court().king().roy().induvidual.race().kingMessage();
+ 		if (data.stanceMess) {
+ 			
 diff -ru -U2 a/game/faction/diplomacy/deal/DealBools.java b/game/faction/diplomacy/deal/DealBools.java
 --- a/game/faction/diplomacy/deal/DealBools.java	2026-05-18 09:29:22.000000000 +0500
 +++ b/game/faction/diplomacy/deal/DealBools.java	2026-11-12 17:39:09.422209700 +0500

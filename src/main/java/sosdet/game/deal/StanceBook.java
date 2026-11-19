@@ -7,13 +7,14 @@ import sosdet.hash.HashLog;
 
 /**
  * The stances passed to a human's NPC vassals (SOS-140, owner 2026-11-04): while humans A and B are trade partners or
- * colleagues, B has at least that stance with each NPC vassal of A, both ways. An alliance never passes, and a war
- * between B and the vassal blocks it. When the source ends, a passed stance goes back to the one B and the vassal had
- * before; one they had on their own stays. A passed stance that anyone else changes (the vassal's court cancelling it,
- * B's own diplomacy) is theirs from then on: it isn't passed again until its source ends.
+ * colleagues, B has at least that stance with each NPC vassal of A, both ways; while they are allies, B has at least
+ * Colleagues (owner 2026-11-18, SOS-226). A war between B and the vassal blocks it until they make peace. When the
+ * source ends, a passed stance goes back to the one B and the vassal had before; one they had on their own stays. A
+ * passed stance is locked while it's passed: one lowered (the vassal's court, B's own diplomacy) is set back. A higher
+ * stance B and the vassal make on their own is theirs, as a war is: the book lets go of them.
  *
- * <p>Stances are codes: {@link #WAR}, {@link #NEUTRAL}, {@link #TRADE}, {@link #PACT}, and {@link #ABOVE} for any
- * stance above a colleague's (ally, vassal, overlord). World state: every PC decides it at the same steps, it is saved
+ * <p>Stances are codes: {@link #WAR}, {@link #NEUTRAL}, {@link #TRADE}, {@link #PACT}, {@link #ALLY}, and
+ * {@link #ABOVE} for a vassal's or an overlord's stance. World state: every PC decides it at the same steps, it is saved
  * with the world ({@code GamePassed}) and in the world hash. Plain Java, no game classes; {@link #decide} allocates
  * nothing, as it runs in every world part.
  */
@@ -23,25 +24,31 @@ public final class StanceBook {
     public static final int NEUTRAL = 0;
     public static final int TRADE = 1;
     public static final int PACT = 2;
-    public static final int ABOVE = 3;
+    public static final int ALLY = 3;
+    public static final int ABOVE = 4;
     /** {@link #decide}'s answer when the stance stays as it is. */
     public static final int KEEP = -2;
 
-    private static final int VERSION = 1;
+    /** 2 since SOS-226: no released flag, a passed stance is locked. */
+    private static final int VERSION = 2;
     /** Pairs are keyed {@code human * SLOTS + vassal}; slots are faction indexes. */
     private static final int SLOTS = 1024;
-    private static final int FIELDS = 4;
+    private static final int FIELDS = 3;
+    /** Version 1 had a fourth field per pair: 1 once someone else changed the stance. */
+    private static final int FIELDS_V1 = 4;
 
-    /** Sorted keys, and per entry: the stance before, the stance passed, and 1 once someone else changed it. */
+    /** Sorted keys, and per entry: the stance before and the stance passed. */
     private int[] keys = new int[64];
     private int[] before = new int[64];
     private int[] passed = new int[64];
-    private boolean[] released = new boolean[64];
     private int size;
 
-    /** What passes from a stance between two humans: a trade partner's or a colleague's, else nothing. */
+    /**
+     * What passes from a stance between two humans: a trade partner's or a colleague's, Colleagues from an alliance
+     * (SOS-226), else nothing (a vassalage between the humans included).
+     */
     public static int passes(int stance) {
-        return stance == TRADE || stance == PACT ? stance : NEUTRAL;
+        return stance == TRADE || stance == PACT ? stance : stance == ALLY ? PACT : NEUTRAL;
     }
 
     /**
@@ -59,27 +66,21 @@ public final class StanceBook {
      */
     public int decide(int human, int vassal, int want, int now) {
         int i = find(human, vassal);
-        if (i >= 0 && released[i]) {
-            if (want == NEUTRAL) {
-                remove(i); // the source ended: the next one passes afresh
-            }
-            return KEEP;
-        }
-        if (i >= 0 && now != passed[i]) {
-            released[i] = true; // someone else changed it: theirs now
+        if (i >= 0 && (now == WAR || now > passed[i])) {
+            remove(i); // a war, or a higher stance of their own: theirs, with nothing to set back
             return KEEP;
         }
         if (now == WAR) {
-            return KEEP;
+            return KEEP; // until they make peace
         }
         if (i >= 0) {
             if (want <= before[i]) {
                 int back = before[i];
                 remove(i);
-                return back;
+                return back == now ? KEEP : back;
             }
-            if (want != passed[i]) {
-                passed[i] = want;
+            if (want != passed[i] || now != passed[i]) {
+                passed[i] = want; // follows its source; locked: one lowered is set back
                 return want;
             }
             return KEEP;
@@ -134,16 +135,13 @@ public final class StanceBook {
             keys = Arrays.copyOf(keys, size * 2);
             before = Arrays.copyOf(before, size * 2);
             passed = Arrays.copyOf(passed, size * 2);
-            released = Arrays.copyOf(released, size * 2);
         }
         System.arraycopy(keys, at, keys, at + 1, size - at);
         System.arraycopy(before, at, before, at + 1, size - at);
         System.arraycopy(passed, at, passed, at + 1, size - at);
-        System.arraycopy(released, at, released, at + 1, size - at);
         keys[at] = k;
         before[at] = was;
         passed[at] = to;
-        released[at] = false;
         size++;
     }
 
@@ -151,7 +149,6 @@ public final class StanceBook {
         System.arraycopy(keys, i + 1, keys, i, size - i - 1);
         System.arraycopy(before, i + 1, before, i, size - i - 1);
         System.arraycopy(passed, i + 1, passed, i, size - i - 1);
-        System.arraycopy(released, i + 1, released, i, size - i - 1);
         size--;
     }
 
@@ -162,7 +159,7 @@ public final class StanceBook {
         return human * SLOTS + vassal;
     }
 
-    /** The book as ints, for the save: the version, the count, then each pair's key, before, passed and released. */
+    /** The book as ints, for the save: the version, the count, then each pair's key, before and passed. */
     public int[] toInts() {
         int[] v = new int[2 + FIELDS * size];
         v[0] = VERSION;
@@ -172,30 +169,35 @@ public final class StanceBook {
             v[at] = keys[i];
             v[at + 1] = before[i];
             v[at + 2] = passed[i];
-            v[at + 3] = released[i] ? 1 : 0;
         }
         return v;
     }
 
-    /** A book from {@link #toInts}. */
+    /**
+     * A book from {@link #toInts}, of this version or version 1. A version 1 pair that someone else had changed (its
+     * released flag) isn't the book's any more: it is left out, and passes afresh if it still should (SOS-226).
+     */
     public static StanceBook fromInts(int[] v) throws IOException {
-        if (v.length < 2 || v[0] != VERSION) {
-            throw new IOException("SOSDET: a stance book of version " + (v.length == 0 ? "none" : v[0]) + ", this engine reads "
-                    + VERSION);
+        if (v.length < 2 || v[0] != VERSION && v[0] != 1) {
+            throw new IOException("SOSDET: a stance book of version " + (v.length == 0 ? "none" : v[0])
+                    + ", this engine reads 1 to " + VERSION);
         }
+        int fields = v[0] == 1 ? FIELDS_V1 : FIELDS;
         int n = v[1];
-        if (n < 0 || v.length != 2 + FIELDS * n) {
+        if (n < 0 || v.length != 2 + fields * n) {
             throw new IOException("SOSDET: a stance book of " + v.length + " ints for " + n + " pairs");
         }
         StanceBook b = new StanceBook();
         for (int i = 0; i < n; i++) {
-            int at = 2 + FIELDS * i;
+            int at = 2 + fields * i;
             int k = v[at];
-            if (k < 0 || (i > 0 && k <= v[at - FIELDS])) {
+            if (k < 0 || (i > 0 && k <= v[at - fields])) {
                 throw new IOException("SOSDET: a stance book's pairs out of order at " + i);
             }
+            if (fields == FIELDS_V1 && v[at + 3] != 0) {
+                continue;
+            }
             b.add(k / SLOTS, k % SLOTS, v[at + 1], v[at + 2]);
-            b.released[i] = v[at + 3] != 0;
         }
         return b;
     }
@@ -207,7 +209,6 @@ public final class StanceBook {
             h = HashLog.mix(h, keys[i]);
             h = HashLog.mix(h, before[i]);
             h = HashLog.mix(h, passed[i]);
-            h = HashLog.mix(h, released[i] ? 1 : 0);
         }
         return h;
     }
