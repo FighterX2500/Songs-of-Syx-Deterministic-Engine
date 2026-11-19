@@ -95,6 +95,8 @@ public final class AiLog {
     /** An ally's order and a commander's vote in a local battle: a watching PC's, but these go through (SOS-119). */
     public static final int LOCAL_ORDER = 7966;
     public static final int LOCAL_VOTE = 7967;
+    /** An ally's Join or Stay out, asked while its game may view a city (SOS-232): a watching PC's too (owner's session, R3). */
+    public static final int ALLY_ANSWER = 7903;
     private long appliedOrders;
     private final long[] appliedByKind = new long[AiEntry.KINDS];
     private final Recent recentAi = new Recent();
@@ -193,7 +195,7 @@ public final class AiLog {
      */
     public void captureOrder(int kind, int div, byte[] payload, boolean stationed) {
         int id = kind == AiEntry.COMMAND ? CmdReader.idOf(payload) : -1;
-        boolean worldAnswer = id == WORLD_ANSWER || id == LOCAL_ORDER || id == LOCAL_VOTE;
+        boolean worldAnswer = id == WORLD_ANSWER || id == LOCAL_ORDER || id == LOCAL_VOTE || id == ALLY_ANSWER;
         if (watchOnly && !worldAnswer && !((commanding || stationed) && kind < AiEntry.SPEED)) {
             watchedDropped++;
             return;

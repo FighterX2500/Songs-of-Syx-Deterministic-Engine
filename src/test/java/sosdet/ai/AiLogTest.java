@@ -371,6 +371,15 @@ class AiLogTest {
         assertEquals(1, peer.watchedDropped(), "any other command is dropped");
     }
 
+    /** The owner's session (R3): an ally viewing a city still answers Join or Stay out to a sally's ask (SOS-232). */
+    @Test
+    void aWatchingPlayerStillAnswersAnAllysAsk() {
+        AiLog peer = AiLog.peer(START, new ByPc());
+        peer.watchOnly(true);
+        peer.captureOrder(AiEntry.COMMAND, -1, new byte[] {(byte) (AiLog.ALLY_ANSWER >> 8), (byte) AiLog.ALLY_ANSWER, 1});
+        assertEquals(0, peer.watchedDropped(), "the Join goes to the host while the city is viewed");
+    }
+
     @Test
     void aWatchingPlayersOrdersAreDroppedBeforeAnyLog() {
         ByPc hr = new ByPc();
