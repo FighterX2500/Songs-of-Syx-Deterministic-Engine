@@ -2215,6 +2215,41 @@ public final class Hooks {
     }
 
     /**
+     * Patch 95, the division cards (owner, 2026-11-19): the banner of the player division {@code d} belongs to, drawn in
+     * the card's top right corner, when that player isn't this PC's; null for this PC's own divisions, an NPC's, and
+     * without a session. The zoomed-out map, the battle panel and the conscripts window draw it. UI thread, outside the
+     * step, never hashed. No allocation.
+     */
+    public static snake2d.util.sprite.SPRITE divBanner(game.battle.div.Div d) {
+        Session s = Engine.session();
+        if (s == null || d == null || s.loading) {
+            return null;
+        }
+        int owner = divHuman(s, d);
+        if (owner < 0 || owner == s.localHuman) {
+            return null;
+        }
+        Faction f = FACTIONS.getByIndex(owner);
+        return f instanceof Player ? f.banner().MEDIUM : null;
+    }
+
+    /**
+     * The human division {@code d} belongs to, or -1 for an NPC's: in a battle by its roster; in the city on screen a
+     * stationed ally's by the registry, the city's own by the city's player (in a view, its owner: SOS-82).
+     */
+    private static int divHuman(Session s, game.battle.div.Div d) {
+        BattleRoster r = s.roster();
+        if (r != null && r.owners != null) {
+            return d.index() < r.owners.length ? r.owners[d.index()] : -1;
+        }
+        if (d.army() != GAME.ARMIES().player()) {
+            return -1;
+        }
+        int stationed = s.ownCity ? stationOwner(s, d.index()) : -1;
+        return stationed >= 0 ? stationed : FACTIONS.player().index();
+    }
+
+    /**
      * {@code AiHooks.muster} and the selection panel's Muster button (owner, 2026-11-19): a stationed ally's division
      * stays mustered in the host's city, so nobody demusters it.
      */

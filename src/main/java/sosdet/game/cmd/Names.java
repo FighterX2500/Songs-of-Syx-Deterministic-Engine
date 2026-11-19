@@ -292,10 +292,23 @@ public final class Names {
         };
     }
 
+    /**
+     * True while this PC views another player's city or battle (owner, 2026-11-19): the game's player is then theirs
+     * (SOS-82), so the profile window shows their name, ruler and banner, which this PC can't change. Before this a
+     * viewer's banner edit changed the owner's banner on the viewer's PC alone, a desync, and a typed name renamed the
+     * viewer.
+     */
+    public static boolean identityLocked() {
+        return Engine.active() && FACTIONS.player().index() != Hooks.localHuman();
+    }
+
     /** Hook in {@code UIProfile}'s faction name input: the faction's name and its capital's, after each edit. */
     public static boolean factionName(CharSequence name) {
         if (!Commands.capturing()) {
             return false;
+        }
+        if (identityLocked()) {
+            return true;
         }
         Commands.capture(new CmdWriter(FACTION_NAME).s(name.toString()));
         return true;
@@ -305,6 +318,9 @@ public final class Names {
     public static boolean rulerName(CharSequence name) {
         if (!Commands.capturing()) {
             return false;
+        }
+        if (identityLocked()) {
+            return true;
         }
         Commands.capture(new CmdWriter(RULER_NAME).s(name.toString()));
         return true;
@@ -316,6 +332,9 @@ public final class Names {
      * stay this PC's, as before. True when the hook did the load.
      */
     public static boolean profileLoad() {
+        if (Commands.capturing() && identityLocked()) {
+            return true;
+        }
         if (!Commands.capturing() || !FactionProfileFlusher.canLoad(FACTIONS.player())) {
             return false;
         }
@@ -397,6 +416,9 @@ public final class Names {
             return false;
         }
         int banner = BannerDraft.owner(c);
+        if (banner == BannerDraft.FACTION && identityLocked()) {
+            return true;
+        }
         if (banner != BannerDraft.NONE) {
             draft(banner);
             return false;
@@ -411,6 +433,9 @@ public final class Names {
 
     /** Hook in {@code FBanner.bannerTypeSet}: the profile's arrows change the player's banner shape in the draft. */
     public static boolean bannerType(FBanner banner, int type) {
+        if (Commands.capturing() && banner == FACTIONS.player().banner() && identityLocked()) {
+            return true;
+        }
         if (Commands.capturing() && banner == FACTIONS.player().banner()) {
             draft(BannerDraft.FACTION);
         }
