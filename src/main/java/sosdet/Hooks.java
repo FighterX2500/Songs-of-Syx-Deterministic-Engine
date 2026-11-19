@@ -1827,12 +1827,18 @@ public final class Hooks {
      */
     private static Txn toCity(TxnKind kind) {
         Session s = Engine.session();
+        return s == null ? null : toCity(kind, s.currentHuman);
+    }
+
+    /** In the world part: a transaction for the city of the human in {@code human}; null elsewhere. */
+    private static Txn toCity(TxnKind kind, int human) {
+        Session s = Engine.session();
         if (s == null || s.part != StepParts.WORLD_PART) {
             return null;
         }
         Txn t = s.txns.add(s.clock.step());
         t.kind = kind;
-        t.human = s.currentHuman;
+        t.human = human;
         return t;
     }
 
@@ -2119,8 +2125,8 @@ public final class Hooks {
     }
 
     /**
-     * In the city tail (SOS-234): a stationed ally's division's survivors of a fight in the host's city reach the world
-     * in the city's next report ({@code StationedDivs.Resolve}'s bytes).
+     * In the city tail (SOS-234): a stationed ally's division's dead and its soldiers' experience in the host's city reach
+     * the world in the city's next report ({@code StationedDivs.Resolve}'s bytes).
      */
     public static void stationResolve(int owner, byte[] data) {
         Session s = inCityPart();
@@ -2135,8 +2141,8 @@ public final class Hooks {
      * an order that names no division, such as artillery's). The general's, a battle's and a tape's always, as before.
      * A player's otherwise in the city they command in, on every PC that runs it alike (SOS-209):
      * <ul>
-     * <li>a stationed ally's division in the host's city (SOS-234): its player's while their view of the city runs,
-     * else the host's, in an assault too;
+     * <li>a stationed ally's division in the host's city (SOS-234): its player's while their view of the city runs, and
+     * the host's while that player gives them command (owner, 2026-11-19), in an assault too;
      * <li>in an assault, the defender's, and a viewer's the commanders table gave a division to (AiLog checked it);
      * <li>any other division: the city's own player's.
      * </ul>
@@ -2152,7 +2158,7 @@ public final class Hooks {
         int ownerPc = owner < 0 ? -1 : s.pcOf(owner);
         boolean assault = s.assault != null && s.assault.started() && s.cityHuman() == s.assault.defender;
         return sosdet.game.station.StationOrders.applies(pc, s.cityPc(), ownerPc, ownerPc >= 0 && s.viewsCityHere(ownerPc),
-                assault, assault && s.viewsCityHere(pc));
+                owner >= 0 && stationGranted(div), assault, assault && s.viewsCityHere(pc));
     }
 
     /**
@@ -2176,10 +2182,16 @@ public final class Hooks {
         return div < 0 || !s.plans().inGame() ? -1 : sosdet.game.GameStationedDivs.get().divs().owner(div);
     }
 
+    /** Whether the player of stationed division {@code div} gives the host command of it, as the world holds it now. */
+    private static boolean stationGranted(int div) {
+        sosdet.game.station.StationedDivs d = sosdet.game.GameStationedDivs.get().divs();
+        return sosdet.game.GameStations.get().granted(d.army(div), d.iteration(div));
+    }
+
     /**
      * The UI, outside the step (SOS-234): whether this PC's player may select division {@code div} of the city on screen
-     * as far as stationed allies go: a stationed ally's division only by its player while they view the city, else by
-     * the host; every other division as before.
+     * as far as stationed allies go: a stationed ally's division by its player, who views the city, and by the host
+     * while that player gives them command (owner, 2026-11-19); every other division as before.
      */
     public static boolean stationSelectable(int div) {
         Session s = Engine.session();
@@ -2188,7 +2200,60 @@ public final class Hooks {
         }
         int owner = stationOwner(s, div);
         return owner < 0 || sosdet.game.station.StationOrders.selectable(s.localHuman, owner, s.viewing() != null,
-                s.viewsCityHere(s.pcOf(owner)));
+                stationGranted(div));
+    }
+
+    /**
+     * {@code AiHooks.muster} and the selection panel's Muster button (owner, 2026-11-19): a stationed ally's division
+     * stays mustered in the host's city, so nobody demusters it.
+     */
+    public static boolean musterLocked(game.battle.div.Div div) {
+        return stationedDiv(div);
+    }
+
+    /** Patch 95, the selection panel's Muster button (owner, 2026-11-19): greyed while every division selected stays mustered. */
+    public static boolean musterLocked(snake2d.util.sets.LIST<game.battle.div.Div> selected) {
+        if (selected.size() == 0) {
+            return false;
+        }
+        for (int i = 0; i < selected.size(); i++) {
+            if (!stationedDiv(selected.get(i))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** The battle panel's Restart prompt in a session (owner, 2026-11-19): the press calls the players' vote. */
+    private static final String RESTART_ASK = "Ask the players to restart the battle? Majority decides.";
+
+    /**
+     * Patch 95, the battle panel's Restart (SOS-231, owner 2026-11-19): in a session it asks whether to call the players'
+     * vote, with Ok and Cancel; Ok runs {@code yes}, the restart, which calls the vote. True when it asked.
+     */
+    public static boolean restartPrompt(snake2d.util.misc.ACTION yes) {
+        if (Engine.session() == null) {
+            return false;
+        }
+        view.main.VIEW.inters().yesNo.activate(RESTART_ASK, yes, snake2d.util.misc.ACTION.NOP, true);
+        return true;
+    }
+
+    /**
+     * {@code StatsPopulation}'s count, as a person is added or removed (owner, 2026-11-19, 10b point A): a stationed
+     * ally's soldier isn't counted in the host's population. The count runs again whenever the person's division changes
+     * and at every load, so it stays balanced: the registry of stationed divisions loads ahead of the city's people.
+     * Per person added or removed: no allocation.
+     */
+    public static boolean uncountedPerson(settlement.stats.Induvidual i) {
+        if (Engine.session() == null) {
+            return false;
+        }
+        game.battle.div.Div d = i.division();
+        // the registry only, never the battle's state: it is the same all through one loaded game, so every add
+        // and remove agrees
+        return d != null && d.army() == game.GAME.ARMIES().player()
+                && sosdet.game.GameHumans.get().stationedDivs().divs().stationed(d.index());
     }
 
     /** The UI (SOS-234): whether division {@code div} of the city on screen holds a stationed ally's soldiers. */
@@ -2217,6 +2282,30 @@ public final class Hooks {
         }
         x.a = a;
         return true;
+    }
+
+    /**
+     * In the world part (owner, 2026-11-19): a stationed army's divisions {@code f} reach the city of the human in
+     * {@code host}: they come in, or their soldiers there take their men, equipment and training again
+     * ({@code TxnKind.STATION_DIVS}).
+     */
+    public static void stationDivs(int host, sosdet.game.GameStations.Fighters f) {
+        Txn x = toCity(TxnKind.STATION_DIVS, host);
+        if (x != null) {
+            x.b = f;
+        }
+    }
+
+    /**
+     * In the world part (owner, 2026-11-19): the stationing of the army at {@code army} with {@code iteration} ended: its
+     * soldiers leave the city of the human in {@code host} ({@code TxnKind.STATION_LEAVE}).
+     */
+    public static void stationLeave(int host, int army, int iteration) {
+        Txn x = toCity(TxnKind.STATION_LEAVE, host);
+        if (x != null) {
+            x.i = army;
+            x.j = iteration;
+        }
     }
 
     /** As {@link #armySupplies(WArmy, int)}, for {@code men} recruited of a race (the recruit command). */
@@ -2298,12 +2387,6 @@ public final class Hooks {
         int fi = ((settlement.battle.invasion.InvasionSpec) spec).fi;
         if (s.invasionNotices.size() < Session.NOTICES_MAX) { // every PC learns it at this step: the mod tells every player (SOS-92 F)
             s.invasionNotices.add(new long[] {s.clock.step(), x.human, fi >= 0 ? fi : army == null ? Engine.RAIDERS : -1});
-        }
-        sosdet.game.GameStations.Fighters f = sosdet.game.GameStations.get().fighters(x.human, fi); // SOS-234
-        if (f != null) {
-            Txn y = toCity(TxnKind.STATION_DIVS); // after the invasion's own: the city knows its ref by then
-            y.a = spec;
-            y.b = f;
         }
         return true;
     }

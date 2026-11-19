@@ -49,10 +49,12 @@ public enum TxnKind {
      */
     STATION_SUPPLY,
     /**
-     * SOS-234: an invasion's start for the stationed allies' divisions that fight it in the host's city, right after its
-     * {@link #INVADE}: their people, made in the world part, wait in the city for the invaders to deploy.
+     * SOS-234, owner 2026-11-19: a stationed army's divisions, made in the world part, reach the host's city: they come
+     * in at the stationing, and every refresh their soldiers there take the world's men, equipment and training again.
      */
-    STATION_DIVS;
+    STATION_DIVS,
+    /** Owner 2026-11-19: a stationing ended: that army's soldiers leave the host's city; {@code i} army, {@code j} iteration. */
+    STATION_LEAVE;
 
     /**
      * Whether a follower's city applies it (SOS-38: its world reads another PC's city). Not the ones that carry the

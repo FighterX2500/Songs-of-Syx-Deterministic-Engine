@@ -8,15 +8,17 @@ import sosdet.game.GameStations;
 import world.entity.army.WArmy;
 
 /**
- * Armies stationed at another human's capital (mod spec §9, SOS-233, ADR 0011), ids 7980-7982: world commands, applied
+ * Armies stationed at another human's capital (mod spec §9, SOS-233, ADR 0011), ids 7980-7983: world commands, applied
  * at their step on every PC, for the human who sent them. Station: the army's human; End: the host sends it away, or
- * its human calls it back; Supply: the host fills its supplies from its own city.
+ * its human calls it back; Supply: the host fills its supplies from its own city; Grant: the army's human gives the
+ * host command of its soldiers in the city, or takes it back (owner, 2026-11-19).
  */
 public final class Stations {
 
     static final int STATION = 7980;
     static final int END = 7981;
     static final int SUPPLY = 7982;
+    static final int GRANT = 7983;
 
     static final List<Command> ALL = List.of(
             new Command(STATION, "armyStation", r -> {
@@ -25,7 +27,11 @@ public final class Stations {
                 return GameStations.get().station(a, host, Hooks.step());
             }),
             new Command(END, "armyStationEnd", r -> GameStations.get().end(Args.army(r))),
-            new Command(SUPPLY, "armyStationSupply", r -> GameStations.get().supply(Args.army(r))));
+            new Command(SUPPLY, "armyStationSupply", r -> GameStations.get().supply(Args.army(r))),
+            new Command(GRANT, "armyStationGrant", r -> {
+                WArmy a = Args.army(r);
+                return GameStations.get().grant(a, r.i() != 0);
+            }));
 
     private Stations() {
     }
@@ -43,6 +49,11 @@ public final class Stations {
     /** This PC's player, the host, supplies {@code a} from its own city: captured, applied at its step. */
     public static void supply(WArmy a) {
         capture(Args.army(new CmdWriter(SUPPLY), a));
+    }
+
+    /** This PC's player gives the host command of {@code a}'s soldiers in its city, or takes it back: applied at its step. */
+    public static void grant(WArmy a, boolean granted) {
+        capture(Args.army(new CmdWriter(GRANT), a).i(granted ? 1 : 0));
     }
 
     private static void capture(CmdWriter w) {

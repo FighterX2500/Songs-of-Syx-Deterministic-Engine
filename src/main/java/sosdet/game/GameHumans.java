@@ -107,7 +107,7 @@ public final class GameHumans extends Savable {
         world(frozen); // the frozen humans, their last reports and what waits for them (SOS-193)
         world(breaks); // who made the last stance change between each human and each NPC (SOS-227)
         world(stations); // the armies stationed at another human's capital (SOS-233)
-        city(stationedDivs); // this city's divisions that hold a stationed ally's soldiers in a fight (SOS-234)
+        cityFirst(stationedDivs); // this city's divisions that hold a stationed ally's soldiers (SOS-234)
     }
 
     /**
@@ -121,13 +121,18 @@ public final class GameHumans extends Savable {
         GAME.saver().add(s);
     }
 
-    /** Adds an engine section of the city only: the world save leaves it out, so a world load or resync keeps it. */
-    private static void city(Savable s) {
+    /**
+     * Adds an engine section of the city only, in the "before" list: the world save leaves it out, so a world load or
+     * resync keeps it, and it loads ahead of the settlement, so the people's load reads it (the stationed soldiers'
+     * population count, owner 2026-11-19).
+     */
+    private static void cityFirst(Savable s) {
         if (GameWorldLoad.KEYS.contains(s.key)) {
             throw new IllegalStateException("SOSDET: save section " + s.key + " is the city's, not the world save's");
         }
-        GAME.saver().add(s);
+        GAME.saver().addSpecialSaver(s);
     }
+
 
     /** This game's humans: the {@code GameHumans} its {@code FACTIONS} holds. */
     public static GameHumans get() {

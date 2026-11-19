@@ -1864,6 +1864,28 @@ public final class Engine {
         sosdet.game.cmd.Stations.supply(army);
     }
 
+    /** Between steps: why this PC's player can't give or take back the host's command of {@code army}'s soldiers, or null. */
+    public static String stationGrantRefusal(world.entity.army.WArmy army) {
+        return sosdet.game.GameStations.get().grantRefusal(army);
+    }
+
+    /**
+     * Between steps (owner, 2026-11-19): this PC's player gives the host command of {@code army}'s soldiers in the host's
+     * city, or takes it back, at its step on every PC. Check {@link #stationGrantRefusal} first.
+     */
+    public static void stationGrant(world.entity.army.WArmy army, boolean granted) {
+        String why = stationGrantRefusal(army);
+        if (why != null) {
+            throw new IllegalStateException("SOSDET: the host's command refused: " + why);
+        }
+        sosdet.game.cmd.Stations.grant(army, granted);
+    }
+
+    /** Between steps: whether the host commands the soldiers of the {@code i}th stationed army. */
+    public static boolean stationGranted(int i) {
+        return sosdet.game.GameStations.get().book().granted(i);
+    }
+
     /** Between steps: the number of stationed armies; read each with {@link #stationedArmy} and the others. */
     public static int stationedCount() {
         required();

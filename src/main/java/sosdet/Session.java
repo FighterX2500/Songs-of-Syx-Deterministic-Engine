@@ -1205,9 +1205,6 @@ final class Session {
         }
         long freeze = nextReportStep(step);
         assault = new Assault(step, attacker, defender, freeze, spec, armies, men, divOwners, attackers, attackerMen);
-        if (plans().inGame()) { // unit tests have no game
-            assault.fighters = sosdet.game.GameStations.get().fighters(defender, attacker); // SOS-234
-        }
         for (int h : humans()) {
             if (h != defender && (!retired(h) || watching(h))) {
                 views[h] = new View(h, pcOf(h), defender, pcOf(defender), freeze);
@@ -1254,8 +1251,7 @@ final class Session {
             if (cityHuman() == a.defender) {
                 assaultStarting = true;
                 try {
-                    a.invasionRef = sosdet.game.GameAssault.invade(a.spec);
-                    sosdet.game.GameStationedDivs.get().arrive(a.spec, a.fighters); // SOS-234
+                    a.invasionRef = sosdet.game.GameAssault.invade(a.spec); // stationed soldiers are in the city already
                 } finally {
                     assaultStarting = false;
                 }

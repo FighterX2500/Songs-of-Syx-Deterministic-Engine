@@ -5,7 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 
-/** SOS-234: who orders and selects a stationed ally's division, in an invasion and in an assault. */
+/** SOS-234, owner 2026-11-19: who orders and selects a stationed ally's division, in peace, an invasion and an assault. */
 class StationOrdersTest {
 
     private static final int HOST = 0, STATIONED = 1, ATTACKER = 2, WATCHER = 3;
@@ -13,28 +13,31 @@ class StationOrdersTest {
     @Test
     void aStationedDivisionIsItsPlayersWhileTheyViewTheCity() {
         for (boolean assault : new boolean[] {false, true}) {
-            assertTrue(StationOrders.applies(STATIONED, HOST, STATIONED, true, assault, true), "its player");
-            assertFalse(StationOrders.applies(HOST, HOST, STATIONED, true, assault, false), "not the host");
-            assertFalse(StationOrders.applies(ATTACKER, HOST, STATIONED, true, assault, true), "not an attacker viewing");
+            assertTrue(StationOrders.applies(STATIONED, HOST, STATIONED, true, false, assault, true), "its player");
+            assertFalse(StationOrders.applies(HOST, HOST, STATIONED, true, false, assault, false), "not the host");
+            assertFalse(StationOrders.applies(ATTACKER, HOST, STATIONED, true, false, assault, true), "not an attacker viewing");
         }
     }
 
     @Test
-    void withoutTheirViewTheHostCommandsIt() {
+    void theHostCommandsItOnlyWhileItsPlayerGivesThemCommand() {
         for (boolean assault : new boolean[] {false, true}) {
-            assertTrue(StationOrders.applies(HOST, HOST, STATIONED, false, assault, false), "the host");
-            assertFalse(StationOrders.applies(STATIONED, HOST, STATIONED, false, assault, false), "its player, not viewing");
+            assertFalse(StationOrders.applies(HOST, HOST, STATIONED, false, false, assault, false), "no grant: nobody");
+            assertTrue(StationOrders.applies(HOST, HOST, STATIONED, false, true, assault, false), "granted: the host");
+            assertTrue(StationOrders.applies(HOST, HOST, STATIONED, true, true, assault, false), "granted, its player views");
+            assertTrue(StationOrders.applies(STATIONED, HOST, STATIONED, true, true, assault, true), "and its player too");
+            assertFalse(StationOrders.applies(STATIONED, HOST, STATIONED, false, true, assault, false), "its player, not viewing");
         }
-        assertFalse(StationOrders.applies(ATTACKER, HOST, STATIONED, false, true, true), "an attacker never");
+        assertFalse(StationOrders.applies(ATTACKER, HOST, STATIONED, false, true, true, true), "an attacker never");
     }
 
     @Test
     void theCitysOwnDivisionsAreAsBefore() {
-        assertTrue(StationOrders.applies(HOST, HOST, -1, false, false, false));
-        assertFalse(StationOrders.applies(STATIONED, HOST, -1, false, false, true), "a viewer's order, outside an assault");
-        assertTrue(StationOrders.applies(ATTACKER, HOST, -1, false, true, true), "an assault's attacker viewing: the table limits it");
-        assertFalse(StationOrders.applies(ATTACKER, HOST, -1, false, true, false), "an attacker whose view ended");
-        assertTrue(StationOrders.applies(HOST, HOST, -1, false, true, false), "the defender");
+        assertTrue(StationOrders.applies(HOST, HOST, -1, false, false, false, false));
+        assertFalse(StationOrders.applies(STATIONED, HOST, -1, false, false, false, true), "a viewer's order, outside an assault");
+        assertTrue(StationOrders.applies(ATTACKER, HOST, -1, false, false, true, true), "an assault's attacker viewing: the table limits it");
+        assertFalse(StationOrders.applies(ATTACKER, HOST, -1, false, false, true, false), "an attacker whose view ended");
+        assertTrue(StationOrders.applies(HOST, HOST, -1, false, false, true, false), "the defender");
     }
 
     /**
@@ -52,10 +55,10 @@ class StationOrdersTest {
     }
 
     @Test
-    void onlyItsPlayerOrTheHostWithoutThatViewSelectsIt() {
-        assertTrue(StationOrders.selectable(STATIONED, STATIONED, true, true));
-        assertFalse(StationOrders.selectable(HOST, STATIONED, false, true), "the host while its player views");
-        assertTrue(StationOrders.selectable(HOST, STATIONED, false, false), "the host otherwise");
-        assertFalse(StationOrders.selectable(WATCHER, STATIONED, true, false), "a third player viewing the city");
+    void itsPlayerSelectsItAndTheHostOnlyWithTheGrant() {
+        assertTrue(StationOrders.selectable(STATIONED, STATIONED, true, false));
+        assertFalse(StationOrders.selectable(HOST, STATIONED, false, false), "the host without the grant");
+        assertTrue(StationOrders.selectable(HOST, STATIONED, false, true), "the host with it");
+        assertFalse(StationOrders.selectable(WATCHER, STATIONED, true, true), "a third player viewing the city");
     }
 }

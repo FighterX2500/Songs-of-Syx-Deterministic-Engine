@@ -9,6 +9,7 @@ import game.faction.diplomacy.DIP;
 import game.faction.diplomacy.DipStance;
 import game.faction.player.Player;
 import game.save.Savable;
+import game.time.TIME;
 import init.constant.Config;
 import settlement.main.SETT;
 import snake2d.util.file.FileGetter;
@@ -32,6 +33,11 @@ import world.region.RD;
 public final class GameStations extends Savable {
 
     static final String KEY = "SOSDET_STATIONS";
+    /**
+     * The game seconds between two refreshes of the stationed soldiers in their host's city from their world armies:
+     * men, equipment and training (owner, 2026-11-19).
+     */
+    public static final int REFRESH_SECONDS = 120;
     /** After the book: vanilla's FileGetter.d refuses a file's last 8 bytes, and this may be the save's last section. */
     private static final int END = 0x53445354; // "SDST"
 
@@ -126,6 +132,24 @@ public final class GameStations extends Savable {
         return null;
     }
 
+    /** Why the current human can't give the host command of {@code a}'s soldiers in its city, or take it back, or null. */
+    public String grantRefusal(WArmy a) {
+        int i = a == null ? -1 : book.find(a.armyIndex(), a.iteration());
+        if (i < 0) {
+            return "This army isn't stationed.";
+        }
+        if (FACTIONS.player().index() != book.owner(i)) {
+            return "Only the army's player can give its command.";
+        }
+        return null;
+    }
+
+    /** Whether the host commands the soldiers of the stationed army at {@code army} with {@code iteration}. */
+    public boolean granted(int army, int iteration) {
+        int i = book.find(army, iteration);
+        return i >= 0 && book.granted(i);
+    }
+
     /** The two humans have an agreement that allows stationing: allies, colleagues (a pact), overlord and vassal. */
     static boolean agreement(Faction a, Faction b) {
         DipStance s = DIP.get(a, b);
@@ -164,6 +188,24 @@ public final class GameStations extends Savable {
         }
         book.station(a.armyIndex(), a.iteration(), FACTIONS.player().index(), host, a.ctx(), a.cty(), (int) step);
         Hooks.notice(Notice.STATIONED, FACTIONS.player().index(), host, 0);
+        Hooks.stationDivs(host, divs(a)); // its soldiers come into the host's city now (owner, 2026-11-19)
+        return true;
+    }
+
+    /**
+     * A world command: the army's human gives the host command of {@code a}'s soldiers in its city, or takes it back
+     * (owner, 2026-11-19); false when refused or unchanged.
+     */
+    public boolean grant(WArmy a, boolean granted) {
+        if (grantRefusal(a) != null) {
+            return false;
+        }
+        int i = book.find(a.armyIndex(), a.iteration());
+        if (book.granted(i) == granted) {
+            return false;
+        }
+        book.grantSet(i, granted);
+        Hooks.notice(Notice.STATION_GRANT, book.owner(i), book.host(i), granted ? 1 : 0);
         return true;
     }
 
@@ -190,12 +232,28 @@ public final class GameStations extends Savable {
         return true;
     }
 
-    /** The world part's end rules, every step outside a battle, on every PC alike. No allocation while nothing ends. */
+    /**
+     * The world part's end rules, every step outside a battle, on every PC alike; then, once every
+     * {@link #REFRESH_SECONDS} of game time, each stationed army's soldiers go to the host's city again as the world holds
+     * them. No allocation while nothing ends or refreshes.
+     */
     public void endDue() {
         for (int i = book.size() - 1; i >= 0; i--) {
             int why = endReason(i);
             if (why >= 0) {
                 end(i, why);
+            }
+        }
+        int period = (int) (TIME.currentSecond() / REFRESH_SECONDS);
+        if (period == book.period()) {
+            return;
+        }
+        boolean first = book.period() < 0;
+        book.periodSet(period);
+        for (int i = 0; !first && i < book.size(); i++) {
+            WArmy a = Args.army(book.army(i), book.iteration(i));
+            if (a != null) {
+                Hooks.stationDivs(book.host(i), divs(a));
             }
         }
     }
@@ -212,15 +270,16 @@ public final class GameStations extends Savable {
 
     private void end(int i, int why) {
         Hooks.notice(Notice.STATION_ENDED, book.owner(i), book.host(i), why);
+        Hooks.stationLeave(book.host(i), book.army(i), book.iteration(i)); // its soldiers leave the host's city
         book.end(i);
     }
 
-    // ---------------------------------------------------------------- a fight in the host's city (SOS-234)
+    // ---------------------------------------------------------------- the soldiers in the host's city (SOS-234)
 
     /**
-     * The stationed divisions that enter a fight in the host's city: each one's player, its world army (index and
-     * iteration), its place in that army, and its people as the fight's soldiers. Built in the world part, the same on
-     * every PC; carried to the host's city by a transaction or with the assault.
+     * A stationed army's divisions for the host's city: each one's player, its world army (index and iteration), its
+     * place in that army, and its people as the city's soldiers. Built in the world part, the same on every PC; carried
+     * to the host's city by a transaction ({@code TxnKind.STATION_DIVS}).
      */
     public static final class Fighters {
         public final int[] owners;
@@ -243,48 +302,32 @@ public final class GameStations extends Savable {
     }
 
     /**
-     * In the world part, on every PC: the divisions of the armies stationed at {@code host}'s capital whose players are
-     * at war with {@code enemy} (a faction's index; -1 for raiders and rebels, at war with everyone), up to the city's
-     * free army slots as the world reads them; null when none (mod spec §9, ADR 0011). A removed or frozen player's stay
-     * out; so does the army of a player at peace with the enemy ("someone else's war").
+     * In the world part, on every PC: a stationed army's divisions with men, as the world holds them now (its men, their
+     * equipment and training, which its own supplies keep up), for the host's city (owner, 2026-11-19).
      */
-    public Fighters fighters(int host, int enemy) {
-        Faction h = FACTIONS.getByIndex(host);
-        if (book.count(host) == 0 || h.capitolRegion() == null) {
-            return null;
-        }
-        int free = Config.battle().DIVISIONS_PER_ARMY - hostDivisions(h);
+    private static Fighters divs(WArmy a) {
         java.util.List<game.battle.util.DivGeneration> divs = new java.util.ArrayList<>();
-        int[] owners = new int[Math.max(free, 0)];
-        int[] armies = new int[owners.length];
-        int[] iterations = new int[owners.length];
-        int[] places = new int[owners.length];
-        for (int i = 0; i < book.size() && divs.size() < owners.length; i++) {
-            int owner = book.owner(i);
-            WArmy a = entryFights(i, host, enemy) ? Args.army(book.army(i), book.iteration(i)) : null;
-            if (a == null) {
-                continue;
-            }
-            for (int di = 0; di < a.divs().size() && divs.size() < owners.length; di++) {
-                if (a.divs().get(di).men() <= 0) {
-                    continue;
-                }
-                int n = divs.size();
-                owners[n] = owner;
-                armies[n] = a.armyIndex();
-                iterations[n] = a.iteration();
-                places[n] = di;
+        int[] places = new int[a.divs().size()];
+        for (int di = 0; di < a.divs().size(); di++) {
+            if (a.divs().get(di).men() > 0) {
+                places[divs.size()] = di;
                 divs.add(a.divs().get(di).generate());
             }
         }
         int n = divs.size();
-        return n == 0 ? null : new Fighters(java.util.Arrays.copyOf(owners, n), java.util.Arrays.copyOf(armies, n),
-                java.util.Arrays.copyOf(iterations, n), java.util.Arrays.copyOf(places, n), divs);
+        int[] owners = new int[n];
+        int[] armies = new int[n];
+        int[] iterations = new int[n];
+        java.util.Arrays.fill(owners, a.faction().index());
+        java.util.Arrays.fill(armies, a.armyIndex());
+        java.util.Arrays.fill(iterations, a.iteration());
+        return new Fighters(owners, armies, iterations, java.util.Arrays.copyOf(places, n), divs);
     }
 
     /**
      * Between steps or in the world part: whether an army of {@code owner}'s stationed at {@code host}'s capital fights
-     * for it against {@code enemy} (a faction's index; below 0 for raiders and rebels), by {@link #fighters}' rule.
+     * for it against {@code enemy} (a faction's index; below 0 for raiders and rebels): its player isn't frozen or
+     * removed and is at war with the enemy. The mod asks such a player whether they watch the invaded city.
      */
     public boolean fights(int owner, int host, int enemy) {
         for (int i = 0; i < book.size(); i++) {
@@ -303,21 +346,9 @@ public final class GameStations extends Savable {
     }
 
     /**
-     * The men a stationed division has now, as the world holds them: 0 when its army no longer stands at {@code host}'s
-     * capital or the division is gone. Read in the host's city tail, the same on every PC that runs it.
-     */
-    public static int men(int army, int iteration, int place, int host) {
-        WArmy a = Args.army(army, iteration);
-        if (a == null || !get().book.stationedAt(army, iteration, host) || place < 0 || place >= a.divs().size()) {
-            return 0;
-        }
-        return a.divs().get(place).men();
-    }
-
-    /**
      * {@code InputKind.STATION_RESOLVE} in the world part: a stationed division's world division loses the men who died
-     * in a fight in the host's city and takes its survivors' experience, as a local battle's does. Men who joined it since
-     * the fight began stay. An army or a division gone since has nothing to lose.
+     * in the host's city since the last report and takes its soldiers' experience, as a local battle's does. Men who
+     * joined it since stay. An army or a division gone since has nothing to lose.
      */
     public static void resolve(int army, int iteration, int place, int dead, double experience) {
         WArmy a = Args.army(army, iteration);

@@ -130,9 +130,42 @@ class StationBookTest {
         assertTrue(new StationBook().empty());
     }
 
+    /** Owner, 2026-11-19: the host's command of the soldiers and the refresh period save, load and hash. */
+    @Test
+    void theGrantAndThePeriodSaveLoadAndHash() throws IOException {
+        StationBook b = new StationBook();
+        b.station(5, 3, 1, 0, 61, 92, 4000);
+        b.station(9, 1, 2, 0, 63, 90, 4100);
+        assertFalse(b.granted(0), "a new record gives nobody command");
+        long before = b.hash(HashLog.start());
+        b.grantSet(1, true);
+        b.periodSet(77);
+        assertNotEquals(before, b.hash(HashLog.start()));
+        StationBook back = StationBook.fromInts(b.toInts());
+        assertFalse(back.granted(0));
+        assertTrue(back.granted(1));
+        assertEquals(77, back.period());
+        assertEquals(b.hash(HashLog.start()), back.hash(HashLog.start()));
+        back.end(0);
+        assertTrue(back.granted(0), "the grant moves up with its record");
+        assertEquals(-1, new StationBook().period());
+    }
+
+    /** A book from batch 13's first builds (version 1): no grant and no period yet. */
+    @Test
+    void aVersionOneBookLoads() throws IOException {
+        StationBook b = StationBook.fromInts(new int[] {1, 1, 5, 3, 1, 0, 61, 92, 4000});
+        assertEquals(1, b.size());
+        assertEquals(5, b.army(0));
+        assertEquals(4000, b.since(0));
+        assertFalse(b.granted(0));
+        assertEquals(-1, b.period());
+    }
+
     @Test
     void aBadBookIsRefused() {
-        assertThrows(IOException.class, () -> StationBook.fromInts(new int[] {2, 0}), "another version");
+        assertThrows(IOException.class, () -> StationBook.fromInts(new int[] {3, 0}), "another version");
+        assertThrows(IOException.class, () -> StationBook.fromInts(new int[] {2, 0}), "version 2 without its period");
         assertThrows(IOException.class, () -> StationBook.fromInts(new int[] {1, 1, 5}), "cut short");
         assertThrows(IOException.class, () -> StationBook.fromInts(new int[] {1, 2, 5, 0, 1, 0, 0, 0, 0, 5, 0, 2, 0, 0, 0, 0}),
                 "one army twice");

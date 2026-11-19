@@ -73,6 +73,9 @@ public final class AiHooks {
     }
 
     public static void muster(Div d, boolean value) {
+        if (!value && Hooks.musterLocked(d)) {
+            return; // a stationed ally's soldiers stay mustered in the host's city (owner, 2026-11-19)
+        }
         if (!setting(AiEntry.MUSTER, d, value ? 1 : 0)) {
             d.settings().musteringSet(value);
         }

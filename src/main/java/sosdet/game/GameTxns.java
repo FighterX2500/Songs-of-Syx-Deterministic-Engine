@@ -112,7 +112,10 @@ public final class GameTxns implements Consumer<Txn> {
             GameStations.supplyFromCity((WArmy) t.a);
             break;
         case STATION_DIVS:
-            GameStationedDivs.get().arrive(t.a, (GameStations.Fighters) t.b);
+            GameStationedDivs.get().arrive((GameStations.Fighters) t.b);
+            break;
+        case STATION_LEAVE:
+            GameStationedDivs.get().leave(t.i, t.j);
             break;
         case GARRISON_RESOLVE:
             ((WDIV) t.a).resolve(t.i, t.d);

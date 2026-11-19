@@ -48,11 +48,6 @@ public final class Assault {
     volatile boolean reopen;
     /** Those views opened: the players take their soldiers back as the new freeze passes. */
     volatile boolean recommand;
-    /**
-     * The defender's stationed allies' divisions that join the fight (SOS-234), made in the world part as it begins;
-     * null for none. The city tail hands them to the city as the invasion starts.
-     */
-    sosdet.game.GameStations.Fighters fighters;
     /** The invaders alive as the invasion ended; -1 until then (SOS-92 C). */
     volatile int survivors = -1;
     /** The step the invasion ended at; -1 while it runs. */

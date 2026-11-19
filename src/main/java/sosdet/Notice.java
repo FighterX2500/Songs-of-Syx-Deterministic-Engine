@@ -55,4 +55,9 @@ public record Notice(long step, int kind, int first, int second, int value) {
      * {@code value} 1 it restarts now, with 0 it couldn't any more (it ended, or a player joins or leaves it) (SOS-231).
      */
     public static final int RESTART = 16;
+    /**
+     * The human {@code first} gives the human {@code second} command of its soldiers stationed in their city ({@code value}
+     * 1), or takes it back (0) (owner, 2026-11-19).
+     */
+    public static final int STATION_GRANT = 17;
 }

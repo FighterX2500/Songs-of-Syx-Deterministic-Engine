@@ -200,7 +200,9 @@ public final class GameAi implements AiApplier {
             d.settings().ammoI = (short) e.intAt(0);
             break;
         case AiEntry.MUSTER:
-            d.settings().musteringSet(e.intAt(0) != 0);
+            if (e.intAt(0) != 0 || !sosdet.Hooks.musterLocked(d)) { // a stationed ally's stay mustered (owner, 2026-11-19)
+                d.settings().musteringSet(e.intAt(0) != 0);
+            }
             break;
         case AiEntry.MOP_UP:
             d.settings().moppingSet(e.intAt(0) != 0);

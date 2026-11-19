@@ -1,7 +1,6 @@
 package sosdet.game;
 
 import java.io.IOException;
-import java.lang.reflect.Field;
 
 import game.GAME;
 import game.battle.div.Div;
@@ -11,12 +10,12 @@ import init.constant.C;
 import init.constant.Config;
 import init.type.CAUSE_LEAVES;
 import init.type.HTYPES;
-import settlement.battle.invasion.InvasionSpec;
 import settlement.entity.ENTITY;
 import settlement.entity.humanoid.Humanoid;
 import settlement.main.SETT;
 import settlement.room.main.throne.THRONE;
 import settlement.stats.STATS;
+import settlement.stats.colls.StatsBattle.StatTraining;
 import settlement.stats.equip.EquipBattle;
 import snake2d.util.datatypes.COORDINATE;
 import snake2d.util.file.FileGetter;
@@ -26,10 +25,13 @@ import sosdet.game.station.StationedDivs;
 import world.army.AD;
 
 /**
- * A stationed ally's soldiers in this city's fight (SOS-234, ADR 0011): the divisions waiting for the invaders to
- * deploy, and the divisions of army 0 that hold them while the fight lasts ({@link StationedDivs}). City state, so not
- * in the world save ({@link GameWorldLoad#KEYS}): a world load or a resync leaves it as it is, and a view's copy of the
- * city loads it with the city. A save without it (any one before SOS-234) has none.
+ * A stationed ally's soldiers in this city (SOS-234, ADR 0011; owner 2026-11-19): the divisions of army 0 that hold
+ * them for as long as their army is stationed here ({@link StationedDivs}). They come in when the stationing starts,
+ * take their men, equipment and training from their world army at every refresh, and leave when it ends; each time,
+ * the dead since the last report and the soldiers' experience go back to the world army. City state, so not in the
+ * world save ({@link GameWorldLoad#KEYS}): a world load or a resync leaves it as it is, and a view's copy of the city
+ * loads it with the city. Its section is in the "before" list, so it loads ahead of the city's people (their
+ * population count reads it). A save without it (any one before SOS-234) has none.
  *
  * <p>Everything here runs in the city tail of the city that holds it, on every PC that runs that city (its owner's,
  * and its viewers' alike), from the same state at the same step.
@@ -37,21 +39,17 @@ import world.army.AD;
 public final class GameStationedDivs extends Savable {
 
     static final String KEY = "SOSDET_STATIONED_DIVS";
-    private static final int VERSION = 1;
+    private static final int VERSION = 2;
     /** After the section: vanilla's FileGetter.d refuses a file's last 8 bytes, and this may be the save's last section. */
     private static final int END = 0x53445344; // "SDSD"
     /** Steps between clearing the stationed soldiers' needs: they don't eat, drink or shop in the host's city. */
     private static final int NEEDS_EVERY = 60;
-    private static final String GAME_VERSION = " (SOSDET supports Songs of Syx V71, build 71.44)";
-    private static final Field SPEC_REF = specField("ref");
-    private static final Field SPEC_ATTACKABLE = specField("canBeAttacked");
 
     private StationedDivs divs = new StationedDivs(Config.battle().DIVISIONS_PER_ARMY);
-    /** The fight's invasion in this city, by its reference; -1 for none. */
-    private int ref = -1;
-    /** The stationed divisions that wait for the invaders to deploy; null when none wait. */
-    private GameStations.Fighters pending;
-    /** The men each stationed division came in with, by division of army 0. */
+    /**
+     * By division of army 0: the men the world counts in it, the dead reported so far taken off. The soldiers alive
+     * fewer than this died since the last report.
+     */
     private int[] spawned = new int[Config.battle().DIVISIONS_PER_ARMY];
     private int steps;
 
@@ -69,9 +67,9 @@ public final class GameStationedDivs extends Savable {
         return divs;
     }
 
-    /** Nothing waits and no division holds stationed soldiers: the city tail does nothing. */
+    /** No division holds stationed soldiers: the city tail does nothing. */
     public boolean idle() {
-        return pending == null && divs.empty();
+        return divs.empty();
     }
 
     // ---------------------------------------------------------------- save
@@ -84,19 +82,9 @@ public final class GameStationedDivs extends Savable {
         for (int i : v) {
             file.i(i);
         }
-        file.i(ref);
         file.i(spawned.length);
         for (int i : spawned) {
             file.i(i);
-        }
-        int n = pending == null ? 0 : pending.size();
-        file.i(n);
-        for (int k = 0; k < n; k++) {
-            file.i(pending.owners[k]);
-            file.i(pending.armies[k]);
-            file.i(pending.iterations[k]);
-            file.i(pending.places[k]);
-            pending.divs.get(k).save(file);
         }
         file.i(END);
     }
@@ -104,9 +92,9 @@ public final class GameStationedDivs extends Savable {
     @Override
     protected void load(FileGetter file) throws IOException {
         int version = file.i();
-        if (version != VERSION) {
+        if (version != VERSION && version != 1) {
             throw new IOException("SOSDET: a stationed divisions section of version " + version + ", this engine reads "
-                    + VERSION);
+                    + VERSION + " and 1");
         }
         int n = file.i();
         if (n < 0 || n > file.remainingInts()) {
@@ -117,7 +105,9 @@ public final class GameStationedDivs extends Savable {
             v[i] = file.i();
         }
         divs = StationedDivs.fromInts(v);
-        ref = file.i();
+        if (version == 1) {
+            file.i(); // the fight's invasion ref: version 1 only kept them during an invasion
+        }
         int slots = file.i();
         if (slots != divs.slots()) {
             throw new IOException("SOSDET: " + slots + " stationed division counts for " + divs.slots() + " divisions");
@@ -126,25 +116,17 @@ public final class GameStationedDivs extends Savable {
         for (int i = 0; i < slots; i++) {
             spawned[i] = file.i();
         }
-        int waiting = file.i();
-        if (waiting < 0 || waiting > divs.slots()) {
-            throw new IOException("SOSDET: " + waiting + " stationed divisions waiting");
-        }
-        pending = null;
-        if (waiting > 0) {
-            int[] owners = new int[waiting];
-            int[] armies = new int[waiting];
-            int[] iterations = new int[waiting];
-            int[] places = new int[waiting];
-            java.util.List<DivGeneration> gens = new java.util.ArrayList<>();
-            for (int k = 0; k < waiting; k++) {
-                owners[k] = file.i();
-                armies[k] = file.i();
-                iterations[k] = file.i();
-                places[k] = file.i();
-                gens.add(new DivGeneration(file));
+        if (version == 1) {
+            int waiting = file.i(); // the divisions waiting for the invaders: the next refresh brings them in now
+            if (waiting < 0 || waiting > divs.slots()) {
+                throw new IOException("SOSDET: " + waiting + " stationed divisions waiting");
             }
-            pending = new GameStations.Fighters(owners, armies, iterations, places, gens);
+            for (int k = 0; k < waiting * 4; k++) {
+                file.i();
+            }
+            for (int k = 0; k < waiting; k++) {
+                new DivGeneration(file);
+            }
         }
         if (file.i() != END) {
             throw new IOException("SOSDET: a stationed divisions section without its end marker");
@@ -154,38 +136,55 @@ public final class GameStationedDivs extends Savable {
     // ---------------------------------------------------------------- the city tail
 
     /**
-     * {@code TxnKind.STATION_DIVS}, or the assault's start: the stationed divisions for the invasion {@code spec} wait
-     * until its invaders deploy. A fight already under way here keeps its own: a second one gets none.
+     * {@code TxnKind.STATION_DIVS}: one stationed army's divisions as the world holds them now. A division not in the
+     * city yet comes in, beside the throne, mustered; one already here reports its dead and its soldiers' experience,
+     * then takes the world's men (new soldiers come in beside the throne, or soldiers leave), equipment and training. A
+     * division of that army the world no longer has leaves. One with no free division left stays out until a refresh
+     * finds one.
      */
-    public void arrive(Object spec, GameStations.Fighters f) {
-        if (f == null || !idle()) {
-            return;
+    public void arrive(GameStations.Fighters f) {
+        if (f == null || f.size() == 0) {
+            return; // an army with no men left sends nothing: its soldiers here stay until it has men or leaves
         }
-        try {
-            ref = SPEC_REF.getInt(spec);
-        } catch (IllegalAccessException e) {
-            throw new IllegalStateException("SOSDET: cannot read InvasionSpec.ref" + GAME_VERSION, e);
+        for (int d = 0; d < divs.slots(); d++) {
+            if (divs.stationed(d) && divs.army(d) == f.armies[0] && divs.iteration(d) == f.iterations[0]
+                    && !sent(f, divs.place(d))) {
+                leaveDiv(d);
+            }
         }
-        pending = f;
+        for (int k = 0; k < f.size(); k++) {
+            int d = find(f.armies[k], f.iterations[k], f.places[k]);
+            if (d >= 0) {
+                refresh(d, f.divs.get(k));
+                continue;
+            }
+            Div div = freeDiv();
+            if (div == null) {
+                break;
+            }
+            DivGeneration g = f.divs.get(k);
+            divs.put(div.index(), f.owners[k], f.armies[k], f.iterations[k], f.places[k]);
+            place(g, div);
+            spawned[div.index()] = div.menNrOf();
+        }
+    }
+
+    /** {@code TxnKind.STATION_LEAVE}: the stationing of that army ended; its soldiers leave the city. */
+    public void leave(int army, int iteration) {
+        for (int d = 0; d < divs.slots(); d++) {
+            if (divs.stationed(d) && divs.army(d) == army && divs.iteration(d) == iteration) {
+                leaveDiv(d);
+            }
+        }
     }
 
     /** Every step, in the city tail of {@code host}'s city, while {@link #idle} isn't true. */
     public void cityStep(int host) {
-        InvasionSpec spec = SETT.INVADOR().spec(ref);
-        if (spec == null) {
-            end(); // the invasion is over: won, lost, called off or stopped
-            return;
-        }
-        if (pending != null && !attackable(spec) && STATS.POP().pop(HTYPES.ENEMY()) > 0) {
-            // the invaders deploy: the stationed soldiers take their place in the city. Not a won Attack's end, which
-            // also closes the invasion to attacks but leaves no invader in the city
-            spawn(host);
-        }
         for (int d = 0; d < divs.slots(); d++) {
             if (divs.stationed(d)) {
                 Div div = GAME.ARMIES().player().divisions().get(d);
                 if (div.info.men() != div.menNrOf()) {
-                    div.info.menSet(div.menNrOf()); // the battle AI keeps them; the hook keeps the city's recruits out
+                    div.info.menSet(div.menNrOf()); // the hook keeps the city's recruits out
                 }
             }
         }
@@ -202,40 +201,124 @@ public final class GameStationedDivs extends Savable {
         }
     }
 
-    private static boolean attackable(InvasionSpec spec) {
-        try {
-            return SPEC_ATTACKABLE.getBoolean(spec);
-        } catch (IllegalAccessException e) {
-            throw new IllegalStateException("SOSDET: cannot read InvasionSpec.canBeAttacked" + GAME_VERSION, e);
+    private static boolean sent(GameStations.Fighters f, int place) {
+        for (int k = 0; k < f.size(); k++) {
+            if (f.places[k] == place) {
+                return true;
+            }
         }
+        return false;
+    }
+
+    private int find(int army, int iteration, int place) {
+        for (int d = 0; d < divs.slots(); d++) {
+            if (divs.stationed(d) && divs.army(d) == army && divs.iteration(d) == iteration && divs.place(d) == place) {
+                return d;
+            }
+        }
+        return -1;
+    }
+
+    /** Division {@code d}'s soldiers alive, in the entities' order, the same on every PC that runs the city. */
+    private static java.util.List<Humanoid> soldiers(int d) {
+        java.util.List<Humanoid> out = new java.util.ArrayList<>();
+        for (ENTITY e : SETT.ENTITIES().getAllEnts()) {
+            if (e instanceof Humanoid && !e.isRemoved()) {
+                Humanoid h = (Humanoid) e;
+                if (h.division() != null && h.division().index() == d) {
+                    out.add(h);
+                }
+            }
+        }
+        return out;
     }
 
     /**
-     * The waiting divisions take free divisions of army 0, as {@code SOLDIER} people (the battle map's kind, battle AI
-     * only: the rig's probe SP1, 2026-11-18), mustered beside the throne. A division whose army no longer stands at
-     * {@code host}'s capital stays out, and one that lost men since (an Attack before the deploy) comes with as many as
-     * it has now. One with no free division left stays out.
+     * The world counts the soldiers who died since the last report off division {@code d} and takes their experience.
+     * Nothing while nobody died: a player's own division ({@code WDivStored}) re-registers every man at a resolve, which
+     * a quiet refresh mustn't repeat; soldiers gain experience only in a fight, where men fall.
      */
-    private void spawn(int host) {
-        GameStations.Fighters f = pending;
-        pending = null;
-        for (int k = 0; k < f.size(); k++) {
-            int men = GameStations.men(f.armies[k], f.iterations[k], f.places[k], host);
-            if (men <= 0) {
-                continue;
-            }
-            Div div = freeDiv();
-            if (div == null) {
-                break;
-            }
-            DivGeneration g = f.divs.get(k);
-            if (g.indus.length > men) {
-                g.setMen(men);
-            }
-            divs.put(div.index(), f.owners[k], f.armies[k], f.iterations[k], f.places[k]);
-            place(g, div);
-            spawned[div.index()] = div.menNrOf();
+    private void report(int d, java.util.List<Humanoid> alive) {
+        int dead = Math.max(0, spawned[d] - alive.size());
+        if (dead == 0) {
+            return;
         }
+        double experience = 0;
+        for (Humanoid h : alive) {
+            experience += STATS.BATTLE().COMBAT_EXPERIENCE.indu().getD(h.indu());
+        }
+        double mean = alive.isEmpty() ? 0 : experience / alive.size();
+        sosdet.Hooks.stationResolve(divs.owner(d), new StationedDivs.Resolve(divs.army(d), divs.iteration(d),
+                divs.place(d), dead, mean).toBytes());
+        spawned[d] -= dead;
+    }
+
+    /**
+     * Division {@code d} takes its world division's men, equipment and training ({@code g}, made before this city's
+     * report of its dead reached the world): its men less the dead reported now.
+     */
+    private void refresh(int d, DivGeneration g) {
+        java.util.List<Humanoid> alive = soldiers(d);
+        int unreported = Math.max(0, spawned[d] - alive.size());
+        report(d, alive);
+        int target = Math.max(0, g.indus.length - unreported);
+        Div div = GAME.ARMIES().player().divisions().get(d);
+        for (int k = alive.size() - 1; k >= target; k--) {
+            leaveCity(alive.get(k)); // the world army lost them: deserters, the starved, the fallen of a world battle
+        }
+        int kept = Math.min(alive.size(), target);
+        for (int k = 0; k < kept; k++) {
+            equip(alive.get(k), g.indus[k]);
+        }
+        if (target > kept) {
+            int[] at = spot((int) Math.ceil((target - kept) / 5.0));
+            for (int k = kept; k < target && at != null; k++) {
+                int x = at[0] + (k - kept) / 5;
+                int y = at[1] + (k - kept) % 5;
+                Humanoid h = new Humanoid(x * C.TILE_SIZE + C.TILE_SIZEH, y * C.TILE_SIZE + C.TILE_SIZEH, g.race(),
+                        HTYPES.SOLDIER(), null);
+                if (h.isRemoved()) {
+                    continue;
+                }
+                STATS.NEEDS().clear(h.indu());
+                h.indu().copyFrom(g.indus[k]);
+                equip(h, g.indus[k]);
+                h.setDivision(div); // mustered: they walk to their place in the division
+            }
+        }
+        div.info.menSet(div.menNrOf());
+        spawned[d] = div.menNrOf();
+    }
+
+    /** A soldier takes the world's equipment and training of the man it stands for. */
+    private static void equip(Humanoid h, settlement.stats.Induvidual from) {
+        STATS.BATTLE().basicTraining.setD(h.indu(), 1.0);
+        for (StatTraining t : STATS.BATTLE().TRAINING_ALL) {
+            t.stat.indu().set(h.indu(), t.stat.indu().get(from));
+        }
+        for (EquipBattle m : STATS.EQUIP().BATTLE_ALL()) {
+            m.set(h.indu(), m.get(from));
+        }
+    }
+
+    /** Out of its division first, so the population count stays balanced, then out of the city. */
+    private static void leaveCity(Humanoid h) {
+        h.setDivision(null);
+        h.kill(false, CAUSE_LEAVES.ARMY());
+    }
+
+    /** Division {@code d}'s soldiers leave the city, its dead and their experience reported; it is the host's again, empty. */
+    private void leaveDiv(int d) {
+        java.util.List<Humanoid> alive = soldiers(d);
+        report(d, alive);
+        for (Humanoid h : alive) {
+            leaveCity(h);
+        }
+        spawned[d] = 0;
+        Div div = GAME.ARMIES().player().divisions().get(d);
+        div.settings().musteringSet(false);
+        div.info.menSet(0);
+        divs.clear(d);
     }
 
     private Div freeDiv() {
@@ -324,59 +407,9 @@ public final class GameStationedDivs extends Savable {
         return true;
     }
 
-    /**
-     * The fight is over: each stationed division's dead and its survivors' mean experience go to its world division in
-     * the city's next report ({@code InputKind.STATION_RESOLVE}), its people leave the city, and the division is the
-     * host's again, empty. Divisions that waited and never came in are dropped: their world divisions are untouched.
-     */
-    private void end() {
-        int[] men = new int[divs.slots()];
-        double[] experience = new double[divs.slots()];
-        java.util.List<Humanoid> leaving = new java.util.ArrayList<>();
-        for (ENTITY e : SETT.ENTITIES().getAllEnts()) {
-            if (e instanceof Humanoid && !e.isRemoved()) {
-                Humanoid h = (Humanoid) e;
-                if (h.division() != null && divs.stationed(h.division().index())) {
-                    men[h.division().index()]++;
-                    experience[h.division().index()] += STATS.BATTLE().COMBAT_EXPERIENCE.indu().getD(h.indu());
-                    leaving.add(h);
-                }
-            }
-        }
-        for (Humanoid h : leaving) {
-            h.kill(false, CAUSE_LEAVES.ARMY());
-        }
-        for (int d = 0; d < divs.slots(); d++) {
-            if (!divs.stationed(d)) {
-                continue;
-            }
-            double mean = men[d] == 0 ? 0 : experience[d] / men[d];
-            sosdet.Hooks.stationResolve(divs.owner(d), new StationedDivs.Resolve(divs.army(d), divs.iteration(d),
-                    divs.place(d), spawned[d] - men[d], mean).toBytes());
-            spawned[d] = 0;
-            Div div = GAME.ARMIES().player().divisions().get(d);
-            div.settings().musteringSet(false);
-            div.info.menSet(0);
-            divs.clear(d);
-        }
-        pending = null;
-        ref = -1;
-        steps = 0;
-    }
-
     /** Applies a {@code STATION_RESOLVE} input's bytes ({@link StationedDivs.Resolve}) in the world part. */
     public static void applyResolve(byte[] data) {
         StationedDivs.Resolve r = StationedDivs.Resolve.of(data);
         GameStations.resolve(r.army(), r.iteration(), r.place(), r.dead(), r.experience());
-    }
-
-    private static Field specField(String name) {
-        try {
-            Field f = InvasionSpec.class.getDeclaredField(name);
-            f.setAccessible(true);
-            return f;
-        } catch (NoSuchFieldException e) {
-            throw new IllegalStateException("SOSDET: no InvasionSpec." + name + GAME_VERSION, e);
-        }
     }
 }
