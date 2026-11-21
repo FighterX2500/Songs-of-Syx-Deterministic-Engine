@@ -2245,6 +2245,24 @@ final class Session {
     }
 
     /**
+     * A human retiring with no report on any PC (SOS-239: removed at a resume's start, or after a load before its step):
+     * disbanding its armies reads its city, so every PC reads the save's last report of it, or an empty one when the
+     * save holds none (an older version's save), alike.
+     */
+    private void reportToRetire(int slot) {
+        if (reports(slot).current() != null) {
+            return;
+        }
+        byte[][] saved = city().lastReport(slot);
+        if (saved != null) {
+            restoreReport(slot, saved);
+            return;
+        }
+        sosdet.report.ReportLayout layout = city().layout();
+        reports(slot).restore(new CityReport(layout, slot, 0, 0, new double[layout.size()]));
+    }
+
+    /**
      * As a freeze applies (SOS-193): the human keeps its slot and its last report, which every PC reads from now; its
      * battle ends with no result, as at a removal, and nobody waits for its PC.
      */
@@ -2298,6 +2316,7 @@ final class Session {
                 freezeDue(slot);
                 continue;
             }
+            reportToRetire(slot);
             remover().accept(slot);
             retired[slot] = true;
             icedSlots[slot] = false; // a frozen human removed for good (SOS-193)

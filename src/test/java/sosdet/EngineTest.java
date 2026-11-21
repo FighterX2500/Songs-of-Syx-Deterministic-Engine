@@ -953,6 +953,41 @@ class EngineTest {
         assertThrows(IllegalStateException.class, () -> Engine.removeHumanAtStart(3), "after the start");
     }
 
+    /**
+     * SOS-239: a human removed at a resume's start has armies, and disbanding them reads its city. No PC sent a report
+     * of it, so every PC reads the save's last report; a save from before the last reports gives an empty one. Before,
+     * the read hit no report and the host crashed at step 0.
+     */
+    @Test
+    void aHumanRemovedAtTheStartRetiresOnTheReportTheSaveHolds() {
+        Session s = ownCity(0);
+        double[] v = new double[SMALL.size()];
+        v[SMALL.slot(Field.CREDITS, 0)] = 500;
+        CityReport last = new CityReport(SMALL, 3, 900, 930, v);
+        byte[][] saved = {last.toBytes(), new sosdet.report.Reports().ledgerOut()};
+        s.city = savedGame(humans(0, 3), new boolean[Session.SLOTS], slot -> slot == 3 ? saved : null);
+        java.util.List<CityReport> readAtRetire = new java.util.ArrayList<>();
+        s.remover = slot -> readAtRetire.add(s.reports(slot).current());
+        Engine.pcHuman(0, 0);
+        Engine.removeHumanAtStart(3);
+        Engine.runFreely();
+        assertEquals(50, steps(50, 1));
+        assertEquals(java.util.List.of(last), readAtRetire, "its armies disband on the save's last report");
+    }
+
+    @Test
+    void aHumanRemovedAtTheStartOfAnOlderSaveRetiresOnAnEmptyReport() {
+        Session s = ownCity(0);
+        s.city = humans(0, 3); // holds no last reports
+        java.util.List<Double> creditsAtRetire = new java.util.ArrayList<>();
+        s.remover = slot -> creditsAtRetire.add(s.reports(slot).value(Field.CREDITS, 0));
+        Engine.pcHuman(0, 0);
+        Engine.removeHumanAtStart(3);
+        Engine.runFreely();
+        assertEquals(50, steps(50, 1));
+        assertEquals(java.util.List.of(0.0), creditsAtRetire, "an empty report, the same on every PC");
+    }
+
     /** {@code base} as a loaded save has it: these frozen humans, and these last reports of the playing ones. */
     private static CitySource savedGame(CitySource base, boolean[] frozen, java.util.function.IntFunction<byte[][]> last) {
         return new CitySource() {

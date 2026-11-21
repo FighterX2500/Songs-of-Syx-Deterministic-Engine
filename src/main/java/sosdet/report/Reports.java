@@ -112,6 +112,12 @@ public final class Reports {
         ledger.fromBytes(ledgerBytes);
     }
 
+    /** A retiring human's report when no PC sent one (SOS-239): the world reads it, with no open changes. */
+    public void restore(CityReport r) {
+        clear();
+        current = r;
+    }
+
     /**
      * A frozen human thaws (SOS-193): the last report before its freeze and the world's changes since go; a report its
      * PC sent since, waiting to apply, stays.
