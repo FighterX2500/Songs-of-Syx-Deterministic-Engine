@@ -9,7 +9,7 @@ import sosdet.hash.HashLog;
 
 /**
  * Every carved city-state still on the map, in the order they were carved: the undo log saved with the world as
- * {@code SOSDET_CARVES} (SOSGSGMP docs/plan/hot-join.md §3.5). An un-carve takes out only what its own carve added and no
+ * {@code SOSDET_CARVES} (SOSGSGMP docs/archive/hot-join.md §3.5). An un-carve takes out only what its own carve added and no
  * later carve also uses, so city-states can go in any order. World state: every PC holds the same book, and it is in the
  * world hash. Plain Java, no game classes.
  */

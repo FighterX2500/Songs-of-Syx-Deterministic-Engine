@@ -1,6 +1,6 @@
 # Spike: a battle on two PCs, several commanders per side (SOS-15)
 
-Date: 2026-10-24 · Card: [SOS-15](https://fighterx2500.atlassian.net/browse/SOS-15) · Epic: SOS-22 · Code: `Engine.watchOnly`, `Engine.commanders`, `sosdet.ai.Commanders`, `sosdet.game.OwnArmy`, patches `94-own-army` and `95-player-orders`, the rig's `--watch` and `--commanders` · Feeds: the mod's SP4 ([single-player-assumptions.md](https://github.com/FighterX2500/SOSGSGMP/blob/main/docs/plan/single-player-assumptions.md) §2, hook B6)
+Date: 2026-10-24 · Card: [SOS-15](https://fighterx2500.atlassian.net/browse/SOS-15) · Epic: SOS-22 · Code: `Engine.watchOnly`, `Engine.commanders`, `sosdet.ai.Commanders`, `sosdet.game.OwnArmy`, patches `94-own-army` and `95-player-orders`, the rig's `--watch` and `--commanders` · Feeds: the mod's SP4 ([single-player-assumptions.md](https://github.com/FighterX2500/SOSGSGMP/blob/main/docs/archive/single-player-assumptions.md) §2, hook B6)
 
 ## Question
 

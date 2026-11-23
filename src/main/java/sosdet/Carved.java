@@ -1,7 +1,7 @@
 package sosdet;
 
 /**
- * What {@link Engine#carve} did (SOS-186, SOSGSGMP docs/plan/hot-join.md §3).
+ * What {@link Engine#carve} did (SOS-186, SOSGSGMP docs/archive/hot-join.md §3).
  *
  * @param region the city-state's new region, with no owner yet
  * @param home   the region its centre was carved out of

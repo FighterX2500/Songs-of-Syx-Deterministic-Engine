@@ -40,7 +40,7 @@ Status: done: milestones 1 and 2 merged with SOS-34, milestone 3 with SOS-36 (bo
    - the mass copier: source bitmap, destination, rotation;
    - a saved blueprint: its `SavedPrint` contents, since it lives in the issuer's profile.
 
-   Inventory section 1.15–1.17 (`docs/plan/notes/placement-inventory.md`) has the call sites.
+   Inventory section 1.15–1.17 (`docs/archive/notes/placement-inventory.md`) has the call sites.
 4. **Open items from part 1, to close in this card:**
    - **Done, saves:** the game's own saves in a session (menu, quick save) lift the local plan too (`PlanStash.beforeGameSave`, `afterGameSave`); rig action `game-save`.
    - **Wall material:** `UtilStructure.set` writes a saved game property on each PC separately. Check whether anything in the step reads it; if so, make it a command or keep it out of the save.

@@ -1,6 +1,6 @@
 package sosdet.txn;
 
-/** The kinds of transaction, by the scan's codes (docs/plan/notes/city-world-link-scan.md). */
+/** The kinds of transaction, by the scan's codes (docs/architecture.md). */
 public enum TxnKind {
     /** C1, C3: goods bought for the city, paid now and delivered later ({@code PBuyer.addReserve}). */
     BUYER_RESERVE,

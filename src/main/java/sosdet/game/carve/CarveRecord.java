@@ -9,7 +9,7 @@ import java.util.TreeSet;
 import sosdet.hash.HashLog;
 
 /**
- * One carved city-state and what it changed, enough to undo it (SOSGSGMP docs/plan/hot-join.md §3.5): the square's
+ * One carved city-state and what it changed, enough to undo it (SOSGSGMP docs/archive/hot-join.md §3.5): the square's
  * tiles and the region each held before, the road tiles and path steps its links added, the regions it was cut from and
  * linked to, and the NPC the land became, if any. Tiles are world tile indexes ({@code x + y * width}); regions and
  * factions are indexes. Plain Java, no game classes.

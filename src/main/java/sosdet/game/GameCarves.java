@@ -8,7 +8,7 @@ import snake2d.util.file.FilePutter;
 import sosdet.game.carve.CarveBook;
 
 /**
- * The carved city-states' undo log (SOS-186, SOSGSGMP docs/plan/hot-join.md §3.5), saved with the world. The section is
+ * The carved city-states' undo log (SOS-186, SOSGSGMP docs/archive/hot-join.md §3.5), saved with the world. The section is
  * in the "all" list, after {@code GamePassed}; a save without it (any one before SOS-186) gives an empty book: nothing
  * carved. The book carries its own version.
  */

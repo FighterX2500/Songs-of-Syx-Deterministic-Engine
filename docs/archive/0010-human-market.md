@@ -1,6 +1,6 @@
 # Plan 0010: the market and tariffs between humans (SOS-77)
 
-Card: [SOS-77](https://fighterx2500.atlassian.net/browse/SOS-77). The mod's plan is SOSGSGMP `docs/plan/goods-tariffs.md`, approved by the owner on 2026-10-27; this file records the engine's half as built.
+Card: [SOS-77](https://fighterx2500.atlassian.net/browse/SOS-77). The mod's plan is SOSGSGMP `docs/archive/goods-tariffs.md`, approved by the owner on 2026-10-27; this file records the engine's half as built.
 
 ## 1. Goal
 

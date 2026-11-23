@@ -37,26 +37,54 @@ dependencies {
 
 Most `Engine` methods throw `IllegalStateException` with no session. `active()`, `locationProblem`, `buildWorld`, `bannerBytes` and `worldHash` work without one.
 
+## The calls, by topic
+
+**The run.** `step()` is the current step. `runUntil(last)` sets the last step the engine may run, and `runFreely()` lifts it; the engine never runs past it, and runs nothing while paused. On the host, `stepPastPeers()` gives a step for something every PC must do together, such as a campaign save: no PC can have passed it when word of it arrives, at any speed.
+
+**Pace and speed.** `peerStep(pc)` is the last step that PC's state hashes reached. On the host, `pace(pcs, lead)` caps its own last step at the slowest of those PCs' steps plus `lead`, so the slowest PC caps the speed (mod spec §4; the rig's `--pace-lead`). After `followAgreedSpeed()`, every PC's game speed follows the agreed speed: the host's governor lowers it to what the slowest PC holds and raises it back toward the host player's speed, with a line on every PC's top bar (SOS-42; the rig's `--govern`). `capacity()` is the steps a second this PC could run, from its frames that didn't wait for another PC; it goes out with the hashes. The governor lowers the speed for a PC whose capacity is under it, and for the link only when waits take over a third of the time for 5 seconds, one step at a time (SOS-94).
+
+**Orders, commands and the AI log.** `aiHost(startId)` or `aiPeer(startId)` chooses the mode: on the host the AI general runs and the engine hands out its log; every PC applies each entry at its step. Orders and players' commands come from the game's own UI through hooks. The host stamps each with a step, and every PC applies it exactly once at that step, never on arrival; a command that moves goods, soldiers or money carries a transaction ID. `seed(seed)` sets the simulation stream's seed. `watchOnly(true)` makes this PC's player a watcher: orders and commands clicked there are dropped before any log (SOS-15). The host's `commanders(byDivision, artilleryByArmy)` says who commands each battle division and each army's artillery: a PC or the host's AI general. It applies at the step the host stamps; an order or a change of the general from a source that doesn't command that division is skipped on every PC (`ordersNotCommanded()` counts them), each PC's player selects only their own, and the table is in the resync state and the state hash. Several humans in one battle each command their own divisions this way (SOS-118). Which player commands what, and where each army deploys, is the mod's to decide.
+
+**Hashes, holds and resyncs.** `hash(step)` is the state hash at a step.
+- With no own cities, `resyncSave` and `resyncLoad` save a battle at a step and load it at that step. The save carries the step and the AI log entries not yet applied; AI state vanilla doesn't save (the offence `flanking` value) is saved, or drawn again on the simulation stream ([ADR 0003](https://github.com/FighterX2500/SOSGSGMP/blob/main/docs/decisions/0003-battle-lockstep.md) in SOSGSGMP). `battleResyncSave` and `battleResyncLoad` do the same for a battle on the battle map. Every PC, the host included, loads a resync: a game that ran on keeps caches a freshly loaded one rebuilds.
+- **The desync hold (SOS-53):** when the host's hashes first differ from another PC's, the host logs a hold entry. Every PC, the host included, applies it at the same step and runs nothing past it, whatever the last step allows. `desyncHold()` gives each PC the desync's step, the differing PC and the hold step. The host then chooses a world resync at the hold step (`worldResyncSave` on the host, `worldResyncLoad` on every PC, which ends the hold), or saving and leaving.
+- **The world resync** carries every human's ledger and loads every human's world sections (city divisions, relations, events), each PC keeping its own city. It also carries the host's world state that no save holds: the move remainders, the entity pools, the war timer, the courts' day counters, the NPC production boosts and the peace times. Every PC puts that back after its load (SOS-52, SOS-183).
+
+**Battles.** `battleHold(true)` holds every PC before a battle's Engage, and `battleGo()` lets it go on, so the mod can save the campaign first (SOS-70). With `localBattles(true)`, a human's battle against NPC armies runs on that human's PC only, every PC's world running on (SOS-93); `localBattle(slot)` describes it. Another human can watch it (`viewTapeOut`, `viewTapeIn`; SOS-109). A restart by vote: "What to pump", below.
+
+**Humans and setup.**
+- `localHuman(slot)` and `pcHuman(pc, slot)` say which human slot is this PC's and which is each PC's, so each PC's commands act for its own human and its city's reports feed that human. `asHuman(slot)` reads the game as another human, between steps only (the rig's probes).
+- On the confirmed terrain, `buildWorld` gives each human a capital at its picked location, in slots 0 to N-1 with the lobby's race, name and banner, then NPC countries and routes as vanilla makes them, with vanilla's small NPC states around every human (SOS-55). One PC builds the world and every PC loads its save. `locationProblem` tells every PC's location picker why a location can't be picked: the terrain, or closer than 6 tiles to another human's.
+- The rig makes a human through the adapter (`GameHumans.add`, its `makehuman`). The `addHuman` call [ADR 0004](decisions/0004-several-humans.md) planned was built as `buildWorld`; today's `addHuman` is hot-join's, below.
+- **Removing a human (SOS-66):** the host's `removeHuman(slot)` logs a removal that applies at the same step on every PC; `removeRefusal(slot, atStart)` says why it would be refused. A battle that human is in ends with no result, every army of it is disbanded and every region it held is freed, as vanilla destroys a faction. It stays in its slot, retired (`retired(slot)`), so every other human keeps its place, and nothing runs for it again. Until that step no PC waits for its reports past the last one the host has. `removeHumanAtStart(slot)` does the same for a resume without that player.
+
+**Between humans.** `dealPropose`, `dealAnswer`, `dealCancel`, `setTariff` and `declareWar` (SOS-72 to SOS-74, SOS-77) each have a refusal check the mod's window shows first (`dealRefusal`, `dealAcceptRefusal`, `dealCancelRefusal`, `tariffRefusal`, `warRefusal`); each is a command applied at one step on every PC. `transfers(afterSeq, out)` gives every human's money and goods transfers between steps, the same on every PC (SOS-81).
+
+**City views (SOS-82).** The host's `viewBegin(viewer, owner)` and `viewEnd` start and end one. The owner's city goes out through `viewOut` and comes in through `viewIn`, and view hashes compare the two (`viewHashOut`, `viewHashIn`). A city has any number of viewers: a viewer already there loads the owner's save again through `viewRejoin` as another joins (SOS-151).
+
+**Sieges of a human's capital (SOS-92).** `besiegedSince` and `assaultInDays`: when the siege began and the days to the assault. `sallyOut` and `sallyRefusal`: the defender's sally. `assault()` and `assaultOutcomeTake()`: the assault and its outcome. `assaultTerms`, `assaultTermsRefusal` and `assaultPeopleInCity`: the attacker's terms.
+
 ## Carved city-states
 
-A city-state can be carved into a running world as a new 3x3 region (SOS-186, SOSGSGMP `docs/plan/hot-join.md`):
+A city-state can be carved into a running world as a new 3x3 region (SOS-186, SOSGSGMP `docs/archive/hot-join.md`):
 
-- `carveProblem(x, y)` says why a centre can't be used, or null. Any PC, between steps.
+- `carveProblem(x, y)` says why a centre can't be used, or null. Any PC, between steps. A centre must pass vanilla's capital terrain rule; the square and a 1-tile ring must lie on the map and the square inside regions; the centre must be at least 6 tiles from every region's town and every human's capital; no army, caravan or camp may stand on the square; it may not touch a besieged region or a human's capital square, cut a region in two or cut a road off its town; the world needs a free region; and a road must be able to reach the town of each region the square touches.
 - `carve(x, y, name)` carves it on the PC that saves the world: the square, its region info and name, a road and path to the town of each region it touches (no road straight to another human: vanilla's path graph joins a region's town to its borders only, so humans 6 to 15 tiles apart keep SOS-120's trade route), and the split rule for the land it is carved in (unowned land becomes a new NPC; a region of an NPC realm of 4 or more that isn't its capital breaks away; a new NPC is neutral and sanctified). The region has no owner yet. `Carved.noSlot` says a new NPC was wanted but all 64 faction slots are in use.
 - `uncarve(region)` undoes one, in any order: only the roads and path steps no other carve uses go.
-- The undo log is the save section `SOSDET_CARVES`, loaded with the world and in the world hash.
+- The undo log is the save section `SOSDET_CARVES`, loaded with the world and in the world hash. Per carve it holds the square's tiles and the region each held before, the road tiles and path steps its links added, the regions it was cut from and linked to, and the NPC the land became.
 - After either, every PC loads the world from that PC's save: a world changed in place on one PC never matches one that was loaded (SOS-38, SOS-184).
+- **Setup by carving (SOS-187):** `buildWorldForCarving` builds the world around a stand-in capital for the host that vanilla's generator places, with NPC slots 1 to N-1 kept free. Every PC loads it, and every player, the host too, picks a spot on the real map (`carveLinks` names the regions a spot would link to). `carveHumans` then carves each into slot 0 to N-1 in order; a spot an earlier carve made unfit moves at most 3 tiles. The host's capital moves to their city-state, the stand-in becomes a new neutral NPC state, and the host's city is made at their capital (SOS-214). Every PC loads that save before step 0.
 - **A gone human's city-state (SOS-188):** `uncarveDue()` names a carved region no human holds any more (its human removed, or eliminated and the city given to a neutral NPC), or -1; it allocates nothing, so a mod can ask every frame. The host then calls `worldEditHold()`: every PC holds at a step a little ahead, as for a desync, but `desyncHold().edit()` is true (no PC differs, nothing to choose). At the hold step the host calls `uncarve(region)` and `worldResyncSave()`; every PC's `worldResyncLoad` ends the hold.
 - **A new human (hot-join, SOS-189):** `joinSlot()` names the slot a newcomer would take, the first free NPC slot above the last human's, or -1 when the map has none. `addHuman(human, credits)` carves the newcomer's city-state at its spot (or the nearest that fits, 3 tiles at most) and makes that slot a human with `credits`. Hot-join restarts every PC: each loads its own copy of the same campaign save in its session, calls `addHuman` with the same arguments before step 0, saves and loads that save, then runs. The carve and the new human are the same on every PC (seeded from the world, rig runs CE1, CE2, AH2); a load with no session isn't, so `addHuman` comes after a session's load. The names a carve gives a new NPC state, its capital and its king come from vanilla's race name lists, whose cursors are per-PC state; every such edit first sets them from the seeded stream, past any human's name, so every PC names the new state alike (SOSGSGMP HJ5).
 
 ## Frozen humans
 
-A player can leave a running campaign and come back later (SOS-193, SOSGSGMP spec §11 Freezing a player, [plan 0020](plan/0020-freeze.md)):
+A player can leave a running campaign and come back later (SOS-193, SOSGSGMP spec §11 Freezing a player, [plan 0020](archive/0020-freeze.md)):
 
 - `freezeHuman(slot)`, host, between steps: refused as `removeHuman` is (`freezeRefusal` says why, or null). The entry applies at the same step on every PC, as a removal does, and nobody waits for that PC from the call on. The human keeps its slot and its capital; every stance but a trade or a pact becomes neutral (its wars end, its vassals go free); its other regions become free land; its open deals and the siege of its capital end; its armies go home and stand still, as they are.
-- While frozen (`frozen(slot)`), every PC reads its city as its last report showed it, also after any load (the report is in the world save, section `SOSDET_FROZEN`). The transactions for its city wait there too. No NPC makes war on it, raids it or gathers on its border; deals, wars and tariffs with it are refused; its city can't be viewed.
+- While frozen (`frozen(slot)`), every PC reads its city as its last report showed it, also after any load (the report is in the world save, section `SOSDET_FROZEN`). The transactions for its city wait there too. No NPC makes war on it, raids it or gathers on its border; deals, wars and tariffs with it are refused; it neither buys nor sells, and nobody trades with it (SOS-240); its city can't be viewed.
 - `removeHuman(slot)` still removes a frozen human for good, at once.
-- **Frozen at the start of a resume:** `freezeHumanAtStart(slot)` freezes a missing player's human instead of removing it, so they can rejoin later ([plan 0021](plan/0021-freeze-at-start.md)). Every PC, own-city mode, after the load and before the run, for the same slots, as `removeHumanAtStart`; the slot has no PC, so leave it out of `pcHuman` and the host's `pace`. It freezes in the first world part on every PC, as `freezeHuman` does, and every PC reads its city from the last report the save holds; no PC waits for it. `freezeAtStartRefusal(slot)` says why it would be refused, or null: slot 0, no human's slot, a human removed or frozen already, after step 0, or a save made before this version, which holds no such report (the host then removes the player or waits). Since this version the world save keeps every playing human's last report for this (`SOSDET_FROZEN` format 2).
+- **Frozen at the start of a resume:** `freezeHumanAtStart(slot)` freezes a missing player's human instead of removing it, so they can rejoin later ([plan 0021](archive/0021-freeze-at-start.md)). Every PC, own-city mode, after the load and before the run, for the same slots, as `removeHumanAtStart`; the slot has no PC, so leave it out of `pcHuman` and the host's `pace`. It freezes in the first world part on every PC, as `freezeHuman` does, and every PC reads its city from the last report the save holds; no PC waits for it. `freezeAtStartRefusal(slot)` says why it would be refused, or null: slot 0, no human's slot, a human removed or frozen already, after step 0, or a save made before this version, which holds no such report (the host then removes the player or waits). Since this version the world save keeps every playing human's last report for this (`SOSDET_FROZEN` format 2).
 - **Rejoin:** at a restart like hot-join's, the host calls `rejoinOut(file)` right after the campaign save every PC reloads; every PC, the returning one from its own freeze save, calls `rejoinLoad(file, state)` in its session before step 1, then `thawHuman(slot)`. The returning PC's city goes on where it stopped, and the transactions that waited for it apply there. On the returning PC, `addMissingHumans(hostSlots)` comes first, right after its freeze save's load: the human slots of players who joined since it froze become stand-ins, which the host's world replaces; then it saves and loads its game again, as after `addHuman` (SOS-204). `rejoinLoad` refuses a game whose human slots still differ from the host's.
 
 ## Stationed armies
@@ -114,7 +142,7 @@ When they come up:
 | A resync with no own cities | host: `resyncSave(file)` | every PC, the host too: `resyncLoad(file, state, afterSet)` |
 | A battle's restart (SOS-231) | the battle's PC or the defender: `viewOut()` | every watcher or viewer whose `View.rejoinAt` is the restart's step: `viewRejoin(bytes)` |
 
-A resync carries a save file as well as the returned bytes, so send both. A restart by vote is the mod's to ask: `battleHere()` names the battle this PC's player sees, `takeRestartAsked()` says when they pressed the battle's own Restart, and the host checks `restartRefusal(key)` and calls `restartBattle(key)` once the players agree. Every PC hears the result as a `Notice.RESTART`. The engine never resyncs on its own: `desyncHold()` says when every PC has held, and your mod shows the choice.
+A resync carries a save file as well as the returned bytes, so send both. A restart by vote is the mod's to ask: `battleHere()` names the battle this PC's player sees, `takeRestartAsked()` says when they pressed the battle's own Restart, and the host checks `restartRefusal(key)` and calls `restartBattle(key)` once the players agree. At that step every PC that runs the battle goes back to its start: a battle every PC runs, a local battle with its allies and watchers, and the assault; every PC skips it alike when the battle can no longer restart then. Every PC hears the result as a `Notice.RESTART`. The engine never resyncs on its own: `desyncHold()` says when every PC has held, and your mod shows the choice.
 
 For a desync hunt, put both PCs' lines side by side: `desyncReport()` (the world's), `viewDesyncReport()` (the viewer's copy of a viewed city), `hashedDivisions(step)` with `hashInterval()` (the divisions this PC hashed at a step, owner and viewer alike), and `traceDraws(steps)` with `drawTrace(from, to)` (the code behind every world draw).
 
@@ -127,8 +155,35 @@ For a desync hunt, put both PCs' lines side by side: `desyncReport()` (the world
 
 ## Limits today
 
+The one list of known limits. The README and the release notes repeat a short part of it for players.
+
+**The engine**
 - V71, build 71.44 only.
 - The host can't change during a session: `aiHost` and `aiPeer` throw after step 0.
 - `removeHuman` and `freezeHuman` refuse slot 0.
 - In `ownCity` mode each city differs by PC, so only the world is compared.
-- The scenario suite checks little today: see [rig/README.md](../rig/README.md).
+- The slowest PC caps the speed, and a speed change applies about half a second later.
+- In a session, Quick Load and the game's autosave are off, and each title is worth the base 0.5.
+- Other mods that change the same game classes or the simulation are untested. A city report from a PC whose game data differs is not read (`reportMismatch()`).
+- The scenario suite checks little: see [rig/README.md](../rig/README.md).
+
+**The world**
+- A world-battle prompt holds only its armies' own movement (SOS-45). The world AI can still teleport, re-route or disband a held army (`War.java`, for one), which vanilla never meets because its prompt pauses the world. It happens alike on every PC.
+- A world resync while a world-battle prompt is open leaves the PC that reloads without that prompt.
+- A world question has no time limit, unlike a prompt's 30 seconds. A battle's return and a view's thaw wait for it, so a player who ignores one delays another player's return.
+- A few slot-0 leftovers: vanilla's `DipStance.any` compares with `FACTIONS.active().get(0)`, so a human at war with slot 0 can draw NPC joiners against it; the raid debug actions act on slot 0 only.
+
+**Battles**
+- A world command whose step falls in a battle is skipped, with a notice to its PC: the battle's end loads the game saved before it.
+- Transactions the world queued for a city in the Engage step itself are dropped by the return load: the save holds the city before that step's tail.
+- The host generating its own local battle holds the other PCs about 12.7 s.
+- In a local battle, Start is the fighter's only; the allies' PCs follow its tape. An ally who closes their view, falls behind or is removed leaves their divisions to the fighting player (owner, 2026-11-19).
+- A watch of a local battle ends once the watcher is 3 minutes behind (`Session.WATCH_BEHIND_SECONDS`). Each join resets the fighter's camera to the throne and closes its panels and selection. A join costs the fighter a save of 2 to 3 MB (about 1 s) and the watcher a load of 6 to 7 s.
+
+**Views**
+- A room the viewer was still drawing (never built) is lost at the view's load; built plans come back with its city.
+- A city question open on the owner's PC at the view's freeze step has no copy on the viewer, so the owner's answer is skipped there.
+- A viewer runs at 3.5x while it is more than 60 steps behind the host's confirmed step. The view ends when it hasn't caught up 60 s after its load, or falls more than 60 steps behind for over 60 s (mod spec §10).
+
+**Freezing after a crash**
+- The returning city comes back from its last campaign save. Soldiers who joined a world division and goods put into army supply after that save exist twice, in the world and in the city (accepted). What the world sent that city between the save and the freeze is lost: the replay of those transfers ([plan 0020](archive/0020-freeze.md), step 5) is not built.

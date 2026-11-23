@@ -991,7 +991,7 @@ public final class Engine {
     }
 
     /**
-     * Setup by carving (SOS-187, SOSGSGMP docs/plan/hot-join.md §4), step 1, on the one PC that builds the world: the whole
+     * Setup by carving (SOS-187, SOSGSGMP docs/archive/hot-join.md §4), step 1, on the one PC that builds the world: the whole
      * world as vanilla makes it for one player, around a stand-in capital for the host that vanilla's generator places
      * (SOS-214; {@code host} gives the race and name, its spot must be none), with NPC slots 1 to {@code humans} - 1 kept
      * free. Then this PC saves, every PC loads that save, and every player, the host too, picks a spot on its map
@@ -1014,7 +1014,7 @@ public final class Engine {
     }
 
     /**
-     * Hot-join (SOSGSGMP docs/plan/hot-join.md §5): the slot a new human would take, the first free NPC slot above the
+     * Hot-join (SOSGSGMP docs/archive/hot-join.md §5): the slot a new human would take, the first free NPC slot above the
      * last human's, or -1 when the map has none (a join is impossible). Any PC with a world loaded.
      */
     public static int joinSlot() {
@@ -1088,7 +1088,7 @@ public final class Engine {
     }
 
     /**
-     * Why a city-state can't be carved with its centre at {@code tx, ty} (SOSGSGMP docs/plan/hot-join.md §3.1), or null:
+     * Why a city-state can't be carved with its centre at {@code tx, ty} (SOSGSGMP docs/archive/hot-join.md §3.1), or null:
      * the terrain; the map's edge beside it; a town or a human's capital closer than 6 tiles (SOS-199); an army on the
      * square; a siege; a region it would cut in two, or whose road it would cut off from its town; no free region; no
      * road to a town it touches. Any PC, between steps.

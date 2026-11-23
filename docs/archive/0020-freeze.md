@@ -1,6 +1,6 @@
 # 0020: a frozen human (SOS-193)
 
-SOSGSGMP `docs/plan/freeze.md` (owner decisions 2026-11-12); spike `spikes/freeze.md`. A human whose player leaves keeps their capital, frozen, until they rejoin.
+SOSGSGMP `docs/archive/freeze.md` (owner decisions 2026-11-12); spike `spikes/freeze.md`. A human whose player leaves keeps their capital, frozen, until they rejoin.
 
 ## Steps
 
