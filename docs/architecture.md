@@ -22,11 +22,12 @@ A short map for an AI agent (or a person) about to change SOSDET. Read it first,
    - enters the simulation random stream, reseeded from the seed and the step number;
    - applies the log entries due at this step: orders, commands, speed changes and the AI general's settings.
 4. **The step itself:** the city part, then the world part (patch `12`), each updating the game's resources by the step length; or the battle.
+   - The parts and what runs in each: "The step's parts", below.
    - The world part never reads a live city: it reads the city report (patches `13`, `14`, `98`; `GameReport`) and changes the city only through transactions applied exactly once (`sosdet/txn`, `GameTxns`).
    - In own-city mode (`Engine.ownCity`) each PC runs its own human's city, and the world reads each human's reports from that human's PC. The world part runs each human's world half in slot order, with that human as `FACTIONS.player()` (several humans, [ADR 0004](decisions/0004-several-humans.md), [requirements](requirements.md) §2).
    - The lockstep windows stay half a second of real time at every speed (SOS-90): a report applies at least 30 steps after it is taken, more at high speeds, and promises the step its city's next report applies at, at the earliest (`CityReport.nextAt`). Another PC's world runs to the step before without waiting. The host's AI log delay grows the same way; a peer runs to the host's horizon, which never goes back. A frame that waited for another PC counts as held, in the status line and for the speed governor.
-   - A removed human stays in its slot, retired (SOS-66, [plan 0007](plan/0007-remove-human.md)). The host logs a REMOVE entry (`Engine.removeHuman`) that carries the step of the last report it read from that human's PC. At the entry's step, by when every PC has that report, the human's battle ends with no result, its regions go free and its armies disband. From then on it runs nothing: `FACTIONS.active()` and every per-human loop skip it (`Hooks.retired`), and the world waits for no more of its reports. Its slices keep their index.
-   - A frozen human (SOS-193, [plan 0020](plan/0020-freeze.md)) also stays in its slot: it goes by the same REMOVE entry, marked as a freeze, at one step on every PC, and from it nobody waits for that PC's reports. Unlike a removed human it keeps its capital, every PC reads its city as its last report showed it, and a restart brings it back (`rejoinLoad`, `thawHuman`). A resume can freeze a missing player's human at the start (`freezeHumanAtStart`, [plan 0021](plan/0021-freeze-at-start.md)); for that the world save keeps every playing human's last report too.
+   - A removed human stays in its slot, retired (SOS-66, [plan 0007](archive/0007-remove-human.md)). The host logs a REMOVE entry (`Engine.removeHuman`) that carries the step of the last report it read from that human's PC. At the entry's step, by when every PC has that report, the human's battle ends with no result, its regions go free and its armies disband. From then on it runs nothing: `FACTIONS.active()` and every per-human loop skip it (`Hooks.retired`), and the world waits for no more of its reports. Its slices keep their index.
+   - A frozen human (SOS-193, [plan 0020](archive/0020-freeze.md)) also stays in its slot: it goes by the same REMOVE entry, marked as a freeze, at one step on every PC, and from it nobody waits for that PC's reports. Unlike a removed human it keeps its capital, every PC reads its city as its last report showed it, and a restart brings it back (`rejoinLoad`, `thawHuman`). A resume can freeze a missing player's human at the start (`freezeHumanAtStart`, [plan 0021](archive/0021-freeze-at-start.md)); for that the world save keeps every playing human's last report too.
    - A carve (`Engine.carve`, `uncarve`, `addHuman`, `carveHumans`; SOS-184 to SOS-189) changes the world's regions between steps on the PC that saves the world, from the generator seeded from the carve layout and the step, and every PC loads the result. Its undo log, `SOSDET_CARVES`, is saved with the world and hashed. See [docs/api.md](api.md), "Carved city-states".
    - Battle jobs run inside the step, not on their threads (patch `30`).
    - Path jobs queued in the step run at its end, before the hash: share 0 on the simulation thread, shares 1 and 2 on path threads, job i always on share i % 3 (patch `35`, `PathWorkers`).
@@ -35,6 +36,44 @@ A short map for an AI agent (or a person) about to change SOSDET. Read it first,
    - The clock section also holds the human slots and each PC's human, when there are several humans in own-city mode (SOS-46), and marks each retired human (SOS-66).
    - The world section holds the armies, every world entity, region owners, each faction's credits (in own-city mode not a human's), each human's name, ruler name and banner, each faction's overlord and stance with every other faction (not only wars), every NPC king's opinion of each human after slot 0, the raiders, each human's war and rebellion timers and current raider, the deals, tariffs and sieges between humans, the recipes' NPC production boosts, every NPC's goods and production rates (SOS-93), region populations, NPC courts, the global events under way, and the calendar. Hash format 8 (SOS-46 made it 7; SOS-94 added each PC's capacity to every record). When it differs, the desync report lists it part by part.
 6. **Between steps** come the UI and rendering. They draw from the cosmetic stream and must never write simulation state (patches `65`, `67`, `98`).
+
+## The step's parts
+
+`GAME.update` runs the game's resources in the order the game builds them: `ScriptEngine`, `TIME`, `Intervals`, `TmpBoosting`, `SETT`, `Armies`, `BattleThreads`, `GCOUNTS`, `WORLD`, `RAIDING`, `EVENTS`, `TOURISM`, `NOBLES`, `FACTIONS`, `EVENT_HANDLER`. Vanilla mixes city and world work in that list, so patch `10` runs it twice a step, once per part, and [`StepParts`](../src/main/java/sosdet/game/StepParts.java) says what runs where ([ADR 0005](https://github.com/FighterX2500/SOSGSGMP/blob/main/docs/decisions/0005-world-lockstep-and-city-world-link.md) in SOSGSGMP). Each part keeps vanilla's order among its own resources.
+
+1. **The step's start** (`Hooks.stepBegin`): the log entries due. A city's commands apply here; the world's wait for the world part.
+2. **The city part,** this PC's own city: every resource but `WORLD` and `RAIDING`, a mod's script included. `EVENTS` runs its 9 city events (`CITIZEN`, `SLAVES`, `DISEASE`, `DISEASE_MILD`, `KILLER`, `TEMP`, `ADVICE`, `ACCIDENTS`, `ENGINE`), and `FACTIONS` only this PC's human's own update (tech, titles, levels, price history, inflation). Scripted events (`EVENT_HANDLER`) are the city's: their world marks and world actions travel in the report (B6).
+3. **The world part,** in lockstep on a stream reseeded from the seed and the step (`Hooks.stepPart`): it takes this PC's report when one is due, applies the reports now due and their inputs, then the step's world commands (`CommandParts.world`: armies, regions, diplomacy, world battles, sieges, stationing, a local battle's result, raider payments, the player's name and banner). Then it runs `WORLD`, `RAIDING`, the 7 world events (`FACTION_EXPAND`, `FACTION_COLLAPSE`, `FACTION_POPUP`, `FACTION_WAR`, `FACTION_PEACE`, `DIPLOMACY`, `REBELLION`) and the rest of `FACTIONS`: the NPCs, trade, emissaries and diplomacy, and each human's world half with that human current.
+4. **The tail** (`Hooks.stepEnd`): the path jobs queued in the step, the transactions the world part queued for this PC's city, then the hash.
+
+A world resync loads the 7 world events, never the city's ones (`GameWorldLoad`).
+
+## The scan's codes
+
+SOS-38's scan of the city↔world boundary gave each crossing a code; `report/Field`, `report/InputKind`, `txn/TxnKind` and the reasons in [docs/hooks.md](hooks.md) use them. They are not the hook map's points in hooks.md's Point column (B7 to B16, E1 to E3), which come from SOSGSGMP's hook map. The full scan, with every site, is [docs/archive/notes/city-world-link-scan.md](archive/notes/city-world-link-scan.md) (history).
+
+| Code | What crosses | How |
+| --- | --- | --- |
+| A1, A2 | The city's stock per tradable; its trade settings and export and import capacity | The world reads report fields |
+| A3 | The treasury | |
+| A4 | Population by race and class | |
+| A5 | The capital's garrison, its power and whether the city is invaded | |
+| A6 | The city divisions that world divisions are made of | |
+| A7 | Boosts: every boost value's player value | |
+| A8 | Data-driven values and locks (`GVALUES.FACTION`) | |
+| A9, A10 | Laws per race (prosecution, war standing, tourism permit); the entry | |
+| B3, B5, B7 | The capital's population per race; mercy; the treasury and progress as the city keeps them | |
+| B1 | A soldier leaves the city for their world division | The city sends report inputs |
+| B2 | Goods into an army's supply | |
+| B4 | An invasion's outcome: its listeners, the army stats, a lost invasion's vassalage, the survivors | |
+| B6 | A scripted event's world marks and world actions | |
+| C1, C2 | Goods bought into the city; goods sold out of it, and army supplies from its stockpiles | The world queues transactions |
+| C3 | Credits in and out | |
+| C4 | People made in the city: a soldier home or retiring | |
+| C5 | City people the world kills or changes: garrison survivors, the relation table | |
+| C6 | Invasions of the city and their cancels | |
+
+The scan's other codes (A11, B8, B9, C7 to C9, and D for objects that are both) cross nothing: they stay local, or the engine handles them another way.
 
 ## Battles, views and assaults
 
@@ -68,7 +107,7 @@ A player's action never changes state on the PC where it was clicked. It becomes
 | 7000s | `World` | armies, recruiting, regions |
 | 7900s | `WorldBattles` | world-battle prompt decisions; 7903: an ally's answer |
 | 7950, 7951 | `StepPrompts` | yes/no questions the step asks: 7950 a city's, 7951 a world one, answered by the human asked (SOS-46) |
-| 7960s | `MapBattles` | a battle fought on the battle map: Start, Retreat, the victory or defeat panel's Close, Restart (SOS-41); 7964 a local battle's result, 7965 a battle's speed vote, 7966 and 7967 an ally's order and vote in a local battle. A world command whose step falls in the battle is skipped, with a notice to its PC: the battle's end loads the game saved before it, which would undo it |
+| 7960s | `MapBattles` | a battle fought on the battle map: Start, Retreat, the victory or defeat panel's Close, Restart (SOS-41; with own cities Restart asks for the players' vote instead, SOS-231); 7964 a local battle's result, 7965 a battle's speed vote, 7966 and 7967 an ally's order and vote in a local battle. A world command whose step falls in the battle is skipped, with a notice to its PC: the battle's end loads the game saved before it, which would undo it |
 | 7970s | `Sieges` | a human's sally from its besieged capital, 7970; the attacker's terms, 7973 (SOS-92); 7971, 7972 and 7974 to 7977 are test tooling |
 | 8000s | `Diplomacy` | deals, emissaries, an overlord's tribute (8005) |
 | 8100s | `HumanDeals` | deals between humans: propose 8100, answer 8101, cancel 8102, tariff 8103, war 8104 (SOS-72 to SOS-74, SOS-77) |
@@ -130,6 +169,14 @@ Each line is a class of cause found in practice. The patch named holds the fix; 
 | **A player action applied at once on one PC** | Every UI setter, tool and dialog | commands: `95`, `96-*`, `97`, `99` |
 | **Iteration and maths** | Object-keyed `HashMap` order; `Math` against `StrictMath` | rules only: [determinism.md](../.claude/rules/determinism.md) |
 
+## Measured costs
+
+- **The step** (SOS-106, 2026-10-30: Mogus-72, own-city mode, two copies at 25x on the dev PC): 3.34 ms a step. Citizens (`ENTETIES`) take 59%, the path jobs at the step's end 18%, the rest of the city 7%, scripts 4%, the world 4%, and battle threads, events, the hash and reports 8%. Only citizens on worker threads would move the step much. The path heap (patch `36`) took 13% off the path jobs and 2 to 3% off the step.
+- **The world resync** (2026-10-24): the world-only save is about 625 KB, saved in 150 to 230 ms and loaded in 115 to 310 ms, the laptop included.
+- **Engage** (MB13, 2026-10-24, Mogus-72): the Engage step took 13.9 s: 11.0 s generating the battle (tile map 6.5 s, pathing 1.9 s, settlement 1.5 s, the minimap 0.65 s, armies 0.6 s) and 2.5 s for the two saves. A local battle's generation holds the other PCs about 12.7 s.
+- **Two CPUs:** the dev PC and the laptop have shown no maths difference so far; no `StrictMath` change was needed (2026-10-24).
+- **Why `StepClock` uses real time times the speed:** vanilla gives a frame at most 1/32 s of game time and slows a PC under 40 frames a second. The laptop draws about 25 and ran below every speed it was given (SOS-42). In a session a frame's game time is its real time times the speed; vanilla's comes back only after a frame over 0.25 s, such as a pause or a load.
+
 ## Debugging a desync
 
 - **Reproduce it with the rig:** `python rig/rig.py city --save <file> --copies 3 --speeds 5,7,7 --steps N`. The copies are compared at every step, and all are held at the first difference. Each copy's `desync-c<k>.txt` names the step and the hash section. `--play` lets a person play copy 1.
@@ -146,6 +193,8 @@ Each line is a class of cause found in practice. The patch named holds the fix; 
 - **Inputs redraw every frame:** with the 30-step delay a typed "12" came out as "02" (`GInputInt`).
 - **Build levels:** the engine compiles with `--release 21`. The rebuild of the game's own source uses `--release 16` and `-proc:none`, so it matches the shipped jar byte for byte.
 - **Environment:** never rebuild while a rig run is live, because the build swaps jars under the running copies. On Windows, never run `cmd /c` from Git Bash (it hangs).
+- **A fresh process never matches running copies:** a save resumed in a fresh process differs from copies that keep running from the first step, with or without a carve (rig runs CV5, CV6; the world-load spike found the same). An in-place load is not transparent, so every PC loads, never one alone.
+- **Refurnish plans:** between steps a refurnish plan puts the placer's room on the site's tiles, a room with no icon, degrader or `remove()`. Closing the room tool ends the plan (`Refurnish.leave`), which keeps `UIRoom.hover`, `Deleter.place` and the default tool's Ctrl-click unreachable while a plan is down: they would throw or clear the plan outside the step (SOS-181; the rig's `plan-switch-tool` checks it). Keep it that way. Known cosmetic glitches under a plan: phantom piles in pastures and orchards, a hunter's gore count, and zeros in the room panel.
 
 ## Checking a change
 

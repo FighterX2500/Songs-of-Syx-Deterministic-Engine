@@ -1,6 +1,6 @@
 # 0002: Players' commands go through the host's log, one entry kind with a registry of commands
 
-Status: Accepted (owner, 2026-10-23, PR #12) · Card: [SOS-34](https://fighterx2500.atlassian.net/browse/SOS-34) · Builds on: [plan 0002](../plan/0002-city-and-world-lockstep.md) (stage B, owner's decisions of 2026-10-23), requirements §2–§3
+Status: Accepted (owner, 2026-10-23, PR #12) · Card: [SOS-34](https://fighterx2500.atlassian.net/browse/SOS-34) · Builds on: [plan 0002](../archive/0002-city-and-world-lockstep.md) (stage B, owner's decisions of 2026-10-23), requirements §2–§3
 
 ## Context
 
@@ -58,6 +58,8 @@ Constraints found while surveying (SOS-34 research):
 - An action not on the list stays local, and the rig's per-step comparison catches it in play. SOS-34's acceptance requires every listed command to be exercised at least once, by a rig script or a play session.
 
 **One player faction.** A command never reads `FACTIONS.player()` as "the issuer". It carries the issuing PC, and the engine applies it to the save's one player faction (requirements §2). Several human factions are the mod's work.
+
+*Amended by [ADR 0004](0004-several-humans.md) (several humans): a command acts for its issuing PC's human.*
 
 ## Options rejected
 

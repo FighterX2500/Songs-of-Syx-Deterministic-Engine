@@ -1,6 +1,6 @@
 # Plan 0016: battles against NPC armies on their own clock (local battles)
 
-Card: [SOS-93](https://fighterx2500.atlassian.net/browse/SOS-93). Mod spec 0.33 §4 and §8 (SOSGSGMP PR #72); research and obstacles O1 to O17 in SOSGSGMP `docs/plan/sos-93-npc-battles-own-clock.md`. Watching is [SOS-109](https://fighterx2500.atlassian.net/browse/SOS-109).
+Card: [SOS-93](https://fighterx2500.atlassian.net/browse/SOS-93). Mod spec 0.33 §4 and §8 (SOSGSGMP PR #72); research and obstacles O1 to O17 in SOSGSGMP `docs/archive/sos-93-npc-battles-own-clock.md`. Watching is [SOS-109](https://fighterx2500.atlassian.net/browse/SOS-109).
 
 ## What it does
 

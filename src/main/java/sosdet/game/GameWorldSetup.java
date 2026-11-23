@@ -172,7 +172,7 @@ public final class GameWorldSetup {
     }
 
     /**
-     * Setup by carving (SOS-187, SOSGSGMP docs/plan/hot-join.md §4), step 1, on the PC that builds the world: the whole
+     * Setup by carving (SOS-187, SOSGSGMP docs/archive/hot-join.md §4), step 1, on the PC that builds the world: the whole
      * world as vanilla makes it for one player, with NPC slots 1 to {@code humans} - 1 left free for the other humans.
      * The host has no spot yet (SOS-214): the world is built around a stand-in capital for them, where vanilla's generator
      * places one itself ({@code GenPlayer} with no location), and the host carves their city-state in step 2 like every
@@ -293,7 +293,7 @@ public final class GameWorldSetup {
     }
 
     /**
-     * Hot-join (SOSGSGMP docs/plan/hot-join.md §5): on a loaded world with its humans, outside any session, {@code h} gets
+     * Hot-join (SOSGSGMP docs/archive/hot-join.md §5): on a loaded world with its humans, outside any session, {@code h} gets
      * a city-state carved at its spot (or the nearest that fits, {@link #MOVE_AT_MOST} tiles at most) in the slot
      * {@link GameHumans#joinSlot} names, starting with {@code credits}. The game is then saved and loaded before a session
      * runs it, as after {@link #carveHumans}: other objects may still hold the slot's NPC. Returns a line for the log.

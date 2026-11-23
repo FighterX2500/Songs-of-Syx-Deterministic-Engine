@@ -23,20 +23,24 @@ What it doesn't do yet:
 - It runs only on V71, build 71.44. On any other build it stops the game at start-up and says so.
 - The API may still change, and nothing about it is promised.
 - The host can't change during a session.
-- The scenario suite's recordings need making again. Until then `python rig\suite.py` checks only the own-city world, and its other scenarios say RECORD, so its result is FAIL. It has no scenario with several humans, carving or freezing yet.
+- The scenario suite checks little. The short suite (`python rig\suite.py --short`) is recorded in the current formats; the full suite's long recordings are older, so they say RECORD and its result is FAIL until they are recorded again. No scenario has several humans, carving or freezing yet.
 
-Until something starts an engine session the game simulates as vanilla, with a few exceptions listed in [docs/hooks.md](docs/hooks.md): every game holds 15 spare Players and every save seven extra sections, and captive counts in manual battles differ slightly.
+The full list of known limits is in [docs/api.md](docs/api.md), "Limits today".
+
+Until something starts an engine session the game simulates as vanilla, with a few exceptions listed in [docs/hooks.md](docs/hooks.md): every game holds 15 spare Players and every save 14 extra sections, and captive counts in manual battles differ slightly.
 
 ## Documentation
 
 - **Building on the engine:** [docs/api.md](docs/api.md)
-- **Start here, especially as an AI agent:** [docs/architecture.md](docs/architecture.md): how a session runs, the code map, every known desync cause and where it is fixed, and the pitfalls
+- **Start here, especially as an AI agent:** [docs/architecture.md](docs/architecture.md): how a session runs, the code map, every known desync cause and where it is fixed, measured costs and the pitfalls
 - What it must do: [docs/requirements.md](docs/requirements.md)
 - Coding rules: [AGENTS.md](AGENTS.md); determinism rules: [.claude/rules/determinism.md](.claude/rules/determinism.md)
+- Open work and the owner's decisions: [docs/plan/HANDOFF.md](docs/plan/HANDOFF.md)
 - Changes to the game's code: [docs/hooks.md](docs/hooks.md); the patch set: [patches/](patches/README.md)
 - How it is built and shipped: [ADR 0001](docs/decisions/0001-build-and-packaging.md)
 - Why it is a separate project: [ADR 0004](https://github.com/FighterX2500/SOSGSGMP/blob/main/docs/decisions/0004-engine-split.md) in SOSGSGMP
 - Code and ideas adapted from other projects: [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)
+- Finished plans, notes and spike reports: [docs/archive/](docs/archive/), kept as history and not maintained
 - License: MIT for SOSDET's own code ([LICENSE](LICENSE)). The game source lines in `patches/` stay the game developer's, published with their permission; the mod is free and must not be sold.
 
 No game files or game source are ever committed. The build reads the game from `SOS_GAME_DIR`. The scenario suite's test saves stay in your own saves folder ([rig/README.md](rig/README.md)).
@@ -87,7 +91,7 @@ The first build downloads Gradle, ECJ 3.40.0 and JUnit. The result is the mod fo
 | `src/test/java/` | Tests (JUnit 5) |
 | `patches/` | The patch set: changes to the game's own source |
 | `src/test/fixtures/patches/` | Patch sets for testing the build (`-Psosdet.patches=<dir>`) |
-| `docs/` | Requirements, decisions, hooks, spike reports |
+| `docs/` | Requirements, architecture, API, decisions, hooks; `docs/archive/` holds finished plans and spike reports |
 | `tools/` | The patch tools |
 | `rig/` | The test rig: a second mod (SOSDET-rig) and its runner, for determinism runs ([rig/README.md](rig/README.md)); never in a release |
 | `spikes/` | Throwaway experiments; never part of the build |

@@ -515,7 +515,7 @@ def compare(copies, run_dir, tag, ref, steps, ends, after=1, resync_step=0):
 
 
 STEP_MS = 1000 / 60
-# Vanilla timing from SOS-23 (runs EVfieldB, EVcityB; SOSGSGMP docs/plan/spikes/city-determinism.md), the same
+# Vanilla timing from SOS-23 (runs EVfieldB, EVcityB; SOSGSGMP docs/archive/spikes/city-determinism.md), the same
 # measure and saves; the default baseline, since vanilla doesn't change (owner, 2026-10-22). --vanilla measures again.
 SOS23_VANILLA = {
     "field": {"p50": 2.21, "p95": 4.36, "p99": 5.81, "p999": 8.4, "max": float("nan"), "mean": 2.30, "stalls10": 10, "over1s": 0},

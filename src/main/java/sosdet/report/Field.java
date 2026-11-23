@@ -2,7 +2,7 @@ package sosdet.report;
 
 /**
  * The city values the world part reads, one field each (ADR 0005, SOS-38; the codes are the scan's, in
- * docs/plan/notes/city-world-link-scan.md). The world part reads a field instead of the live city, plus the changes its
+ * docs/architecture.md, the scan's codes). The world part reads a field instead of the live city, plus the changes its
  * own transactions made since the report was taken ({@link Reports#value}).
  */
 public enum Field {

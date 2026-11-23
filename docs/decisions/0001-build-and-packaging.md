@@ -1,6 +1,6 @@
 # 0001: The engine ships as a Songs of Syx mod, built from a patch set with ECJ
 
-Status: Accepted (owner, 2026-10-22) · Card: [SOS-26](https://fighterx2500.atlassian.net/browse/SOS-26) · Builds on: SOSGSGMP [ADR 0001](https://github.com/FighterX2500/SOSGSGMP/blob/main/docs/decisions/0001-game-compiler-ecj.md) (ECJ), [ADR 0004](https://github.com/FighterX2500/SOSGSGMP/blob/main/docs/decisions/0004-engine-split.md) (the split), [SOS-25](../plan/spikes/distribution.md) (how the engine reaches players)
+Status: Accepted (owner, 2026-10-22) · Card: [SOS-26](https://fighterx2500.atlassian.net/browse/SOS-26) · Builds on: SOSGSGMP [ADR 0001](https://github.com/FighterX2500/SOSGSGMP/blob/main/docs/decisions/0001-game-compiler-ecj.md) (ECJ), [ADR 0004](https://github.com/FighterX2500/SOSGSGMP/blob/main/docs/decisions/0004-engine-split.md) (the split), [SOS-25](../archive/spikes/distribution.md) (how the engine reaches players)
 
 ## Context
 

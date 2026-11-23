@@ -1,6 +1,6 @@
 # 0003: A player's room plan is lifted out of the simulation around every step; Build is one command
 
-Status: Accepted (owner, 2026-10-23) · Card: [SOS-34](https://fighterx2500.atlassian.net/browse/SOS-34) · Builds on: [ADR 0002](0002-player-commands.md), [plan 0002](../plan/0002-city-and-world-lockstep.md) decision 5
+Status: Accepted (owner, 2026-10-23) · Card: [SOS-34](https://fighterx2500.atlassian.net/browse/SOS-34) · Builds on: [ADR 0002](0002-player-commands.md), [plan 0002](../archive/0002-city-and-world-lockstep.md) decision 5
 
 ## Context
 

@@ -68,7 +68,7 @@ public final class StepParts {
         return r instanceof WORLD || r instanceof RAIDING;
     }
 
-    /** True for the events of the world part, by save key (scan: city-world-link.md); any other event is the city's. */
+    /** True for the world part's events, by save key (docs/architecture.md, the step's parts); others are the city's. */
     public static boolean worldEvent(String key) {
         switch (key) {
         case "FACTION_EXPAND":

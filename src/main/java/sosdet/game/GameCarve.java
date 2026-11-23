@@ -28,7 +28,7 @@ import world.map.road.WTRAV;
 import world.region.RD;
 
 /**
- * Carved city-states (SOS-184, SOSGSGMP docs/plan/hot-join.md §3): a new 3x3 region cut out of a finished, living world,
+ * Carved city-states (SOS-184, SOSGSGMP docs/archive/hot-join.md §3): a new 3x3 region cut out of a finished, living world,
  * linked by road and path to the town of each region it touches, and the undo of that. A player's capital is such a
  * square ({@code GenPlayer}), but vanilla only ever makes one before it grows the other regions; it never re-partitions
  * a running world.

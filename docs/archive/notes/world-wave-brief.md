@@ -4,7 +4,7 @@ You do one part of stage D for SOSDET, the deterministic lockstep engine for Son
 - the world fixes, or
 - the world, diplomacy and event commands.
 
-One other agent does the other part at the same time, in its own git worktree, so stay inside yours. This brief follows the SOS-34 wave brief (`docs/plan/notes/agent-wave-brief.md`). Read that one too: its "Where things are", "The pattern", menu safety, mkpatch, build and commit rules all apply here, with the changes below.
+One other agent does the other part at the same time, in its own git worktree, so stay inside yours. This brief follows the SOS-34 wave brief (`docs/archive/notes/agent-wave-brief.md`). Read that one too: its "Where things are", "The pattern", menu safety, mkpatch, build and commit rules all apply here, with the changes below.
 
 ## Where things are
 
@@ -15,7 +15,7 @@ One other agent does the other part at the same time, in its own git worktree, s
 - **Rules:** read these first and follow them:
   - `CLAUDE.md`, `AGENTS.md` and `.claude/rules/determinism.md`;
   - `docs/decisions/0002-player-commands.md`;
-  - `docs/plan/0002-city-and-world-lockstep.md` (stage D);
+  - `docs/archive/0002-city-and-world-lockstep.md` (stage D);
   - `docs/hooks.md`;
   - `docs/commands.md`.
 - **Game source (read only):** `C:\ClaudeFolder\Songs of Syx\info\SongsOfSyx-sources`. `SOS_GAME_DIR` is set.

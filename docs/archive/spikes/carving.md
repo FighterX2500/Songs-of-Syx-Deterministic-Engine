@@ -1,6 +1,6 @@
 # Spike: carving a city-state into a running world (SOS-184)
 
-Date: 2026-11-12 · Card: [SOS-184](https://fighterx2500.atlassian.net/browse/SOS-184) · Epic: SOS-22 · Code: `sosdet.game.GameCarve`, the rig's `carveat`, `worldresyncnext`, `wresyncsavegame` commands and `wregion`, `whumanregions`, `wlayout`, `wcarvespots`, `wcarveprobe`, `wcarved` probes, `rig.py --carve`, `--world-resync2`, `--uncarve`, `--resync-savegame` · Feeds: [SOSGSGMP docs/plan/hot-join.md](https://github.com/FighterX2500/SOSGSGMP/blob/main/docs/plan/hot-join.md) sections 3 to 6, cards SOS-186 to SOS-190
+Date: 2026-11-12 · Card: [SOS-184](https://fighterx2500.atlassian.net/browse/SOS-184) · Epic: SOS-22 · Code: `sosdet.game.GameCarve`, the rig's `carveat`, `worldresyncnext`, `wresyncsavegame` commands and `wregion`, `whumanregions`, `wlayout`, `wcarvespots`, `wcarveprobe`, `wcarved` probes, `rig.py --carve`, `--world-resync2`, `--uncarve`, `--resync-savegame` · Feeds: [SOSGSGMP docs/archive/hot-join.md](https://github.com/FighterX2500/SOSGSGMP/blob/main/docs/archive/hot-join.md) sections 3 to 6, cards SOS-186 to SOS-190
 
 ## Question
 

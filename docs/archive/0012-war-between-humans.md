@@ -1,6 +1,6 @@
 # Plan 0012: war between humans (SOS-74, milestone 1)
 
-Card: [SOS-74](https://fighterx2500.atlassian.net/browse/SOS-74). The mod's plan, with the audit and the owner's decisions: SOSGSGMP `docs/plan/war.md` (approved 2026-10-27). Real-time battles between two humans are milestone 2, [SOS-83](https://fighterx2500.atlassian.net/browse/SOS-83). Until then the mod doesn't offer war in its Diplomacy tab.
+Card: [SOS-74](https://fighterx2500.atlassian.net/browse/SOS-74). The mod's plan, with the audit and the owner's decisions: SOSGSGMP `docs/archive/war.md` (approved 2026-10-27). Real-time battles between two humans are milestone 2, [SOS-83](https://fighterx2500.atlassian.net/browse/SOS-83). Until then the mod doesn't offer war in its Diplomacy tab.
 
 ## What changes
 
@@ -46,7 +46,7 @@ Card: [SOS-74](https://fighterx2500.atlassian.net/browse/SOS-74). The mod's plan
 
 ## Milestone 2: battles between two humans (SOS-83)
 
-Card: [SOS-83](https://fighterx2500.atlassian.net/browse/SOS-83). The mod's plan, with the audit and the owner's decisions (2026-10-27, every one as recommended: 1a, 2a, 3a, 4a): SOSGSGMP `docs/plan/battles-between-players.md`. Below, A is the human whose PC builds the battle (army 0) and B the other (army 1).
+Card: [SOS-83](https://fighterx2500.atlassian.net/browse/SOS-83). The mod's plan, with the audit and the owner's decisions (2026-10-27, every one as recommended: 1a, 2a, 3a, 4a): SOSGSGMP `docs/archive/battles-between-players.md`. Below, A is the human whose PC builds the battle (army 0) and B the other (army 1).
 
 ### What changes
 

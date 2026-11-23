@@ -1,6 +1,6 @@
 # Plan 0014: sieges of a human's capital (SOS-92)
 
-Card: [SOS-92](https://fighterx2500.atlassian.net/browse/SOS-92). Mod spec §9 and ADR 0006 (SOSGSGMP). The whole plan, engine and mod, is SOSGSGMP `docs/plan/sieges.md`, approved by the owner on 2026-10-29. This file records the engine's side of each step as it is built.
+Card: [SOS-92](https://fighterx2500.atlassian.net/browse/SOS-92). Mod spec §9 and ADR 0006 (SOSGSGMP). The whole plan, engine and mod, is SOSGSGMP `docs/archive/sieges.md`, approved by the owner on 2026-10-29. This file records the engine's side of each step as it is built.
 
 Status: step A merged (PR #60, 2026-10-30); steps B and C in part are in PR #63 (open).
 

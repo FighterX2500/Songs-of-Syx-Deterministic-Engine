@@ -1,6 +1,6 @@
 # Plan 0011: regions, vassalage and trade at peace between humans (SOS-73)
 
-Card: [SOS-73](https://fighterx2500.atlassian.net/browse/SOS-73). The mod's plan is SOSGSGMP `docs/plan/diplomacy-2.md`, approved by the owner on 2026-10-27; this file records the engine's half as built. Part 1 is [plan 0009](0009-human-deals.md).
+Card: [SOS-73](https://fighterx2500.atlassian.net/browse/SOS-73). The mod's plan is SOSGSGMP `docs/archive/diplomacy-2.md`, approved by the owner on 2026-10-27; this file records the engine's half as built. Part 1 is [plan 0009](0009-human-deals.md).
 
 ## 1. Goal
 

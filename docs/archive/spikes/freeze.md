@@ -1,6 +1,6 @@
 # Spike: a frozen human's city back into a newer world (SOS-192)
 
-SOSGSGMP plan `docs/plan/freeze.md` (owner approved 2026-11-12) freezes a human whose player leaves, and brings the city back when they rejoin. The spike answers two questions:
+SOSGSGMP plan `docs/archive/freeze.md` (owner approved 2026-11-12) freezes a human whose player leaves, and brings the city back when they rejoin. The spike answers two questions:
 
 - whether a city left behind for game days can come back into a newer world on every PC alike;
 - what a freeze after a crash puts at stake.

@@ -444,7 +444,7 @@ public final class GameHumans extends Savable {
     }
 
     /**
-     * Hot-join (SOSGSGMP docs/plan/hot-join.md §5.1): the slot a new human takes, the first free NPC slot above the last
+     * Hot-join (SOSGSGMP docs/archive/hot-join.md §5.1): the slot a new human takes, the first free NPC slot above the last
      * human's (humans join in slot order, {@link #add}), never the game's "other faction"; -1 when none is free, on a
      * crowded map.
      */

@@ -1,7 +1,7 @@
 package sosdet.game.carve;
 
 /**
- * What becomes of the land a city-state is carved in (SOSGSGMP docs/plan/hot-join.md decision 3, owner 2026-11-11). The
+ * What becomes of the land a city-state is carved in (SOSGSGMP docs/archive/hot-join.md decision 3, owner 2026-11-11). The
  * rule looks at the region holding the square's centre tile; any other region the square cuts only loses tiles.
  *
  * <ul>
