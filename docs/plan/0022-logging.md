@@ -91,3 +91,20 @@ before the mod's.
   people. The opinions, stocks and inputs lines that follow are headed "now, not at step N".
 - Rig probe `rings <step>` for the smoke run. Not run yet: the rig smoke run and the hash timing (`Stats` hash mean
   and max ms) before and after.
+
+## State on 2026-11-25: the test cycle
+
+- **Rig B15S** (`city --save <Mogus-72> --no-invade --copies 2 --speeds 5,7 --humans 2 --steps 9000 --on-desync exit
+  --cmds "wait 90;1: rings 3000;2: rings 3000;wait 10;2: wcorrupt"`): the copies identical to the test desync at 8790;
+  both reports say "world ... DIFFERS, from part events per human on (8 of 14 parts)", the part `wcorrupt` breaks; the
+  1107 item lines the same on both copies. Hash mean 2.2 ms, max 21 to 23 ms (copy 1 and 2), every 30 steps.
+- **Rig B15R2** (`--speeds 1,2 --humans 2 --steps 3000`, `wnewarmy 0`, `wmove`, `wstop`, `wraid`, `rings` at 900, 1500
+  and 2100 on both copies): identical to step 3000; both copies' rings the same: applied armyCreate, armyMove,
+  armyStop, armyRaid, nothing skipped; army orders CREATE, MOVE, RAID (the stop of a standing army is not one). An
+  earlier run, B15R, used `wnewarmy` with no army: the step skipped that create on both copies (the human had an
+  army), which the applied ring marked as skipped; `8ef416e` makes the probe show skips and `wnewarmy <army>` create.
+- **`suite.py --short`:** field-short PASS, ownworld-short PASS, **assault-short FAIL** (differs from the recording at
+  step 300, expected `7671342d8e71b28d`, got `22fb40e4bcda1438`). Main (`bad818f`, a worktree made for it) fails the
+  same way, with the same hash; this branch's and main's hashes are the same at every one of its 6000 steps. The
+  recording was out of date on main before this batch; not re-recorded here.
+- Not measured: the hash's time before E3 and E4 against after, in the same run.
