@@ -56,7 +56,7 @@ public final class AiEntry {
     public static final int RESTART = 22;
     static final int KINDS = 23;
     public static String kindName(int kind) {
-        return KIND_NAMES[kind];
+        return kind >= 0 && kind < KINDS ? KIND_NAMES[kind] : "kind " + kind; // SOS-249: the mod names any kind it reads
     }
 
     private static final String[] KIND_NAMES = {"path", "dest", "task", "guard", "running", "fireAtWill", "formation",
@@ -101,6 +101,11 @@ public final class AiEntry {
 
     int payloadLength() {
         return payload.length;
+    }
+
+    /** A command's id, as {@link CmdReader#idOf} reads it, without allocating: the applied ring reads it in the step. */
+    int commandId() {
+        return payload.length < 2 ? -1 : (payload[0] & 0xFF) << 8 | payload[1] & 0xFF;
     }
 
     void payloadTo(ByteBuffer to) {

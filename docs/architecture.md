@@ -121,13 +121,13 @@ A player's action never changes state on the PC where it was clicked. It becomes
 
 | Path | What |
 | --- | --- |
-| `sosdet/Engine.java` | The API the mod calls ([docs/api.md](api.md)) |
+| `sosdet/Engine.java` | The API the mod calls ([docs/api.md](api.md)); the records it hands back sit beside it (`Notice`, `Applied`, `ArmyOrder`, ...) |
 | `sosdet/Hooks.java` | Every call the patches make into the engine; not for mods |
 | `sosdet/Session.java`, `StepClock`, `Streams` | One session's state, the fixed step, the simulation and cosmetic random streams |
 | `sosdet/OwnBattle`, `LocalBattle`, `BattleRoster`, `View`, `ViewCity`, `Assault` | Battles, views and assaults: what the mod reads, and the engine's state for each |
 | `sosdet/Pacer`, `Resync`, `WorldResync`, `DesyncHold` | The speed governor, and the resync and desync hold states |
-| `sosdet/ai/` | The log: `AiLog` (host and peer, stamping, confirmations, the delay: 30 steps at 1x, half a second of real time at higher speeds, SOS-90), `AiEntry`, `CmdWriter`/`CmdReader` |
-| `sosdet/game/` | Everything that touches game classes: `GameAi` (applies log entries), `GameHash`, `GameResync`, `AiHooks`, world fixes; the city↔world link: `StepParts`, `GameReport`, `GameTxns`, `GameSoldiers`, `GameWorldLoad` (the world resync); several humans: `GameHumans` (the human slots, spares, `SOSDET_HUMANS`), `GameCityDivs`, `GameRelations` (NPC relations per human), `GameEvents` (event timers and raids per human) |
+| `sosdet/ai/` | The log: `AiLog` (host and peer, stamping, confirmations, the delay: 30 steps at 1x, half a second of real time at higher speeds, SOS-90), `AiEntry`, `CmdWriter`/`CmdReader`, `AppliedLog` (every entry applied or skipped, for the logs, SOS-249) |
+| `sosdet/game/` | Everything that touches game classes: `GameAi` (applies log entries), `GameHash`, `GameResync`, `AiHooks`, world fixes; the city↔world link: `StepParts`, `GameReport`, `GameTxns`, `GameSoldiers`, `GameWorldLoad` (the world resync); several humans: `GameHumans` (the human slots, spares, `SOSDET_HUMANS`), `GameCityDivs`, `GameRelations` (NPC relations per human), `GameEvents` (event timers and raids per human); `ArmyOrders` (every world army order, for the logs, SOS-249) |
 | `sosdet/txn/` | Transactions: the world's changes to a city, each applied exactly once |
 | `sosdet/report/` | The city report the world part reads (`CityReport`, its fields and layout) |
 | `sosdet/game/deal/`, `sosdet/game/siege/` | Deals and tariffs between humans; sieges and the assault's terms |

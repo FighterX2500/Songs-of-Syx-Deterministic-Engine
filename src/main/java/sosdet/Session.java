@@ -258,6 +258,8 @@ final class Session {
     final TxnQueue txns = new TxnQueue();
     /** Every money and goods transaction, for the logs only (SOS-81): not saved, not hashed, never read by the step. */
     final TransferLog transfers = new TransferLog();
+    /** Every world army order and creation, for the logs only (SOS-249): not saved, not hashed, never read by the step. */
+    final sosdet.game.ArmyOrders armyOrders = new sosdet.game.ArmyOrders();
     /** What applies them: the game, made at first use; tests put in their own. */
     java.util.function.Consumer<Txn> txnApplier;
 

@@ -1272,6 +1272,34 @@ public final class WorldActions {
             });
             return true;
         }
+        case "rings": { // rings <step>: notes the applied entries and the army orders of the 600 steps up to <step>:
+            // how many, a checksum, the kinds counted. Every copy past <step> notes the same (SOS-249)
+            long upTo = Long.parseLong(a[1]);
+            Rig.later(() -> {
+                java.util.List<sosdet.Applied> applied = new java.util.ArrayList<>();
+                Engine.applied(0, applied);
+                applied.removeIf(e -> e.step() > upTo || e.step() <= upTo - 600);
+                long sum = 0;
+                java.util.Map<String, Integer> kinds = new java.util.TreeMap<>();
+                for (sosdet.Applied e : applied) {
+                    sum = 31 * sum + e.logSeq() + e.kind() * 7L + e.pc() * 13L + e.div() + e.command() * 17L + (e.skipped() ? 1 : 0);
+                    kinds.merge(e.command() >= 0 ? Engine.commandName(e.command()) : Engine.aiKindName(e.kind()), 1, Integer::sum);
+                }
+                java.util.List<sosdet.ArmyOrder> orders = new java.util.ArrayList<>();
+                Engine.armyOrders(0, orders);
+                orders.removeIf(o -> o.step() > upTo || o.step() <= upTo - 600);
+                long osum = 0;
+                java.util.Map<String, Integer> okinds = new java.util.TreeMap<>();
+                for (sosdet.ArmyOrder o : orders) {
+                    osum = 31 * osum + o.step() + o.army() * 7L + o.faction() * 13L + o.kind().ordinal() + o.x() * 17L
+                            + o.y() * 19L + o.target();
+                    okinds.merge(o.kind().name(), 1, Integer::sum);
+                }
+                Rig.note("rings up to step " + upTo + ": applied " + applied.size() + ", checksum " + Long.toHexString(sum)
+                        + " " + kinds + "; army orders " + orders.size() + ", checksum " + Long.toHexString(osum) + " " + okinds);
+            });
+            return true;
+        }
         case "deals": { // deals: notes the open proposals, the latest answers, this human's treaties with each other
             // human and its treasury (a probe for the run log, SOS-72)
             Rig.later(() -> {
