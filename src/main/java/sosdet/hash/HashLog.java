@@ -12,8 +12,9 @@ import java.util.List;
  * same steps; the first difference is kept as a {@link Desync}.
  *
  * <p>The hashes as bytes: a header (magic, format version, interval, sections, divisions), then one record per hash:
- * step, epoch, the PC's capacity (steps a second it could run, -1 unknown; SOS-94), total, the sections, one hash per
- * division's soldiers. The epoch counts resyncs: hashes taken before
+ * step, epoch, the PC's capacity (steps a second it could run, -1 unknown; SOS-94), total, the sections, the world
+ * section's {@link #WORLD_PARTS} running hashes (SOS-250), one hash per division's soldiers. The epoch counts resyncs:
+ * hashes taken before
  * the last resync are never compared with those taken after it.
  *
  * <p>Taking a hash ({@link #take}) runs in the step: no allocation, except once for the ring and on a desync.
@@ -39,8 +40,17 @@ public final class HashLog {
     public static final int SECTIONS = 7;
     static final String[] SECTION_NAMES = {"clock", "soldiers", "divisions", "projectiles", "entities", "world",
             "report"};
+    /**
+     * The world section's parts, in the order it hashes them (SOS-250). Each record carries the running hash after
+     * each, so the first that differs is where the world first went differently; every later part differs with it.
+     */
+    public static final List<String> WORLD_PART_NAMES = List.of("armies", "entities", "region owners",
+            "factions and stances", "NPC relations per human", "raiders", "events per human",
+            "deals and tariffs between humans", "NPC production boosts", "NPC stocks", "region populations", "NPC courts",
+            "global events", "calendar");
+    public static final int WORLD_PARTS = WORLD_PART_NAMES.size();
 
-    static final int FORMAT_VERSION = 8; // 8: each record carries its PC's capacity (SOS-94)
+    static final int FORMAT_VERSION = 9; // 9: the world section's parts (SOS-250); 8: each record carries its PC's capacity (SOS-94)
     static final int MAGIC = 0x53444853; // "SDHS"
     static final int HEADER_BYTES = 4 * 5;
     static final long FNV_OFFSET = 0xcbf29ce484222325L;
@@ -53,6 +63,7 @@ public final class HashLog {
     private long[] steps;
     private long[][] clockParts;
     private long[][] sections;
+    private long[][] worldParts;
     private long[][] divisionHashes;
     private int taken;
     private long lastStep;
@@ -137,7 +148,7 @@ public final class HashLog {
         sec[CLOCK] = clock;
         System.arraycopy(parts, 0, clockParts[slot], 0, parts.length);
         sec[REPORT] = report;
-        source.hash(sec, div);
+        source.hash(sec, div, worldParts[slot]);
         if (worldOnly) {
             Arrays.fill(div, FNV_OFFSET);
             sec[DIVISIONS] = 0;
@@ -172,6 +183,7 @@ public final class HashLog {
         divisions = divs;
         steps = new long[RING];
         sections = new long[RING][SECTIONS];
+        worldParts = new long[RING][WORLD_PARTS];
         clockParts = new long[RING][CLOCK_PARTS];
         divisionHashes = new long[RING][divs];
         out = ByteBuffer.allocate(HEADER_BYTES + RING * recordBytes());
@@ -210,7 +222,7 @@ public final class HashLog {
     // ------------------------------------------------------------ the hashes as bytes
 
     private int recordBytes() {
-        return 8 + 4 + 4 + 8 + 8 * SECTIONS + 8 * divisions;
+        return 8 + 4 + 4 + 8 + 8 * SECTIONS + 8 * WORLD_PARTS + 8 * divisions;
     }
 
     /** The hashes taken since the last call (the header first); empty before the first hash. */
@@ -234,6 +246,9 @@ public final class HashLog {
         out.putLong(steps[slot]).putInt(epoch).putInt(capacity).putLong(total(sections[slot]));
         for (long s : sections[slot]) {
             out.putLong(s);
+        }
+        for (long p : worldParts[slot]) {
+            out.putLong(p);
         }
         for (long d : divisionHashes[slot]) {
             out.putLong(d);
@@ -323,14 +338,16 @@ public final class HashLog {
             return;
         }
         long[] remoteSections = Arrays.copyOfRange(rec, 3, 3 + SECTIONS);
+        long[] remoteParts = Arrays.copyOfRange(rec, 3 + SECTIONS, 3 + SECTIONS + WORLD_PARTS);
         int[] diff = new int[divisions];
         int n = 0;
         for (int d = 0; d < divisions; d++) {
-            if (divisionHashes[slot][d] != rec[3 + SECTIONS + d]) {
+            if (divisionHashes[slot][d] != rec[3 + SECTIONS + WORLD_PARTS + d]) {
                 diff[n++] = d;
             }
         }
-        desync = new Desync(rec[0], pc, lastStep, sections[slot], remoteSections, Arrays.copyOf(diff, n), clockParts[slot]);
+        desync = new Desync(rec[0], pc, lastStep, sections[slot], remoteSections, Arrays.copyOf(diff, n), clockParts[slot],
+                worldParts[slot], remoteParts);
     }
 
     /** One other PC's incoming hashes: bytes not yet read, and records for steps this PC has not reached. */
@@ -357,7 +374,7 @@ public final class HashLog {
             in.put(bytes);
         }
 
-        /** The next whole record (step, epoch, total, sections, divisions), or null. */
+        /** The next whole record (step, epoch, total, sections, world parts, divisions), or null. */
         long[] next() {
             in.flip();
             try {
@@ -377,7 +394,7 @@ public final class HashLog {
                 if (in.remaining() < recordBytes()) {
                     return null;
                 }
-                long[] rec = new long[3 + SECTIONS + divisions];
+                long[] rec = new long[3 + SECTIONS + WORLD_PARTS + divisions];
                 rec[0] = in.getLong();
                 rec[1] = in.getInt();
                 capacity = in.getInt();

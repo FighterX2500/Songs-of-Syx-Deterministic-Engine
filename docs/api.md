@@ -146,7 +146,7 @@ When they come up:
 
 A resync carries a save file as well as the returned bytes, so send both. A restart by vote is the mod's to ask: `battleHere()` names the battle this PC's player sees, `takeRestartAsked()` says when they pressed the battle's own Restart, and the host checks `restartRefusal(key)` and calls `restartBattle(key)` once the players agree. At that step every PC that runs the battle goes back to its start: a battle every PC runs, a local battle with its allies and watchers, and the assault; every PC skips it alike when the battle can no longer restart then. Every PC hears the result as a `Notice.RESTART`. The engine never resyncs on its own: `desyncHold()` says when every PC has held, and your mod shows the choice.
 
-For a desync hunt, put both PCs' lines side by side: `desyncReport()` (the world's), `viewDesyncReport()` (the viewer's copy of a viewed city), `hashedDivisions(step)` with `hashInterval()` (the divisions this PC hashed at a step, owner and viewer alike), and `traceDraws(steps)` with `drawTrace(from, to)` (the code behind every world draw).
+For a desync hunt, put both PCs' lines side by side: `desyncReport()` (the world's; its world line, and `desync().worldParts()`, name the world part where the two PCs first differ, and its item lines, one per faction, region, NPC court and NPC stock of a differing part, compare line by line, SOS-250), `viewDesyncReport()` (the viewer's copy of a viewed city), `hashedDivisions(step)` with `hashInterval()` (the divisions this PC hashed at a step, owner and viewer alike), and `traceDraws(steps)` with `drawTrace(from, to)` (the code behind every world draw).
 
 ## Rules for a mod
 
