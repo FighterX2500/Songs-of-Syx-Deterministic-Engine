@@ -930,6 +930,7 @@ public final class Engine {
             s.reports(slot).ledgerIn(r.ledger(slot));
         }
         s.hashes.rewind(r.step, r.hashEpoch);
+        s.ringsCut(r.step);
         s.endDesyncHold(r.step);
         s.clock.runUntil(r.step);
     }
@@ -2531,8 +2532,9 @@ public final class Engine {
     /**
      * Between steps: adds to {@code out} the AI log entries applied or skipped after the one numbered {@code afterSeq},
      * every kind, the general's and the players', oldest first (SOS-249, the playtest log), and returns how many of
-     * those were already overwritten (the ring keeps {@link sosdet.ai.AppliedLog#CAPACITY}). Every PC records the same.
-     * {@link #lastApplied()} gives the number to read after next time.
+     * those were already overwritten (the ring keeps {@link sosdet.ai.AppliedLog#CAPACITY}). Every PC records the same
+     * entries, but whether one was skipped may differ ({@link Applied#skipped}). A resync drops the entries past its
+     * step, which apply again under new numbers. {@link #lastApplied()} gives the number to read after next time.
      */
     public static long applied(long afterSeq, java.util.List<Applied> out) {
         return required().ai().appliedLog().read(afterSeq, out);
@@ -2556,8 +2558,9 @@ public final class Engine {
     /**
      * Between steps: adds to {@code out} the world armies' orders and creations given after the one numbered
      * {@code afterSeq}, every faction's, oldest first (SOS-249, the playtest log), and returns how many of those were
-     * already overwritten (the ring keeps {@link sosdet.game.ArmyOrders#CAPACITY}). Every PC records the same.
-     * {@link #lastArmyOrder()} gives the number to read after next time.
+     * already overwritten (the ring keeps {@link sosdet.game.ArmyOrders#CAPACITY}). Every PC records the same. A resync
+     * drops the orders past its step, which come again under new numbers. {@link #lastArmyOrder()} gives the number to
+     * read after next time.
      */
     public static long armyOrders(long afterSeq, java.util.List<ArmyOrder> out) {
         return required().armyOrders.read(afterSeq, out);

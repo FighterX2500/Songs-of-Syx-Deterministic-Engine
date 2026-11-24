@@ -127,9 +127,15 @@ public final class WorldActions {
         }
         case "wnewarmy": { // wnewarmy [army]: a new army at the capital, as the autopilot's army (SOS-122), which the
             // step skips when this human has an army already; with an army, a new one on that army's tile (SOS-249)
-            int at = a.length > 1 ? Integer.parseInt(a[1]) : -1;
+            boolean beside = a.length > 1;
+            int at = beside ? Integer.parseInt(a[1]) : -1;
             Rig.later(() -> {
-                WArmy w = at >= 0 ? army(at) : null;
+                int armies = FACTIONS.player().armies().all().size();
+                if (beside && (at < 0 || at >= armies)) {
+                    Rig.note("wnewarmy: no army " + at + " (this human has " + armies + "), so no new army");
+                    return;
+                }
+                WArmy w = beside ? army(at) : null;
                 if (!World.armyCreate(w == null ? -1 : w.ctx(), w == null ? -1 : w.cty())) {
                     throw new IllegalStateException("no session");
                 }

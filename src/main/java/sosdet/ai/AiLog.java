@@ -103,6 +103,8 @@ public final class AiLog {
     private final Recent recentOrders = new Recent();
     /** Every entry applied or skipped, for the logs (SOS-249). */
     private final AppliedLog appliedLog = new AppliedLog();
+    /** While {@link #stepBegin} applies an entry: its number in {@link #appliedLog}; else -1 (a taped entry too). */
+    private long applyingSeq = -1;
     /** Peer: entries applied in the last {@link #HISTORY_STEPS}, oldest first. */
     private final ArrayDeque<AiEntry> history = new ArrayDeque<>();
     /** The players' orders: a peer's going out, the host's coming in from each peer. */
@@ -456,10 +458,12 @@ public final class AiLog {
                     commanders.claim(due.pc, due.div);
                 }
                 applyingPc = due.pc;
+                applyingSeq = recorded;
                 try {
                     applier.apply(due);
                 } finally {
                     applyingPc = NOT_APPLYING;
+                    applyingSeq = -1;
                 }
             }
             if (due.kind == AiEntry.COMMAND && lastCommand != null && due.pc == localPc
@@ -846,6 +850,14 @@ public final class AiLog {
     /** Every entry applied or skipped, in the order applied, for the logs (SOS-249). */
     public AppliedLog appliedLog() {
         return appliedLog;
+    }
+
+    /**
+     * While {@link #stepBegin} applies an entry: its number in {@link #appliedLog}; -1 otherwise, also while a local
+     * battle's taped entry applies, which the ring doesn't hold (SOS-249).
+     */
+    public long applyingSeq() {
+        return applyingSeq;
     }
 
     /** Entries known but not applied yet. */

@@ -103,9 +103,9 @@ public final class AiEntry {
         return payload.length;
     }
 
-    /** A command's id, as {@link CmdReader#idOf} reads it, without allocating: the applied ring reads it in the step. */
+    /** A command's id ({@link CmdReader#idOf}, which allocates nothing: the applied ring reads it in the step). */
     int commandId() {
-        return payload.length < 2 ? -1 : (payload[0] & 0xFF) << 8 | payload[1] & 0xFF;
+        return CmdReader.idOf(payload);
     }
 
     void payloadTo(ByteBuffer to) {

@@ -2854,12 +2854,15 @@ public final class Hooks {
 
     // ------------------------------------------------------------ the logs' rings (SOS-249)
 
-    /** Inside the step, while an AI log entry applies: its number in the applied ring. */
+    /**
+     * Inside the step, while the log's {@code stepBegin} applies an entry: its number in the applied ring; -1 for an
+     * entry from a local battle's tape, which the ring doesn't hold.
+     */
     public static long appliedNow() {
-        return Engine.session().ai().appliedLog().last();
+        return Engine.session().ai().applyingSeq();
     }
 
-    /** Inside the step's world part: the world command numbered {@code seq} in the applied ring was skipped. */
+    /** Inside the step: the entry numbered {@code seq} in the applied ring was skipped on every PC that applied it; -1: none. */
     public static void appliedSkipped(long seq) {
         Engine.session().ai().appliedLog().skip(seq);
     }

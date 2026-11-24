@@ -61,19 +61,52 @@ class AppliedLogTest {
         assertEquals(1, out.size());
     }
 
-    /** Records the step and kind of what it applies, as the game's applier would apply it. */
+    /** SOS-249 review: a resync drops the entries past its step, which the PC applies again under new numbers. */
+    @Test
+    void aResyncDropsTheLaterStepsAndNumbersGoOn() {
+        AppliedLog l = new AppliedLog();
+        l.record(10, entry(1, AiEntry.GUARD, 0, AiEntry.AI, AiEntry.ints(1)));
+        l.record(11, entry(2, AiEntry.GUARD, 1, AiEntry.AI, AiEntry.ints(1)));
+        l.record(12, entry(3, AiEntry.GUARD, 2, AiEntry.AI, AiEntry.ints(1)));
+        l.cut(11);
+        l.skip(3); // dropped: no mark anywhere
+        l.skip(-1); // a taped entry's number: nothing
+        assertEquals(3, l.last(), "numbers never go back");
+        assertEquals(4, l.record(12, entry(3, AiEntry.GUARD, 2, AiEntry.AI, AiEntry.ints(1))));
+        List<Applied> out = new ArrayList<>();
+        assertEquals(0, l.read(0, out));
+        assertEquals(List.of(1L, 2L, 4L), out.stream().map(Applied::seq).toList());
+        for (Applied a : out) {
+            assertFalse(a.skipped());
+        }
+        out.clear();
+        l.read(3, out); // a reader that had read entry 3 before the resync
+        assertEquals(List.of(new Applied(4, 12, 3, AiEntry.GUARD, AiEntry.AI, 2, -1, false)), out);
+    }
+
+    /**
+     * Records the step and kind of what it applies, as the game's applier would apply it, and the number the log gives
+     * the entry applying ({@code Hooks.appliedNow}).
+     */
     private static final class Kinds implements AiApplier {
         final List<String> applied = new ArrayList<>();
+        final List<Long> numbers = new ArrayList<>();
+        AiLog log;
 
         @Override
         public void apply(AiEntry e) {
             applied.add(e.step + ":" + e.kind);
+            if (log != null) {
+                numbers.add(log.applyingSeq());
+            }
         }
     }
 
     @Test
     void theHostAndAPeerRecordTheSameEntriesTheSkippedOnesMarked() throws InterruptedException {
-        AiLog host = AiLog.host(START, new Kinds());
+        Kinds hostKinds = new Kinds();
+        AiLog host = AiLog.host(START, hostKinds);
+        hostKinds.log = host;
         AiLog peer = AiLog.peer(START, new Kinds());
         peer.localPc(1);
         // divisions 0 and 1 the host's, 2 the peer's, 3 the general's
@@ -108,5 +141,9 @@ class AppliedLogTest {
                 new Applied(4, 32, 3, AiEntry.GUARD, 0, 2, -1, true),
                 new Applied(5, 32, 4, AiEntry.COMMAND, 1, -1, 7003, false)), h);
         assertEquals(5, host.appliedLog().last());
+        assertEquals(List.of(2L, 3L, 5L), hostKinds.numbers, "while each applies, its own number (Hooks.appliedNow)");
+        assertEquals(-1, host.applyingSeq(), "none between entries");
+        host.applyTaped(AiEntry.order(AiEntry.TASK, 3, AiEntry.AI, AiEntry.ints(6)));
+        assertEquals(-1L, hostKinds.numbers.get(3), "a local battle's taped entry has no number in the ring");
     }
 }

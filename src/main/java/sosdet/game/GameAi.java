@@ -121,6 +121,7 @@ public final class GameAi implements AiApplier {
             }
             if (!Commands.apply(payload)) {
                 commandsSkipped++; // its target was gone at its step, on every PC alike
+                Hooks.appliedSkipped(Hooks.appliedNow()); // on every PC that runs the city (SOS-249)
             }
             return;
         case AiEntry.SPEED:

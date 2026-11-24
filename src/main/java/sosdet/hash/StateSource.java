@@ -31,8 +31,8 @@ public interface StateSource {
 
     /**
      * The world as the world section hashed it at {@code step}: the running hash after each part, and each army's
-     * row, if kept. The first part and army two PCs disagree on name what went differently (SOS-46 playtests). For each
-     * part {@code differs} marks ({@link HashLog#WORLD_PART_NAMES} order) that has items, a line per item:
+     * row, if kept. The first part and army two PCs disagree on name what went differently (SOS-46 playtests). When the
+     * first part {@code differs} marks ({@link HashLog#WORLD_PART_NAMES} order) has items, a line per item:
      * {@code <part> <index> <hash>}, in a fixed order, so two PCs' reports compare line by line (SOS-250).
      */
     String describeWorld(long step, boolean[] differs);

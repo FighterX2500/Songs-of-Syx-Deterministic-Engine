@@ -481,17 +481,19 @@ public final class GameHash implements StateSource {
                 b.append(String.format(Locale.ROOT, "  human %d: war timer %s, rebellion timer %s, raider power %s%n",
                         k + 1, events[3 * k], events[3 * k + 1], events[3 * k + 2]));
             }
-            // SOS-250: the items of each part that differs, one line each, always in this order
-            if (differs[FACTIONS_PART]) {
+            // SOS-250: the items of the first part that differs, one line each; each part's hash runs on from the one
+            // before, so every later part differs with it and its items say nothing
+            int first = 0;
+            while (first < differs.length && !differs[first]) {
+                first++;
+            }
+            if (first == FACTIONS_PART) {
                 items(b, "factions", faction, factionHash, factions);
-            }
-            if (differs[REGION_OWNERS] || differs[REGION_POPULATIONS]) {
+            } else if (first == REGION_OWNERS || first == REGION_POPULATIONS) {
                 items(b, "regions", region, regionHash, regions);
-            }
-            if (differs[NPC_COURTS]) {
+            } else if (first == NPC_COURTS) {
                 items(b, "courts", court, courtHash, courts);
-            }
-            if (differs[NPC_STOCKS]) {
+            } else if (first == NPC_STOCKS) {
                 items(b, "stocks", stock, stockHash, stocks);
             }
             return b.toString();

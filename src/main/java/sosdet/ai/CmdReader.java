@@ -17,9 +17,9 @@ public final class CmdReader {
         id = b.getShort() & 0xFFFF;
     }
 
-    /** The command's id, read from a payload without decoding the rest. */
+    /** The command's id, read from a payload without decoding the rest; allocates nothing (SOS-249: in the step). */
     public static int idOf(byte[] payload) {
-        return payload.length < 2 ? -1 : ByteBuffer.wrap(payload).getShort() & 0xFFFF;
+        return payload.length < 2 ? -1 : (payload[0] & 0xFF) << 8 | payload[1] & 0xFF;
     }
 
     public int id() {

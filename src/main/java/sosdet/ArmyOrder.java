@@ -2,10 +2,13 @@ package sosdet;
 
 /**
  * A world army's order or creation in the step's world part (SOS-249): the NPCs' decisions, the rebels' and the
- * humans' alike, since a human's army command goes through the same methods. Every PC records the same orders. Plain
- * data for the logs: nothing reads it back into the step.
+ * humans' alike, since a human's army command goes through the same methods. A move, siege, raid or intercept counts
+ * once its path is found. A stop and another order of the same army at the same step are one entry, the order: so a
+ * stop that really follows another order within one step is not recorded (a known limit). Every PC records the same
+ * orders. Plain data for the logs: nothing reads it back into the step.
  *
- * @param seq     its number in the ring, from 1 ({@link Engine#lastArmyOrder})
+ * @param seq     its number in this PC's ring, from 1 ({@link Engine#lastArmyOrder}); never given twice, so a PC that
+ *                had run past a resync's step has a gap where the resync dropped the orders its world gives again
  * @param step    the step it was given at
  * @param army    the army's slot ({@code WArmy.armyIndex}); a slot is used again after a disband
  * @param faction the army's faction's index, -1 for none (rebels)

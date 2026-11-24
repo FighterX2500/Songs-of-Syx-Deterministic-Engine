@@ -108,3 +108,26 @@ before the mod's.
   same way, with the same hash; this branch's and main's hashes are the same at every one of its 6000 steps. The
   recording was out of date on main before this batch; not re-recorded here.
 - Not measured: the hash's time before E3 and E4 against after, in the same run.
+
+## State on 2026-11-25: review fixes
+
+One commit after the test cycle ("SOS-249, SOS-250: review fixes"). `gradlew.bat build` passes; 471 unit tests, no
+failures. Not run in the rig since.
+- 1, resyncs: every resync load (`Session` resync and battle resync, `Engine.worldResyncLoad`) cuts both rings at its
+  step (`Session.ringsCut`): the entries of later steps go, and apply or come again under new numbers. Numbers are never
+  given twice, so the mod's reader (`MpEngineRings`) reads only the new ones; a PC that had run past the step has a gap.
+  Unit tests for both rings.
+- 2, docs: `Engine.applied`, `Applied`, `AppliedLog` and `docs/api.md` say the entries are the same on every PC but
+  `skipped` may differ (SOS-234 stationed orders, own-city city commands).
+- 3, hooks: MOVE, BESIEGE (the march), RAID on a region and INTERCEPT record once the path search succeeded, in
+  `96-cmd-world` regenerated with `tools/mkpatch.py`; BESIEGE at a siege already there records before its battle. The
+  game's stop comes first, so an order after a stop of the same army at the same step takes the stop's place in the ring.
+- 4, taped entries: `AiLog.applyingSeq()` is set only around `stepBegin`'s apply, -1 otherwise (a local battle's tape
+  too); `Hooks.appliedNow` returns it and `AppliedLog.skip` ignores -1. Unit test.
+- 5, city commands: a command whose `Commands.apply` returns false in `GameAi.apply` is marked skipped in the ring, as
+  world commands are, on the PCs that run it.
+- 6, item lines: only for the first part that differs; regions for part 2 or 10, whichever comes first.
+- 7, the stop merge is a known limit: in `ArmyOrders`, `ArmyOrder` and `docs/api.md` "Limits today". No code change
+  beyond 3.
+- 9, `CmdReader.idOf` allocates nothing; `AiEntry.commandId` calls it.
+- 10, rig: `wnewarmy <army>` with a bad index notes it and makes no army.

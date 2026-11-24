@@ -2648,6 +2648,7 @@ final class Session {
             seed = r.seed;
             resyncDraws = r.draws; // the load's own draws don't count: set when it ends
             hashes.rewind(r.step, r.hashEpoch);
+            ringsCut(r.step);
             ai().resyncIn(r.ai);
             return;
         }
@@ -2676,7 +2677,14 @@ final class Session {
         clock.agreedSpeed(r.speed);
         resyncDraws = r.draws;
         hashes.rewind(r.step, r.hashEpoch);
+        ringsCut(r.step);
         ai().resyncIn(r.ai);
+    }
+
+    /** A resync to the end of {@code step}: the logs' rings drop the later steps' entries, which run again (SOS-249). */
+    void ringsCut(long step) {
+        ai().appliedLog().cut(step);
+        armyOrders.cut(step);
     }
 
     /**
