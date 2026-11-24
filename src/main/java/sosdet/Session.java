@@ -258,6 +258,8 @@ final class Session {
     final TxnQueue txns = new TxnQueue();
     /** Every money and goods transaction, for the logs only (SOS-81): not saved, not hashed, never read by the step. */
     final TransferLog transfers = new TransferLog();
+    /** Every world army order and creation, for the logs only (SOS-249): not saved, not hashed, never read by the step. */
+    final sosdet.game.ArmyOrders armyOrders = new sosdet.game.ArmyOrders();
     /** What applies them: the game, made at first use; tests put in their own. */
     java.util.function.Consumer<Txn> txnApplier;
 
@@ -2646,6 +2648,7 @@ final class Session {
             seed = r.seed;
             resyncDraws = r.draws; // the load's own draws don't count: set when it ends
             hashes.rewind(r.step, r.hashEpoch);
+            ringsCut(r.step);
             ai().resyncIn(r.ai);
             return;
         }
@@ -2674,7 +2677,14 @@ final class Session {
         clock.agreedSpeed(r.speed);
         resyncDraws = r.draws;
         hashes.rewind(r.step, r.hashEpoch);
+        ringsCut(r.step);
         ai().resyncIn(r.ai);
+    }
+
+    /** A resync to the end of {@code step}: the logs' rings drop the later steps' entries, which run again (SOS-249). */
+    void ringsCut(long step) {
+        ai().appliedLog().cut(step);
+        armyOrders.cut(step);
     }
 
     /**

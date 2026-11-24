@@ -40,7 +40,7 @@ class EngineTest {
         }
 
         @Override
-        public void hash(long[] sections, long[] divisions) {
+        public void hash(long[] sections, long[] divisions, long[] worldParts) {
         }
 
         @Override
@@ -59,7 +59,7 @@ class EngineTest {
         }
 
         @Override
-        public String describeWorld(long step) {
+        public String describeWorld(long step, boolean[] differs) {
             return "";
         }
     };

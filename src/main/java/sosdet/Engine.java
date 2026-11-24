@@ -930,6 +930,7 @@ public final class Engine {
             s.reports(slot).ledgerIn(r.ledger(slot));
         }
         s.hashes.rewind(r.step, r.hashEpoch);
+        s.ringsCut(r.step);
         s.endDesyncHold(r.step);
         s.clock.runUntil(r.step);
     }
@@ -2526,6 +2527,48 @@ public final class Engine {
     /** The number of the latest transfer recorded; 0 before the first. */
     public static long lastTransfer() {
         return required().transfers.last();
+    }
+
+    /**
+     * Between steps: adds to {@code out} the AI log entries applied or skipped after the one numbered {@code afterSeq},
+     * every kind, the general's and the players', oldest first (SOS-249, the playtest log), and returns how many of
+     * those were already overwritten (the ring keeps {@link sosdet.ai.AppliedLog#CAPACITY}). Every PC records the same
+     * entries, but whether one was skipped may differ ({@link Applied#skipped}). A resync drops the entries past its
+     * step, which apply again under new numbers. {@link #lastApplied()} gives the number to read after next time.
+     */
+    public static long applied(long afterSeq, java.util.List<Applied> out) {
+        return required().ai().appliedLog().read(afterSeq, out);
+    }
+
+    /** The number of the latest AI log entry applied or skipped; 0 before the first. */
+    public static long lastApplied() {
+        return required().ai().appliedLog().last();
+    }
+
+    /** A command's name for a log, from its id ({@link Applied#command}); "command N" for an id this engine lacks. */
+    public static String commandName(int id) {
+        return sosdet.game.cmd.Commands.name(id);
+    }
+
+    /** An AI log entry kind's name for a log ({@link Applied#kind}), such as "command" or "speed"; "kind N" if unknown. */
+    public static String aiKindName(int kind) {
+        return AiEntry.kindName(kind);
+    }
+
+    /**
+     * Between steps: adds to {@code out} the world armies' orders and creations given after the one numbered
+     * {@code afterSeq}, every faction's, oldest first (SOS-249, the playtest log), and returns how many of those were
+     * already overwritten (the ring keeps {@link sosdet.game.ArmyOrders#CAPACITY}). Every PC records the same. A resync
+     * drops the orders past its step, which come again under new numbers. {@link #lastArmyOrder()} gives the number to
+     * read after next time.
+     */
+    public static long armyOrders(long afterSeq, java.util.List<ArmyOrder> out) {
+        return required().armyOrders.read(afterSeq, out);
+    }
+
+    /** The number of the latest world army order recorded; 0 before the first. */
+    public static long lastArmyOrder() {
+        return required().armyOrders.last();
     }
 
     /** Counters and step times since the session began or {@link #resetStats()}. */

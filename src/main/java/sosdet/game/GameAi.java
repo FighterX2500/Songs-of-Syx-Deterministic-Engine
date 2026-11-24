@@ -50,10 +50,13 @@ public final class GameAi implements AiApplier {
         final byte[] payload;
         /** The PC that gave it. */
         final int pc;
+        /** Its number in the applied ring, marked there if it is skipped (SOS-249). */
+        final long applied;
 
-        WorldCommand(byte[] payload, int pc) {
+        WorldCommand(byte[] payload, int pc, long applied) {
             this.payload = payload;
             this.pc = pc;
+            this.applied = applied;
         }
     }
 
@@ -89,12 +92,14 @@ public final class GameAi implements AiApplier {
             int human = Hooks.humanOf(c.pc);
             if (Hooks.retired(human)) {
                 commandsSkipped++; // given before its human was removed, due after: nothing acts for a removed human (SOS-66)
+                Hooks.appliedSkipped(c.applied);
                 continue;
             }
             Hooks.currentHuman(human); // it acts for its PC's human (ADR 0004)
             try {
                 if (MapBattles.worldCommandSkipped(c.pc) || !Commands.apply(c.payload)) {
                     commandsSkipped++;
+                    Hooks.appliedSkipped(c.applied);
                 }
             } finally {
                 Hooks.currentHuman(0);
@@ -108,7 +113,7 @@ public final class GameAi implements AiApplier {
         case AiEntry.COMMAND:
             byte[] payload = e.payload();
             if (CommandParts.world(payload)) {
-                worldCommands.add(new WorldCommand(payload, e.pc));
+                worldCommands.add(new WorldCommand(payload, e.pc, Hooks.appliedNow()));
                 return;
             }
             if (!CommandParts.everyPc(payload) && !Hooks.cityCommandHere(e.pc)) {
@@ -116,6 +121,7 @@ public final class GameAi implements AiApplier {
             }
             if (!Commands.apply(payload)) {
                 commandsSkipped++; // its target was gone at its step, on every PC alike
+                Hooks.appliedSkipped(Hooks.appliedNow()); // on every PC that runs the city (SOS-249)
             }
             return;
         case AiEntry.SPEED:

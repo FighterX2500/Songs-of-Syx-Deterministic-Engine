@@ -15,10 +15,11 @@ import org.junit.jupiter.api.Test;
 
 class HashLogTest {
 
-    /** A battle of four divisions whose state is a few numbers. */
+    /** A battle of four divisions and a world of 14 parts, whose state is a few numbers. */
     static final class FakeState implements StateSource {
         final long[] soldiers = new long[4];
         long projectiles;
+        final long[] world = new long[HashLog.WORLD_PARTS];
 
         @Override
         public int divisions() {
@@ -26,13 +27,19 @@ class HashLogTest {
         }
 
         @Override
-        public void hash(long[] sections, long[] divisions) {
+        public void hash(long[] sections, long[] divisions, long[] worldParts) {
             for (int d = 0; d < soldiers.length; d++) {
                 divisions[d] = HashLog.mix(divisions[d], soldiers[d]);
             }
             sections[HashLog.DIVISIONS] = 7;
             sections[HashLog.PROJECTILES] = projectiles;
             sections[HashLog.ENTITIES] = 9;
+            long h = HashLog.start(); // a running hash, as the game's world section is
+            for (int i = 0; i < world.length; i++) {
+                h = HashLog.mix(h, world[i]);
+                worldParts[i] = h;
+            }
+            sections[HashLog.WORLD] = h;
         }
 
         @Override
@@ -51,8 +58,14 @@ class HashLogTest {
         }
 
         @Override
-        public String describeWorld(long step) {
-            return "";
+        public String describeWorld(long step, boolean[] differs) {
+            StringBuilder b = new StringBuilder("  parts told:");
+            for (int i = 0; i < differs.length; i++) {
+                if (differs[i]) {
+                    b.append(' ').append(i);
+                }
+            }
+            return b.append(System.lineSeparator()).toString();
         }
     }
 
@@ -136,6 +149,48 @@ class HashLogTest {
         assertEquals(120, d.noticedAt);
         assertEquals(List.of("soldiers"), d.sections());
         assertArrayEquals(new int[] {2}, d.divisions());
+    }
+
+    /** SOS-250: the record carries the world's parts, and the desync names the part where the world first differs. */
+    @Test
+    void aWorldPartChangedOnOnePcIsNamedFromTheRecordsParts() {
+        HashLog a = new HashLog();
+        HashLog b = new HashLog();
+        FakeState sa = new FakeState();
+        FakeState sb = new FakeState();
+        sa.world[9] = 4;
+        sb.world[9] = 4;
+        run(a, sa, 1, 60);
+        run(b, sb, 1, 45);
+        sb.world[9] = 5; // the NPC stocks differ from step 45 on
+        run(b, sb, 46, 90);
+        a.in(2, b.out());
+        Desync d = a.desync();
+        assertNotNull(d);
+        assertEquals(60, d.step);
+        assertEquals(List.of("world"), d.sections());
+        assertEquals(HashLog.WORLD_PART_NAMES.subList(9, HashLog.WORLD_PARTS), d.worldParts(),
+                "the first part that differs, then every later one: each runs on from the one before");
+        String report = d.report(sa, List.of(), List.of());
+        assertTrue(report.contains("DIFFERS, from part NPC stocks on (5 of 14 parts)"), report);
+        assertTrue(report.contains("  parts told: 9 10 11 12 13"), report);
+    }
+
+    @Test
+    void aDesyncOutsideTheWorldNamesNoWorldPart() {
+        HashLog a = new HashLog();
+        HashLog b = new HashLog();
+        FakeState sa = new FakeState();
+        FakeState sb = new FakeState();
+        sa.world[3] = 8;
+        sb.world[3] = 8;
+        sb.projectiles = 2;
+        run(a, sa, 1, 30);
+        run(b, sb, 1, 30);
+        a.in(2, b.out());
+        assertEquals(List.of("projectiles"), a.desync().sections());
+        assertEquals(List.of(), a.desync().worldParts(), "the parts came through the record unchanged");
+        assertFalse(a.desync().report(sa, List.of(), List.of()).contains("parts told"));
     }
 
     @Test
@@ -287,6 +342,6 @@ class HashLogTest {
     }
 
     private static int recordBytes(int divisions) {
-        return 8 + 4 + 8 + 8 * HashLog.SECTIONS + 8 * divisions;
+        return 8 + 4 + 4 + 8 + 8 * HashLog.SECTIONS + 8 * HashLog.WORLD_PARTS + 8 * divisions;
     }
 }

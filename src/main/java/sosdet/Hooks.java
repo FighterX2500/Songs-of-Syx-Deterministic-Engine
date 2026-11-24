@@ -46,6 +46,7 @@ import sosdet.txn.TxnKind;
 import util.data.DOUBLE_O;
 import view.main.VIEW;
 import world.entity.army.WArmy;
+import world.entity.army.WArmyState;
 
 /**
  * What the engine's patches to the game call (docs/hooks.md). Each hook asks one question or reports one
@@ -2849,6 +2850,42 @@ public final class Hooks {
         Session s = Engine.session();
         return s == null || a == null || s.part == StepParts.WORLD_PART ? 0
                 : s.sentSupplies.pending(supply, a.armyIndex(), a.iteration());
+    }
+
+    // ------------------------------------------------------------ the logs' rings (SOS-249)
+
+    /**
+     * Inside the step, while the log's {@code stepBegin} applies an entry: its number in the applied ring; -1 for an
+     * entry from a local battle's tape, which the ring doesn't hold.
+     */
+    public static long appliedNow() {
+        return Engine.session().ai().applyingSeq();
+    }
+
+    /** Inside the step: the entry numbered {@code seq} in the applied ring was skipped on every PC that applied it; -1: none. */
+    public static void appliedSkipped(long seq) {
+        Engine.session().ai().appliedLog().skip(seq);
+    }
+
+    /**
+     * Patch {@code 96-cmd-world}: an army's order or its creation, recorded for the logs ({@code ArmyOrders}) in the
+     * step's world part only, where every PC gives the same orders; elsewhere (a load, a carve, the UI) nothing. A stop
+     * of an army that stands, or a disband of one not on the map, is no order. Records only: no draw, no write,
+     * nothing the hash reads, no allocation.
+     */
+    public static void armyOrder(WArmy a, ArmyOrder.Kind kind, int tx, int ty, int target) {
+        Session s = Engine.session();
+        if (s == null || s.part != StepParts.WORLD_PART || !s.streams.isSimulationThread()) {
+            return;
+        }
+        if (kind == ArmyOrder.Kind.STOP && (a.state() == WArmyState.fortifying || a.state() == WArmyState.fortified)) {
+            return;
+        }
+        if (kind == ArmyOrder.Kind.DISBAND && !a.added()) {
+            return;
+        }
+        Faction f = a.faction();
+        s.armyOrders.record(s.clock.step(), a.armyIndex(), f == null ? -1 : f.index(), kind, tx, ty, target);
     }
 
     // ------------------------------------------------------------ RND: the two streams (B10)

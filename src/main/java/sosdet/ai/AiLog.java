@@ -101,6 +101,10 @@ public final class AiLog {
     private final long[] appliedByKind = new long[AiEntry.KINDS];
     private final Recent recentAi = new Recent();
     private final Recent recentOrders = new Recent();
+    /** Every entry applied or skipped, for the logs (SOS-249). */
+    private final AppliedLog appliedLog = new AppliedLog();
+    /** While {@link #stepBegin} applies an entry: its number in {@link #appliedLog}; else -1 (a taped entry too). */
+    private long applyingSeq = -1;
     /** Peer: entries applied in the last {@link #HISTORY_STEPS}, oldest first. */
     private final ArrayDeque<AiEntry> history = new ArrayDeque<>();
     /** The players' orders: a peer's going out, the host's coming in from each peer. */
@@ -439,6 +443,7 @@ public final class AiLog {
                 throw new IllegalStateException("SOSDET: AI log entry " + due.seq + " for step " + due.step
                         + " is still pending at step " + step);
             }
+            long recorded = appliedLog.record(step, due); // before it applies: a world command marks itself skipped later
             boolean skipped = false;
             if (due.kind == AiEntry.COMMANDERS) {
                 commanders.apply(due);
@@ -447,15 +452,18 @@ public final class AiLog {
                 // where its city runs (SOS-234): the count, which no hash holds, may differ there
                 commanders.skip();
                 skipped = true;
+                appliedLog.skip(recorded);
             } else {
                 if (due.div >= 0) {
                     commanders.claim(due.pc, due.div);
                 }
                 applyingPc = due.pc;
+                applyingSeq = recorded;
                 try {
                     applier.apply(due);
                 } finally {
                     applyingPc = NOT_APPLYING;
+                    applyingSeq = -1;
                 }
             }
             if (due.kind == AiEntry.COMMAND && lastCommand != null && due.pc == localPc
@@ -837,6 +845,19 @@ public final class AiLog {
     /** The players' last orders applied, oldest first, one line each (for a desync report). */
     public List<String> recentOrders() {
         return recentOrders.lines();
+    }
+
+    /** Every entry applied or skipped, in the order applied, for the logs (SOS-249). */
+    public AppliedLog appliedLog() {
+        return appliedLog;
+    }
+
+    /**
+     * While {@link #stepBegin} applies an entry: its number in {@link #appliedLog}; -1 otherwise, also while a local
+     * battle's taped entry applies, which the ring doesn't hold (SOS-249).
+     */
+    public long applyingSeq() {
+        return applyingSeq;
     }
 
     /** Entries known but not applied yet. */

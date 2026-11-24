@@ -32,7 +32,7 @@ dependencies {
 ## What to call
 
 - **`sosdet.Engine` is the API.** It has about 150 static methods, and their Javadoc is the reference. [Requirements §3](requirements.md#3-what-the-mod-can-do-through-the-api) says what each group is for.
-- **Types it hands back:** `HumanStart`, `OwnBattle`, `LocalBattle`, `View`, `Assault`, `BattleOutcome`, `Notice`, `DesyncHold`, `Stats`, `Carved`, `sosdet.hash.Desync`.
+- **Types it hands back:** `HumanStart`, `OwnBattle`, `LocalBattle`, `View`, `Assault`, `BattleOutcome`, `Notice`, `DesyncHold`, `Stats`, `Carved`, `Applied`, `ArmyOrder`, `sosdet.hash.Desync`.
 - **`sosdet.Hooks` is for patches.** It is public because the patched game classes call it. Don't call it from a mod. The same goes for `sosdet.Cosmetic` and `sosdet.game`.
 
 Most `Engine` methods throw `IllegalStateException` with no session. `active()`, `locationProblem`, `buildWorld`, `bannerBytes` and `worldHash` work without one.
@@ -59,6 +59,8 @@ Most `Engine` methods throw `IllegalStateException` with no session. `active()`,
 - **Removing a human (SOS-66):** the host's `removeHuman(slot)` logs a removal that applies at the same step on every PC; `removeRefusal(slot, atStart)` says why it would be refused. A battle that human is in ends with no result, every army of it is disbanded and every region it held is freed, as vanilla destroys a faction. It stays in its slot, retired (`retired(slot)`), so every other human keeps its place, and nothing runs for it again. Until that step no PC waits for its reports past the last one the host has. `removeHumanAtStart(slot)` does the same for a resume without that player.
 
 **Between humans.** `dealPropose`, `dealAnswer`, `dealCancel`, `setTariff` and `declareWar` (SOS-72 to SOS-74, SOS-77) each have a refusal check the mod's window shows first (`dealRefusal`, `dealAcceptRefusal`, `dealCancelRefusal`, `tariffRefusal`, `warRefusal`); each is a command applied at one step on every PC. `transfers(afterSeq, out)` gives every human's money and goods transfers between steps, the same on every PC (SOS-81).
+
+**For the logs (SOS-249).** Between steps, `applied(afterSeq, out)` gives every AI log entry applied or skipped, every kind, the general's and the players', as `Applied` records; `aiKindName(kind)` and `commandName(id)` name the kind and a command's id, and `lastApplied()` is the number to read after next time. `armyOrders(afterSeq, out)` gives every world army's order and creation in the step's world part as `ArmyOrder` records (move, besiege, raid, intercept, stop, disband, teleport, create), the NPCs', the rebels' and the humans' alike; `lastArmyOrder()` is the number to read after. Both are rings of 16,384 and 8,192 entries, and each call returns how many entries after `afterSeq` were already overwritten. Every PC records the same entries, but an `Applied`'s `skipped` may differ between PCs: a stationed player's order (SOS-234), and in own-city mode a city's command, which only its own PC runs. A resync drops the entries past its step, which come again under new numbers (never given twice, so a PC that had run past the step has a gap). Nothing in them reaches the step or the hash.
 
 **City views (SOS-82).** The host's `viewBegin(viewer, owner)` and `viewEnd` start and end one. The owner's city goes out through `viewOut` and comes in through `viewIn`, and view hashes compare the two (`viewHashOut`, `viewHashIn`). A city has any number of viewers: a viewer already there loads the owner's save again through `viewRejoin` as another joins (SOS-151).
 
@@ -144,7 +146,7 @@ When they come up:
 
 A resync carries a save file as well as the returned bytes, so send both. A restart by vote is the mod's to ask: `battleHere()` names the battle this PC's player sees, `takeRestartAsked()` says when they pressed the battle's own Restart, and the host checks `restartRefusal(key)` and calls `restartBattle(key)` once the players agree. At that step every PC that runs the battle goes back to its start: a battle every PC runs, a local battle with its allies and watchers, and the assault; every PC skips it alike when the battle can no longer restart then. Every PC hears the result as a `Notice.RESTART`. The engine never resyncs on its own: `desyncHold()` says when every PC has held, and your mod shows the choice.
 
-For a desync hunt, put both PCs' lines side by side: `desyncReport()` (the world's), `viewDesyncReport()` (the viewer's copy of a viewed city), `hashedDivisions(step)` with `hashInterval()` (the divisions this PC hashed at a step, owner and viewer alike), and `traceDraws(steps)` with `drawTrace(from, to)` (the code behind every world draw).
+For a desync hunt, put both PCs' lines side by side: `desyncReport()` (the world's; its world line, and `desync().worldParts()`, name the world part where the two PCs first differ, and its item lines, one per faction, region, NPC court and NPC stock of a differing part, compare line by line, SOS-250), `viewDesyncReport()` (the viewer's copy of a viewed city), `hashedDivisions(step)` with `hashInterval()` (the divisions this PC hashed at a step, owner and viewer alike), and `traceDraws(steps)` with `drawTrace(from, to)` (the code behind every world draw).
 
 ## Rules for a mod
 
@@ -166,6 +168,7 @@ The one list of known limits. The README and the release notes repeat a short pa
 - In a session, Quick Load and the game's autosave are off, and each title is worth the base 0.5.
 - Other mods that change the same game classes or the simulation are untested. A city report from a PC whose game data differs is not read (`reportMismatch()`).
 - The scenario suite checks little: see [rig/README.md](../rig/README.md).
+- The army orders ring (`armyOrders`, SOS-249) makes one entry of a stop and another order of the same army at the same step, the order: the game's orders stop the army first, so a stop that really follows another order within one step is not recorded.
 
 **The world**
 - A world-battle prompt holds only its armies' own movement (SOS-45). The world AI can still teleport, re-route or disband a held army (`War.java`, for one), which vanilla never meets because its prompt pauses the world. It happens alike on every PC.

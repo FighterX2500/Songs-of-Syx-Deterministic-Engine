@@ -37,6 +37,7 @@ import world.entity.WEntity;
 import world.army.AD;
 import world.entity.army.WArmy;
 import world.map.regions.Region;
+import world.map.regions.WREGIONS;
 import world.region.RD;
 import world.region.pop.RDRace;
 
@@ -75,7 +76,7 @@ public final class GameHash implements StateSource {
     }
 
     @Override
-    public void hash(long[] sections, long[] divisions) {
+    public void hash(long[] sections, long[] divisions, long[] worldParts) {
         long others = HashLog.start();
         ENTITY[] all = SETT.ENTITIES().getAllEnts();
         int max = Math.min(all.length, SETT.ENTITIES().Imax() + 1);
@@ -128,6 +129,7 @@ public final class GameHash implements StateSource {
             world[es] = new WorldKept(WORLD.ENTITIES().armies.max());
         }
         sections[HashLog.WORLD] = worldHash(world[es]);
+        System.arraycopy(world[es].parts, 0, worldParts, 0, worldParts.length); // SOS-250
     }
 
     /**
@@ -189,21 +191,32 @@ public final class GameHash implements StateSource {
         for (int i = 0; i < factions.size(); i++) {
             Faction f = factions.get(i);
             h = HashLog.mix(h, f.index());
+            long q = HashLog.start(); // the faction's own row, the same values, for the desync report (SOS-250)
             if (!ownCity || !(f instanceof Player)) {
-                h = HashLog.mix(h, Double.doubleToLongBits(f.credits().getD()));
+                long credits = Double.doubleToLongBits(f.credits().getD());
+                h = HashLog.mix(h, credits);
+                q = HashLog.mix(q, credits);
+            }
+            if (f instanceof Player) {
+                h = identity(h, (Player) f); // every PC applies them (SOS-78)
+                if (w != null) { // the banner's pixels: not for the rig's hash of every step
+                    q = identity(q, (Player) f);
+                }
+            }
+            Faction overlord = DIP.overlord(f);
+            int o = overlord == null ? -1 : overlord.index();
+            h = HashLog.mix(h, o);
+            q = HashLog.mix(q, o);
+            for (int k = i + 1; k < factions.size(); k++) {
+                int stance = DIP.get(f, factions.get(k)).index();
+                h = HashLog.mix(h, stance); // every stance, not only war (SOS-46)
+                q = HashLog.mix(q, stance);
             }
             if (w != null && i < w.faction.length) {
                 w.faction[i] = f.index();
                 w.credits[i] = f.credits().getD();
+                w.factionHash[i] = q;
                 w.factions = i + 1;
-            }
-            if (f instanceof Player) {
-                h = identity(h, (Player) f); // every PC applies them (SOS-78)
-            }
-            Faction overlord = DIP.overlord(f);
-            h = HashLog.mix(h, overlord == null ? -1 : overlord.index());
-            for (int k = i + 1; k < factions.size(); k++) {
-                h = HashLog.mix(h, DIP.get(f, factions.get(k)).index()); // every stance, not only war (SOS-46)
             }
         }
         if (Engine.active()) { // no save holds them: a world before its session has a load's, each copy's
@@ -226,9 +239,9 @@ public final class GameHash implements StateSource {
         }
         h = part(w, 7, GameStations.hash(GameFrozen.hash(GameCarves.hash(GamePassed.hash(GameTraded.hash(GameSieges.hash(GameTariffs.hash(GameDeals.hash(h))))))))); // the stationed armies (SOS-233), the frozen humans (SOS-193), the carves (SOS-186), the tariffs, sieges, trade and passed stances with the deals: between humans
         h = part(w, 8, Engine.active() ? GameWorldLoad.hashFboosts(h) : h); // a world before its session: a load's draws, each copy's
-        h = part(w, 9, npcStocks(h));
-        h = part(w, 10, regionPopulations(h));
-        h = part(w, 11, npcCourts(h));
+        h = part(w, 9, npcStocks(h, w));
+        h = part(w, 10, regionPopulations(h, w));
+        h = part(w, 11, npcCourts(h, w));
         h = part(w, 12, Hooks.globalEventList().hash(h));
         return part(w, 13, HashLog.mix(h, Double.doubleToLongBits(TIME.currentSecond())));
     }
@@ -237,10 +250,23 @@ public final class GameHash implements StateSource {
      * Every region's people by race. An NPC's rates and workforce are made from its capital's (SOS-121): the playtest of
      * 2026-11-01 saw only the rates, on one PC.
      */
-    private static long regionPopulations(long h) {
+    private static long regionPopulations(long h, WorldKept w) {
         LIST<Region> regions = WORLD.REGIONS().all();
+        LIST<RDRace> races = RD.RACES().all;
         for (int i = 0; i < regions.size(); i++) {
-            h = regionPopulation(h, regions.get(i));
+            Region reg = regions.get(i);
+            Faction owner = reg.faction();
+            long q = HashLog.mix(HashLog.start(), owner == null ? -1 : owner.index()); // its owner and people (SOS-250)
+            for (int k = 0; k < races.size(); k++) {
+                int people = races.get(k).pop.get(reg);
+                h = HashLog.mix(h, people);
+                q = HashLog.mix(q, people);
+            }
+            if (w != null && i < w.regionHash.length) {
+                w.region[i] = reg.index();
+                w.regionHash[i] = q;
+                w.regions = i + 1;
+            }
         }
         return h;
     }
@@ -258,10 +284,15 @@ public final class GameHash implements StateSource {
      * heir's showed only as they took the throne. No save holds the day counter, and the court ages and draws on it once a
      * day: a PC whose counter had split desynced a day later, on every resync again (SOS-183).
      */
-    private static long npcCourts(long h) {
+    private static long npcCourts(long h, WorldKept w) {
         LIST<FactionNPC> npcs = FACTIONS.NPCs();
         for (int i = 0; i < npcs.size(); i++) {
             h = npcCourt(h, npcs.get(i));
+            if (w != null && i < w.courtHash.length) { // each court on its own, for the desync report (SOS-250)
+                w.court[i] = npcs.get(i).index();
+                w.courtHash[i] = npcCourt(HashLog.start(), npcs.get(i));
+                w.courts = i + 1;
+            }
         }
         return h;
     }
@@ -344,17 +375,25 @@ public final class GameHash implements StateSource {
     }
 
     /** Every active NPC's goods and production rates, which otherwise show only when a trade spends them (SOS-93). */
-    private static long npcStocks(long h) {
+    private static long npcStocks(long h, WorldKept w) {
         LIST<FactionNPC> npcs = FACTIONS.NPCs();
         LIST<TRADABLE> goods = TR.ALL();
         for (int i = 0; i < npcs.size(); i++) {
             FactionNPC f = npcs.get(i);
             h = HashLog.mix(h, f.index());
+            long q = HashLog.start(); // this NPC's stock on its own, for the desync report (SOS-250)
             for (int k = 0; k < goods.size(); k++) {
                 NPCRes r = f.res(goods.get(k));
-                h = HashLog.mix(h, Double.doubleToLongBits(r.amount()));
-                h = HashLog.mix(h, Double.doubleToLongBits(r.rate()));
-                h = HashLog.mix(h, Double.doubleToLongBits(r.rateTot()));
+                long amount = Double.doubleToLongBits(r.amount());
+                long rate = Double.doubleToLongBits(r.rate());
+                long total = Double.doubleToLongBits(r.rateTot());
+                h = HashLog.mix(HashLog.mix(HashLog.mix(h, amount), rate), total);
+                q = HashLog.mix(HashLog.mix(HashLog.mix(q, amount), rate), total);
+            }
+            if (w != null && i < w.stockHash.length) {
+                w.stock[i] = f.index();
+                w.stockHash[i] = q;
+                w.stocks = i + 1;
             }
         }
         return h;
@@ -391,10 +430,9 @@ public final class GameHash implements StateSource {
     /** One hashed step's world, kept for the desync report. */
     private static final class WorldKept {
         static final int ARMY_FIELDS = 6;
-        static final String[] PARTS = {"armies", "entities", "region owners", "factions and stances",
-            "NPC relations per human", "raiders", "events per human", "deals and tariffs between humans",
-            "NPC production boosts", "NPC stocks", "region populations", "NPC courts", "global events", "calendar"};
-        final long[] parts = new long[PARTS.length];
+        /** The parts that have items of their own (SOS-250), as {@link HashLog#WORLD_PART_NAMES} numbers them. */
+        static final int REGION_OWNERS = 2, FACTIONS_PART = 3, NPC_STOCKS = 9, REGION_POPULATIONS = 10, NPC_COURTS = 11;
+        final long[] parts = new long[HashLog.WORLD_PARTS];
         final int[] army;
         final long[] armyHash;
         int armies;
@@ -405,16 +443,31 @@ public final class GameHash implements StateSource {
         final int[] faction = new int[FACTIONS.MAX()];
         final double[] credits = new double[FACTIONS.MAX()];
         int factions;
+        /**
+         * Each item's own hash where items are many (SOS-250): each active faction's row (its credits as hashed,
+         * identity, overlord and stances with the factions after it), each region's owner and people, each NPC's court
+         * and each NPC's goods and rates, with the item's index.
+         */
+        final long[] factionHash = new long[FACTIONS.MAX()];
+        final int[] region = new int[WREGIONS.MAX];
+        final long[] regionHash = new long[WREGIONS.MAX];
+        int regions;
+        final int[] court = new int[FACTIONS.MAX()];
+        final long[] courtHash = new long[FACTIONS.MAX()];
+        int courts;
+        final int[] stock = new int[FACTIONS.MAX()];
+        final long[] stockHash = new long[FACTIONS.MAX()];
+        int stocks;
 
         WorldKept(int maxArmies) {
             army = new int[maxArmies * ARMY_FIELDS];
             armyHash = new long[maxArmies];
         }
 
-        String describe() {
+        String describe(boolean[] differs) {
             StringBuilder b = new StringBuilder();
-            for (int i = 0; i < PARTS.length; i++) {
-                b.append(String.format(Locale.ROOT, "  after %-24s %016x%n", PARTS[i], parts[i]));
+            for (int i = 0; i < parts.length; i++) {
+                b.append(String.format(Locale.ROOT, "  after %-24s %016x%n", HashLog.WORLD_PART_NAMES.get(i), parts[i]));
             }
             for (int k = 0; k < armies; k++) {
                 int o = k * ARMY_FIELDS;
@@ -428,7 +481,29 @@ public final class GameHash implements StateSource {
                 b.append(String.format(Locale.ROOT, "  human %d: war timer %s, rebellion timer %s, raider power %s%n",
                         k + 1, events[3 * k], events[3 * k + 1], events[3 * k + 2]));
             }
+            // SOS-250: the items of the first part that differs, one line each; each part's hash runs on from the one
+            // before, so every later part differs with it and its items say nothing
+            int first = 0;
+            while (first < differs.length && !differs[first]) {
+                first++;
+            }
+            if (first == FACTIONS_PART) {
+                items(b, "factions", faction, factionHash, factions);
+            } else if (first == REGION_OWNERS || first == REGION_POPULATIONS) {
+                items(b, "regions", region, regionHash, regions);
+            } else if (first == NPC_COURTS) {
+                items(b, "courts", court, courtHash, courts);
+            } else if (first == NPC_STOCKS) {
+                items(b, "stocks", stock, stockHash, stocks);
+            }
             return b.toString();
+        }
+
+        /** One line per item, {@code <part> <index> <hash>}: two PCs' lines compare line by line. */
+        private static void items(StringBuilder b, String part, int[] index, long[] hash, int count) {
+            for (int k = 0; k < count; k++) {
+                b.append(String.format(Locale.ROOT, "%s %d %016x%n", part, index[k], hash[k]));
+            }
         }
     }
 
@@ -515,10 +590,11 @@ public final class GameHash implements StateSource {
     }
 
     @Override
-    public String describeWorld(long step) {
+    public String describeWorld(long step, boolean[] differs) {
         for (int slot = 0; kept != null && slot < KEPT; slot++) {
             if (keptCount > slot && keptStep[slot] == step && world[slot] != null) {
-                return world[slot].describe() + GameRelations.describe() + describeNpcStocks() + describeNpcInputs(); // the opinions and stocks now, not at the step
+                return world[slot].describe(differs) + "  now, not at step " + step + ": the NPCs' opinions, stocks and inputs"
+                        + System.lineSeparator() + GameRelations.describe() + describeNpcStocks() + describeNpcInputs(); // the opinions and stocks now, not at the step
             }
         }
         return "  (not kept)" + System.lineSeparator();
