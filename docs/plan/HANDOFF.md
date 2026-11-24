@@ -19,7 +19,7 @@ Finished plans, notes and spikes are in [docs/archive/](../archive/): history, n
 
 The phase is the release on the Steam Workshop (owner, 2026-11-01). Main is merged through PR #104 (2026-11-22, batch 14). What the engine does is in the [README](../../README.md), "Status"; what changed when is in `git log --first-parent main`.
 
-**The scenario suite.** The short suite's recordings (`field-short`, `assault-short` in `rig\golden`) are in the current formats, AI log 8 and hash 8: they were recorded again on 2026-11-06 (SOS-154). The short suite last passed on 2026-11-12 (SOS-184's commit); no later run is recorded. The full suite's `field`, `assault` and `mapbattle` recordings are from 2026-10-25, in AI log 4 and hash 6, so those scenarios say `RECORD` and the full suite's result is FAIL until they are recorded again (`python rig\suite.py --record`). The own-city world is checked by its copies only. No scenario has several humans, carving or freezing.
+**The scenario suite.** The short suite's recordings (`field-short`, `assault-short` in `rig\golden`) are in AI log 8 and hash 9: recorded again on 2026-11-06 (SOS-154), their header moved to hash 9 in batch 15 (plan 0022: the world parts are extra lines, the hashes didn't change). The short suite on 2026-11-25: `field-short` and `ownworld-short` PASS, `assault-short` FAIL from step 300, the same on main: its recording was out of date before batch 15 and needs recording again (an owner's call). The full suite's `field`, `assault` and `mapbattle` recordings are from 2026-10-25, in AI log 4 and hash 6, so those scenarios say `RECORD` and the full suite's result is FAIL until they are recorded again (`python rig\suite.py --record`). The own-city world is checked by its copies only. No scenario has several humans, carving or freezing.
 
 ## 3. Still open in the engine
 
@@ -31,6 +31,7 @@ The phase is the release on the Steam Workshop (owner, 2026-11-01). Main is merg
 - **The suite:** the full suite's recordings, and scenarios with several humans, carving and freezing (above).
 - **SOS-183, step 3:** where the split of the courts' day counters and the peace times began is not found. The playtest's host fought a local battle against raiders, one PC watched and one didn't; the hash now names those parts, so a rig run of that case would show the first split.
 - **Mod spec §16, a commander who drops out of a battle with allies:** settled for a local battle (their divisions go to the fighting player, owner 2026-11-19); still open for a battle every PC runs, where a removal ends the battle with no result.
+- **Plan 0022's limits (batch 15):** the rings keep seconds only (16,384 applied entries, 8,192 army orders) and the mod reads them a few times a second; `skipped` is per PC; a STOP and an order of the same army in the same step keep only the order. `TransferLog` still repeats a resync's re-applied transfers under new numbers (older than this batch; a follow-up).
 - **Reflection with no build-time test:** about 30 reflected members in `sosdet.game.cmd.Rooms` and the 8 field handles of `PlanStores` resolve only at run time. A test that resolves them against the game jar would catch a game change at build time.
 
 From the release audit of 2026-11-01, still open on main (checked 2026-11-23):

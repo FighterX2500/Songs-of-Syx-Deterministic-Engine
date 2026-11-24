@@ -131,3 +131,14 @@ failures. Not run in the rig since.
   beyond 3.
 - 9, `CmdReader.idOf` allocates nothing; `AiEntry.commandId` calls it.
 - 10, rig: `wnewarmy <army>` with a bad index notes it and makes no army.
+
+## State on 2026-11-25: the rigs again, after the review fixes
+
+- **Rig B15S2** (B15S's command): the copies identical to the test desync at 8820; both reports say "world ...
+  DIFFERS, from part events per human on (8 of 14 parts)". Both copies held, saved and stopped at 8861.
+- **Rig B15R3** (B15R2's command): all copies identical to step 3000, 100 hashes compared each, none missed. Both
+  copies' `rings` notes the same: applied armyCreate; armyMove and armyStop; armyRaid. Army orders CREATE; STOP;
+  RAID. The MOVE of B15R2 is gone, as the review fix meant: `wmove 0 4 4` aims at a tile 4 tiles off the army, which
+  most likely has no path (the move order needs a tile on the path network, `rig/README.md`), so the game's own
+  `stop()` in `setDestination` is the entry left; before the fix MOVE was recorded ahead of the path search. A MOVE
+  with a path found was not probed in the rig.
