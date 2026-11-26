@@ -1,6 +1,6 @@
 diff -ru -U2 a/game/faction/FBanner.java b/game/faction/FBanner.java
 --- a/game/faction/FBanner.java	2025-11-20 16:38:10.000000000 +0500
-+++ b/game/faction/FBanner.java	2026-11-19 21:41:18.115155000 +0500
++++ b/game/faction/FBanner.java	2026-11-26 21:37:22.279480300 +0500
 @@ -66,6 +66,8 @@
  	}
  	
@@ -12,7 +12,7 @@ diff -ru -U2 a/game/faction/FBanner.java b/game/faction/FBanner.java
  	}
 diff -ru -U2 a/game/nobility/NOBLES.java b/game/nobility/NOBLES.java
 --- a/game/nobility/NOBLES.java	2026-06-17 10:48:04.000000000 +0500
-+++ b/game/nobility/NOBLES.java	2026-11-19 21:41:18.115155000 +0500
++++ b/game/nobility/NOBLES.java	2026-11-26 21:37:22.279480300 +0500
 @@ -184,6 +184,8 @@
  	}
  	
@@ -44,7 +44,7 @@ diff -ru -U2 a/game/nobility/NOBLES.java b/game/nobility/NOBLES.java
  									for (int i = 0; i < ranks; i++) {
 diff -ru -U2 a/util/gui/common/BitmapSpriteEditor.java b/util/gui/common/BitmapSpriteEditor.java
 --- a/util/gui/common/BitmapSpriteEditor.java	2025-09-12 16:09:02.000000000 +0500
-+++ b/util/gui/common/BitmapSpriteEditor.java	2026-11-19 21:41:18.116152600 +0500
++++ b/util/gui/common/BitmapSpriteEditor.java	2026-11-26 21:37:22.280482500 +0500
 @@ -40,6 +40,7 @@
  						if(sprite != null) {
  							i = sprite.is(x1, y1) ? 20 : 80;
@@ -55,7 +55,7 @@ diff -ru -U2 a/util/gui/common/BitmapSpriteEditor.java b/util/gui/common/BitmapS
  							if (isHovered)
 diff -ru -U2 a/util/gui/misc/GColorPicker.java b/util/gui/misc/GColorPicker.java
 --- a/util/gui/misc/GColorPicker.java	2025-12-02 09:51:38.000000000 +0500
-+++ b/util/gui/misc/GColorPicker.java	2026-11-19 21:41:18.116152600 +0500
++++ b/util/gui/misc/GColorPicker.java	2026-11-26 21:37:22.280482500 +0500
 @@ -46,6 +46,8 @@
  			@Override
  			public void set(int t) {
@@ -85,7 +85,7 @@ diff -ru -U2 a/util/gui/misc/GColorPicker.java b/util/gui/misc/GColorPicker.java
  			}
 diff -ru -U2 a/view/interrupter/IPopup.java b/view/interrupter/IPopup.java
 --- a/view/interrupter/IPopup.java	2025-12-02 09:55:24.000000000 +0500
-+++ b/view/interrupter/IPopup.java	2026-11-19 21:41:18.116152600 +0500
++++ b/view/interrupter/IPopup.java	2026-11-26 21:37:22.280482500 +0500
 @@ -31,6 +31,7 @@
  	}
  	
@@ -104,7 +104,7 @@ diff -ru -U2 a/view/interrupter/IPopup.java b/view/interrupter/IPopup.java
  			}else
 diff -ru -U2 a/view/sett/ui/right/UIMiniHotSpots.java b/view/sett/ui/right/UIMiniHotSpots.java
 --- a/view/sett/ui/right/UIMiniHotSpots.java	2025-09-12 16:12:40.000000000 +0500
-+++ b/view/sett/ui/right/UIMiniHotSpots.java	2026-11-19 21:41:18.117150900 +0500
++++ b/view/sett/ui/right/UIMiniHotSpots.java	2026-11-26 21:37:22.281477200 +0500
 @@ -65,7 +65,7 @@
  		
  		@Override
@@ -145,7 +145,7 @@ diff -ru -U2 a/view/sett/ui/right/UIMiniHotSpots.java b/view/sett/ui/right/UIMin
  							init(d);
 diff -ru -U2 a/view/sett/ui/room/UIRoom.java b/view/sett/ui/room/UIRoom.java
 --- a/view/sett/ui/room/UIRoom.java	2026-05-20 08:23:46.000000000 +0500
-+++ b/view/sett/ui/room/UIRoom.java	2026-11-19 21:41:18.117150900 +0500
++++ b/view/sett/ui/room/UIRoom.java	2026-11-26 21:37:22.281477200 +0500
 @@ -233,6 +233,8 @@
  		private final StringInputSprite panelTitle = new StringInputSprite(24, UI.FONT().S) {
  			@Override
@@ -157,7 +157,7 @@ diff -ru -U2 a/view/sett/ui/room/UIRoom.java b/view/sett/ui/room/UIRoom.java
  		};
 diff -ru -U2 a/view/sett/ui/subject/UISubjectActions.java b/view/sett/ui/subject/UISubjectActions.java
 --- a/view/sett/ui/subject/UISubjectActions.java	2026-06-20 16:14:10.000000000 +0500
-+++ b/view/sett/ui/subject/UISubjectActions.java	2026-11-19 21:41:18.117150900 +0500
++++ b/view/sett/ui/subject/UISubjectActions.java	2026-11-26 21:37:22.281477200 +0500
 @@ -84,7 +84,7 @@
  					
  					@Override
@@ -197,7 +197,7 @@ diff -ru -U2 a/view/sett/ui/subject/UISubjectActions.java b/view/sett/ui/subject
  						}
 diff -ru -U2 a/view/ui/div/UIDivBannerEditor.java b/view/ui/div/UIDivBannerEditor.java
 --- a/view/ui/div/UIDivBannerEditor.java	2025-12-02 09:50:56.000000000 +0500
-+++ b/view/ui/div/UIDivBannerEditor.java	2026-11-19 21:41:18.118147000 +0500
++++ b/view/ui/div/UIDivBannerEditor.java	2026-11-26 21:37:22.282471500 +0500
 @@ -74,11 +74,36 @@
  		pop.addRelBody(8, DIR.S, new GButt.ButtPanel(Dic.¤¤Accept) {
  			@Override
@@ -237,7 +237,7 @@ diff -ru -U2 a/view/ui/div/UIDivBannerEditor.java b/view/ui/div/UIDivBannerEdito
  	}
 diff -ru -U2 a/view/ui/div/UIDivEditor.java b/view/ui/div/UIDivEditor.java
 --- a/view/ui/div/UIDivEditor.java	2026-01-12 12:38:12.000000000 +0500
-+++ b/view/ui/div/UIDivEditor.java	2026-11-19 21:41:18.118147000 +0500
++++ b/view/ui/div/UIDivEditor.java	2026-11-26 21:37:22.282471500 +0500
 @@ -147,6 +147,8 @@
  				
  				@Override
@@ -247,9 +247,67 @@ diff -ru -U2 a/view/ui/div/UIDivEditor.java b/view/ui/div/UIDivEditor.java
  					to.nameE().clear().add(div.name());
  				}
  				
+diff -ru -U2 a/view/ui/profile/Titles.java b/view/ui/profile/Titles.java
+--- a/view/ui/profile/Titles.java	2025-12-01 12:33:16.000000000 +0500
++++ b/view/ui/profile/Titles.java	2026-11-26 21:37:22.288455300 +0500
+@@ -108,6 +108,11 @@
+ 	private static final class Butt extends HOVERABLE.HoverableAbs {
+ 
+ 		private final PTitle title;
++		
++		/** SOSDET: this PC's player's own title: the rows are built while a game loads, with slot 0's player (mod spec §5 Titles). */
++		private PTitle sosdetTitle() {
++			return FACTIONS.player().titles.all().get(title.index());
++		}
+ 		private final GuiSection sec = new GuiSection();
+ 		
+ 		
+@@ -125,7 +130,7 @@
+ 				@Override
+ 				public void render(SPRITE_RENDERER r, float ds) {
+ 					GMeterCol cc = GMeter.C_ORANGE;
+-					if (title.selected())
++					if (sosdetTitle().selected())
+ 						cc = GMeter.C_BLUE;
+ 					else if (title.unlocked())
+ 						cc = GMeter.C_GREEN;
+@@ -143,7 +148,7 @@
+ 				
+ 				@Override
+ 				public void render(SPRITE_RENDERER r, float ds) {
+-					if (!title.selected() && !(title.unlocked() && title.race(FACTIONS.player().race())))
++					if (!sosdetTitle().selected() && !(title.unlocked() && title.race(FACTIONS.player().race())))
+ 						GCOLOR.T().INACTIVE.bind();
+ 					title.icon.render(r, body);
+ 					COLOR.unbind();
+@@ -165,7 +170,7 @@
+ 		
+ 		@Override
+ 		protected void render(SPRITE_RENDERER r, float ds, boolean isHovered) {
+-			GButt.ButtPanel.renderBG(r, title.unlocked(), title.isNew(), title.selected(), body);
++			GButt.ButtPanel.renderBG(r, title.unlocked(), sosdetTitle().isNew(), sosdetTitle().selected(), body);
+ 			GButt.ButtPanel.renderFrame(r, body);
+ 			
+ 			sec.body().centerIn(body);
+@@ -177,13 +182,13 @@
+ 		
+ 		@Override
+ 		public void hoverInfoGet(GUI_BOX text) {
+-			title.consumeNew();
++			sosdetTitle().consumeNew();
+ 			GBox b = (GBox) text;
+ 			b.title(title.name);
+ 			b.text(title.desc);
+ 			b.NL(6);
+ 			
+-			if (title.selected()) {
++			if (sosdetTitle().selected()) {
+ 				b.text(¤¤Active);
+ 			}else if(title.unlocked()) {
+ 				b.text(¤¤Unlocked);
 diff -ru -U2 a/view/ui/profile/UIFactionBanner.java b/view/ui/profile/UIFactionBanner.java
 --- a/view/ui/profile/UIFactionBanner.java	2025-09-12 16:09:04.000000000 +0500
-+++ b/view/ui/profile/UIFactionBanner.java	2026-11-19 21:41:18.118147000 +0500
++++ b/view/ui/profile/UIFactionBanner.java	2026-11-26 21:37:22.282471500 +0500
 @@ -100,6 +100,39 @@
  				return b.colorPole();
  			}
@@ -292,7 +350,7 @@ diff -ru -U2 a/view/ui/profile/UIFactionBanner.java b/view/ui/profile/UIFactionB
  	
 diff -ru -U2 a/view/ui/profile/UIProfile.java b/view/ui/profile/UIProfile.java
 --- a/view/ui/profile/UIProfile.java	2026-05-23 21:02:52.000000000 +0500
-+++ b/view/ui/profile/UIProfile.java	2026-11-19 21:41:18.123134700 +0500
++++ b/view/ui/profile/UIProfile.java	2026-11-26 21:37:22.283468700 +0500
 @@ -27,7 +27,7 @@
  
  	

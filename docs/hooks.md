@@ -170,6 +170,7 @@ Rows that share a reason name it in italics:
 | `96-cmd-names` | SOS-34 | `view/ui/profile/UIProfile.java` | `cmd.Names.nameInput`, `factionName`, `rulerName` | *Command*: the inputs edit the name in place; in a session a draft | SOS-34 |
 | `96-cmd-names` | SOS-78 | `view/ui/profile/UIProfile.java` | `cmd.Names.profileLoad` | *Command*: Load set name, ruler and banner on this PC alone (5002, 5003, 5016) | SOS-78 |
 | `96-cmd-names` | SOS-87 | `view/ui/profile/UIProfile.java` | none (`FACTIONS.player()`, a class of the patch's own) | Built before this PC's human was set; rebuilt when `FACTIONS.player()` changes | SOS-87 |
+| `96-cmd-names` | SOSGSGMP spec §5 Titles | `view/ui/profile/Titles.java` | none (`FACTIONS.player()`) | The rows were built while the game loaded, with slot 0's titles: each PC showed the host's chosen titles. Each row reads this PC's player's title as it draws | SOSGSGMP 2026-11-26 |
 | `96-cmd-names` | SOS-98 | `view/ui/profile/UIProfile.java` | `cmd.Names.playerBannerIcon` | The icon was slot 0's banner; it draws this PC's player's | SOS-98 |
 | `96-cmd-names` | SOS-34 | `view/sett/ui/right/UIMiniHotSpots.java` | `cmd.Names.markAdd`, `markName`, `markRemove`, `markOrder` | *Command*: the marks have no single entry point | SOS-34 |
 | `96-cmd-names` | SOS-34 | `util/gui/misc/GColorPicker.java` | `cmd.Names.colour` | *Command*: one UI site for a hot generic colour class; marks only, banners are drafts | SOS-34 |
