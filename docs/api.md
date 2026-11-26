@@ -35,7 +35,7 @@ dependencies {
 - **Types it hands back:** `HumanStart`, `OwnBattle`, `LocalBattle`, `View`, `Assault`, `BattleOutcome`, `Notice`, `DesyncHold`, `Stats`, `Carved`, `Applied`, `ArmyOrder`, `sosdet.hash.Desync`.
 - **`sosdet.Hooks` is for patches.** It is public because the patched game classes call it. Don't call it from a mod. The same goes for `sosdet.Cosmetic` and `sosdet.game`.
 
-Most `Engine` methods throw `IllegalStateException` with no session. `active()`, `locationProblem`, `buildWorld`, `bannerBytes` and `worldHash` work without one.
+Most `Engine` methods throw `IllegalStateException` with no session. `active()`, `locationProblem`, `buildWorld`, `bannerBytes`, `loadBanner` and `worldHash` work without one.
 
 ## The calls, by topic
 
