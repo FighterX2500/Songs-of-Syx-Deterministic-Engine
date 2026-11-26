@@ -252,6 +252,7 @@ public final class GameWorldSetup {
                 String standIn = "";
                 if (k == 0) {
                     standIn = moveHost(host, reg);
+                    GameTitles.apply(host, h); // the build's start for the host came before the picks were final
                 } else {
                     GameHumans.get().activateNpc(reg, false, k);
                     reg.setCapitol();
@@ -438,12 +439,18 @@ public final class GameWorldSetup {
         }
         byte[] banner = h.banner();
         if (banner != null) {
-            GameCodec codec = new GameCodec();
-            invoke(BANNER_LOAD, p.banner(), codec.reader(padded(banner)));
+            loadBanner(banner, p.banner());
         }
         if (p.capitolRegion() != null) {
             p.capitolRegion().info.name().clear().add(h.name);
         }
+        GameTitles.apply(p, h);
+    }
+
+    /** A banner as {@link #bannerBytes} writes it, into {@code into}. */
+    public static void loadBanner(byte[] banner, FBanner into) {
+        GameCodec codec = new GameCodec();
+        invoke(BANNER_LOAD, into, codec.reader(padded(banner)));
     }
 
     /** Vanilla's FileGetter.d refuses a buffer's last 8 bytes; zeros after the banner keep its last double readable. */

@@ -1089,6 +1089,40 @@ public final class Engine {
     }
 
     /**
+     * Setup: a banner as {@link #bannerBytes} gives it, loaded into {@code into}, for drawing another player's banner
+     * before their faction exists (SOSGSGMP: the setup's spots). Game thread, outside the step.
+     */
+    public static void loadBanner(byte[] banner, game.faction.FBanner into) {
+        outsideStep("loadBanner");
+        if (banner == null || into == null) {
+            throw new IllegalArgumentException("SOSDET: loadBanner of banner " + (banner == null ? "null" : banner.length + " bytes")
+                    + " into " + into);
+        }
+        GameWorldSetup.loadBanner(banner, into);
+    }
+
+    /**
+     * Setup: per title index, the number of races this PC's profile earned the title with, for {@link HumanStart}'s titles
+     * (mod spec §5 Titles). Game thread, outside the step.
+     */
+    public static int[] titleRaces() {
+        outsideStep("titleRaces");
+        return sosdet.game.GameTitles.localRaces();
+    }
+
+    /** The titles the human in {@code slot} holds, as title indices (mod spec §5 Titles). Game thread, outside the step. */
+    public static int[] heldTitles(int slot) {
+        outsideStep("heldTitles");
+        return sosdet.game.GameTitles.held(slot);
+    }
+
+    /** For each of {@link #heldTitles}, the races it counts in this world. Game thread, outside the step. */
+    public static int[] heldTitleRaces(int slot) {
+        outsideStep("heldTitleRaces");
+        return sosdet.game.GameTitles.heldRaces(slot);
+    }
+
+    /**
      * Why a city-state can't be carved with its centre at {@code tx, ty} (SOSGSGMP docs/archive/hot-join.md §3.1), or null:
      * the terrain; the map's edge beside it; a town or a human's capital closer than 6 tiles (SOS-199); an army on the
      * square; a siege; a region it would cut in two, or whose road it would cut off from its town; no free region; no

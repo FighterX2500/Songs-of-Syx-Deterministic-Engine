@@ -80,6 +80,7 @@ public final class GameHumans extends Savable {
     private final GameFrozen frozen = new GameFrozen();
     private final GameBreaks breaks = new GameBreaks();
     private final GameStations stations = new GameStations();
+    private final GameTitles titles = new GameTitles();
     private final GameStationedDivs stationedDivs = new GameStationedDivs();
     /** Setup by carving: NPC slots 1 to this - 1 wait for the humans ({@link #reserve}); 0 when none do. */
     private int reservedTo;
@@ -107,6 +108,7 @@ public final class GameHumans extends Savable {
         world(frozen); // the frozen humans, their last reports and what waits for them (SOS-193)
         world(breaks); // who made the last stance change between each human and each NPC (SOS-227)
         world(stations); // the armies stationed at another human's capital (SOS-233)
+        world(titles); // each human's titles' strength (mod spec §5 Titles)
         cityFirst(stationedDivs); // this city's divisions that hold a stationed ally's soldiers (SOS-234)
     }
 
@@ -240,6 +242,11 @@ public final class GameHumans extends Savable {
     /** The armies stationed at another human's capital (SOS-233). */
     public GameStations stations() {
         return stations;
+    }
+
+    /** Each human's titles' strength (mod spec §5 Titles). */
+    public GameTitles titles() {
+        return titles;
     }
 
     /** The frozen humans (SOS-193). */

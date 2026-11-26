@@ -4,7 +4,8 @@ import java.util.Locale;
 
 /**
  * One human at world setup (SOS-55, mod spec §5): the race, faction name and banner picked in the lobby's setup, and the
- * world location, as vanilla's location stage stores the player's ({@code WorldGen.playerX/playerY}). Immutable.
+ * world location, as vanilla's location stage stores the player's ({@code WorldGen.playerX/playerY}); the titles it holds,
+ * each with the number of races its player's profile earned it with (mod spec §5 Titles). Immutable.
  */
 public final class HumanStart {
 
@@ -23,6 +24,8 @@ public final class HumanStart {
     public final int tx;
     public final int ty;
     private final byte[] banner;
+    private final int[] titles;
+    private final int[] titleRaces;
 
     /** As {@link #HumanStart(String, String, String, byte[], int, int)}, keeping the game's ruler name. */
     public HumanStart(String race, String name, byte[] banner, int tx, int ty) {
@@ -34,6 +37,19 @@ public final class HumanStart {
      * {@code banner}: the banner in the game's own save layout ({@link Engine#bannerBytes}), or null to keep it.
      */
     public HumanStart(String race, String name, String ruler, byte[] banner, int tx, int ty) {
+        this(race, name, ruler, banner, tx, ty, NONE, NONE);
+    }
+
+    /**
+     * As {@link #HumanStart(String, String, String, byte[], int, int)}, holding {@code titles} (title indices, as
+     * {@code PTitle.index()}), each earned with {@code titleRaces[i]} races ({@link Engine#titleRaces}); no titles: empty.
+     */
+    public HumanStart(String race, String name, String ruler, byte[] banner, int tx, int ty, int[] titles,
+            int[] titleRaces) {
+        if (titles.length != titleRaces.length) {
+            throw new IllegalArgumentException("SOSDET: " + titles.length + " titles and " + titleRaces.length
+                    + " race counts");
+        }
         if (race == null || race.isEmpty() || name == null || name.isEmpty()) {
             throw new IllegalArgumentException("SOSDET: a human start needs a race and a name (race " + race + ", name "
                     + name + ")");
@@ -44,11 +60,25 @@ public final class HumanStart {
         this.banner = banner == null ? null : banner.clone();
         this.tx = tx;
         this.ty = ty;
+        this.titles = titles.clone();
+        this.titleRaces = titleRaces.clone();
     }
+
+    private static final int[] NONE = new int[0];
 
     /** The banner bytes (a copy), or null. */
     public byte[] banner() {
         return banner == null ? null : banner.clone();
+    }
+
+    /** The titles held, as title indices (a copy); empty for none. */
+    public int[] titles() {
+        return titles.clone();
+    }
+
+    /** For each of {@link #titles}, the races its player's profile earned it with (a copy). */
+    public int[] titleRaces() {
+        return titleRaces.clone();
     }
 
     /** Why a location at {@code tx, ty} is too close to one of the others' locations, or null. */

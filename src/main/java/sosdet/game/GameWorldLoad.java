@@ -67,11 +67,12 @@ public final class GameWorldLoad {
      * The sections the world is in: the map's resources, every faction, the raiders (the world-load spike); the
      * calendar, which the world's events and wars count by; the temporary boosts of regions and factions; and the
      * world's events, without the city's ({@link #EVENTS_KEY}) (SOS-32); and the engine's stores, relations and event
-     * timers of every human but slot 0 (SOS-52); the sieges of the humans' capitals, with vanilla's sieges in WORLD (SOS-92). The market trade between humans (SOS-137: it was missing, so a view's thaw and every resync dropped it). The carved city-states' undo log (SOS-186). The armies stationed at another human's capital (SOS-233). Not the human slots: they are set once, and a resync checks they match.
+     * timers of every human but slot 0 (SOS-52); the sieges of the humans' capitals, with vanilla's sieges in WORLD (SOS-92). The market trade between humans (SOS-137: it was missing, so a view's thaw and every resync dropped it). The carved city-states' undo log (SOS-186). The armies stationed at another human's capital (SOS-233). Each human's titles' strength (mod spec §5 Titles). Not the human slots: they are set once, and a resync checks they match.
      */
     public static final List<String> KEYS = Arrays.asList("TIME", "WORLD", "FACTIONS", "RAIDING", "TEMP_EVENTS", "EVENTS",
             GameCityDivs.KEY, GameRelations.KEY, GameEvents.KEY, GameDeals.KEY, GameTariffs.KEY, GameSieges.KEY,
-            GameTraded.KEY, GamePassed.KEY, GameCarves.KEY, GameFrozen.KEY, GameBreaks.KEY, GameStations.KEY);
+            GameTraded.KEY, GamePassed.KEY, GameCarves.KEY, GameFrozen.KEY, GameBreaks.KEY, GameStations.KEY,
+            GameTitles.KEY);
     /** Saved and loaded with only the world's events ({@link StepParts#worldEvent}): the city's are each PC's own. */
     private static final String EVENTS_KEY = "EVENTS";
 
@@ -696,6 +697,11 @@ public final class GameWorldLoad {
         } catch (IllegalAccessException | InvocationTargetException e) {
             throw new IllegalStateException("SOSDET: cannot load " + r.getClass().getName() + VERSION, e);
         }
+    }
+
+    /** {@code p}'s titles as vanilla saves them: which it holds ({@link GameTitles#apply}). */
+    static SAVABLE titlesSaver(Player p) {
+        return saver(TITLES, p.titles);
     }
 
     private static SAVABLE saver(Field f, Object owner) {
