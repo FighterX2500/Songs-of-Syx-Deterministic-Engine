@@ -252,6 +252,7 @@ public final class GameWorldSetup {
                 String standIn = "";
                 if (k == 0) {
                     standIn = moveHost(host, reg);
+                    GameTitles.apply(host, h); // the build's start for the host came before the picks were final
                 } else {
                     GameHumans.get().activateNpc(reg, false, k);
                     reg.setCapitol();
@@ -443,6 +444,7 @@ public final class GameWorldSetup {
         if (p.capitolRegion() != null) {
             p.capitolRegion().info.name().clear().add(h.name);
         }
+        GameTitles.apply(p, h);
     }
 
     /** A banner as {@link #bannerBytes} writes it, into {@code into}. */

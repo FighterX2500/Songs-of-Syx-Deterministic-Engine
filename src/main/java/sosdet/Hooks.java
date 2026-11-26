@@ -10,6 +10,7 @@ import game.faction.FACTIONS;
 import game.faction.FCredits.CTYPE;
 import game.faction.Faction;
 import game.faction.player.PCredits;
+import game.faction.player.PTitles;
 import game.faction.player.Player;
 import init.paths.PATHS;
 import init.type.CAUSE_LEAVE;
@@ -30,6 +31,7 @@ import sosdet.ai.Commanders;
 import sosdet.ai.AiMode;
 import sosdet.game.GameOwnCity;
 import sosdet.game.GameReport;
+import sosdet.game.GameTitles;
 import sosdet.game.StepParts;
 import sosdet.game.WorldStatics;
 import sosdet.game.cmd.BannerDraft;
@@ -4133,6 +4135,23 @@ public final class Hooks {
     /** A value that changes the simulation: this PC's without a session, the shared one with one. */
     public static double simulationValue(double local, double shared) {
         return Engine.session() == null ? local : shared;
+    }
+
+    /**
+     * The races title {@code title} of {@code titles} counts, which vanilla scales its boosts by (patch 98, mod spec §5
+     * Titles): {@code local}, this PC's profile's, without a session; with one, what the human holding {@code titles}
+     * brought to the world ({@code GameTitles}), 0 for a human from before that or with nothing set. No allocation.
+     */
+    public static double titleRaces(PTitles titles, int title, double local) {
+        if (Engine.session() == null) {
+            return local;
+        }
+        for (int slot : humanSlots()) {
+            if (FACTIONS.getByIndex(slot) instanceof Player p && p.titles == titles) {
+                return GameTitles.get().races(slot, title);
+            }
+        }
+        return 0;
     }
 
     /**

@@ -11,7 +11,7 @@ With no engine session a hook gives the game's own behaviour. The known exceptio
 - two game fixes: `WDivStored`'s load clears its stats totals (`14-report-reads`), and a held `GSliderInt` button calls `inc` only for a non-zero amount (`96-cmd-employment`);
 - `ResolverPlayer.Manual.afterBattle` counts each side through `sosdetCount` (`15-humans`), so single-player captive counts differ slightly from vanilla;
 - a war declared on an NPC that broke its treaties with the player costs no betrayal (`14-report-reads`, owner 2026-11-18, SOS-227; see that row);
-- every game holds 15 spare Players, and every save extra sections: `SOSDET_HUMANS`, `SOSDET_CITY_DIVS`, `SOSDET_RELATIONS`, `SOSDET_EVENTS`, `SOSDET_DEALS`, `SOSDET_TARIFFS`, `SOSDET_SIEGES`, `SOSDET_TRADED`, `SOSDET_PASSED` (SOS-140), `SOSDET_CARVES` (SOS-186), `SOSDET_FROZEN` (SOS-193), `SOSDET_BREAKS` (SOS-227), `SOSDET_STATIONS` (SOS-233) and `SOSDET_STATIONED_DIVS` (SOS-234, the city's only, in the save's first list so it loads before the people) (`GameHumans`, from the `FACTIONS` constructor). Every one but `SOSDET_HUMANS` and `SOSDET_STATIONED_DIVS` is in the world save too (`GameWorldLoad.KEYS`); `GameHumans` refuses to start with one that isn't (SOS-137).
+- every game holds 15 spare Players, and every save extra sections: `SOSDET_HUMANS`, `SOSDET_CITY_DIVS`, `SOSDET_RELATIONS`, `SOSDET_EVENTS`, `SOSDET_DEALS`, `SOSDET_TARIFFS`, `SOSDET_SIEGES`, `SOSDET_TRADED`, `SOSDET_PASSED` (SOS-140), `SOSDET_CARVES` (SOS-186), `SOSDET_FROZEN` (SOS-193), `SOSDET_BREAKS` (SOS-227), `SOSDET_STATIONS` (SOS-233), `SOSDET_TITLES` (SOSGSGMP spec §5 Titles) and `SOSDET_STATIONED_DIVS` (SOS-234, the city's only, in the save's first list so it loads before the people) (`GameHumans`, from the `FACTIONS` constructor). Every one but `SOSDET_HUMANS` and `SOSDET_STATIONED_DIVS` is in the world save too (`GameWorldLoad.KEYS`); `GameHumans` refuses to start with one that isn't (SOS-137).
 
 ## Shared reasons
 
@@ -214,7 +214,7 @@ Rows that share a reason name it in italics:
 | `98-world-fixes` | SOS-35 | `game/faction/player/emmi/Emissaries.java` | `cacheKey` | Cached on the render frame (`VIEW.RI()`); keyed on the step | SOS-35 |
 | `98-world-fixes` | SOS-35 | `util/data/DOUBLE_O.java` | `cacheKey` | `DoubleOCached` cached on the render frame; keyed on the step | SOS-35 |
 | `98-world-fixes` | SOS-35 | `game/faction/diplomacy/deal/DealBools.java` | `developerFlag` | Read this PC's developer setting inline | SOS-35 |
-| `98-world-fixes` | SOS-35 | `game/faction/player/PTitles.java` | `simulationValue` | Read this PC's profile inline; base 0.5 in a session | SOS-35 |
+| `98-world-fixes` | SOS-35 | `game/faction/player/PTitles.java` | `titleRaces` | Read this PC's profile inline; in a session, the title holder's race count from the world (`GameTitles`; base 0.5 when none is set) | SOS-35, SOSGSGMP spec §5 Titles |
 | `98-world-fixes` | SOS-35 | `game/faction/FWorth.java` | `sharedStateOnly` | Read the deal window's `DIP.TMP()`; reads `TMP2` | SOS-35 |
 | `98-world-fixes` | SOS-35 | `world/region/RDBoostCache.java` | `outsideStep` | *First caller*: `get()` writes the saved cache | SOS-35 |
 | `98-world-fixes` | SOS-35 | `world/region/pop/RDRaces.java`, with `sosdet.game.RegionVisuals` | `outsideStep` | The private `cache()` writes on every render call | SOS-35 |
