@@ -103,6 +103,12 @@ public final class GameTitles extends Savable {
         }
     }
 
+    /** Mixes the table into {@code h}; a game with no titles set hashes as before. */
+    static long hash(long h) {
+        TitleTable t = get().table;
+        return t.empty() ? h : t.hash(h);
+    }
+
     @Override
     protected void save(FilePutter file) {
         int[] v = table.toInts();
@@ -143,7 +149,7 @@ public final class GameTitles extends Savable {
             }
             held[t] = true;
         }
-        get().table.set(p.index(), titles, h.titleRaces(), count);
+        // through vanilla's saver, not PTitle.select: select clears FACTIONS.player()'s boost cache, not p's
         GameCodec codec = new GameCodec();
         FilePutter out = codec.hashBegin();
         out.i(count);
@@ -158,5 +164,6 @@ public final class GameTitles extends Savable {
         } catch (IOException e) {
             throw new IllegalStateException("SOSDET: " + p.name + "'s titles could not be set", e);
         }
+        get().table.set(p.index(), titles, h.titleRaces(), count);
     }
 }

@@ -2,6 +2,7 @@ package sosdet.game.titles;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -48,6 +49,18 @@ class TitleTableTest {
         assertEquals(t, back);
         assertEquals(9, back.races(7, 4));
         assertEquals(new TitleTable(), TitleTable.fromInts(new TitleTable().toInts()));
+    }
+
+    @Test
+    void theHashFollowsTheCounts() {
+        TitleTable a = new TitleTable();
+        TitleTable b = new TitleTable();
+        a.set(1, new int[] {2}, new int[] {3}, 5);
+        b.set(1, new int[] {2}, new int[] {3}, 5);
+        assertEquals(a.hash(7), b.hash(7));
+        b.set(1, new int[] {2}, new int[] {4}, 5);
+        assertNotEquals(a.hash(7), b.hash(7));
+        assertEquals(7, new TitleTable().hash(7));
     }
 
     @Test

@@ -2,6 +2,8 @@ package sosdet.game.titles;
 
 import java.util.Arrays;
 
+import sosdet.hash.HashLog;
+
 /**
  * Each human's titles' strength (SOSGSGMP spec §5 Titles, owner 2026-11-26): for every title the human picked, the
  * number of races the picking player's profile earned it with, which vanilla scales a title by (0.5 to 1.0). Set from the
@@ -108,6 +110,20 @@ public final class TitleTable {
             throw new IllegalArgumentException("SOSDET: a title table with " + (v.length - k) + " ints left over");
         }
         return t;
+    }
+
+    /** Mixes every slot set, its slot and its counts, into {@code h}. */
+    public long hash(long h) {
+        for (int s = 0; s < SLOTS; s++) {
+            if (races[s] != null) {
+                h = HashLog.mix(h, s);
+                h = HashLog.mix(h, races[s].length);
+                for (int r : races[s]) {
+                    h = HashLog.mix(h, r);
+                }
+            }
+        }
+        return h;
     }
 
     private static void checkSlot(int slot) {

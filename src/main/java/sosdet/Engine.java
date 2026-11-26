@@ -1094,6 +1094,10 @@ public final class Engine {
      */
     public static void loadBanner(byte[] banner, game.faction.FBanner into) {
         outsideStep("loadBanner");
+        if (banner == null || into == null) {
+            throw new IllegalArgumentException("SOSDET: loadBanner of banner " + (banner == null ? "null" : banner.length + " bytes")
+                    + " into " + into);
+        }
         GameWorldSetup.loadBanner(banner, into);
     }
 
